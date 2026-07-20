@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 )
 
 func TestDashboardInitialEnvelopeValidatesPageScopedPayloads(t *testing.T) {
@@ -187,7 +187,7 @@ func TestWorkspaceSidebarUsesGlobalChat(t *testing.T) {
 
 func TestSidebarWorkspaceTitleDoesNotInventDefaultWorkspace(t *testing.T) {
 	global := SidebarConfigForCatalog(dashboard.Catalog{})
-	if global.WorkspaceTitle != "LibreDash" {
+	if global.WorkspaceTitle != "LeapView" {
 		t.Fatalf("global workspace title = %q, want app title", global.WorkspaceTitle)
 	}
 

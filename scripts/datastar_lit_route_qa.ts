@@ -6,17 +6,17 @@ type RouteExpectation = {
   shell: boolean
 }
 
-const baseURL = Bun.env.LIBREDASH_BASE_URL ?? 'http://localhost:8195'
+const baseURL = Bun.env.LEAPVIEW_BASE_URL ?? 'http://localhost:8195'
 const dashboardPath = '/workspaces/visuals/dashboards/visual-showcase/pages/overview'
 const routes: RouteExpectation[] = [
-  { path: '/', root: 'ld-catalog-page', shell: true },
-  { path: dashboardPath, root: 'ld-dashboard-page', shell: true },
-  { path: '/data', root: 'ld-data-explorer', shell: true },
-  { path: '/workspaces', root: 'ld-workspace-page', shell: true },
-  { path: '/connections', root: 'ld-connections-page', shell: true },
-  { path: '/admin', root: 'ld-admin-page', shell: true },
-  { path: '/chat', root: 'ld-chat-page', shell: true },
-  { path: '/login', root: 'ld-login-page', shell: false },
+  { path: '/', root: 'lv-catalog-page', shell: true },
+  { path: dashboardPath, root: 'lv-dashboard-page', shell: true },
+  { path: '/data', root: 'lv-data-explorer', shell: true },
+  { path: '/workspaces', root: 'lv-workspace-page', shell: true },
+  { path: '/connections', root: 'lv-connections-page', shell: true },
+  { path: '/admin', root: 'lv-admin-page', shell: true },
+  { path: '/chat', root: 'lv-chat-page', shell: true },
+  { path: '/login', root: 'lv-login-page', shell: false },
 ]
 
 const browser = await chromium.launch()
@@ -46,7 +46,7 @@ async function verifyRoute(route: RouteExpectation): Promise<void> {
     }
     await page.waitForSelector(route.root)
     await page.waitForFunction((expectedRoot) => {
-      if (expectedRoot === 'ld-chat-page') return true
+      if (expectedRoot === 'lv-chat-page') return true
       const root = document.querySelector(expectedRoot)
       return (root?.shadowRoot?.textContent?.replace(/\s+/g, ' ').trim().length ?? 0) > 0
     }, route.root, { timeout: 5000 })
@@ -55,7 +55,7 @@ async function verifyRoute(route: RouteExpectation): Promise<void> {
       const root = document.querySelector(expectedRoot)
       return {
         root: root?.localName ?? '',
-        shell: Boolean(document.querySelector('ld-app-shell')),
+        shell: Boolean(document.querySelector('lv-app-shell')),
         shadowText: root?.shadowRoot?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
         datastarScriptCount: document.querySelectorAll('script[src*="datastar-1.0.2"]').length,
       }
@@ -63,7 +63,7 @@ async function verifyRoute(route: RouteExpectation): Promise<void> {
 
     if (state.root !== route.root) throw new Error(`${route.path}: mounted ${state.root || 'no root'}, want ${route.root}`)
     if (state.shell !== route.shell) throw new Error(`${route.path}: shell=${state.shell}, want ${route.shell}`)
-    if (state.shadowText.length === 0 && route.root !== 'ld-chat-page') throw new Error(`${route.path}: route root rendered no shadow text`)
+    if (state.shadowText.length === 0 && route.root !== 'lv-chat-page') throw new Error(`${route.path}: route root rendered no shadow text`)
     if (state.datastarScriptCount !== 1) throw new Error(`${route.path}: Datastar script count=${state.datastarScriptCount}, want 1`)
     if (updates.length !== 1) throw new Error(`${route.path}: /updates request count=${updates.length}, want 1`)
     assertNoBlockingConsoleMessages(route.path, messages)
@@ -93,11 +93,11 @@ async function verifyDashboardCommandDoesNotReopenUpdates(): Promise<void> {
 
   try {
     await page.goto(new URL(dashboardPath, baseURL).toString(), { waitUntil: 'domcontentloaded' })
-    await page.waitForSelector('ld-dashboard-page')
+    await page.waitForSelector('lv-dashboard-page')
     await page.waitForTimeout(1000)
     const beforeUpdates = updates.length
     await page.evaluate(() => {
-      document.querySelector('ld-dashboard-page')?.dispatchEvent(new CustomEvent('ld-filters-refresh', { bubbles: true, composed: true }))
+      document.querySelector('lv-dashboard-page')?.dispatchEvent(new CustomEvent('lv-filters-refresh', { bubbles: true, composed: true }))
     })
     await page.waitForTimeout(1000)
 
@@ -118,7 +118,7 @@ function collectBlockingConsoleMessages(page: Page): string[] {
     if (message.type() !== 'warning' && message.type() !== 'error') return
     const text = message.text()
     if (text.includes('Failed to load resource')) messages.push(text)
-    if (text.includes('[LibreDash]')) messages.push(text)
+    if (text.includes('[LeapView]')) messages.push(text)
     if (text.includes('Multiple versions of Lit loaded')) messages.push(text)
     if (text.includes('Lit is in dev mode')) messages.push(text)
   })

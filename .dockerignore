@@ -7,7 +7,7 @@
 .venv
 
 .data
-.libredash
+.leapview
 bin
 coverage.out
 node_modules

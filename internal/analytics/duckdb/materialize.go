@@ -12,12 +12,12 @@ import (
 	"sync"
 	"time"
 
-	analyticsducklake "github.com/Yacobolo/libredash/internal/analytics/ducklake"
-	analyticsmaterialize "github.com/Yacobolo/libredash/internal/analytics/materialize"
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	semanticquery "github.com/Yacobolo/libredash/internal/analytics/query"
-	"github.com/Yacobolo/libredash/internal/configspec"
-	"github.com/Yacobolo/libredash/internal/dataquery"
+	analyticsducklake "github.com/Yacobolo/leapview/internal/analytics/ducklake"
+	analyticsmaterialize "github.com/Yacobolo/leapview/internal/analytics/materialize"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	semanticquery "github.com/Yacobolo/leapview/internal/analytics/query"
+	"github.com/Yacobolo/leapview/internal/configspec"
+	"github.com/Yacobolo/leapview/internal/dataquery"
 )
 
 type SourceRuntime struct {
@@ -197,7 +197,7 @@ func workspaceReaderCount(configured int) int {
 	if configured > 0 {
 		return configured
 	}
-	if value, err := strconv.Atoi(strings.TrimSpace(os.Getenv(configspec.EnvLIBREDASH_EXEC_MAX_RUNNING_READS))); err == nil && value > 0 {
+	if value, err := strconv.Atoi(strings.TrimSpace(os.Getenv(configspec.EnvLEAPVIEW_EXEC_MAX_RUNNING_READS))); err == nil && value > 0 {
 		return value
 	}
 	return 4

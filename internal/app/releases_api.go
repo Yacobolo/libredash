@@ -12,14 +12,14 @@ import (
 	"strconv"
 	"strings"
 
-	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
-	manageddatabinding "github.com/Yacobolo/libredash/internal/manageddata/binding"
-	"github.com/Yacobolo/libredash/internal/release"
-	"github.com/Yacobolo/libredash/internal/servingstate"
-	servingstatefs "github.com/Yacobolo/libredash/internal/servingstate/filesystem"
-	"github.com/Yacobolo/libredash/internal/servingstate/validate"
-	"github.com/Yacobolo/libredash/internal/staticasset"
+	apigenapi "github.com/Yacobolo/leapview/internal/api/gen"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	manageddatabinding "github.com/Yacobolo/leapview/internal/manageddata/binding"
+	"github.com/Yacobolo/leapview/internal/release"
+	"github.com/Yacobolo/leapview/internal/servingstate"
+	servingstatefs "github.com/Yacobolo/leapview/internal/servingstate/filesystem"
+	"github.com/Yacobolo/leapview/internal/servingstate/validate"
+	"github.com/Yacobolo/leapview/internal/staticasset"
 )
 
 func (s *Server) releaseService() (*release.Service, error) {
@@ -287,7 +287,7 @@ func writeAPIProblem(w http.ResponseWriter, r *http.Request, status int, code, d
 	w.Header().Set("X-Request-ID", requestID)
 	w.Header().Set("Content-Type", "application/problem+json")
 	writeAPIJSON(w, status, apigenapi.ProblemDetails{
-		Type: "https://libredash.dev/problems/" + strings.ToLower(code), Title: http.StatusText(status), Status: int32(status),
+		Type: "https://leapview.dev/problems/" + strings.ToLower(code), Title: http.StatusText(status), Status: int32(status),
 		Detail: detail, Instance: r.URL.Path, Code: code, RequestId: requestID, Errors: violations,
 	})
 }

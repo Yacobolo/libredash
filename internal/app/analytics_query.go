@@ -4,8 +4,8 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/Yacobolo/libredash/internal/access"
-	queryhttp "github.com/Yacobolo/libredash/internal/analytics/query/http"
+	"github.com/Yacobolo/leapview/internal/access"
+	queryhttp "github.com/Yacobolo/leapview/internal/analytics/query/http"
 )
 
 func (s *Server) semanticQueryHTTP() queryhttp.Handler {

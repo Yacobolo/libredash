@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"testing"
 
-	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
 )
 
 func TestArtifactStoreSaveUploadWritesAtomically(t *testing.T) {

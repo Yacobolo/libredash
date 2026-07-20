@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/dashboard/report"
+	"github.com/Yacobolo/leapview/internal/dashboard/report"
 )
 
 func TestVisualPayloadIncludesPointSelectionContract(t *testing.T) {

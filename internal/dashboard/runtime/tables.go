@@ -3,13 +3,13 @@ package runtime
 import (
 	"context"
 	"fmt"
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	"sort"
 	"strconv"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 )
 
 func (s *TableQueryService) queryAggregateTable(ctx context.Context, runtime *modelRuntime, report *reportdef.Dashboard, request dashboard.TableRequest, table reportdef.TableVisual, filters dashboard.Filters) (dashboard.Table, error) {

@@ -11,7 +11,7 @@ import (
 func TestComposeSingleInstanceContract(t *testing.T) {
 	compose := read(t, "compose.yaml")
 	for _, required := range []string{
-		"libredash-state:/var/lib/libredash",
+		"leapview-state:/var/lib/leapview",
 		"${COMPOSE_APP_BIND:-127.0.0.1:8080}:8080",
 		"read_only: true",
 		"cap_drop: [ALL]",
@@ -27,8 +27,8 @@ func TestComposeSingleInstanceContract(t *testing.T) {
 	if strings.Contains(compose, "./backups:/backups") {
 		t.Fatal("backup archives must cross the container boundary as streams, not through a host bind with incompatible ownership")
 	}
-	if !strings.Contains(read(t, "libredash.env.example"), "LIBREDASH_HOME=/var/lib/libredash/home") {
-		t.Fatal("libredash.env.example must place LIBREDASH_HOME beneath the mounted volume so restore can replace it")
+	if !strings.Contains(read(t, "leapview.env.example"), "LEAPVIEW_HOME=/var/lib/leapview/home") {
+		t.Fatal("leapview.env.example must place LEAPVIEW_HOME beneath the mounted volume so restore can replace it")
 	}
 	https := read(t, "compose.https.yaml")
 	if !strings.Contains(https, "CADDY_IMAGE") || !strings.Contains(https, "443:443/udp") {
@@ -39,7 +39,7 @@ func TestComposeSingleInstanceContract(t *testing.T) {
 func TestPublicImageIsPrimaryOnboardingContract(t *testing.T) {
 	release := read(t, filepath.Join("..", "..", ".github", "workflows", "release.yml"))
 	for _, required := range []string{
-		"IMAGE_NAME: ghcr.io/yacobolo/libredash",
+		"IMAGE_NAME: ghcr.io/yacobolo/leapview",
 		"docker/setup-qemu-action@",
 		"type=raw,value=latest",
 		"platforms: linux/amd64,linux/arm64",
@@ -60,10 +60,10 @@ func TestPublicImageIsPrimaryOnboardingContract(t *testing.T) {
 		filepath.Join("..", "..", "docs", "articles", "start", "installation.md"),
 	} {
 		document := read(t, name)
-		image := strings.Index(document, "ghcr.io/yacobolo/libredash:latest")
+		image := strings.Index(document, "ghcr.io/yacobolo/leapview:latest")
 		pull := strings.Index(document, "docker pull")
 		initialize := strings.Index(document, "admin initialize --format json")
-		controller := strings.Index(document, "./libredashctl init")
+		controller := strings.Index(document, "./leapviewctl init")
 		if image < 0 || pull < 0 || initialize < 0 {
 			t.Errorf("%s does not document pull-first public image onboarding", name)
 		}
@@ -78,7 +78,7 @@ func TestControllerBuildAndLifecycleCommands(t *testing.T) {
 	controller := buildController(t, root)
 	output, err := exec.Command(controller, "help").CombinedOutput()
 	if err != nil {
-		t.Fatalf("libredashctl help: %v\n%s", err, output)
+		t.Fatalf("leapviewctl help: %v\n%s", err, output)
 	}
 	for _, command := range []string{"init", "start", "status", "logs", "first-login", "backup", "restore", "upgrade", "rollback"} {
 		if !strings.Contains(string(output), command) {
@@ -90,7 +90,7 @@ func TestControllerBuildAndLifecycleCommands(t *testing.T) {
 func TestControllerReleasePackagingContract(t *testing.T) {
 	release := read(t, filepath.Join("..", "..", ".github", "workflows", "release.yml"))
 	for _, required := range []string{
-		"./cmd/libredashctl",
+		"./cmd/leapviewctl",
 		"CGO_ENABLED=0",
 		"linux amd64",
 		"linux arm64",
@@ -102,7 +102,7 @@ func TestControllerReleasePackagingContract(t *testing.T) {
 		}
 	}
 	dockerfile := read(t, filepath.Join("..", "..", "Dockerfile"))
-	if !strings.Contains(dockerfile, "/usr/local/libexec/libredashctl") {
+	if !strings.Contains(dockerfile, "/usr/local/libexec/leapviewctl") {
 		t.Fatal("application image must carry the matching Linux controller for provider extraction")
 	}
 }
@@ -124,7 +124,7 @@ fi
 if [[ "${1:-}" == inspect ]]; then
   template="${3:-}"
   if [[ "$template" == *Running* ]]; then printf 'true\n'; exit 0; fi
-  image="$(awk -F= '$1=="LIBREDASH_IMAGE" {sub(/^[^=]*=/, ""); print; exit}' "$root/deployment.env")"
+  image="$(awk -F= '$1=="LEAPVIEW_IMAGE" {sub(/^[^=]*=/, ""); print; exit}' "$root/deployment.env")"
   if [[ -n "${FAKE_DOCKER_FAIL_IMAGE:-}" && "$image" == "$FAKE_DOCKER_FAIL_IMAGE" ]]; then printf 'unhealthy\n'; else printf 'healthy\n'; fi
   exit 0
 fi
@@ -161,10 +161,10 @@ esac
 		t.Fatal(err)
 	}
 
-	oldImage := "example.com/libredash@sha256:" + strings.Repeat("a", 64)
-	newImage := "example.com/libredash@sha256:" + strings.Repeat("b", 64)
+	oldImage := "example.com/leapview@sha256:" + strings.Repeat("a", 64)
+	newImage := "example.com/leapview@sha256:" + strings.Repeat("b", 64)
 	runController(t, root, fakeDocker, "", "init", "--admin-email", "admin@example.com", "--domain", "dash.example.com", "--image", oldImage)
-	for _, name := range []string{"deployment.env", "libredash.env", "initial-credentials.json"} {
+	for _, name := range []string{"deployment.env", "leapview.env", "initial-credentials.json"} {
 		info, err := os.Stat(filepath.Join(root, name))
 		if err != nil || info.Mode().Perm() != 0o600 {
 			t.Fatalf("%s permissions = %v, %v", name, info.Mode().Perm(), err)
@@ -188,7 +188,7 @@ esac
 		t.Fatalf("backup missing: %v (%s)", err, backupOutput)
 	}
 	runController(t, root, fakeDocker, "", "restore", backupPath)
-	t.Setenv("FAKE_DOCKER_FAIL_COMMAND", "pull libredash")
+	t.Setenv("FAKE_DOCKER_FAIL_COMMAND", "pull leapview")
 	if output, err := runControllerResult(root, fakeDocker, "", "upgrade", newImage); err == nil || !strings.Contains(output, "previous image and service state were restored") {
 		t.Fatalf("failed pull result = %v, %s", err, output)
 	}
@@ -217,7 +217,7 @@ esac
 }
 
 func TestControllerInitializationIsRetryableAndRequiresPinnedProxy(t *testing.T) {
-	image := "example.com/libredash@sha256:" + strings.Repeat("a", 64)
+	image := "example.com/leapview@sha256:" + strings.Repeat("a", 64)
 	setup := func(t *testing.T) (string, string) {
 		t.Helper()
 		root := t.TempDir()
@@ -245,7 +245,7 @@ fi
 		if output, err := runControllerResult(root, fakeDocker, "", "init", "--admin-email", "admin@example.com", "--domain", "dash.example.com", "--image", image); err == nil || !strings.Contains(output, "initialization can be retried") {
 			t.Fatalf("failed initialization = %v, %s", err, output)
 		}
-		for _, name := range []string{"libredash.env", "initial-credentials.json"} {
+		for _, name := range []string{"leapview.env", "initial-credentials.json"} {
 			if _, err := os.Stat(filepath.Join(root, name)); !os.IsNotExist(err) {
 				t.Fatalf("partial initialization retained %s: %v", name, err)
 			}
@@ -291,11 +291,11 @@ func copyDeploymentFile(t *testing.T, targetDir, name string, mode os.FileMode) 
 
 func buildController(t *testing.T, targetDir string) string {
 	t.Helper()
-	target := filepath.Join(targetDir, "libredashctl")
-	command := exec.Command("go", "build", "-o", target, "./cmd/libredashctl")
+	target := filepath.Join(targetDir, "leapviewctl")
+	command := exec.Command("go", "build", "-o", target, "./cmd/leapviewctl")
 	command.Dir = filepath.Join("..", "..")
 	if output, err := command.CombinedOutput(); err != nil {
-		t.Fatalf("build libredashctl: %v\n%s", err, output)
+		t.Fatalf("build leapviewctl: %v\n%s", err, output)
 	}
 	return target
 }
@@ -304,15 +304,15 @@ func runController(t *testing.T, root, docker, failImage string, args ...string)
 	t.Helper()
 	output, err := runControllerResult(root, docker, failImage, args...)
 	if err != nil {
-		t.Fatalf("libredashctl %s: %v\n%s", strings.Join(args, " "), err, output)
+		t.Fatalf("leapviewctl %s: %v\n%s", strings.Join(args, " "), err, output)
 	}
 	return output
 }
 
 func runControllerResult(root, docker, failImage string, args ...string) (string, error) {
-	command := exec.Command(filepath.Join(root, "libredashctl"), args...)
+	command := exec.Command(filepath.Join(root, "leapviewctl"), args...)
 	command.Dir = root
-	command.Env = append(os.Environ(), "LIBREDASHCTL_ROOT="+root, "LIBREDASHCTL_DOCKER_BIN="+docker, "FAKE_DOCKER_FAIL_IMAGE="+failImage)
+	command.Env = append(os.Environ(), "LEAPVIEWCTL_ROOT="+root, "LEAPVIEWCTL_DOCKER_BIN="+docker, "FAKE_DOCKER_FAIL_IMAGE="+failImage)
 	output, err := command.CombinedOutput()
 	return string(output), err
 }
@@ -320,7 +320,7 @@ func runControllerResult(root, docker, failImage string, args ...string) (string
 func requireDeploymentImage(t *testing.T, root, image string) {
 	t.Helper()
 	contents, err := os.ReadFile(filepath.Join(root, "deployment.env"))
-	if err != nil || !strings.Contains(string(contents), "LIBREDASH_IMAGE="+image+"\n") {
+	if err != nil || !strings.Contains(string(contents), "LEAPVIEW_IMAGE="+image+"\n") {
 		t.Fatalf("deployment image is not %s: %v\n%s", image, err, contents)
 	}
 }

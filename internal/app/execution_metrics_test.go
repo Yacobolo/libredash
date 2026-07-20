@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
-	"github.com/Yacobolo/libredash/internal/dataquery"
-	"github.com/Yacobolo/libredash/internal/execution"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	"github.com/Yacobolo/leapview/internal/dataquery"
+	"github.com/Yacobolo/leapview/internal/execution"
 )
 
 func TestExecutionMetricsBoundsDataQueries(t *testing.T) {

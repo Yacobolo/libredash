@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/Yacobolo/libredash/internal/dashboard"
+	"github.com/Yacobolo/leapview/internal/dashboard"
 )
 
 const ArtifactVersion = 4

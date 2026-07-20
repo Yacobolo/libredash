@@ -11,21 +11,21 @@ import (
 )
 
 func TestGenerateWritesVersionedMachineManifest(t *testing.T) {
-	root := &cobra.Command{Use: "libredash"}
+	root := &cobra.Command{Use: "leapview"}
 	deploy := &cobra.Command{
 		Use:     "deploy <project>",
 		Short:   "Deploy a project",
 		Long:    "Compile and atomically deploy a project.",
-		Example: "libredash deploy ./dashboards --apply",
+		Example: "leapview deploy ./dashboards --apply",
 		Args:    cobra.ExactArgs(1),
 		RunE:    func(*cobra.Command, []string) error { return nil },
 		Annotations: map[string]string{
-			"libredash.dev/effect":       "write",
-			"libredash.dev/confirmation": "conditional",
+			"leapview.dev/effect":       "write",
+			"leapview.dev/confirmation": "conditional",
 		},
 	}
 	deploy.Flags().Bool("apply", false, "Apply the deployment")
-	root.PersistentFlags().String("target", "", "LibreDash server URL")
+	root.PersistentFlags().String("target", "", "LeapView server URL")
 	root.AddCommand(deploy)
 
 	out := t.TempDir()
@@ -48,7 +48,7 @@ func TestGenerateWritesVersionedMachineManifest(t *testing.T) {
 		t.Fatalf("commands = %d, want %d", got, want)
 	}
 	command := manifest.Commands[0]
-	if command.ID != "deploy" || !strings.HasPrefix(command.Usage, "libredash deploy <project>") {
+	if command.ID != "deploy" || !strings.HasPrefix(command.Usage, "leapview deploy <project>") {
 		t.Errorf("command identity = %#v", command)
 	}
 	if command.Effect != "write" || command.Confirmation != "conditional" {
@@ -63,7 +63,7 @@ func TestGenerateWritesVersionedMachineManifest(t *testing.T) {
 	if len(command.InheritedOptions) != 1 || command.InheritedOptions[0].Name != "target" {
 		t.Errorf("inherited options = %#v", command.InheritedOptions)
 	}
-	if len(command.Examples) != 1 || command.Examples[0] != "libredash deploy ./dashboards --apply" {
+	if len(command.Examples) != 1 || command.Examples[0] != "leapview deploy ./dashboards --apply" {
 		t.Errorf("examples = %#v", command.Examples)
 	}
 	article, err := os.ReadFile(filepath.Join(out, "deploy.md"))
@@ -78,17 +78,17 @@ func TestGenerateWritesVersionedMachineManifest(t *testing.T) {
 }
 
 func TestGenerateRejectsRunnableCommandWithoutSafetyMetadata(t *testing.T) {
-	root := &cobra.Command{Use: "libredash"}
+	root := &cobra.Command{Use: "leapview"}
 	root.AddCommand(&cobra.Command{Use: "mutate", Run: func(*cobra.Command, []string) {}})
 
 	err := generate(root, t.TempDir())
-	if err == nil || err.Error() != `command "libredash mutate" is runnable but missing libredash.dev/effect annotation` {
+	if err == nil || err.Error() != `command "leapview mutate" is runnable but missing leapview.dev/effect annotation` {
 		t.Fatalf("generate error = %v", err)
 	}
 }
 
 func TestGenerateGroupsSubcommandsOnTopLevelCommandPage(t *testing.T) {
-	root := &cobra.Command{Use: "libredash"}
+	root := &cobra.Command{Use: "leapview"}
 	semanticModels := &cobra.Command{Use: "semantic-models", Short: "Inspect semantic models"}
 	list := &cobra.Command{
 		Use: "list", Short: "List semantic models", Run: func(*cobra.Command, []string) {},
@@ -127,13 +127,13 @@ func TestGenerateGroupsSubcommandsOnTopLevelCommandPage(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"# libredash semantic-models",
+		"# leapview semantic-models",
 		"## Subcommands",
 		"[`list`](#list)",
 		"[`query`](#query)",
 		"## list",
 		"## query",
-		"libredash semantic-models query <model> <dataset>",
+		"leapview semantic-models query <model> <dataset>",
 		"/docs/cli/commands/semantic-models-query.json",
 		"| `--limit` | int | `100` | maximum rows |",
 	} {

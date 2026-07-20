@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/configspec"
+	"github.com/Yacobolo/leapview/internal/configspec"
 )
 
 const (
@@ -51,7 +51,7 @@ func run(client *http.Client, out string) error {
 		return fmt.Errorf("create data directory %s: %w", target, err)
 	}
 
-	force := truthy(os.Getenv(configspec.EnvLIBREDASH_BOOTSTRAP_FORCE))
+	force := truthy(os.Getenv(configspec.EnvLEAPVIEW_BOOTSTRAP_FORCE))
 	missing := missingCSVs(target)
 	if len(missing) == 0 && !force {
 		fmt.Printf("Olist CSVs already available in %s\n", target)
@@ -102,14 +102,14 @@ func targetDir(out string) (string, error) {
 }
 
 func cacheDir() (string, error) {
-	if dir := os.Getenv(configspec.EnvLIBREDASH_BOOTSTRAP_CACHE_DIR); dir != "" {
+	if dir := os.Getenv(configspec.EnvLEAPVIEW_BOOTSTRAP_CACHE_DIR); dir != "" {
 		return filepath.Abs(dir)
 	}
 	base, err := os.UserCacheDir()
 	if err != nil {
 		return "", fmt.Errorf("find user cache directory: %w", err)
 	}
-	return filepath.Join(base, "libredash", "olist"), nil
+	return filepath.Join(base, "leapview", "olist"), nil
 }
 
 func missingCSVs(target string) []string {
@@ -149,7 +149,7 @@ func downloadArchive(client *http.Client, archivePath string) error {
 		_ = tmp.Close()
 		return fmt.Errorf("create Kaggle request: %w", err)
 	}
-	req.Header.Set("User-Agent", "LibreDash bootstrap")
+	req.Header.Set("User-Agent", "LeapView bootstrap")
 
 	resp, err := client.Do(req)
 	if err != nil {

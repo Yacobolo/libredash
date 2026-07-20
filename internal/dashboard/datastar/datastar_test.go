@@ -5,8 +5,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	dashboardstream "github.com/Yacobolo/libredash/internal/dashboard/stream"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	dashboardstream "github.com/Yacobolo/leapview/internal/dashboard/stream"
 )
 
 func TestPatchKeys(t *testing.T) {

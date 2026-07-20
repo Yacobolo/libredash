@@ -3,7 +3,7 @@ package control
 import (
 	"context"
 
-	"github.com/Yacobolo/libredash/internal/manageddata"
+	"github.com/Yacobolo/leapview/internal/manageddata"
 )
 
 // RevisionMetadata carries the upload provenance associated with a public

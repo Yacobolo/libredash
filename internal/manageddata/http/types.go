@@ -6,8 +6,8 @@ import (
 	"errors"
 	stdhttp "net/http"
 
-	"github.com/Yacobolo/libredash/internal/manageddata/control"
-	"github.com/Yacobolo/libredash/internal/manageddata/s3multipart"
+	"github.com/Yacobolo/leapview/internal/manageddata/control"
+	"github.com/Yacobolo/leapview/internal/manageddata/s3multipart"
 )
 
 var (

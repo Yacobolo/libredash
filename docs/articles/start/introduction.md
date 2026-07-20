@@ -1,12 +1,12 @@
-# What is LibreDash?
+# What is LeapView?
 
-LibreDash is a lightweight, code-native business intelligence workspace. Data teams define data access, analytical models, business metrics, dashboards, and access rules as versioned resources, then deliver those resources as one reviewed project.
+LeapView is a lightweight, code-native business intelligence workspace. Data teams define data access, analytical models, business metrics, dashboards, and access rules as versioned resources, then deliver those resources as one reviewed project.
 
-The intended experience is familiar to teams that use tools such as Power BI: people can discover workspaces, open report pages, filter results, inspect charts, and work with analytical tables. The difference is where the source of truth lives. In LibreDash, reusable business logic and dashboard composition remain in YAML and can move through the same review, testing, and deployment process as application code.
+The intended experience is familiar to teams that use tools such as Power BI: people can discover workspaces, open report pages, filter results, inspect charts, and work with analytical tables. The difference is where the source of truth lives. In LeapView, reusable business logic and dashboard composition remain in YAML and can move through the same review, testing, and deployment process as application code.
 
-## When LibreDash is a good fit
+## When LeapView is a good fit
 
-LibreDash is designed for a team that wants:
+LeapView is designed for a team that wants:
 
 - dashboards and semantic models reviewed through Git;
 - a small, self-hosted BI application instead of a collection of separate services;
@@ -19,11 +19,11 @@ It is not intended to make every browser edit authoritative. The browser is a co
 
 ## The resource layers
 
-A LibreDash project has three main layers:
+A LeapView project has three main layers:
 
 ```mermaid
 flowchart LR
-  accTitle: LibreDash resource layers
+  accTitle: LeapView resource layers
   accDescr: Connections and sources feed model tables and semantic models, which feed dashboards and report pages.
   inputs["Connections and sources"] --> semantics["Model tables and semantic models"] --> presentation["Dashboards and report pages"]
 ```
@@ -44,4 +44,4 @@ This division keeps credentials, unrestricted SQL, authorization, and query trut
 
 A typical project contains one project manifest, project-global connections and sources, and one or more workspaces. Each workspace owns its model tables, semantic models, dashboards, role bindings, data policies, and refresh pipelines. Generated JSON Schemas describe the exact shape of every resource.
 
-Start with [Get started with LibreDash](/docs/getting-started) to run the included project. Then read [Projects, workspaces, and environments](/docs/concepts/projects-workspaces-environments) before creating a project of your own.
+Start with [Get started with LeapView](/docs/getting-started) to run the included project. Then read [Projects, workspaces, and environments](/docs/concepts/projects-workspaces-environments) before creating a project of your own.

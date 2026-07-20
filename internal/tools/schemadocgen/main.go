@@ -1,4 +1,4 @@
-// Command schemadocgen turns LibreDash's JSON Schema contracts into the
+// Command schemadocgen turns LeapView's JSON Schema contracts into the
 // Markdown configuration reference consumed by the public documentation site.
 package main
 

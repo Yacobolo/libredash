@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/manageddata"
-	"github.com/Yacobolo/libredash/internal/manageddata/storage"
-	"github.com/Yacobolo/libredash/internal/manageddata/storage/filesystem"
-	"github.com/Yacobolo/libredash/internal/manageddata/storage/storagetest"
+	"github.com/Yacobolo/leapview/internal/manageddata"
+	"github.com/Yacobolo/leapview/internal/manageddata/storage"
+	"github.com/Yacobolo/leapview/internal/manageddata/storage/filesystem"
+	"github.com/Yacobolo/leapview/internal/manageddata/storage/storagetest"
 )
 
 func TestBlobStoreConformance(t *testing.T) {

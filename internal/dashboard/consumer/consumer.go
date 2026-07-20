@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/dashboard"
+	"github.com/Yacobolo/leapview/internal/dashboard"
 )
 
 type Kind string

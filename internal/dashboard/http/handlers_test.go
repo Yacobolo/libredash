@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	"github.com/Yacobolo/libredash/internal/dashboard/consumer"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	"github.com/Yacobolo/leapview/internal/dashboard/consumer"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -98,14 +98,14 @@ func TestPageSetsClientCookieAndRendersReport(t *testing.T) {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 	}
 	cookies := rec.Result().Cookies()
-	if len(cookies) == 0 || cookies[0].Name != "ld_client_id" || cookies[0].Value == "" {
+	if len(cookies) == 0 || cookies[0].Name != "lv_client_id" || cookies[0].Value == "" {
 		t.Fatalf("cookies = %#v", cookies)
 	}
 	body := html.UnescapeString(rec.Body.String())
-	if !strings.Contains(body, `<ld-dashboard-page`) || !strings.Contains(body, `/updates?dashboard=dash`) || !strings.Contains(body, `route=dashboard`) || !strings.Contains(body, `@get('/updates?`) || strings.Contains(body, `data-signals=`) {
+	if !strings.Contains(body, `<lv-dashboard-page`) || !strings.Contains(body, `/updates?dashboard=dash`) || !strings.Contains(body, `route=dashboard`) || !strings.Contains(body, `@get('/updates?`) || strings.Contains(body, `data-signals=`) {
 		t.Fatalf("page did not render report shell:\n%s", body)
 	}
-	if strings.Contains(body, `<ld-report-canvas`) {
+	if strings.Contains(body, `<lv-report-canvas`) {
 		t.Fatalf("page rendered dashboard internals in Go shell:\n%s", body)
 	}
 }

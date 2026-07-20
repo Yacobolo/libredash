@@ -2,7 +2,7 @@ version: '3'
 
 tasks:
   dev:
-    desc: Start the managed LibreDash dev server for this worktree
+    desc: Start the managed LeapView dev server for this worktree
     cmds:
       - task: generate
       - task: build
@@ -10,15 +10,15 @@ tasks:
       - ./scripts/dev-server.sh start
 
   dev:movielens:
-    desc: Start the managed LibreDash dev server with the MovieLens 32M experiment project
+    desc: Start the managed LeapView dev server with the MovieLens 32M experiment project
     cmds:
       - task: generate
       - task: build
       - task: bootstrap:movielens
-      - LIBREDASH_DEV_RESTART=1 LIBREDASH_DEV_READY_ATTEMPTS=1800 ./scripts/dev-server.sh start dashboards/experiments/movielens/libredash.yaml movielens .data/movielens
+      - LEAPVIEW_DEV_RESTART=1 LEAPVIEW_DEV_READY_ATTEMPTS=1800 ./scripts/dev-server.sh start dashboards/experiments/movielens/leapview.yaml movielens .data/movielens
 
   dev:quack:
-    desc: Start the managed LibreDash dev server with the local Quack profile
+    desc: Start the managed LeapView dev server with the local Quack profile
     cmds:
       - task: generate
       - task: build
@@ -35,17 +35,17 @@ tasks:
       - go run ./internal/tools/bootstrapmovielens --out .data/movielens
 
   dev:stop:
-    desc: Stop the managed LibreDash dev server for this worktree
+    desc: Stop the managed LeapView dev server for this worktree
     cmds:
       - ./scripts/dev-server.sh stop
 
   dev:quack:stop:
-    desc: Stop the managed LibreDash dev server with the local Quack profile
+    desc: Stop the managed LeapView dev server with the local Quack profile
     cmds:
       - ./scripts/dev-profile.sh quack stop
 
   dev:status:
-    desc: Show managed LibreDash dev server status
+    desc: Show managed LeapView dev server status
     cmds:
       - ./scripts/dev-server.sh status
 
@@ -56,24 +56,24 @@ tasks:
         test -f .tmp/dev-server.port || { echo "Dev server port file missing. Run task dev first."; exit 1; }
         PORT="$(cat .tmp/dev-server.port)"
         curl -fsS "http://localhost:${PORT}/workspaces" >/dev/null || { echo "Dev server is not running on http://localhost:${PORT}. Run task dev first."; exit 1; }
-        SYNC_OUTPUT="$(go run ./cmd/libredash data sync --project dashboards/libredash.yaml --connection olist --from .data/olist --target "http://localhost:${PORT}" --token dev)"
+        SYNC_OUTPUT="$(go run ./cmd/leapview data sync --project dashboards/leapview.yaml --connection olist --from .data/olist --target "http://localhost:${PORT}" --token dev)"
         printf '%s\n' "$SYNC_OUTPUT"
         REVISION="$(printf '%s\n' "$SYNC_OUTPUT" | awk '$1 == "staged" { print $2 }')"
         printf '%s\n' "$REVISION" | grep -Eq '^sha256:[0-9a-f]{64}$' || { echo "Managed data sync did not return a canonical revision."; exit 1; }
-        go run ./cmd/libredash deploy --project dashboards/libredash.yaml --revision "olist=$REVISION" --target "http://localhost:${PORT}" --token dev --auto-approve
+        go run ./cmd/leapview deploy --project dashboards/leapview.yaml --revision "olist=$REVISION" --target "http://localhost:${PORT}" --token dev --auto-approve
 
   dev:quack:status:
-    desc: Show managed LibreDash dev server status with the local Quack profile
+    desc: Show managed LeapView dev server status with the local Quack profile
     cmds:
       - ./scripts/dev-profile.sh quack status
 
   dev:logs:
-    desc: Tail managed LibreDash dev server logs
+    desc: Tail managed LeapView dev server logs
     cmds:
       - ./scripts/dev-server.sh logs
 
   dev:quack:logs:
-    desc: Tail managed LibreDash dev server logs with the local Quack profile
+    desc: Tail managed LeapView dev server logs with the local Quack profile
     cmds:
       - ./scripts/dev-profile.sh quack logs
 
@@ -90,7 +90,7 @@ tasks:
       - bun run build
 
   site:build:
-    desc: Build the LibreDash public site assets from generated contracts
+    desc: Build the LeapView public site assets from generated contracts
     cmds:
       - task: ui-signals:generate
       - task: node:deps
@@ -101,19 +101,19 @@ tasks:
     cmds:
       - task: generate
       - task: site:build
-      - go build -o bin/libredash-site ./cmd/libredash-site
+      - go build -o bin/leapview-site ./cmd/leapview-site
 
   site:image:
-    desc: Build the production LibreDash public site OCI image
+    desc: Build the production LeapView public site OCI image
     cmds:
-      - docker build --file Dockerfile.site --tag libredash-site:local .
+      - docker build --file Dockerfile.site --tag leapview-site:local .
 
   site:dev:
     desc: Start the public site from generated documentation on http://localhost:8081
     cmds:
       - task: generate
       - task: site:build
-      - go run ./cmd/libredash-site
+      - go run ./cmd/leapview-site
 
   site:product-screenshot:
     desc: Refresh light and dark homepage screenshots from the deployed Visual Showcase
@@ -314,12 +314,12 @@ tasks:
       - docs/api/openapi.yaml
       - docs/api/operations.json
     cmds:
-      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3 typespec-compile -manifest api/apigen.yaml -target libredash-v1
-      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3 all -manifest api/apigen.yaml -target libredash-v1
+      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3 typespec-compile -manifest api/apigen.yaml -target leapview-v1
+      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3 all -manifest api/apigen.yaml -target leapview-v1
       - go run ./internal/tools/openapidocgen
 
   schema:generate:
-    desc: Generate JSON Schema artifacts for LibreDash YAML contracts
+    desc: Generate JSON Schema artifacts for LeapView YAML contracts
     deps:
       - db:generate
       - config:generate
@@ -328,7 +328,7 @@ tasks:
     method: checksum
     sources:
       - Taskfile.yml
-      - cmd/libredash/**/*.go
+      - cmd/leapview/**/*.go
       - internal/cli/**/*.go
       - internal/configschema/**/*.go
       - internal/dashboard/report/**/*.go
@@ -340,7 +340,7 @@ tasks:
       - schemas/json/semantic-model.schema.json
       - docs/reference/config/catalog.json
     cmds:
-      - go run ./cmd/libredash schema export --format json-schema --out schemas/json
+      - go run ./cmd/leapview schema export --format json-schema --out schemas/json
       - go run ./internal/tools/schemadocgen
 
   ui-signals:generate:
@@ -413,7 +413,7 @@ tasks:
   deploy:check:
     desc: Validate the supported single-node deployment and lifecycle contracts
     cmds:
-      - go test ./cmd/libredashctl ./internal/composectl ./deploy/compose
+      - go test ./cmd/leapviewctl ./internal/composectl ./deploy/compose
       - go test ./deploy/hetzner
       - terraform fmt -check -recursive deploy/hetzner
       - terraform -chdir=deploy/hetzner init -backend=false -input=false

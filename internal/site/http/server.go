@@ -11,8 +11,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/Yacobolo/libredash/pkg/pagestream"
-	siteassets "github.com/Yacobolo/libredash/site"
+	"github.com/Yacobolo/leapview/pkg/pagestream"
+	siteassets "github.com/Yacobolo/leapview/site"
 )
 
 // Options configures public URLs and production behavior for the site handler.

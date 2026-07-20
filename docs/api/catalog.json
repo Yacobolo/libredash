@@ -1,7 +1,7 @@
 {
-  "title": "LibreDash Headless API",
+  "title": "LeapView Headless API",
   "version": "1.0.0",
-  "description": "Headless API for LibreDash workspaces, deployments, managed data, access control, refreshes, and agent operations.",
+  "description": "Headless API for LeapView workspaces, deployments, managed data, access control, refreshes, and agent operations.",
   "documents": [
     {
       "slug": "system",
@@ -11,7 +11,7 @@
     {
       "slug": "instance",
       "title": "Instance",
-      "summary": "The immutable serving identity of this LibreDash installation."
+      "summary": "The immutable serving identity of this LeapView installation."
     },
     {
       "slug": "projects",

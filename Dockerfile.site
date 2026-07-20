@@ -19,12 +19,12 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
     go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 generate && \
     go run ./internal/tools/configgen && \
-    go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3 typespec-compile -manifest api/apigen.yaml -target libredash-v1 && \
-    go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3 all -manifest api/apigen.yaml -target libredash-v1 && \
+    go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3 typespec-compile -manifest api/apigen.yaml -target leapview-v1 && \
+    go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3 all -manifest api/apigen.yaml -target leapview-v1 && \
     go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3 typespec-compile -manifest api/apigen.yaml -target ui-signals && \
     go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3 all -manifest api/apigen.yaml -target ui-signals && \
     go run ./internal/tools/uisignalspostprocess && \
-    go run ./cmd/libredash schema export --format json-schema --out schemas/json && \
+    go run ./cmd/leapview schema export --format json-schema --out schemas/json && \
     go run ./internal/tools/clidocgen && \
     go run ./internal/tools/schemadocgen && \
     go run ./internal/tools/openapidocgen && \
@@ -50,27 +50,27 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
     test -f docs/catalog.json && \
     test -f docs/search-index.sqlite3 && \
-    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/libredash-site ./cmd/libredash-site
+    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/leapview-site ./cmd/leapview-site
 
 FROM gcr.io/distroless/static-debian12:nonroot@sha256:aef9602f8710ec12bde19d593fed1f76c708531bb7aba205110f1029786ead7b AS runtime
 
 ARG BUILD_VERSION=dev
 ARG BUILD_REVISION=unknown
 
-LABEL org.opencontainers.image.title="LibreDash documentation site" \
-      org.opencontainers.image.description="LibreDash public website and documentation portal" \
-      org.opencontainers.image.source="https://github.com/Yacobolo/libredash" \
+LABEL org.opencontainers.image.title="LeapView documentation site" \
+      org.opencontainers.image.description="LeapView public website and documentation portal" \
+      org.opencontainers.image.source="https://github.com/Yacobolo/leapview" \
       org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.version="$BUILD_VERSION" \
       org.opencontainers.image.revision="$BUILD_REVISION"
 
-COPY --from=build /out/libredash-site /libredash-site
+COPY --from=build /out/leapview-site /leapview-site
 
 USER nonroot:nonroot
 
-ENV LIBREDASH_SITE_BASE_URL=
+ENV LEAPVIEW_SITE_BASE_URL=
 
 EXPOSE 8081
 
-ENTRYPOINT ["/libredash-site"]
+ENTRYPOINT ["/leapview-site"]
 CMD ["-addr=:8081"]

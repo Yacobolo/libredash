@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 )
 
 func TestAgentVisualShapeUsesVisualTypeDefaults(t *testing.T) {

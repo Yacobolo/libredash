@@ -36,7 +36,7 @@ func (s *Store) BindInstanceEnvironment(ctx context.Context, environment string)
 	}
 	for _, active := range environments {
 		if active != environment {
-			return fmt.Errorf("cannot bind instance to environment %q: existing active state belongs to %q; use a separate LIBREDASH_HOME or redeploy the project", environment, active)
+			return fmt.Errorf("cannot bind instance to environment %q: existing active state belongs to %q; use a separate LEAPVIEW_HOME or redeploy the project", environment, active)
 		}
 	}
 	if _, err := s.db.ExecContext(ctx, `INSERT INTO platform_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO NOTHING`, instanceEnvironmentSetting, environment); err != nil {
@@ -104,7 +104,7 @@ func ValidateDatabaseInstanceEnvironment(ctx context.Context, path, expected str
 		}
 		active = strings.TrimSpace(active)
 		if active != "" && active != expected {
-			return fmt.Errorf("cannot restore database into environment %q: backup active state belongs to %q; use a separate LIBREDASH_HOME", expected, active)
+			return fmt.Errorf("cannot restore database into environment %q: backup active state belongs to %q; use a separate LEAPVIEW_HOME", expected, active)
 		}
 	}
 	return rows.Err()
@@ -138,5 +138,5 @@ func (s *Store) activeEnvironments(ctx context.Context) ([]string, error) {
 }
 
 func environmentMismatch(bound, requested string) error {
-	return fmt.Errorf("LibreDash instance is bound to environment %q, not %q; use a separate LIBREDASH_HOME for another environment", bound, requested)
+	return fmt.Errorf("LeapView instance is bound to environment %q, not %q; use a separate LEAPVIEW_HOME for another environment", bound, requested)
 }

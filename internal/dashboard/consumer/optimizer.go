@@ -6,9 +6,9 @@ import (
 	"sort"
 	"strings"
 
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	semanticquery "github.com/Yacobolo/libredash/internal/analytics/query"
-	"github.com/Yacobolo/libredash/internal/dataquery"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	semanticquery "github.com/Yacobolo/leapview/internal/analytics/query"
+	"github.com/Yacobolo/leapview/internal/dataquery"
 )
 
 type Strategy string

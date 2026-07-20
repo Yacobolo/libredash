@@ -102,18 +102,18 @@ function toneColor(value: string | undefined, fallback = 'accent'): string {
   switch (tableTone(value, fallback)) {
     case 'success':
     case 'green':
-      return 'var(--ld-fg-success)'
+      return 'var(--lv-fg-success)'
     case 'danger':
     case 'red':
-      return 'var(--ld-fg-danger)'
+      return 'var(--lv-fg-danger)'
     case 'warning':
     case 'yellow':
-      return 'var(--ld-fg-warning)'
+      return 'var(--lv-fg-warning)'
     case 'muted':
     case 'gray':
-      return 'var(--ld-fg-muted)'
+      return 'var(--lv-fg-muted)'
     default:
-      return 'var(--ld-fg-link)'
+      return 'var(--lv-fg-link)'
   }
 }
 
@@ -273,7 +273,7 @@ class ReportTable extends LitElement {
       display: block;
       height: 100%;
       min-height: 0;
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
       font-family: var(--fontStack-system);
     }
 
@@ -283,7 +283,7 @@ class ReportTable extends LitElement {
       height: 100%;
       min-height: 0;
       min-width: 0;
-      background: var(--ld-chart-surface);
+      background: var(--lv-chart-surface);
       isolation: isolate;
     }
 
@@ -295,8 +295,8 @@ class ReportTable extends LitElement {
       justify-content: space-between;
       gap: var(--base-size-8);
       min-height: calc(var(--control-small-size) + var(--base-size-6));
-      border-bottom: var(--ld-border-default);
-      background: var(--ld-chart-surface);
+      border-bottom: var(--lv-border-default);
+      background: var(--lv-chart-surface);
       padding:
         var(--base-size-6)
         var(--base-size-8)
@@ -328,10 +328,10 @@ class ReportTable extends LitElement {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: var(--ld-font-size-body-md);
-      font-weight: var(--ld-font-weight-strong);
+      font-size: var(--lv-font-size-body-md);
+      font-weight: var(--lv-font-weight-strong);
       letter-spacing: 0;
-      line-height: var(--ld-line-height-compact);
+      line-height: var(--lv-line-height-compact);
     }
 
     .visual-options {
@@ -347,17 +347,17 @@ class ReportTable extends LitElement {
 
     .visual-options summary {
       display: grid;
-      width: var(--ld-button-height-xs, var(--control-xsmall-size));
-      height: var(--ld-button-height-xs, var(--control-xsmall-size));
+      width: var(--lv-button-height-xs, var(--control-xsmall-size));
+      height: var(--lv-button-height-xs, var(--control-xsmall-size));
       place-items: center;
-      border: var(--borderWidth-default, var(--ld-border-width)) solid var(--ld-button-invisible-border-rest, var(--control-transparent-borderColor-rest, var(--ld-line-muted)));
-      border-radius: var(--ld-radius-tight);
-      background: var(--ld-button-invisible-bg-rest, var(--control-transparent-bgColor-rest, var(--ld-bg-panel)));
-      color: var(--ld-button-invisible-icon-rest, var(--ld-fg-muted));
+      border: var(--borderWidth-default, var(--lv-border-width)) solid var(--lv-button-invisible-border-rest, var(--control-transparent-borderColor-rest, var(--lv-line-muted)));
+      border-radius: var(--lv-radius-tight);
+      background: var(--lv-button-invisible-bg-rest, var(--control-transparent-bgColor-rest, var(--lv-bg-panel)));
+      color: var(--lv-button-invisible-icon-rest, var(--lv-fg-muted));
       cursor: pointer;
-      font-size: var(--ld-font-size-body-lg);
-      font-weight: var(--ld-font-weight-strong);
-      line-height: var(--ld-line-height-none);
+      font-size: var(--lv-font-size-body-lg);
+      font-weight: var(--lv-font-weight-strong);
+      line-height: var(--lv-line-height-none);
       list-style: none;
     }
 
@@ -373,11 +373,11 @@ class ReportTable extends LitElement {
     .visual-options summary:hover,
     .visual-options summary:focus-visible,
     .visual-options[open] summary {
-      border-color: var(--ld-button-invisible-border-hover, var(--control-transparent-borderColor-hover, var(--ld-line-default)));
-      background: var(--ld-button-invisible-bg-hover, var(--control-transparent-bgColor-hover, var(--ld-bg-panel-muted)));
-      color: var(--ld-fg-default);
-      outline: var(--focus-outline, var(--ld-border-default));
-      outline-color: var(--borderColor-accent-emphasis, var(--ld-line-accent));
+      border-color: var(--lv-button-invisible-border-hover, var(--control-transparent-borderColor-hover, var(--lv-line-default)));
+      background: var(--lv-button-invisible-bg-hover, var(--control-transparent-bgColor-hover, var(--lv-bg-panel-muted)));
+      color: var(--lv-fg-default);
+      outline: var(--focus-outline, var(--lv-border-default));
+      outline-color: var(--borderColor-accent-emphasis, var(--lv-line-accent));
       outline-offset: var(--focus-outline-offset, var(--base-size-2));
     }
 
@@ -388,9 +388,9 @@ class ReportTable extends LitElement {
       z-index: var(--zIndex-dropdown);
       display: grid;
       width: calc(var(--overlay-width-xsmall) - var(--base-size-16));
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-overlay);
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-overlay);
       box-shadow: var(--shadow-floating-small);
       padding: var(--base-size-4);
     }
@@ -399,16 +399,16 @@ class ReportTable extends LitElement {
       display: flex;
       align-items: center;
       gap: var(--base-size-8);
-      min-height: var(--ld-button-height-sm, var(--control-small-size));
-      border: var(--borderWidth-default, var(--ld-border-width)) solid var(--ld-button-invisible-border-rest, var(--control-transparent-borderColor-rest, var(--ld-line-muted)));
-      border-radius: var(--ld-radius-tight);
-      background: var(--ld-button-invisible-bg-rest, var(--control-transparent-bgColor-rest, var(--ld-bg-panel)));
-      color: var(--ld-button-invisible-fg-rest, var(--ld-fg-default));
+      min-height: var(--lv-button-height-sm, var(--control-small-size));
+      border: var(--borderWidth-default, var(--lv-border-width)) solid var(--lv-button-invisible-border-rest, var(--control-transparent-borderColor-rest, var(--lv-line-muted)));
+      border-radius: var(--lv-radius-tight);
+      background: var(--lv-button-invisible-bg-rest, var(--control-transparent-bgColor-rest, var(--lv-bg-panel)));
+      color: var(--lv-button-invisible-fg-rest, var(--lv-fg-default));
       cursor: pointer;
-      padding: 0 var(--ld-button-padding-inline-xs, var(--control-xsmall-paddingInline-normal));
+      padding: 0 var(--lv-button-padding-inline-xs, var(--control-xsmall-paddingInline-normal));
       font: inherit;
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
       text-align: left;
     }
 
@@ -425,10 +425,10 @@ class ReportTable extends LitElement {
 
     .menu button:hover,
     .menu button:focus-visible {
-      border-color: var(--ld-button-invisible-border-hover, var(--control-transparent-borderColor-hover, var(--ld-line-default)));
-      background: var(--ld-button-invisible-bg-hover, var(--control-transparent-bgColor-hover, var(--ld-bg-panel-muted)));
-      outline: var(--focus-outline, var(--ld-border-default));
-      outline-color: var(--borderColor-accent-emphasis, var(--ld-line-accent));
+      border-color: var(--lv-button-invisible-border-hover, var(--control-transparent-borderColor-hover, var(--lv-line-default)));
+      background: var(--lv-button-invisible-bg-hover, var(--control-transparent-bgColor-hover, var(--lv-bg-panel-muted)));
+      outline: var(--focus-outline, var(--lv-border-default));
+      outline-color: var(--borderColor-accent-emphasis, var(--lv-line-accent));
       outline-offset: var(--focus-outline-offset, var(--base-size-2));
     }
 
@@ -438,13 +438,13 @@ class ReportTable extends LitElement {
     }
 
     .menu button:disabled:hover {
-      background: var(--ld-button-invisible-bg-rest, var(--control-transparent-bgColor-rest, var(--ld-bg-panel)));
+      background: var(--lv-button-invisible-bg-rest, var(--control-transparent-bgColor-rest, var(--lv-bg-panel)));
     }
 
     .menu-divider {
       height: var(--borderWidth-default);
       margin: var(--base-size-4) var(--base-size-2);
-      background: var(--ld-line-muted);
+      background: var(--lv-line-muted);
     }
 
     .column-menu {
@@ -455,9 +455,9 @@ class ReportTable extends LitElement {
 
     .column-menu > span {
       padding: var(--base-size-2) var(--base-size-6);
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-strong);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-strong);
       text-transform: uppercase;
     }
 
@@ -466,68 +466,68 @@ class ReportTable extends LitElement {
       align-items: center;
       gap: var(--base-size-8);
       min-height: var(--control-xsmall-size);
-      border-radius: var(--ld-radius-tight);
+      border-radius: var(--lv-radius-tight);
       cursor: pointer;
       padding: 0 var(--base-size-6);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
     }
 
     .column-menu label:hover {
-      background: var(--ld-bg-hover);
+      background: var(--lv-bg-hover);
     }
 
     .column-menu input {
-      accent-color: var(--ld-fg-link);
+      accent-color: var(--lv-fg-link);
     }
 
     .error {
-      border-bottom: var(--ld-border-danger);
-      background: var(--ld-bg-danger-muted);
-      color: var(--ld-fg-danger);
+      border-bottom: var(--lv-border-danger);
+      background: var(--lv-bg-danger-muted);
+      color: var(--lv-fg-danger);
       padding: var(--base-size-8) var(--base-size-12);
-      font-size: var(--ld-font-size-body-md);
-      font-weight: var(--ld-font-weight-strong);
+      font-size: var(--lv-font-size-body-md);
+      font-weight: var(--lv-font-weight-strong);
     }
 
     .head,
     .group-head,
     .row {
       display: grid;
-      grid-template-columns: var(--ld-table-columns);
-      width: var(--ld-table-width, 1080px);
-      min-width: var(--ld-table-width, 1080px);
+      grid-template-columns: var(--lv-table-columns);
+      width: var(--lv-table-width, 1080px);
+      min-width: var(--lv-table-width, 1080px);
     }
 
     .group-head {
       position: sticky;
       top: 0;
       z-index: calc(var(--zIndex-sticky) + 2);
-      border-bottom: var(--ld-border-default);
-      background: var(--ld-bg-panel-muted);
-      color: var(--ld-fg-muted);
+      border-bottom: var(--lv-border-default);
+      background: var(--lv-bg-panel-muted);
+      color: var(--lv-fg-muted);
     }
 
     .group-cell {
       display: flex;
       align-items: center;
       min-width: 0;
-      min-height: var(--ld-group-head-height, 26px);
+      min-height: var(--lv-group-head-height, 26px);
       overflow: hidden;
-      border-right: var(--ld-border-default);
+      border-right: var(--lv-border-default);
       background: inherit;
       padding: 0 var(--base-size-8);
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-strong);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-strong);
       letter-spacing: 0;
       text-transform: uppercase;
     }
 
     .group-cell.measure-group {
       justify-content: center;
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
     }
 
     .group-cell:last-child {
@@ -536,12 +536,12 @@ class ReportTable extends LitElement {
 
     .head {
       position: sticky;
-      top: var(--ld-head-top, 0px);
+      top: var(--lv-head-top, 0px);
       z-index: calc(var(--zIndex-sticky) + 1);
-      border-bottom: var(--ld-border-emphasis);
-      background: var(--ld-bg-panel-muted);
-      color: var(--ld-fg-muted);
-      box-shadow: inset 0 -1px 0 var(--ld-line-emphasis);
+      border-bottom: var(--lv-border-emphasis);
+      background: var(--lv-bg-panel-muted);
+      color: var(--lv-fg-muted);
+      box-shadow: inset 0 -1px 0 var(--lv-line-emphasis);
     }
 
     .header-cell,
@@ -554,8 +554,8 @@ class ReportTable extends LitElement {
 
     .header-cell {
       position: relative;
-      border-right: var(--ld-border-default);
-      background: var(--ld-bg-panel-muted);
+      border-right: var(--lv-border-default);
+      background: var(--lv-bg-panel-muted);
     }
 
     .header-cell:last-child {
@@ -566,10 +566,10 @@ class ReportTable extends LitElement {
     .group-cell.pinned-left,
     .cell.pinned-left {
       position: sticky;
-      left: calc(var(--ld-pin-left, 0px) - 1px);
+      left: calc(var(--lv-pin-left, 0px) - 1px);
       overflow: visible;
       border-right: 0;
-      background: var(--ld-chart-surface);
+      background: var(--lv-chart-surface);
       box-shadow: none;
     }
 
@@ -582,19 +582,19 @@ class ReportTable extends LitElement {
       left: 100%;
       z-index: calc(var(--zIndex-default) + 1);
       width: 10px;
-      border-left: 1px solid var(--ld-line-default);
+      border-left: 1px solid var(--lv-line-default);
       background: inherit;
       pointer-events: none;
     }
 
     .header-cell.pinned-left {
       z-index: calc(var(--zIndex-sticky) + 4);
-      background: var(--ld-bg-panel-muted);
+      background: var(--lv-bg-panel-muted);
     }
 
     .group-cell.pinned-left {
       z-index: calc(var(--zIndex-sticky) + 5);
-      background: var(--ld-bg-panel-muted);
+      background: var(--lv-bg-panel-muted);
     }
 
     .cell.pinned-left {
@@ -625,16 +625,16 @@ class ReportTable extends LitElement {
       justify-content: space-between;
       gap: var(--base-size-8);
       width: 100%;
-      min-height: calc(var(--ld-button-height-sm, var(--control-small-size)) + var(--base-size-6));
-      border: var(--borderWidth-default, var(--ld-border-width)) solid var(--ld-button-invisible-border-rest, var(--control-transparent-borderColor-rest, var(--ld-line-muted)));
+      min-height: calc(var(--lv-button-height-sm, var(--control-small-size)) + var(--base-size-6));
+      border: var(--borderWidth-default, var(--lv-border-width)) solid var(--lv-button-invisible-border-rest, var(--control-transparent-borderColor-rest, var(--lv-line-muted)));
       border-bottom: var(--borderWidth-thick) solid transparent;
-      background: var(--ld-button-invisible-bg-rest, var(--control-transparent-bgColor-rest, var(--ld-bg-panel)));
-      color: var(--ld-button-invisible-fg-rest, inherit);
+      background: var(--lv-button-invisible-bg-rest, var(--control-transparent-bgColor-rest, var(--lv-bg-panel)));
+      color: var(--lv-button-invisible-fg-rest, inherit);
       cursor: pointer;
       padding: 0 var(--base-size-8);
       font: inherit;
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-strong);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-strong);
       letter-spacing: 0;
       text-align: left;
       text-transform: uppercase;
@@ -642,11 +642,11 @@ class ReportTable extends LitElement {
 
     button.header-button:hover,
     button.header-button:focus-visible {
-      border-color: var(--ld-button-invisible-border-hover, var(--control-transparent-borderColor-hover, var(--ld-line-default)));
-      background: var(--ld-button-invisible-bg-hover, var(--control-transparent-bgColor-hover));
-      color: var(--ld-fg-default);
-      outline: var(--focus-outline, var(--ld-border-default));
-      outline-color: var(--borderColor-accent-emphasis, var(--ld-line-accent));
+      border-color: var(--lv-button-invisible-border-hover, var(--control-transparent-borderColor-hover, var(--lv-line-default)));
+      background: var(--lv-button-invisible-bg-hover, var(--control-transparent-bgColor-hover));
+      color: var(--lv-fg-default);
+      outline: var(--focus-outline, var(--lv-border-default));
+      outline-color: var(--borderColor-accent-emphasis, var(--lv-line-accent));
       outline-offset: var(--focus-outline-offset, var(--base-size-2));
     }
 
@@ -654,8 +654,8 @@ class ReportTable extends LitElement {
       display: inline-grid;
       min-width: var(--base-size-20);
       place-items: center;
-      color: var(--ld-fg-link);
-      font-size: var(--ld-font-size-body-md);
+      color: var(--lv-fg-link);
+      font-size: var(--lv-font-size-body-md);
       opacity: 0;
     }
 
@@ -678,13 +678,13 @@ class ReportTable extends LitElement {
       inset-block: 3px;
       left: 2px;
       width: 2px;
-      border-radius: var(--ld-radius-full);
+      border-radius: var(--lv-radius-full);
       background: transparent;
     }
 
     .header-cell:hover .column-resizer::after,
     .column-resizer.resizing::after {
-      background: var(--ld-fg-link);
+      background: var(--lv-fg-link);
     }
 
     .table-frame {
@@ -696,8 +696,8 @@ class ReportTable extends LitElement {
       min-width: 0;
       margin-top: -1px;
       overflow: hidden;
-      border-top: 1px solid var(--ld-line-default);
-      background: var(--ld-chart-surface);
+      border-top: 1px solid var(--lv-line-default);
+      background: var(--lv-chart-surface);
     }
 
     .table-scrollport {
@@ -706,7 +706,7 @@ class ReportTable extends LitElement {
       overflow: auto;
       min-height: 0;
       min-width: 0;
-      background: var(--ld-chart-surface);
+      background: var(--lv-chart-surface);
       overscroll-behavior: none;
       scrollbar-gutter: stable;
     }
@@ -714,15 +714,15 @@ class ReportTable extends LitElement {
     .table-plane {
       position: relative;
       isolation: isolate;
-      width: var(--ld-table-width, 1080px);
-      min-width: var(--ld-table-width, 1080px);
+      width: var(--lv-table-width, 1080px);
+      min-width: var(--lv-table-width, 1080px);
     }
 
     .canvas {
       position: relative;
       z-index: 0;
-      width: var(--ld-table-width, 1080px);
-      min-width: var(--ld-table-width, 1080px);
+      width: var(--lv-table-width, 1080px);
+      min-width: var(--lv-table-width, 1080px);
     }
 
     .grid-lines {
@@ -737,17 +737,17 @@ class ReportTable extends LitElement {
       top: 0;
       bottom: 0;
       width: 1px;
-      background: var(--ld-line-muted);
+      background: var(--lv-line-muted);
     }
 
     .resize-guide {
       position: absolute;
       top: 0;
       bottom: 0;
-      left: var(--ld-resize-guide-x, -9999px);
+      left: var(--lv-resize-guide-x, -9999px);
       z-index: var(--zIndex-overlay);
       width: 0;
-      border-left: 2px solid var(--ld-fg-link);
+      border-left: 2px solid var(--lv-fg-link);
       box-shadow: 0 0 0 var(--borderWidth-default) var(--borderColor-accent-muted);
       pointer-events: none;
     }
@@ -756,39 +756,39 @@ class ReportTable extends LitElement {
       position: absolute;
       inset-inline: 0;
       z-index: 1;
-      height: var(--ld-row-height, 34px);
-      --ld-row-bg: var(--ld-chart-surface);
-      --ld-row-bg-hover: var(--control-transparent-bgColor-hover);
-      --ld-row-bg-selected: var(--bgColor-accent-muted);
-      --ld-row-bg-selected-hover: var(--selection-bgColor);
-      background: var(--ld-row-bg);
-      color: var(--ld-fg-default);
+      height: var(--lv-row-height, 34px);
+      --lv-row-bg: var(--lv-chart-surface);
+      --lv-row-bg-hover: var(--control-transparent-bgColor-hover);
+      --lv-row-bg-selected: var(--bgColor-accent-muted);
+      --lv-row-bg-selected-hover: var(--selection-bgColor);
+      background: var(--lv-row-bg);
+      color: var(--lv-fg-default);
     }
 
     .zebra .row:nth-child(even) {
-      --ld-row-bg: var(--ld-table-stripe);
+      --lv-row-bg: var(--lv-table-stripe);
     }
 
     .grid-rows .row,
     .grid-full .row {
-      border-bottom: var(--ld-border-muted);
+      border-bottom: var(--lv-border-muted);
     }
 
     .row:hover {
-      background: var(--ld-row-bg-hover);
+      background: var(--lv-row-bg-hover);
     }
 
     .row.hovered {
-      background: var(--ld-row-bg-hover);
+      background: var(--lv-row-bg-hover);
     }
 
     .row.selected {
-      background: var(--ld-row-bg-selected);
+      background: var(--lv-row-bg-selected);
     }
 
     .row.selected:hover,
     .row.selected.hovered {
-      background: var(--ld-row-bg-selected-hover);
+      background: var(--lv-row-bg-selected-hover);
     }
 
     .row.skeleton-row {
@@ -796,7 +796,7 @@ class ReportTable extends LitElement {
     }
 
     .row.skeleton-row:hover {
-      background: var(--ld-row-bg);
+      background: var(--lv-row-bg);
     }
 
     .cell {
@@ -809,24 +809,24 @@ class ReportTable extends LitElement {
       cursor: default;
       font: inherit;
       padding: 0 var(--base-size-8);
-      font-size: var(--ld-font-size-body-md);
-      font-weight: var(--ld-font-weight-strong);
+      font-size: var(--lv-font-size-body-md);
+      font-weight: var(--lv-font-weight-strong);
       text-align: left;
     }
 
     .density-compact .cell {
       padding: 0 var(--base-size-6);
-      font-size: var(--ld-font-size-caption);
+      font-size: var(--lv-font-size-caption);
     }
 
     .density-spacious .cell {
       padding: 0 var(--base-size-12);
-      font-size: var(--ld-font-size-body-lg);
+      font-size: var(--lv-font-size-body-lg);
     }
 
     .grid-columns .cell,
     .grid-full .cell {
-      border-right: var(--ld-border-muted);
+      border-right: var(--lv-border-muted);
     }
 
     .cell:last-child {
@@ -834,7 +834,7 @@ class ReportTable extends LitElement {
     }
 
     .cell.active {
-      outline: var(--ld-border-width-focus) solid var(--ld-fg-link);
+      outline: var(--lv-border-width-focus) solid var(--lv-fg-link);
       outline-offset: var(--base-size-negative-2);
       background: var(--bgColor-accent-muted);
     }
@@ -844,7 +844,7 @@ class ReportTable extends LitElement {
     }
 
     .cell.has-background {
-      background: color-mix(in srgb, var(--ld-cell-bg-color), transparent var(--ld-cell-bg-fade, 78%));
+      background: color-mix(in srgb, var(--lv-cell-bg-color), transparent var(--lv-cell-bg-fade, 78%));
     }
 
     .cell.has-data-bar {
@@ -857,9 +857,9 @@ class ReportTable extends LitElement {
       inset-block: 5px;
       left: 6px;
       z-index: var(--zIndex-behind);
-      width: var(--ld-cell-bar-width, 0%);
-      border-radius: var(--ld-radius-tight);
-      background: color-mix(in srgb, var(--ld-cell-bar-color, var(--ld-fg-link)), transparent 74%);
+      width: var(--lv-cell-bar-width, 0%);
+      border-radius: var(--lv-radius-tight);
+      background: color-mix(in srgb, var(--lv-cell-bar-color, var(--lv-fg-link)), transparent 74%);
     }
 
     .cell-badge {
@@ -869,39 +869,39 @@ class ReportTable extends LitElement {
       justify-content: center;
       overflow: hidden;
       border: 1px solid currentColor;
-      border-radius: var(--ld-radius-full);
+      border-radius: var(--lv-radius-full);
       padding: 1px 7px;
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-strong);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-strong);
       line-height: 1.45;
     }
 
     .cell-badge.tone-success {
-      background: var(--ld-bg-success-muted);
-      color: var(--ld-fg-success);
+      background: var(--lv-bg-success-muted);
+      color: var(--lv-fg-success);
     }
 
     .cell-badge.tone-danger {
-      background: var(--ld-bg-danger-muted);
-      color: var(--ld-fg-danger);
+      background: var(--lv-bg-danger-muted);
+      color: var(--lv-fg-danger);
     }
 
     .cell-badge.tone-warning {
-      background: var(--ld-bg-warning-muted);
-      color: var(--ld-fg-warning);
+      background: var(--lv-bg-warning-muted);
+      color: var(--lv-fg-warning);
     }
 
     .cell-badge.tone-muted {
-      background: var(--ld-bg-panel-muted);
-      color: var(--ld-fg-muted);
+      background: var(--lv-bg-panel-muted);
+      color: var(--lv-fg-muted);
     }
 
     .cell-badge.tone-accent,
     .cell-badge.tone-blue {
-      background: var(--ld-bg-accent-muted);
-      color: var(--ld-fg-link);
+      background: var(--lv-bg-accent-muted);
+      color: var(--lv-fg-link);
     }
 
     .grid-none .grid-lines,
@@ -914,12 +914,12 @@ class ReportTable extends LitElement {
       width: min(76%, 140px);
       height: 9px;
       overflow: hidden;
-      border-radius: var(--ld-radius-full);
+      border-radius: var(--lv-radius-full);
       background: linear-gradient(
         90deg,
-        var(--ld-bg-panel-muted) 0%,
-        color-mix(in srgb, var(--ld-fg-muted), transparent 82%) 45%,
-        var(--ld-bg-panel-muted) 90%
+        var(--lv-bg-panel-muted) 0%,
+        color-mix(in srgb, var(--lv-fg-muted), transparent 82%) 45%,
+        var(--lv-bg-panel-muted) 90%
       );
       background-size: 220% 100%;
       animation: shimmer var(--base-duration-1000) var(--motion-easing-move) infinite;
@@ -939,9 +939,9 @@ class ReportTable extends LitElement {
       display: grid;
       min-height: 240px;
       place-items: center;
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-body-lg);
-      font-weight: var(--ld-font-weight-strong);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-body-lg);
+      font-weight: var(--lv-font-weight-strong);
     }
 
     .loading {
@@ -951,7 +951,7 @@ class ReportTable extends LitElement {
       z-index: var(--zIndex-sticky);
       height: var(--base-size-4);
       overflow: hidden;
-      background: var(--ld-bg-accent-muted);
+      background: var(--lv-bg-accent-muted);
     }
 
     .loading::after {
@@ -959,7 +959,7 @@ class ReportTable extends LitElement {
       display: block;
       width: 34%;
       height: 100%;
-      background: var(--ld-fg-link);
+      background: var(--lv-fg-link);
       animation: load var(--base-duration-900) var(--motion-easing-move) infinite;
     }
 
@@ -969,12 +969,12 @@ class ReportTable extends LitElement {
       justify-content: space-between;
       gap: var(--base-size-8);
       min-height: calc(var(--control-small-size) + var(--base-size-6));
-      border-top: var(--ld-border-default);
-      background: var(--ld-bg-panel-muted);
+      border-top: var(--lv-border-default);
+      background: var(--lv-bg-panel-muted);
       padding: var(--base-size-6) var(--control-small-paddingInline-normal);
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
     }
 
     .footer span {
@@ -991,8 +991,8 @@ class ReportTable extends LitElement {
     }
 
     .footer strong {
-      color: var(--ld-fg-default);
-      font-weight: var(--ld-font-weight-strong);
+      color: var(--lv-fg-default);
+      font-weight: var(--lv-font-weight-strong);
     }
 
     @keyframes load {
@@ -1310,7 +1310,7 @@ class ReportTable extends LitElement {
     })
     if (!command) return
     this.dispatchEvent(
-      new CustomEvent('ld-interaction-select', {
+      new CustomEvent('lv-interaction-select', {
         bubbles: true,
         composed: true,
         detail: command,
@@ -1335,7 +1335,7 @@ class ReportTable extends LitElement {
   private pinnedCellStyle(column: any): string {
     if (this.columnPinPosition(column) !== 'left') return ''
     const offset = column.getStart?.('left') ?? callMemoOrStaticFn(column, 'getStart', column_getStart, 'left') ?? 0
-    return `--ld-pin-left:${Math.max(0, Number(offset) || 0)}px`
+    return `--lv-pin-left:${Math.max(0, Number(offset) || 0)}px`
   }
 
   private beginColumnResize(event: MouseEvent | TouchEvent, header: any): void {
@@ -1468,15 +1468,15 @@ class ReportTable extends LitElement {
     if (background) {
       const percent = scalePercent(value, background)
       const color = toneColor(background.highColor || background.background || background.color, 'warning')
-      styles.push(`--ld-cell-bg-color:${color}`)
-      styles.push(`--ld-cell-bg-fade:${Math.max(66, 92 - Math.round(percent * 0.22))}%`)
+      styles.push(`--lv-cell-bg-color:${color}`)
+      styles.push(`--lv-cell-bg-fade:${Math.max(66, 92 - Math.round(percent * 0.22))}%`)
     }
     const text = textColorRule(value, column)
     if (text?.color) styles.push(`color:${toneColor(text.color)}`)
     const bar = dataBarRule(column)
     if (bar) {
-      styles.push(`--ld-cell-bar-width:${scalePercent(value, bar)}%`)
-      styles.push(`--ld-cell-bar-color:${toneColor(bar.color || bar.highColor || 'accent')}`)
+      styles.push(`--lv-cell-bar-width:${scalePercent(value, bar)}%`)
+      styles.push(`--lv-cell-bar-color:${toneColor(bar.color || bar.highColor || 'accent')}`)
     }
     return styles.join(';')
   }
@@ -1562,11 +1562,11 @@ class ReportTable extends LitElement {
     const tableWidth = this.tableWidthFor(columns)
     const columnLineOffsets = this.columnLineOffsetsFor(columns)
     const shellStyle = [
-      `--ld-table-columns:${gridTemplate}`,
-      `--ld-table-width:${tableWidth}px`,
-      `--ld-row-height:${this.rowHeight}px`,
-      `--ld-group-head-height:${groupHeaderHeight}px`,
-      `--ld-head-top:${hasGroupHeaderRow ? groupHeaderHeight : 0}px`,
+      `--lv-table-columns:${gridTemplate}`,
+      `--lv-table-width:${tableWidth}px`,
+      `--lv-row-height:${this.rowHeight}px`,
+      `--lv-group-head-height:${groupHeaderHeight}px`,
+      `--lv-head-top:${hasGroupHeaderRow ? groupHeaderHeight : 0}px`,
     ].join(';')
     const style = this.table.style
     const shellClass = [
@@ -1620,7 +1620,7 @@ class ReportTable extends LitElement {
           ${loading ? html`<div class="loading" aria-hidden="true"></div>` : nothing}
           <div class="table-scrollport" ${ref(this.bodyViewportRef)} @scroll=${this.handleScroll}>
             <div class="table-plane">
-              ${this.resizeGuideX >= 0 ? html`<span class="resize-guide" style=${`--ld-resize-guide-x:${this.resizeGuideX}px`}></span>` : nothing}
+              ${this.resizeGuideX >= 0 ? html`<span class="resize-guide" style=${`--lv-resize-guide-x:${this.resizeGuideX}px`}></span>` : nothing}
               ${this.renderGroupHeaderRows(headers)}
               ${this.renderHeaderRow(headers)}
               ${this.availableRows === 0 && !loading ? html`<div class="empty">Waiting for table data</div>` : html`
@@ -1725,7 +1725,7 @@ class ReportTable extends LitElement {
       this.expectedBlocks.set(block, { start, requestSeq, resetVersion, sort })
     }
     this.requestUpdate()
-    this.dispatchEvent(new CustomEvent<VisualWindowCommand>('ld-visual-window-change', {
+    this.dispatchEvent(new CustomEvent<VisualWindowCommand>('lv-visual-window-change', {
       bubbles: true,
       composed: true,
       detail: {
@@ -1805,7 +1805,7 @@ class ReportTable extends LitElement {
     if (action === 'clear-selection') {
       if (tableId) {
         this.dispatchEvent(
-          new CustomEvent('ld-interaction-select', {
+          new CustomEvent('lv-interaction-select', {
             bubbles: true,
             composed: true,
             detail: {
@@ -1821,7 +1821,7 @@ class ReportTable extends LitElement {
       }
     }
     this.dispatchEvent(
-      new CustomEvent('ld-visual-action', {
+      new CustomEvent('lv-visual-action', {
         bubbles: true,
         composed: true,
         detail: {
@@ -1864,4 +1864,4 @@ function cardinalityLabel(cardinality: TableSignal['cardinality']): string {
   }
 }
 
-customElements.define('ld-report-table', ReportTable)
+customElements.define('lv-report-table', ReportTable)

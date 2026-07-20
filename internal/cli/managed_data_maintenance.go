@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/manageddata/control"
-	"github.com/Yacobolo/libredash/internal/manageddata/maintenance"
-	"github.com/Yacobolo/libredash/internal/manageddata/s3multipart"
+	"github.com/Yacobolo/leapview/internal/manageddata/control"
+	"github.com/Yacobolo/leapview/internal/manageddata/maintenance"
+	"github.com/Yacobolo/leapview/internal/manageddata/s3multipart"
 )
 
 type managedDataMaintenance struct {

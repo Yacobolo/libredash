@@ -1,8 +1,8 @@
-# Get started with LibreDash
+# Get started with LeapView
 
-LibreDash keeps the semantic layer, report definition, and visual runtime together. Start with the included workspace, then make it your own.
+LeapView keeps the semantic layer, report definition, and visual runtime together. Start with the included workspace, then make it your own.
 
-This guide uses a source checkout so you can edit the bundled project. To evaluate the running server without building LibreDash, start with the public-image path in [Installation](/docs/installation).
+This guide uses a source checkout so you can edit the bundled project. To evaluate the running server without building LeapView, start with the public-image path in [Installation](/docs/installation).
 
 ## Bootstrap the workspace
 
@@ -12,7 +12,7 @@ Download the sample data and prepare the local workspace.
 task bootstrap
 ```
 
-## Run LibreDash
+## Run LeapView
 
 Start the local application and open the dashboard workspace.
 
@@ -26,7 +26,7 @@ Keep the project entry point, shared data inputs, and workspace-owned models and
 
 ```text
 dashboards/
-  libredash.yaml
+  leapview.yaml
   connections/
     olist.yaml
   sources/
@@ -44,4 +44,4 @@ dashboards/
 
 ## Explore the visual system
 
-See the chart, table, matrix, and pivot components that the dashboard contract can render in the [visual gallery](/visuals). The project source and issue tracker are available on [GitHub](https://github.com/Yacobolo/libredash).
+See the chart, table, matrix, and pivot components that the dashboard contract can render in the [visual gallery](/visuals). The project source and issue tracker are available on [GitHub](https://github.com/Yacobolo/leapview).

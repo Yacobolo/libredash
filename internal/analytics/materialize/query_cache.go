@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/Yacobolo/libredash/internal/dataquery"
+	"github.com/Yacobolo/leapview/internal/dataquery"
 	"golang.org/x/sync/singleflight"
 )
 

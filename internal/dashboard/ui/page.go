@@ -8,14 +8,15 @@ import (
 	"strings"
 	"time"
 
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
-	"github.com/Yacobolo/libredash/internal/staticasset"
-	uiactions "github.com/Yacobolo/libredash/internal/ui/actions"
-	uisignals "github.com/Yacobolo/libredash/internal/ui/signals"
-	"github.com/Yacobolo/libredash/pkg/pagestream"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	"github.com/Yacobolo/leapview/internal/brand"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	"github.com/Yacobolo/leapview/internal/staticasset"
+	uiactions "github.com/Yacobolo/leapview/internal/ui/actions"
+	uisignals "github.com/Yacobolo/leapview/internal/ui/signals"
+	"github.com/Yacobolo/leapview/pkg/pagestream"
 
-	"github.com/Yacobolo/libredash/internal/dashboard"
+	"github.com/Yacobolo/leapview/internal/dashboard"
 	g "maragu.dev/gomponents"
 	h "maragu.dev/gomponents/html"
 )
@@ -82,6 +83,7 @@ func inspectorElement() g.Node {
 
 func pageHead(extra ...g.Node) []g.Node {
 	nodes := []g.Node{
+		h.Link(h.Rel("icon"), h.Href(staticAsset(brand.FaviconPath)), h.Type("image/svg+xml")),
 		h.Link(h.Rel("stylesheet"), h.Href(staticAsset("/static/app.css"))),
 		h.Script(h.Src(staticAsset("/static/theme.js"))),
 		h.Script(h.Type("module"), h.Src(staticAsset("/static/command.js"))),
@@ -108,7 +110,7 @@ func Page(clientID, csrfToken string, catalog dashboard.Catalog, report reportde
 	reloadAction := uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/reload", "runtime", "filters.controls")
 	filtersUpdate := "$filters = evt.detail.filters; $urlParams = evt.detail.urlParams; window.DatastarURLSync && window.DatastarURLSync.replace($urlParams); " + visualReset
 	return pagestream.RenderPage(pagestream.PageSpec{
-		Title:             "LibreDash",
+		Title:             brand.Name,
 		DatastarScriptURL: datastarScriptURL(),
 		HTMLAttrs: []g.Node{
 			g.Attr("data-color-mode", "auto"),
@@ -125,22 +127,22 @@ func Page(clientID, csrfToken string, catalog dashboard.Catalog, report reportde
 		MainAttrs: []g.Node{
 			h.ID("dashboard"),
 			h.Class(appRootClass),
-			g.Attr("data-on:datastar-url-params-sync__window", "$urlParams = evt.detail.params; $filters = window.LibreDashFilterURL.fromParams($filterConfig, $filters, $urlParams); "+visualReset+reloadAction),
+			g.Attr("data-on:datastar-url-params-sync__window", "$urlParams = evt.detail.params; $filters = window.LeapViewFilterURL.fromParams($filterConfig, $filters, $urlParams); "+visualReset+reloadAction),
 		},
 		UpdatesURL: dashboardUpdatesURL,
 		Body: []g.Node{
-			g.El("ld-app-shell",
-				g.El("ld-dashboard-page",
+			g.El("lv-app-shell",
+				g.El("lv-dashboard-page",
 					g.Attr("slot", "page"),
 					g.Attr("workspace-id", catalog.Workspace.ID),
 					g.Attr("dashboard-id", report.ID),
 					g.Attr("page-id", activePage.ID),
-					g.Attr("data-on:ld-filters-change", filtersUpdate+reloadAction),
-					g.Attr("data-on:ld-filters-reset", filtersUpdate+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/reset-filters", "runtime")),
-					g.Attr("data-on:ld-filters-refresh", reloadAction),
-					g.Attr("data-on:ld-selection-clear", "$filters.selections = []; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/clear-selection", "runtime")),
-					g.Attr("data-on:ld-interaction-select", "$interactionCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/select", "runtime", "interactionCommand")),
-					g.Attr("data-on:ld-visual-window-change", "$visualWindowCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/visual-window", "runtime", "visualWindowCommand")),
+					g.Attr("data-on:lv-filters-change", filtersUpdate+reloadAction),
+					g.Attr("data-on:lv-filters-reset", filtersUpdate+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/reset-filters", "runtime")),
+					g.Attr("data-on:lv-filters-refresh", reloadAction),
+					g.Attr("data-on:lv-selection-clear", "$filters.selections = []; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/clear-selection", "runtime")),
+					g.Attr("data-on:lv-interaction-select", "$interactionCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/select", "runtime", "interactionCommand")),
+					g.Attr("data-on:lv-visual-window-change", "$visualWindowCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/visual-window", "runtime", "visualWindowCommand")),
 				),
 			),
 			inspectorElement(),

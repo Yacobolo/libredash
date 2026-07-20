@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/docvalidation"
+	"github.com/Yacobolo/leapview/internal/docvalidation"
 )
 
 func TestMarkdownYAMLExamplesAreValid(t *testing.T) {

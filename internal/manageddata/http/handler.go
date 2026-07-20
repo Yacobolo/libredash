@@ -13,10 +13,10 @@ import (
 	"strconv"
 	"strings"
 
-	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
-	"github.com/Yacobolo/libredash/internal/manageddata"
-	"github.com/Yacobolo/libredash/internal/manageddata/control"
-	"github.com/Yacobolo/libredash/internal/manageddata/s3multipart"
+	apigenapi "github.com/Yacobolo/leapview/internal/api/gen"
+	"github.com/Yacobolo/leapview/internal/manageddata"
+	"github.com/Yacobolo/leapview/internal/manageddata/control"
+	"github.com/Yacobolo/leapview/internal/manageddata/s3multipart"
 )
 
 const (
@@ -587,7 +587,7 @@ func (h *Handler) writePublicError(w stdhttp.ResponseWriter, r *stdhttp.Request,
 	_ = details
 	w.Header().Set("Content-Type", "application/problem+json")
 	h.writeJSON(w, status, apigenapi.ProblemDetails{
-		Type: "https://libredash.dev/problems/managed-data", Title: stdhttp.StatusText(status), Status: int32(status),
+		Type: "https://leapview.dev/problems/managed-data", Title: stdhttp.StatusText(status), Status: int32(status),
 		Detail: message, Instance: r.URL.Path, Code: fmt.Sprintf("MANAGED_DATA_%d", status), RequestId: requestID,
 		Errors: []apigenapi.ProblemFieldError{},
 	})

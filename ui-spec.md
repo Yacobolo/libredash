@@ -1,6 +1,6 @@
-# LibreDash UI North Star
+# LeapView UI North Star
 
-LibreDash UI is a stream-first MPA. Go renders documents with Gomponents, Datastar stores client signals, `/updates` streams signal patches, and Lit renders route roots from the Datastar signal store.
+LeapView UI is a stream-first MPA. Go renders documents with Gomponents, Datastar stores client signals, `/updates` streams signal patches, and Lit renders route roots from the Datastar signal store.
 
 It is not a React-style SPA.
 
@@ -47,13 +47,13 @@ Gomponents must not build product UI internals. Lit must not become a router, da
 
 ## Document Shape
 
-Go chooses the route root. `ld-app-shell` provides chrome and a page slot; it does not switch on route kind.
+Go chooses the route root. `lv-app-shell` provides chrome and a page slot; it does not switch on route kind.
 
 ```html
 <main data-init="@get('/updates?...', {openWhenHidden: true})">
-  <ld-app-shell>
-    <ld-some-route-root slot="page" route-id="..."></ld-some-route-root>
-  </ld-app-shell>
+  <lv-app-shell>
+    <lv-some-route-root slot="page" route-id="..."></lv-some-route-root>
+  </lv-app-shell>
 </main>
 ```
 
@@ -77,7 +77,7 @@ Commands are CQRS write endpoints. They receive command/read context from Datast
 
 Commands must not reopen `/updates`, return ad hoc JSON read models, or make Lit fetch backend state directly.
 
-CSRF is document security metadata, not application state. Mutating pages render `<meta name="csrf-token" content="...">`; Datastar command expressions call `window.LibreDashCommand.headers()`.
+CSRF is document security metadata, not application state. Mutating pages render `<meta name="csrf-token" content="...">`; Datastar command expressions call `window.LeapViewCommand.headers()`.
 
 ## Signals
 
@@ -113,7 +113,7 @@ Shared components must be static or property-driven. They must not introduce hid
 
 - Tailwind is for outer light DOM and minimal Go shell.
 - Lit components use Shadow DOM CSS.
-- Lit CSS consumes Primer and LibreDash CSS variables.
+- Lit CSS consumes Primer and LeapView CSS variables.
 - Tailwind utilities are not injected into Shadow DOM.
 - Global CSS contains tokens, imports, source declarations, and document defaults.
 - Product UI must not depend on global selectors.

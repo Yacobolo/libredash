@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sort"
 
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 )
 
 // CompiledModel is the immutable semantic metadata shared by every query in a

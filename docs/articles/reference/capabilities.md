@@ -4,7 +4,7 @@ This page maps the supported product surface. Generated configuration, CLI, API,
 
 ## Configuration resources
 
-LibreDash supports these versioned YAML resource families:
+LeapView supports these versioned YAML resource families:
 
 - project discovery: Project;
 - project data access: Connection and Source;
@@ -59,6 +59,6 @@ The supported Hetzner module provides a single-node production topology with Cad
 
 ## Boundaries
 
-LibreDash is dashboards-as-code: browser edits are not the durable authoring source. Browser clients do not receive unrestricted SQL or credentials. DuckLake snapshots are internal serving consistency and cleanup boundaries, not a general customer-facing time-travel/version browser. The provided single-node deployment is not horizontal high availability.
+LeapView is dashboards-as-code: browser edits are not the durable authoring source. Browser clients do not receive unrestricted SQL or credentials. DuckLake snapshots are internal serving consistency and cleanup boundaries, not a general customer-facing time-travel/version browser. The provided single-node deployment is not horizontal high availability.
 
 Use the generated [Configuration](/docs/config/project), [CLI](/docs/cli/reference), [API](/docs/api), and [visual](/docs/visuals/overview) catalogs to confirm exact support in the current version.

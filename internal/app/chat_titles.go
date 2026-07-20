@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/agent"
-	"github.com/Yacobolo/libredash/internal/ui"
+	"github.com/Yacobolo/leapview/internal/agent"
+	"github.com/Yacobolo/leapview/internal/ui"
 )
 
 func (s *Server) generateConversationTitleAsync(scope agent.Scope, conversationID, clientID string) {

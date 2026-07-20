@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/asyncjob"
-	platformdb "github.com/Yacobolo/libredash/internal/platform/db"
+	"github.com/Yacobolo/leapview/internal/asyncjob"
+	platformdb "github.com/Yacobolo/leapview/internal/platform/db"
 )
 
 type Repository struct{ q *platformdb.Queries }

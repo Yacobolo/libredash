@@ -1,10 +1,10 @@
-# LibreDash Project Overview
+# LeapView Project Overview
 
-LibreDash is a dashboards-as-code BI monolith. Go owns configuration compilation, security, deployments, managed data, DuckDB/DuckLake execution, and the Datastar SSE command loop. Gomponents renders page shells; Lit components render typed signal payloads in the browser.
+LeapView is a dashboards-as-code BI monolith. Go owns configuration compilation, security, deployments, managed data, DuckDB/DuckLake execution, and the Datastar SSE command loop. Gomponents renders page shells; Lit components render typed signal payloads in the browser.
 
 ## Architecture
 
-- `dashboards/libredash.yaml` is the project entrypoint. It references global connections and sources plus workspace-scoped models, semantic models, dashboards, and access policy.
+- `dashboards/leapview.yaml` is the project entrypoint. It references global connections and sources plus workspace-scoped models, semantic models, dashboards, and access policy.
 - `internal/workspace/compiler/` loads, validates, and compiles the project into deployable serving-state artifacts.
 - `internal/deployment/`, `internal/servingstate/`, and `internal/runtimehost/` prepare immutable serving-state generations, activate them per workspace/environment, lease DuckLake snapshots, and drain readers safely during cutover.
 - `internal/manageddata/` implements local and S3-backed ingestion, revisions, upload protocols, runtime views, retention, and binding resolution.
@@ -14,7 +14,7 @@ LibreDash is a dashboards-as-code BI monolith. Go owns configuration compilation
 - `pkg/pagestream/` owns the shared page/SSE transport, signal history, broker, tracing, and escaped Datastar action construction.
 - `api/signals/main.tsp` is the source of truth for browser signal contracts. Generation produces Go models in `internal/ui/signals/models.gen.go` and TypeScript types in `web/generated/signals/index.ts`.
 - `internal/ui/` and `internal/dashboard/ui/` render gomponents document shells. `web/components/` contains Lit route and visual components.
-- ECharts is the built-in chart renderer. TanStack powers table state and virtualization behind LibreDash-owned signal/query contracts.
+- ECharts is the built-in chart renderer. TanStack powers table state and virtualization behind LeapView-owned signal/query contracts.
 
 ## Runtime Flow
 
@@ -27,8 +27,8 @@ LibreDash is a dashboards-as-code BI monolith. Go owns configuration compilation
 
 ## Important Files
 
-- `cmd/libredash/main.go` and `internal/cli/serve.go`: process startup and lifecycle.
-- `cmd/libredash-site/main.go` and `internal/site/http/`: independently deployable public site startup and HTTP adapter.
+- `cmd/leapview/main.go` and `internal/cli/serve.go`: process startup and lifecycle.
+- `cmd/leapview-site/main.go` and `internal/site/http/`: independently deployable public site startup and HTTP adapter.
 - `internal/app/router.go`: canonical page, command, auth, admin, and API routes.
 - `internal/workspace/compiler/compiler.go`: project compilation entrypoint.
 - `internal/runtimehost/manager.go`: serving-generation and snapshot-lease lifecycle.

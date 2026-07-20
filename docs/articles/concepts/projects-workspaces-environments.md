@@ -1,13 +1,13 @@
 # Projects, workspaces, and environments
 
-Projects, workspaces, and instance environments are separate concepts. A LibreDash instance serves exactly one environment; use separate instance targets for development, staging, and production.
+Projects, workspaces, and instance environments are separate concepts. A LeapView instance serves exactly one environment; use separate instance targets for development, staging, and production.
 
 ## Project
 
 A project is the atomic configuration-as-code delivery unit. Its manifest discovers project-global connections and sources and one or more workspace manifests:
 
 ```yaml
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Project
 metadata:
   name: commerce
@@ -53,7 +53,7 @@ The standard progression is:
 
 ## Atomic delivery
 
-One project deployment may change global references and several workspaces together. LibreDash builds and validates the candidate before activation. Activation switches the serving pointers only after the candidate is acceptable, so a failed candidate does not partially update one workspace while leaving another on incompatible definitions.
+One project deployment may change global references and several workspaces together. LeapView builds and validates the candidate before activation. Activation switches the serving pointers only after the candidate is acceptable, so a failed candidate does not partially update one workspace while leaving another on incompatible definitions.
 
 Managed-data revisions follow the same principle. A plan identifies immutable revisions; deployment activates the reviewed combination. Avoid mutable file replacement in an active serving directory because it bypasses that boundary.
 

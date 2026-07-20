@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/access"
-	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
-	"github.com/Yacobolo/libredash/internal/workspace"
+	"github.com/Yacobolo/leapview/internal/access"
+	apigenapi "github.com/Yacobolo/leapview/internal/api/gen"
+	"github.com/Yacobolo/leapview/internal/workspace"
 )
 
 func TestServingSnapshotIsOwnedByServer(t *testing.T) {
@@ -71,7 +71,7 @@ func TestAPIGenUsesTypeSpecV053(t *testing.T) {
 	taskText := string(taskfile)
 	for _, want := range []string{
 		"- task: api:generate\n      - task: ui-signals:generate\n      - task: schema:generate",
-		"schema:generate:\n    desc: Generate JSON Schema artifacts for LibreDash YAML contracts\n    deps:\n      - db:generate\n      - config:generate\n      - api:generate\n      - ui-signals:generate",
+		"schema:generate:\n    desc: Generate JSON Schema artifacts for LeapView YAML contracts\n    deps:\n      - db:generate\n      - config:generate\n      - api:generate\n      - ui-signals:generate",
 	} {
 		if !strings.Contains(taskText, want) {
 			t.Fatalf("Taskfile.yml does not enforce generated-model ordering %q", want)
@@ -229,7 +229,7 @@ func TestAPIGenOwnsUISignalContracts(t *testing.T) {
 	}
 	foundEnvelopeMetadata := false
 	for _, contract := range irDoc.Contracts {
-		if contract.Name == "DashboardEnvelope" && contract.Kind == "ui-envelope" && contract.Extensions["x-libredash-contract-role"] == "envelope" {
+		if contract.Name == "DashboardEnvelope" && contract.Kind == "ui-envelope" && contract.Extensions["x-leapview-contract-role"] == "envelope" {
 			foundEnvelopeMetadata = true
 			break
 		}
@@ -512,7 +512,7 @@ func TestAPIGenOperationExtensions(t *testing.T) {
 		if _, hasLegacy := contract.Extensions["x-agent"]; hasLegacy {
 			t.Fatalf("%s retained legacy x-agent metadata", operationID)
 		}
-		if _, ok := contract.Extensions["x-libredash-dispatch"]; ok {
+		if _, ok := contract.Extensions["x-leapview-dispatch"]; ok {
 			t.Fatalf("%s should not have raw-body dispatch extension", operationID)
 		}
 	}
@@ -528,8 +528,8 @@ func TestAPIGenUploadArtifactUsesNativeOctetStreamBody(t *testing.T) {
 		t.Fatalf("openapi paths missing: %#v", spec["paths"])
 	}
 	operation := mustOpenAPIOperation(t, paths, "/api/v1/projects/{project}/releases/{release}/workspaces/{workspace}/artifact", "put")
-	if _, ok := operation["x-libredash-dispatch"]; ok {
-		t.Fatalf("upload operation should not use x-libredash-dispatch: %#v", operation["x-libredash-dispatch"])
+	if _, ok := operation["x-leapview-dispatch"]; ok {
+		t.Fatalf("upload operation should not use x-leapview-dispatch: %#v", operation["x-leapview-dispatch"])
 	}
 	requestBody, _ := operation["requestBody"].(map[string]any)
 	content, _ := requestBody["content"].(map[string]any)

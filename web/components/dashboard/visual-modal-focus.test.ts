@@ -84,13 +84,13 @@ test('mountVisualFocus moves the source element into the target and leaves a pla
   expect(mount).toBeTruthy()
   expect(target.children[0]).toBe(source)
   expect(source.parentNode).toBe(target)
-  expect(childNames(parent)).toEqual(['#comment:ld-visual-focus-placeholder', 'after'])
+  expect(childNames(parent)).toEqual(['#comment:lv-visual-focus-placeholder', 'after'])
 })
 
 test('mountVisualFocus can slot the source as a light DOM child of the modal host', () => {
   const source = new FakeNode('source')
   const parent = new FakeNode('parent')
-  const modalHost = new FakeNode('ld-visual-modal')
+  const modalHost = new FakeNode('lv-visual-modal')
   parent.appendChild(source)
 
   const mount = mountVisualFocus(source as unknown as Element, modalHost as unknown as Node, { slot: 'focus-visual' })
@@ -98,7 +98,7 @@ test('mountVisualFocus can slot the source as a light DOM child of the modal hos
   expect(mount).toBeTruthy()
   expect(source.parentNode).toBe(modalHost)
   expect(source.getAttribute('slot')).toBe('focus-visual')
-  expect(childNames(parent)).toEqual(['#comment:ld-visual-focus-placeholder'])
+  expect(childNames(parent)).toEqual(['#comment:lv-visual-focus-placeholder'])
 
   restoreVisualFocus(mount)
 
@@ -110,7 +110,7 @@ test('mountVisualFocus can slot the source as a light DOM child of the modal hos
 test('restoreVisualFocus restores a previous slot value after fullscreen focus', () => {
   const source = new FakeNode('source')
   const parent = new FakeNode('parent')
-  const modalHost = new FakeNode('ld-visual-modal')
+  const modalHost = new FakeNode('lv-visual-modal')
   source.setAttribute('slot', 'dashboard-cell')
   parent.appendChild(source)
 
@@ -176,7 +176,7 @@ test('focus can move from one source element to another after restoring the firs
 
   expect(secondMount).toBeTruthy()
   expect(childNames(firstParent)).toEqual(['first'])
-  expect(childNames(secondParent)).toEqual(['#comment:ld-visual-focus-placeholder'])
+  expect(childNames(secondParent)).toEqual(['#comment:lv-visual-focus-placeholder'])
   expect(childNames(target)).toEqual(['second'])
 })
 
@@ -188,8 +188,8 @@ test('visualSourceFromEvent returns the first focusable visual in the composed p
   globalThis.HTMLElement = TestHTMLElement as unknown as typeof HTMLElement
   try {
     const button = new TestHTMLElement('button')
-    const chart = new TestHTMLElement('ld-echart')
-    const table = new TestHTMLElement('ld-report-table')
+    const chart = new TestHTMLElement('lv-echart')
+    const table = new TestHTMLElement('lv-report-table')
     const event = { composedPath: () => [button, chart, table] } as unknown as Event
 
     expect(visualSourceFromEvent(event)).toBe(chart)

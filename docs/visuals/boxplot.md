@@ -6,7 +6,7 @@ Every preview on this page is generated from the YAML shown below it using a fix
 
 ## Delivery distribution
 
-Set `query.table` and select a numeric measure so LibreDash can derive the quartiles, median, whiskers, and outliers from raw delivery values.
+Set `query.table` and select a numeric measure so LeapView can derive the quartiles, median, whiskers, and outliers from raw delivery values.
 
 {{< visual id="delivery_distribution" >}}
 

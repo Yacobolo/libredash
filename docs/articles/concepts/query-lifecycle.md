@@ -1,6 +1,6 @@
 # Query and interaction lifecycle
 
-LibreDash keeps query state, semantic resolution, authorization, and data access on the server. The browser renders typed presentation state and sends small commands; it does not receive credentials or construct unrestricted SQL.
+LeapView keeps query state, semantic resolution, authorization, and data access on the server. The browser renders typed presentation state and sends small commands; it does not receive credentials or construct unrestricted SQL.
 
 ## Initial page request
 
@@ -30,7 +30,7 @@ Semantic names are resolved to known model-table fields, relationships, aggregat
 
 ## Signal delivery
 
-The result is converted into LibreDash-owned payloads rather than renderer-specific database rows. Go patches KPI, chart, table, filter-option, page, and status signals. Each Lit component observes its configured signal path and rerenders only when relevant state changes.
+The result is converted into LeapView-owned payloads rather than renderer-specific database rows. Go patches KPI, chart, table, filter-option, page, and status signals. Each Lit component observes its configured signal path and rerenders only when relevant state changes.
 
 The signal contract is part of the application architecture. A chart renderer may change without changing how filters are authorized or how the semantic query is defined.
 

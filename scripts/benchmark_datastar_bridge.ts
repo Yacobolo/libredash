@@ -35,8 +35,8 @@ const projectRoot = process.cwd()
 const outDir = join(projectRoot, '.tmp/datastar-bridge-bench')
 const resultPath = join(projectRoot, '.tmp/datastar-bridge-benchmark.json')
 const variants: BridgeVariant[] = ['legacy', 'ignition', 'datastar-lit']
-const iterations = Number(Bun.env.LIBREDASH_BRIDGE_BENCH_ITERATIONS ?? 120)
-const warmup = Number(Bun.env.LIBREDASH_BRIDGE_BENCH_WARMUP ?? 20)
+const iterations = Number(Bun.env.LEAPVIEW_BRIDGE_BENCH_ITERATIONS ?? 120)
+const warmup = Number(Bun.env.LEAPVIEW_BRIDGE_BENCH_WARMUP ?? 20)
 
 await buildBenchmarkBundle()
 
@@ -135,7 +135,7 @@ function documentForVariant(variant: BridgeVariant): string {
     <html>
       <head>
         <meta charset="utf-8">
-        <title>LibreDash Datastar Bridge Benchmark - ${variant}</title>
+        <title>LeapView Datastar Bridge Benchmark - ${variant}</title>
         <style>
           html, body { margin: 0; min-height: 100%; font-family: system-ui, sans-serif; }
           main { padding: 16px; }

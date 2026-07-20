@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	dashboardstream "github.com/Yacobolo/libredash/internal/dashboard/stream"
-	"github.com/Yacobolo/libredash/internal/secret"
+	dashboardstream "github.com/Yacobolo/leapview/internal/dashboard/stream"
+	"github.com/Yacobolo/leapview/internal/secret"
 	"github.com/go-chi/chi/v5"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -33,47 +33,47 @@ func newHTTPTelemetry() *httpTelemetry {
 	telemetry := &httpTelemetry{
 		registry: registry,
 		requests: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "libredash_http_requests_total",
-			Help: "Total HTTP requests served by LibreDash.",
+			Name: "leapview_http_requests_total",
+			Help: "Total HTTP requests served by LeapView.",
 		}, []string{"method", "route", "status"}),
 		duration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:    "libredash_http_request_duration_seconds",
+			Name:    "leapview_http_request_duration_seconds",
 			Help:    "HTTP request duration in seconds.",
 			Buckets: []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30},
 		}, []string{"method", "route", "status"}),
 		response: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:    "libredash_http_response_size_bytes",
+			Name:    "leapview_http_response_size_bytes",
 			Help:    "HTTP response size in bytes.",
 			Buckets: prometheus.ExponentialBuckets(128, 2, 16),
 		}, []string{"method", "route", "status"}),
 		inFlight: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: "libredash_http_requests_in_flight",
-			Help: "HTTP requests currently being served by LibreDash.",
+			Name: "leapview_http_requests_in_flight",
+			Help: "HTTP requests currently being served by LeapView.",
 		}),
 		dashboardRefreshDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:    "libredash_dashboard_refresh_duration_seconds",
+			Name:    "leapview_dashboard_refresh_duration_seconds",
 			Help:    "End-to-end dashboard refresh duration in seconds.",
 			Buckets: []float64{0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30},
 		}, []string{"command", "outcome"}),
 		dashboardStageDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:    "libredash_dashboard_refresh_stage_duration_seconds",
+			Name:    "leapview_dashboard_refresh_stage_duration_seconds",
 			Help:    "Dashboard refresh stage duration in seconds.",
 			Buckets: []float64{0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
 		}, []string{"stage", "outcome"}),
 		dashboardRefreshInFlight: prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Name: "libredash_dashboard_refreshes_in_flight",
+			Name: "leapview_dashboard_refreshes_in_flight",
 			Help: "Dashboard refreshes currently in flight.",
 		}, []string{"command"}),
 		dashboardRefreshCancellations: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "libredash_dashboard_refresh_cancellations_total",
+			Name: "leapview_dashboard_refresh_cancellations_total",
 			Help: "Total dashboard refresh cancellations.",
 		}, []string{"command"}),
 		dashboardCacheOutcomes: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "libredash_dashboard_cache_outcomes_total",
+			Name: "leapview_dashboard_cache_outcomes_total",
 			Help: "Dashboard query cache outcomes.",
 		}, []string{"outcome"}),
 		dashboardTargetOutcomes: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "libredash_dashboard_target_outcomes_total",
+			Name: "leapview_dashboard_target_outcomes_total",
 			Help: "Dashboard refresh target outcomes.",
 		}, []string{"kind", "outcome"}),
 		handlerOpts: promhttp.HandlerOpts{EnableOpenMetrics: true},
@@ -274,7 +274,7 @@ func (s *Server) metricsHandler() http.Handler {
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if provided := bearerToken(r); !secret.Equal(provided, token) {
-			w.Header().Set("WWW-Authenticate", `Bearer realm="libredash-metrics"`)
+			w.Header().Set("WWW-Authenticate", `Bearer realm="leapview-metrics"`)
 			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			return
 		}

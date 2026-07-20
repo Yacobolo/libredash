@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/Yacobolo/libredash/internal/runtimehost"
-	"github.com/Yacobolo/libredash/internal/workspace"
+	"github.com/Yacobolo/leapview/internal/runtimehost"
+	"github.com/Yacobolo/leapview/internal/workspace"
 )
 
 func BindRoots(definition *workspace.Definition, resolution runtimehost.ManagedDataResolution) error {

@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/api"
-	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
-	"github.com/Yacobolo/libredash/internal/asyncjob"
-	"github.com/Yacobolo/libredash/internal/cursorsigning"
+	"github.com/Yacobolo/leapview/internal/api"
+	apigenapi "github.com/Yacobolo/leapview/internal/api/gen"
+	"github.com/Yacobolo/leapview/internal/asyncjob"
+	"github.com/Yacobolo/leapview/internal/cursorsigning"
 )
 
 const asyncCursorLifetime = 15 * time.Minute

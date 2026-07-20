@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/Yacobolo/libredash/internal/access"
-	platformdb "github.com/Yacobolo/libredash/internal/platform/db"
+	"github.com/Yacobolo/leapview/internal/access"
+	platformdb "github.com/Yacobolo/leapview/internal/platform/db"
 	"strings"
 )
 

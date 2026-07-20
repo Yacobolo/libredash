@@ -7,14 +7,14 @@ import (
 	"os"
 	"time"
 
-	analyticsduckdb "github.com/Yacobolo/libredash/internal/analytics/duckdb"
-	manageddatabinding "github.com/Yacobolo/libredash/internal/manageddata/binding"
-	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
-	servingstatefs "github.com/Yacobolo/libredash/internal/servingstate/filesystem"
-	"github.com/Yacobolo/libredash/internal/workspace"
-	workspacehttp "github.com/Yacobolo/libredash/internal/workspace/http"
-	"github.com/Yacobolo/libredash/internal/workspace/refresh"
-	"github.com/Yacobolo/libredash/pkg/pagestream"
+	analyticsduckdb "github.com/Yacobolo/leapview/internal/analytics/duckdb"
+	manageddatabinding "github.com/Yacobolo/leapview/internal/manageddata/binding"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
+	servingstatefs "github.com/Yacobolo/leapview/internal/servingstate/filesystem"
+	"github.com/Yacobolo/leapview/internal/workspace"
+	workspacehttp "github.com/Yacobolo/leapview/internal/workspace/http"
+	"github.com/Yacobolo/leapview/internal/workspace/refresh"
+	"github.com/Yacobolo/leapview/pkg/pagestream"
 )
 
 func (s *Server) workspaceRefreshSupport() workspacehttp.Support {
@@ -91,7 +91,7 @@ func (s *Server) workspaceRefreshService(runRepo refresh.RunRepository) (refresh
 type appRefreshArtifactLoader struct{}
 
 func (appRefreshArtifactLoader) Load(_ context.Context, artifact servingstate.Artifact) (refresh.LoadedArtifact, error) {
-	root, err := os.MkdirTemp("", "libredash-refresh-artifact-*")
+	root, err := os.MkdirTemp("", "leapview-refresh-artifact-*")
 	if err != nil {
 		return refresh.LoadedArtifact{}, err
 	}

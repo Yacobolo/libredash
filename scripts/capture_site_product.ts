@@ -7,7 +7,7 @@ import { join } from 'node:path'
 const root = process.cwd()
 const captureRoot = join(root, '.tmp', 'site-product-capture')
 const home = join(captureRoot, 'home')
-const binary = join(captureRoot, 'libredash')
+const binary = join(captureRoot, 'leapview')
 const dashboardPath = '/workspaces/visuals/dashboards/visual-showcase/pages/overview'
 const viewport = { width: 1440, height: 900 }
 
@@ -16,7 +16,7 @@ await mkdir(join(home, 'managed-data'), { recursive: true })
 await mkdir(join(home, 'duckdb'), { recursive: true })
 await mkdir(join(home, 'ducklake'), { recursive: true })
 
-await run(['go', 'build', '-o', binary, './cmd/libredash'])
+await run(['go', 'build', '-o', binary, './cmd/leapview'])
 
 const port = await availablePort()
 const origin = `http://127.0.0.1:${port}`
@@ -24,12 +24,12 @@ const server = Bun.spawn([binary], {
   cwd: root,
   env: {
     ...process.env,
-    LIBREDASH_ADDR: `127.0.0.1:${port}`,
-    LIBREDASH_DEV_AUTH_BYPASS: 'true',
-    LIBREDASH_HOME: home,
-    LIBREDASH_MANAGED_DATA_DIR: join(home, 'managed-data'),
-    LIBREDASH_DUCKDB_DIR: join(home, 'duckdb'),
-    LIBREDASH_DUCKLAKE_CATALOG_PATH: join(home, 'ducklake', 'catalog.sqlite'),
+    LEAPVIEW_ADDR: `127.0.0.1:${port}`,
+    LEAPVIEW_DEV_AUTH_BYPASS: 'true',
+    LEAPVIEW_HOME: home,
+    LEAPVIEW_MANAGED_DATA_DIR: join(home, 'managed-data'),
+    LEAPVIEW_DUCKDB_DIR: join(home, 'duckdb'),
+    LEAPVIEW_DUCKLAKE_CATALOG_PATH: join(home, 'ducklake', 'catalog.sqlite'),
   },
   stdout: 'pipe',
   stderr: 'pipe',
@@ -44,7 +44,7 @@ try {
     'data',
     'sync',
     '--project',
-    'dashboards/libredash.yaml',
+    'dashboards/leapview.yaml',
     '--connection',
     'olist',
     '--from',
@@ -61,7 +61,7 @@ try {
     binary,
     'deploy',
     '--project',
-    'dashboards/libredash.yaml',
+    'dashboards/leapview.yaml',
     '--revision',
     `olist=${revision}`,
     '--target',
@@ -83,18 +83,18 @@ try {
       })
       try {
         await context.addInitScript((theme) => {
-          localStorage.setItem('libredash-color-mode', theme)
+          localStorage.setItem('leapview-color-mode', theme)
         }, mode)
         const page = await context.newPage()
         await page.goto(`${origin}${dashboardPath}`, { waitUntil: 'domcontentloaded' })
         await page.getByRole('heading', { name: 'Visual Showcase', exact: true }).waitFor()
         await page.waitForFunction(() => {
-          const dashboard = document.querySelector('ld-dashboard-page') as HTMLElement & {
+          const dashboard = document.querySelector('lv-dashboard-page') as HTMLElement & {
             signals?: { status?: { loading?: boolean } }
             shadowRoot: ShadowRoot
           }
           if (!dashboard?.shadowRoot || dashboard.signals?.status?.loading !== false) return false
-          const charts = Array.from(dashboard.shadowRoot.querySelectorAll('ld-echart')) as Array<HTMLElement & {
+          const charts = Array.from(dashboard.shadowRoot.querySelectorAll('lv-echart')) as Array<HTMLElement & {
             chart?: { data?: unknown[] }
           }>
           return charts.length >= 4 && charts.every((chart) => (chart.chart?.data?.length ?? 0) > 0)

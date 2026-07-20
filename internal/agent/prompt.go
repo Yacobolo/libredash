@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	agentcore "github.com/Yacobolo/libredash/pkg/agent"
+	agentcore "github.com/Yacobolo/leapview/pkg/agent"
 )
 
 type PromptInput struct {
@@ -233,7 +233,7 @@ func (p *StartedPrompt) Complete(ctx context.Context, onEvent func(EventEnvelope
 
 	sink := &storeEventSink{repo: s.repo, scope: input.Scope, conversationID: input.ConversationID, runID: p.RunID, onEvent: input.OnEvent}
 	def := agentcore.Definition{
-		Name:              "libredash-readonly",
+		Name:              "leapview-readonly",
 		SystemPrompt:      p.systemPrompt,
 		Model:             s.model,
 		Tools:             s.toolDefinitions(input.Scope),

@@ -476,7 +476,7 @@ class RecordTable extends LitElement {
         <tr class="record-query-expanded-row">
           <td class="record-query-expanded-cell" colspan=${columns.length}>
             <div class="record-query-expanded">
-              <ld-code-block language="sql" format dense .code=${expandedContent}></ld-code-block>
+              <lv-code-block language="sql" format dense .code=${expandedContent}></lv-code-block>
               <button
                 type="button"
                 class="record-query-copy"
@@ -705,7 +705,7 @@ class RecordTable extends LitElement {
   }
 
   private emitAction(action: string, row: RecordRow): void {
-    this.dispatchEvent(new CustomEvent('ld-record-table-action', {
+    this.dispatchEvent(new CustomEvent('lv-record-table-action', {
       bubbles: true,
       composed: true,
       detail: { action, row },
@@ -787,28 +787,28 @@ function iconToken(name: string): string {
 }
 
 const recordTableStyles = `
-  ld-record-table {
+  lv-record-table {
     display: block;
     position: relative;
     min-width: 0;
     max-width: 100%;
   }
 
-  ld-record-table .record-table-wrap {
+  lv-record-table .record-table-wrap {
     width: 100%;
     min-width: 0;
     max-width: 100%;
     overflow-x: auto;
-    border-top: var(--ld-border-muted);
-    border-bottom: var(--ld-border-muted);
+    border-top: var(--lv-border-muted);
+    border-bottom: var(--lv-border-muted);
   }
 
-  ld-record-table .record-table-column-selector {
+  lv-record-table .record-table-column-selector {
     position: relative;
     flex: none;
   }
 
-  ld-record-table .record-table-corner-selector {
+  lv-record-table .record-table-corner-selector {
     position: absolute;
     z-index: 5;
     top: var(--base-size-6);
@@ -816,30 +816,30 @@ const recordTableStyles = `
     display: inline-flex;
   }
 
-  ld-record-table .record-table-column-selector summary {
+  lv-record-table .record-table-column-selector summary {
     display: inline-flex;
     width: var(--control-medium-size, 32px);
     height: var(--control-medium-size, 32px);
     align-items: center;
     justify-content: center;
-    border: var(--ld-border-muted);
-    border-radius: var(--ld-radius-default);
-    background: var(--ld-bg-panel);
-    color: var(--ld-fg-muted);
+    border: var(--lv-border-muted);
+    border-radius: var(--lv-radius-default);
+    background: var(--lv-bg-panel);
+    color: var(--lv-fg-muted);
     cursor: pointer;
     list-style: none;
   }
 
-  ld-record-table .record-table-column-selector summary::-webkit-details-marker {
+  lv-record-table .record-table-column-selector summary::-webkit-details-marker {
     display: none;
   }
 
-  ld-record-table .record-table-column-selector summary:hover {
-    background: var(--ld-bg-control-hover, var(--ld-bg-panel-muted));
-    color: var(--ld-fg-default);
+  lv-record-table .record-table-column-selector summary:hover {
+    background: var(--lv-bg-control-hover, var(--lv-bg-panel-muted));
+    color: var(--lv-fg-default);
   }
 
-  ld-record-table .record-table-column-menu {
+  lv-record-table .record-table-column-menu {
     position: absolute;
     z-index: 10;
     top: calc(100% + var(--base-size-4));
@@ -847,136 +847,136 @@ const recordTableStyles = `
     display: grid;
     min-width: 13rem;
     gap: var(--base-size-4);
-    border: var(--ld-border-muted);
-    border-radius: var(--ld-radius-default);
-    background: var(--ld-bg-panel);
-    box-shadow: var(--ld-shadow-floating, 0 8px 24px rgba(31, 35, 40, 0.12));
+    border: var(--lv-border-muted);
+    border-radius: var(--lv-radius-default);
+    background: var(--lv-bg-panel);
+    box-shadow: var(--lv-shadow-floating, 0 8px 24px rgba(31, 35, 40, 0.12));
     padding: var(--base-size-8);
   }
 
-  ld-record-table .record-table-column-menu label {
+  lv-record-table .record-table-column-menu label {
     display: grid;
     grid-template-columns: 1rem minmax(0, 1fr);
     gap: var(--base-size-8);
     align-items: center;
-    color: var(--ld-fg-default);
-    font-size: var(--ld-font-size-body-sm);
-    line-height: var(--ld-line-height-compact);
+    color: var(--lv-fg-default);
+    font-size: var(--lv-font-size-body-sm);
+    line-height: var(--lv-line-height-compact);
   }
 
-  ld-record-table .record-table-column-menu input {
+  lv-record-table .record-table-column-menu input {
     margin: 0;
   }
 
-  ld-record-table .record-table-wrap.variant-primary,
-  ld-record-table .record-table-wrap.variant-compact {
-    border: var(--ld-border-muted);
-    border-radius: var(--ld-radius-default);
-    background: var(--ld-bg-panel);
+  lv-record-table .record-table-wrap.variant-primary,
+  lv-record-table .record-table-wrap.variant-compact {
+    border: var(--lv-border-muted);
+    border-radius: var(--lv-radius-default);
+    background: var(--lv-bg-panel);
   }
 
-  ld-record-table .record-table {
+  lv-record-table .record-table {
     width: 100%;
     border-collapse: collapse;
     table-layout: fixed;
   }
 
-  ld-record-table .record-table th,
-  ld-record-table .record-table td {
-    border-bottom: var(--ld-border-muted);
+  lv-record-table .record-table th,
+  lv-record-table .record-table td {
+    border-bottom: var(--lv-border-muted);
     padding: var(--base-size-8);
     text-align: left;
     vertical-align: top;
   }
 
-  ld-record-table .record-table th {
+  lv-record-table .record-table th {
     position: sticky;
     top: 0;
     z-index: 1;
-    background: var(--ld-bg-panel);
-    color: var(--ld-fg-muted);
-    font-size: var(--ld-font-size-caption);
-    font-weight: var(--ld-font-weight-medium);
+    background: var(--lv-bg-panel);
+    color: var(--lv-fg-muted);
+    font-size: var(--lv-font-size-caption);
+    font-weight: var(--lv-font-weight-medium);
     letter-spacing: 0.03em;
     text-transform: uppercase;
   }
 
-  ld-record-table .variant-primary .record-table th,
-  ld-record-table .variant-compact .record-table th {
+  lv-record-table .variant-primary .record-table th,
+  lv-record-table .variant-compact .record-table th {
     padding: var(--base-size-12) var(--base-size-16);
-    background: var(--ld-bg-panel-muted);
-    font-size: var(--ld-font-size-body-sm);
-    font-weight: var(--ld-font-weight-strong);
+    background: var(--lv-bg-panel-muted);
+    font-size: var(--lv-font-size-body-sm);
+    font-weight: var(--lv-font-weight-strong);
   }
 
-  ld-record-table .variant-compact .record-table th {
+  lv-record-table .variant-compact .record-table th {
     padding: var(--base-size-8) var(--base-size-12);
-    font-size: var(--ld-font-size-caption);
+    font-size: var(--lv-font-size-caption);
   }
 
-  ld-record-table .record-table td {
-    color: var(--ld-fg-default);
-    font-size: var(--ld-font-size-body-md);
-    line-height: var(--ld-line-height-normal);
-    font-weight: var(--ld-font-weight-regular);
+  lv-record-table .record-table td {
+    color: var(--lv-fg-default);
+    font-size: var(--lv-font-size-body-md);
+    line-height: var(--lv-line-height-normal);
+    font-weight: var(--lv-font-weight-regular);
   }
 
-  ld-record-table .variant-primary .record-table td {
+  lv-record-table .variant-primary .record-table td {
     padding: var(--base-size-12) var(--base-size-16);
-    font-size: var(--ld-font-size-body-md);
+    font-size: var(--lv-font-size-body-md);
     vertical-align: top;
   }
 
-  ld-record-table .variant-compact .record-table td {
+  lv-record-table .variant-compact .record-table td {
     padding: var(--base-size-8) var(--base-size-12);
-    font-size: var(--ld-font-size-body-sm);
+    font-size: var(--lv-font-size-body-sm);
     vertical-align: middle;
   }
 
-  ld-record-table .density-tight .record-table th {
+  lv-record-table .density-tight .record-table th {
     padding: var(--base-size-6) var(--base-size-8);
   }
 
-  ld-record-table .density-tight .record-table td {
+  lv-record-table .density-tight .record-table td {
     padding: var(--base-size-4) var(--base-size-8);
   }
 
-  ld-record-table .variant-primary .record-table tbody tr {
+  lv-record-table .variant-primary .record-table tbody tr {
     min-height: 4rem;
   }
 
-  ld-record-table .record-table th.is-right,
-  ld-record-table .record-table td.is-right {
+  lv-record-table .record-table th.is-right,
+  lv-record-table .record-table td.is-right {
     text-align: right;
   }
 
-  ld-record-table .record-table tbody tr:last-child td {
+  lv-record-table .record-table tbody tr:last-child td {
     border-bottom: 0;
   }
 
-  ld-record-table .record-table tbody tr {
+  lv-record-table .record-table tbody tr {
     transition: background-color var(--motion-transition-hover);
   }
 
-  ld-record-table .record-table tbody tr:hover {
-    background: var(--ld-bg-hover, var(--ld-bg-panel-muted));
+  lv-record-table .record-table tbody tr:hover {
+    background: var(--lv-bg-hover, var(--lv-bg-panel-muted));
   }
 
-  ld-record-table .record-table tbody tr.is-actionable {
+  lv-record-table .record-table tbody tr.is-actionable {
     cursor: pointer;
   }
 
-  ld-record-table .record-table tbody tr.is-actionable:focus-visible {
-    outline: 2px solid var(--ld-fg-link);
+  lv-record-table .record-table tbody tr.is-actionable:focus-visible {
+    outline: 2px solid var(--lv-fg-link);
     outline-offset: -2px;
   }
 
-  ld-record-table .variant-primary .record-table tbody tr:hover,
-  ld-record-table .variant-compact .record-table tbody tr:hover {
+  lv-record-table .variant-primary .record-table tbody tr:hover,
+  lv-record-table .variant-compact .record-table tbody tr:hover {
     background: var(--control-transparent-bgColor-hover);
   }
 
-  ld-record-table .record-table-sort {
+  lv-record-table .record-table-sort {
     display: inline-flex;
     width: 100%;
     min-width: 0;
@@ -994,7 +994,7 @@ const recordTableStyles = `
     text-transform: inherit;
   }
 
-  ld-record-table .record-table-header-content {
+  lv-record-table .record-table-header-content {
     display: flex;
     min-width: 0;
     align-items: center;
@@ -1002,114 +1002,114 @@ const recordTableStyles = `
     gap: var(--base-size-6);
   }
 
-  ld-record-table .record-table-header-content .record-table-sort {
+  lv-record-table .record-table-header-content .record-table-sort {
     flex: 1 1 auto;
     min-width: 0;
   }
 
-  ld-record-table .record-table-sort:hover,
-  ld-record-table .record-table-sort:focus-visible {
-    color: var(--ld-fg-default);
+  lv-record-table .record-table-sort:hover,
+  lv-record-table .record-table-sort:focus-visible {
+    color: var(--lv-fg-default);
     outline: 0;
   }
 
-  ld-record-table .record-table-sort-indicator {
+  lv-record-table .record-table-sort-indicator {
     display: inline-flex;
     min-width: var(--base-size-16);
     justify-content: flex-end;
-    color: var(--ld-fg-muted);
+    color: var(--lv-fg-muted);
     opacity: 0;
   }
 
-  ld-record-table .record-table-sort:hover .record-table-sort-indicator,
-  ld-record-table .record-table-sort:focus-visible .record-table-sort-indicator,
-  ld-record-table .record-table-sort-indicator.is-active {
+  lv-record-table .record-table-sort:hover .record-table-sort-indicator,
+  lv-record-table .record-table-sort:focus-visible .record-table-sort-indicator,
+  lv-record-table .record-table-sort-indicator.is-active {
     opacity: 1;
   }
 
-  ld-record-table .record-code,
-  ld-record-table .record-expression {
+  lv-record-table .record-code,
+  lv-record-table .record-expression {
     font-family: var(--fontStack-monospace);
   }
 
-  ld-record-table .record-code {
+  lv-record-table .record-code {
     display: inline-flex;
     max-width: 100%;
     overflow: hidden;
-    color: var(--ld-fg-default);
+    color: var(--lv-fg-default);
     padding: 0;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: var(--ld-font-size-body-md);
-    font-weight: var(--ld-font-weight-medium);
+    font-size: var(--lv-font-size-body-md);
+    font-weight: var(--lv-font-weight-medium);
   }
 
-  ld-record-table .record-expression {
+  lv-record-table .record-expression {
     display: block;
     overflow: hidden;
-    color: var(--ld-fg-default);
+    color: var(--lv-fg-default);
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: var(--ld-font-size-body-md);
-    font-weight: var(--ld-font-weight-regular);
+    font-size: var(--lv-font-size-body-md);
+    font-weight: var(--lv-font-weight-regular);
   }
 
-  ld-record-table .record-badge {
+  lv-record-table .record-badge {
     display: inline-flex;
     min-height: var(--base-size-20);
     align-items: center;
     gap: var(--base-size-4);
-    border-radius: var(--borderRadius-full, var(--ld-radius-full));
+    border-radius: var(--borderRadius-full, var(--lv-radius-full));
     padding: 0 var(--base-size-8);
-    font-size: var(--ld-font-size-caption);
-    font-weight: var(--ld-font-weight-medium);
+    font-size: var(--lv-font-size-caption);
+    font-weight: var(--lv-font-weight-medium);
   }
 
-  ld-record-table .record-badge-success {
-    border: var(--borderWidth-default) solid var(--ld-line-success-muted, var(--ld-line-muted));
-    background: var(--ld-bg-success-muted, var(--ld-bg-panel-muted));
-    color: var(--ld-fg-default);
+  lv-record-table .record-badge-success {
+    border: var(--borderWidth-default) solid var(--lv-line-success-muted, var(--lv-line-muted));
+    background: var(--lv-bg-success-muted, var(--lv-bg-panel-muted));
+    color: var(--lv-fg-default);
   }
 
-  ld-record-table .record-badge-accent {
-    border: var(--borderWidth-default) solid var(--ld-line-accent-muted, var(--ld-line-muted));
-    background: var(--ld-bg-accent-muted, var(--ld-bg-panel-muted));
-    color: var(--ld-fg-default);
+  lv-record-table .record-badge-accent {
+    border: var(--borderWidth-default) solid var(--lv-line-accent-muted, var(--lv-line-muted));
+    background: var(--lv-bg-accent-muted, var(--lv-bg-panel-muted));
+    color: var(--lv-fg-default);
   }
 
-  ld-record-table .record-badge-attention {
-    border: var(--borderWidth-default) solid var(--ld-line-warning-muted, var(--ld-line-muted));
-    background: var(--ld-bg-warning-muted, var(--ld-bg-panel-muted));
-    color: var(--ld-fg-default);
+  lv-record-table .record-badge-attention {
+    border: var(--borderWidth-default) solid var(--lv-line-warning-muted, var(--lv-line-muted));
+    background: var(--lv-bg-warning-muted, var(--lv-bg-panel-muted));
+    color: var(--lv-fg-default);
   }
 
-  ld-record-table .record-badge-muted,
-  ld-record-table .record-badge-default {
-    border: var(--ld-border-muted);
-    background: var(--ld-bg-panel-muted);
-    color: var(--ld-fg-muted);
+  lv-record-table .record-badge-muted,
+  lv-record-table .record-badge-default {
+    border: var(--lv-border-muted);
+    background: var(--lv-bg-panel-muted);
+    color: var(--lv-fg-muted);
   }
 
-  ld-record-table .record-status {
+  lv-record-table .record-status {
     display: inline-flex;
     align-items: center;
     gap: var(--base-size-6);
-    color: var(--ld-fg-default);
-    font-weight: var(--ld-font-weight-medium);
+    color: var(--lv-fg-default);
+    font-weight: var(--lv-font-weight-medium);
     white-space: nowrap;
   }
 
-  ld-record-table .record-status-icon {
+  lv-record-table .record-status-icon {
     display: inline-flex;
     width: var(--base-size-16);
     height: var(--base-size-16);
     flex: none;
     align-items: center;
     justify-content: center;
-    color: var(--ld-fg-muted);
+    color: var(--lv-fg-muted);
   }
 
-  ld-record-table .record-query {
+  lv-record-table .record-query {
     display: grid;
     width: 100%;
     min-width: 0;
@@ -1118,23 +1118,23 @@ const recordTableStyles = `
     gap: var(--base-size-6);
   }
 
-  ld-record-table .record-query-status {
+  lv-record-table .record-query-status {
     display: inline-flex;
     width: var(--base-size-16);
     height: var(--base-size-16);
     align-items: center;
     justify-content: center;
-    color: var(--ld-fg-muted);
+    color: var(--lv-fg-muted);
   }
 
-  ld-record-table .record-query-status svg {
+  lv-record-table .record-query-status svg {
     display: block;
     width: var(--base-size-16);
     height: var(--base-size-16);
   }
 
-  ld-record-table .record-query-expand,
-  ld-record-table .record-query-expand-spacer {
+  lv-record-table .record-query-expand,
+  lv-record-table .record-query-expand-spacer {
     display: inline-flex;
     width: 1.5rem;
     height: 1.5rem;
@@ -1142,180 +1142,180 @@ const recordTableStyles = `
     justify-content: center;
   }
 
-  ld-record-table .record-query-expand {
+  lv-record-table .record-query-expand {
     border: 0;
-    border-radius: var(--ld-radius-default);
+    border-radius: var(--lv-radius-default);
     background: transparent;
-    color: var(--ld-fg-muted);
+    color: var(--lv-fg-muted);
     cursor: pointer;
     padding: 0;
   }
 
-  ld-record-table .record-query-expand:hover,
-  ld-record-table .record-query-expand:focus-visible {
-    background: var(--ld-bg-control-hover, var(--ld-bg-panel-muted));
-    color: var(--ld-fg-default);
+  lv-record-table .record-query-expand:hover,
+  lv-record-table .record-query-expand:focus-visible {
+    background: var(--lv-bg-control-hover, var(--lv-bg-panel-muted));
+    color: var(--lv-fg-default);
     outline: 0;
   }
 
-  ld-record-table .record-query-text {
+  lv-record-table .record-query-text {
     display: block;
     min-width: 0;
     overflow: hidden;
-    color: var(--ld-fg-link, var(--ld-fg-default));
+    color: var(--lv-fg-link, var(--lv-fg-default));
     font-family: var(--fontStack-monospace);
-    font-size: var(--ld-font-size-caption);
-    font-weight: var(--ld-font-weight-medium);
-    line-height: var(--ld-line-height-compact);
+    font-size: var(--lv-font-size-caption);
+    font-weight: var(--lv-font-weight-medium);
+    line-height: var(--lv-line-height-compact);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  ld-record-table .record-query-expanded-row:hover {
+  lv-record-table .record-query-expanded-row:hover {
     background: transparent;
   }
 
-  ld-record-table .record-query-expanded-cell {
+  lv-record-table .record-query-expanded-cell {
     padding: 0 !important;
-    background: var(--ld-bg-panel);
+    background: var(--lv-bg-panel);
   }
 
-  ld-record-table .record-query-expanded {
+  lv-record-table .record-query-expanded {
     display: grid;
     gap: var(--base-size-8);
-    border-top: var(--borderWidth-default, 1px) solid color-mix(in srgb, var(--ld-line-muted), transparent 35%);
+    border-top: var(--borderWidth-default, 1px) solid color-mix(in srgb, var(--lv-line-muted), transparent 35%);
     padding: var(--base-size-12);
   }
 
-  ld-record-table .record-query-expanded > pre {
+  lv-record-table .record-query-expanded > pre {
     max-height: 18rem;
     min-width: 0;
     overflow: auto;
-    border: var(--ld-border-muted);
-    border-radius: var(--ld-radius-default);
-    background: var(--ld-bg-panel-muted);
-    color: var(--ld-fg-default);
+    border: var(--lv-border-muted);
+    border-radius: var(--lv-radius-default);
+    background: var(--lv-bg-panel-muted);
+    color: var(--lv-fg-default);
     margin: 0;
     padding: var(--base-size-12);
   }
 
-  ld-record-table .record-query-expanded > pre code {
+  lv-record-table .record-query-expanded > pre code {
     font-family: var(--fontStack-monospace);
-    font-size: var(--ld-font-size-body-sm);
-    line-height: var(--ld-line-height-normal);
+    font-size: var(--lv-font-size-body-sm);
+    line-height: var(--lv-line-height-normal);
     white-space: pre;
   }
 
-  ld-record-table .record-query-copy {
+  lv-record-table .record-query-copy {
     justify-self: start;
     display: inline-flex;
     min-height: var(--control-medium-size, 32px);
     align-items: center;
     gap: var(--base-size-6);
-    border: var(--ld-border-muted);
-    border-radius: var(--ld-radius-default);
-    background: var(--ld-bg-panel);
-    color: var(--ld-fg-default);
+    border: var(--lv-border-muted);
+    border-radius: var(--lv-radius-default);
+    background: var(--lv-bg-panel);
+    color: var(--lv-fg-default);
     cursor: pointer;
     padding: 0 var(--base-size-12);
     font: inherit;
-    font-size: var(--ld-font-size-body-sm);
+    font-size: var(--lv-font-size-body-sm);
   }
 
-  ld-record-table .record-query-copy:hover,
-  ld-record-table .record-query-copy:focus-visible {
-    background: var(--ld-bg-control-hover, var(--ld-bg-panel-muted));
+  lv-record-table .record-query-copy:hover,
+  lv-record-table .record-query-copy:focus-visible {
+    background: var(--lv-bg-control-hover, var(--lv-bg-panel-muted));
     outline: 0;
   }
 
-  ld-record-table .record-status-icon svg,
-  ld-record-table .record-entity-icon svg,
-  ld-record-table .record-button-icon svg,
-  ld-record-table .record-icon-action svg {
+  lv-record-table .record-status-icon svg,
+  lv-record-table .record-entity-icon svg,
+  lv-record-table .record-button-icon svg,
+  lv-record-table .record-icon-action svg {
     display: block;
     width: var(--base-size-16);
     height: var(--base-size-16);
   }
 
-  ld-record-table .record-status-success .record-status-icon {
-    color: var(--ld-fg-success);
+  lv-record-table .record-status-success .record-status-icon {
+    color: var(--lv-fg-success);
   }
 
-  ld-record-table .record-query-status.record-status-success {
-    color: var(--ld-fg-success);
+  lv-record-table .record-query-status.record-status-success {
+    color: var(--lv-fg-success);
   }
 
-  ld-record-table .record-status-danger .record-status-icon {
-    color: var(--ld-fg-danger);
+  lv-record-table .record-status-danger .record-status-icon {
+    color: var(--lv-fg-danger);
   }
 
-  ld-record-table .record-query-status.record-status-danger {
-    color: var(--ld-fg-danger);
+  lv-record-table .record-query-status.record-status-danger {
+    color: var(--lv-fg-danger);
   }
 
-  ld-record-table .record-status-attention .record-status-icon {
-    color: var(--ld-fg-warning);
+  lv-record-table .record-status-attention .record-status-icon {
+    color: var(--lv-fg-warning);
   }
 
-  ld-record-table .record-query-status.record-status-attention {
-    color: var(--ld-fg-warning);
+  lv-record-table .record-query-status.record-status-attention {
+    color: var(--lv-fg-warning);
   }
 
-  ld-record-table .record-status-accent .record-status-icon {
-    color: var(--ld-fg-link);
+  lv-record-table .record-status-accent .record-status-icon {
+    color: var(--lv-fg-link);
   }
 
-  ld-record-table .record-query-status.record-status-accent {
-    color: var(--ld-fg-link);
+  lv-record-table .record-query-status.record-status-accent {
+    color: var(--lv-fg-link);
   }
 
-  ld-record-table .record-number {
+  lv-record-table .record-number {
     font-variant-numeric: tabular-nums;
   }
 
-  ld-record-table .record-link,
-  ld-record-table .record-entity-link {
-    color: var(--ld-fg-link);
-    font-weight: var(--ld-font-weight-medium);
+  lv-record-table .record-link,
+  lv-record-table .record-entity-link {
+    color: var(--lv-fg-link);
+    font-weight: var(--lv-font-weight-medium);
     text-decoration: none;
   }
 
-  ld-record-table .record-entity-link {
+  lv-record-table .record-entity-link {
     display: grid;
     width: 100%;
     max-width: 100%;
   }
 
-  ld-record-table .record-link:hover,
-  ld-record-table .record-link:focus-visible,
-  ld-record-table .record-entity-link:hover .record-entity-label,
-  ld-record-table .record-entity-link:focus-visible .record-entity-label {
+  lv-record-table .record-link:hover,
+  lv-record-table .record-link:focus-visible,
+  lv-record-table .record-entity-link:hover .record-entity-label,
+  lv-record-table .record-entity-link:focus-visible .record-entity-label {
     text-decoration: underline;
     outline: 0;
   }
 
-  ld-record-table .record-tags {
+  lv-record-table .record-tags {
     display: flex;
     flex-wrap: wrap;
     gap: var(--base-size-4);
   }
 
-  ld-record-table .record-tags span {
+  lv-record-table .record-tags span {
     display: inline-flex;
     min-height: var(--base-size-20);
     align-items: center;
-    border: var(--ld-border-muted);
-    border-radius: var(--borderRadius-full, var(--ld-radius-full));
-    background: var(--ld-bg-panel-muted);
-    color: var(--ld-fg-muted);
+    border: var(--lv-border-muted);
+    border-radius: var(--borderRadius-full, var(--lv-radius-full));
+    background: var(--lv-bg-panel-muted);
+    color: var(--lv-fg-muted);
     padding: 0 var(--base-size-8);
-    font-size: var(--ld-font-size-caption);
-    font-weight: var(--ld-font-weight-medium);
+    font-size: var(--lv-font-size-caption);
+    font-weight: var(--lv-font-weight-medium);
     text-transform: uppercase;
   }
 
-  ld-record-table .record-entity,
-  ld-record-table .record-button-cell {
+  lv-record-table .record-entity,
+  lv-record-table .record-button-cell {
     display: grid;
     width: 100%;
     max-width: 100%;
@@ -1324,140 +1324,140 @@ const recordTableStyles = `
     gap: var(--base-size-8);
   }
 
-  ld-record-table .record-entity-icon,
-  ld-record-table .record-button-icon {
+  lv-record-table .record-entity-icon,
+  lv-record-table .record-button-icon {
     display: inline-flex;
     width: var(--control-medium-size);
     height: var(--control-medium-size);
     align-items: center;
     justify-content: center;
-    border: var(--ld-border-muted);
-    border-radius: var(--ld-radius-default);
-    background: var(--ld-bg-panel-muted);
-    color: var(--ld-fg-muted);
+    border: var(--lv-border-muted);
+    border-radius: var(--lv-radius-default);
+    background: var(--lv-bg-panel-muted);
+    color: var(--lv-fg-muted);
   }
 
-  ld-record-table .variant-primary .record-entity-icon {
-    background: var(--ld-bg-control, var(--ld-bg-panel-muted));
+  lv-record-table .variant-primary .record-entity-icon {
+    background: var(--lv-bg-control, var(--lv-bg-panel-muted));
   }
 
-  ld-record-table .variant-primary .record-icon-dashboard {
-    border-color: var(--ld-asset-dashboard-border, var(--ld-line-muted));
-    background: var(--ld-asset-dashboard-bg, var(--ld-bg-panel-muted));
-    color: var(--ld-asset-dashboard-accent, var(--ld-fg-muted));
+  lv-record-table .variant-primary .record-icon-dashboard {
+    border-color: var(--lv-asset-dashboard-border, var(--lv-line-muted));
+    background: var(--lv-asset-dashboard-bg, var(--lv-bg-panel-muted));
+    color: var(--lv-asset-dashboard-accent, var(--lv-fg-muted));
   }
 
-  ld-record-table .variant-primary .record-icon-semantic_model {
-    border-color: var(--ld-asset-semantic-model-border, var(--ld-line-muted));
-    background: var(--ld-asset-semantic-model-bg, var(--ld-bg-panel-muted));
-    color: var(--ld-asset-semantic-model-accent, var(--ld-fg-muted));
+  lv-record-table .variant-primary .record-icon-semantic_model {
+    border-color: var(--lv-asset-semantic-model-border, var(--lv-line-muted));
+    background: var(--lv-asset-semantic-model-bg, var(--lv-bg-panel-muted));
+    color: var(--lv-asset-semantic-model-accent, var(--lv-fg-muted));
   }
 
-  ld-record-table .variant-primary .record-icon-model_table,
-  ld-record-table .variant-primary .record-icon-semantic_table {
-    border-color: var(--ld-asset-model-table-border, var(--ld-line-muted));
-    background: var(--ld-asset-model-table-bg, var(--ld-bg-panel-muted));
-    color: var(--ld-asset-model-table-accent, var(--ld-fg-muted));
+  lv-record-table .variant-primary .record-icon-model_table,
+  lv-record-table .variant-primary .record-icon-semantic_table {
+    border-color: var(--lv-asset-model-table-border, var(--lv-line-muted));
+    background: var(--lv-asset-model-table-bg, var(--lv-bg-panel-muted));
+    color: var(--lv-asset-model-table-accent, var(--lv-fg-muted));
   }
 
-  ld-record-table .variant-primary .record-icon-source {
-    border-color: var(--ld-asset-source-border, var(--ld-line-muted));
-    background: var(--ld-asset-source-bg, var(--ld-bg-panel-muted));
-    color: var(--ld-asset-source-accent, var(--ld-fg-muted));
+  lv-record-table .variant-primary .record-icon-source {
+    border-color: var(--lv-asset-source-border, var(--lv-line-muted));
+    background: var(--lv-asset-source-bg, var(--lv-bg-panel-muted));
+    color: var(--lv-asset-source-accent, var(--lv-fg-muted));
   }
 
-  ld-record-table .record-entity-copy {
+  lv-record-table .record-entity-copy {
     display: grid;
     min-width: 0;
     gap: var(--base-size-4);
   }
 
-  ld-record-table .record-entity-label {
+  lv-record-table .record-entity-label {
     display: block;
     max-width: 100%;
     overflow-wrap: anywhere;
-    color: var(--ld-fg-default);
-    font-weight: var(--ld-font-weight-strong);
+    color: var(--lv-fg-default);
+    font-weight: var(--lv-font-weight-strong);
     white-space: normal;
   }
 
-  ld-record-table .variant-primary .record-entity-label {
-    font-size: var(--ld-font-size-title-sm);
-    line-height: var(--ld-line-height-compact);
+  lv-record-table .variant-primary .record-entity-label {
+    font-size: var(--lv-font-size-title-sm);
+    line-height: var(--lv-line-height-compact);
   }
 
-  ld-record-table .record-entity-description {
+  lv-record-table .record-entity-description {
     display: block;
     max-width: 100%;
     overflow-wrap: anywhere;
-    color: var(--ld-fg-muted);
-    font-size: var(--ld-font-size-body-sm);
-    font-weight: var(--ld-font-weight-regular);
-    line-height: var(--ld-line-height-compact);
+    color: var(--lv-fg-muted);
+    font-size: var(--lv-font-size-body-sm);
+    font-weight: var(--lv-font-weight-regular);
+    line-height: var(--lv-line-height-compact);
     white-space: normal;
   }
 
-  ld-record-table .record-button-cell {
+  lv-record-table .record-button-cell {
     border: 0;
     background: transparent;
-    color: var(--ld-fg-default);
+    color: var(--lv-fg-default);
     cursor: pointer;
     padding: 0;
     font: inherit;
     text-align: left;
   }
 
-  ld-record-table .record-button-cell:hover span:last-child,
-  ld-record-table .record-button-cell:focus-visible span:last-child {
-    color: var(--ld-fg-link);
+  lv-record-table .record-button-cell:hover span:last-child,
+  lv-record-table .record-button-cell:focus-visible span:last-child {
+    color: var(--lv-fg-link);
     text-decoration: underline;
   }
 
-  ld-record-table .record-actions {
+  lv-record-table .record-actions {
     display: inline-flex;
     justify-content: flex-end;
     gap: var(--base-size-6);
   }
 
-  ld-record-table .record-icon-action {
+  lv-record-table .record-icon-action {
     display: inline-flex;
     width: var(--control-medium-size);
     height: var(--control-medium-size);
     align-items: center;
     justify-content: center;
-    border: var(--ld-border-transparent);
-    border-radius: var(--ld-radius-default);
+    border: var(--lv-border-transparent);
+    border-radius: var(--lv-radius-default);
     background: transparent;
-    color: var(--ld-fg-muted);
+    color: var(--lv-fg-muted);
     text-decoration: none;
     cursor: pointer;
   }
 
-  ld-record-table .density-tight .record-icon-action {
+  lv-record-table .density-tight .record-icon-action {
     width: 1.5rem;
     height: 1.5rem;
   }
 
-  ld-record-table .record-icon-action:hover,
-  ld-record-table .record-icon-action:focus-visible {
-    border-color: var(--ld-line-muted);
-    background: var(--ld-bg-control-hover, var(--ld-bg-panel-muted));
-    color: var(--ld-fg-default);
+  lv-record-table .record-icon-action:hover,
+  lv-record-table .record-icon-action:focus-visible {
+    border-color: var(--lv-line-muted);
+    background: var(--lv-bg-control-hover, var(--lv-bg-panel-muted));
+    color: var(--lv-fg-default);
     outline: 0;
   }
 
-  ld-record-table .record-muted,
-  ld-record-table .record-table-empty {
-    color: var(--ld-fg-muted);
+  lv-record-table .record-muted,
+  lv-record-table .record-table-empty {
+    color: var(--lv-fg-muted);
   }
 
-  ld-record-table .record-table-empty {
-    border-top: var(--ld-border-muted);
-    border-bottom: var(--ld-border-muted);
+  lv-record-table .record-table-empty {
+    border-top: var(--lv-border-muted);
+    border-bottom: var(--lv-border-muted);
     padding: var(--base-size-20) 0;
-    font-size: var(--ld-font-size-body-md);
-    font-weight: var(--ld-font-weight-regular);
+    font-size: var(--lv-font-size-body-md);
+    font-weight: var(--lv-font-weight-regular);
   }
 `
 
-customElements.define('ld-record-table', RecordTable)
+customElements.define('lv-record-table', RecordTable)

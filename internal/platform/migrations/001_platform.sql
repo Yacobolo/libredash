@@ -1,5 +1,5 @@
 -- +goose Up
--- LibreDash v1 platform control-plane schema.
+-- LeapView v1 platform control-plane schema.
 -- Runtime migration and sqlc generation both use this migration chain as the
 -- authoritative SQLite schema source.
 

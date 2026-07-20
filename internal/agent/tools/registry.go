@@ -3,7 +3,7 @@ package tools
 import (
 	"sort"
 
-	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
+	apigenapi "github.com/Yacobolo/leapview/internal/api/gen"
 	agenttool "github.com/Yacobolo/toolbelt/apigen/runtime/agenttool"
 )
 

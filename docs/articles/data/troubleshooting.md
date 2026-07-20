@@ -18,7 +18,7 @@ Capture the exact command, project, connection, environment, target, run or depl
 
 ## Planning fails
 
-If `libredash data plan` fails:
+If `leapview data plan` fails:
 
 - Validate the project and confirm the connection exists and is `managed`.
 - Use the connection's resource name, not its title.
@@ -31,7 +31,7 @@ Run the same command again only after the directory is stable. If comparing revi
 
 ## Sync fails
 
-For `libredash data sync` failures:
+For `leapview data sync` failures:
 
 - Verify target URL, token, and project/connection authorization.
 - Confirm sufficient local, temporary, and backend object-storage capacity.
@@ -53,7 +53,7 @@ Confirm that:
 - the token can deploy and any explicit environment assertion matches the target instance;
 - all workspace candidates validate with the pinned inputs.
 
-Use `libredash data revisions list` to confirm the revision is staged and `current` to see which digest remains active.
+Use `leapview data revisions list` to confirm the revision is staged and `current` to see which digest remains active.
 
 ## Refresh fails before SQL
 
@@ -90,4 +90,4 @@ Use semantic preview/query and explain commands to isolate the model from the da
 
 Do not delete Parquet files or DuckLake catalog rows by hand. Check active serving references, in-process query leases, backend permissions, disk capacity, and maintenance dry-run output. A snapshot protected by an active pointer or lease is not eligible for cleanup.
 
-Escalate with the failing run identity, storage backend, dry-run output, and relevant logs. See [`libredash data`](/docs/cli/data), [Refresh Runs API](/docs/api/refresh-runs), and [Storage and recovery](/docs/guides/data/storage-recovery).
+Escalate with the failing run identity, storage backend, dry-run output, and relevant logs. See [`leapview data`](/docs/cli/data), [Refresh Runs API](/docs/api/refresh-runs), and [Storage and recovery](/docs/guides/data/storage-recovery).

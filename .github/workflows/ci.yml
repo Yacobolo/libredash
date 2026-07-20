@@ -184,17 +184,17 @@ jobs:
 
       - name: Start MinIO source integration service
         run: |
-          docker run --detach --name libredash-minio \
+          docker run --detach --name leapview-minio \
             --publish 127.0.0.1:9000:9000 \
-            --env MINIO_ROOT_USER=libredash \
-            --env MINIO_ROOT_PASSWORD=libredash-integration-secret \
+            --env MINIO_ROOT_USER=leapview \
+            --env MINIO_ROOT_PASSWORD=leapview-integration-secret \
             minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e \
             server /data --address :9000
           attempt=0
           until curl --fail --silent http://127.0.0.1:9000/minio/health/ready >/dev/null; do
             attempt=$((attempt + 1))
             if [ "$attempt" -ge 60 ]; then
-              docker logs libredash-minio
+              docker logs leapview-minio
               exit 1
             fi
             sleep 1
@@ -202,7 +202,7 @@ jobs:
 
       - name: Run Go tests
         env:
-          LIBREDASH_TEST_MINIO_ENDPOINT: http://127.0.0.1:9000
+          LEAPVIEW_TEST_MINIO_ENDPOINT: http://127.0.0.1:9000
         run: go test ./...
 
   site-image:
@@ -215,7 +215,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - name: Build production site image
-        run: docker build --file Dockerfile.site --tag libredash-site:ci .
+        run: docker build --file Dockerfile.site --tag leapview-site:ci .
 
   frontend-tests:
     name: Frontend tests (${{ matrix.name }})
@@ -425,10 +425,10 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - name: Build production image
-        run: docker build --pull --tag libredash:ci .
+        run: docker build --pull --tag leapview:ci .
 
       - name: Smoke test production image
-        run: ./scripts/smoke_production_image.sh libredash:ci
+        run: ./scripts/smoke_production_image.sh leapview:ci
 
   deployment-contracts:
     name: Deployment contracts
@@ -461,8 +461,8 @@ jobs:
         run: >-
           docker run --rm -v "$PWD:/mnt:ro"
           koalaman/shellcheck:stable@sha256:bb596a0d169b85ddd81d8b6d3a2ff6d5baf5fca10b97f575ebc647c3dff62b3d
-          deploy/hetzner/files/libredashctl-wrapper
-          deploy/hetzner/files/libredash-backup-hook
+          deploy/hetzner/files/leapviewctl-wrapper
+          deploy/hetzner/files/leapview-backup-hook
           deploy/hetzner/files/provision.sh.tftpl
 
       - name: Initialize Terraform providers
@@ -509,7 +509,7 @@ jobs:
           context: .
           platforms: linux/amd64
           push: true
-          tags: ghcr.io/yacobolo/libredash:candidate-${{ github.sha }}
+          tags: ghcr.io/yacobolo/leapview:candidate-${{ github.sha }}
           build-args: |
             BUILD_VERSION=candidate-${{ github.sha }}
             BUILD_REVISION=${{ github.sha }}
@@ -521,9 +521,9 @@ jobs:
       - name: Attest candidate provenance
         uses: actions/attest@f6bf1532d7d6793fce74eac584813a8eee607999 # v4
         with:
-          subject-name: ghcr.io/yacobolo/libredash
+          subject-name: ghcr.io/yacobolo/leapview
           subject-digest: ${{ steps.publish.outputs.digest }}
           push-to-registry: true
 
       - name: Record immutable candidate reference
-        run: echo 'ghcr.io/yacobolo/libredash@${{ steps.publish.outputs.digest }}' >> "$GITHUB_STEP_SUMMARY"
+        run: echo 'ghcr.io/yacobolo/leapview@${{ steps.publish.outputs.digest }}' >> "$GITHUB_STEP_SUMMARY"

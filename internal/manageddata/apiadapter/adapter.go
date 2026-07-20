@@ -9,8 +9,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/manageddata"
-	"github.com/Yacobolo/libredash/internal/manageddata/control"
+	"github.com/Yacobolo/leapview/internal/manageddata"
+	"github.com/Yacobolo/leapview/internal/manageddata/control"
 )
 
 var canonicalRevisionID = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)

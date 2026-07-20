@@ -1,0 +1,711 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <title>LeapView Logo Lab</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --ink: #1f2328;
+        --muted: #59636e;
+        --line: #d1d9e0;
+        --soft-line: #eaeef2;
+        --paper: #ffffff;
+        --canvas: #f6f8fa;
+        --night: #0d1117;
+        --night-soft: #151b23;
+        --night-line: #3d444d;
+        --blue: #0969da;
+        --radius: 16px;
+        font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-synthesis: none;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        min-width: 320px;
+        margin: 0;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at 14% -8%, rgb(9 105 218 / 8%), transparent 30rem),
+          var(--canvas);
+      }
+
+      svg {
+        display: block;
+        width: 100%;
+        height: 100%;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .page {
+        width: min(1180px, calc(100% - 40px));
+        margin: 0 auto;
+        padding: 32px 0 64px;
+      }
+
+      .topbar,
+      .topbar-brand,
+      .wordmark,
+      .mini-nav,
+      .scale,
+      .chip-row,
+      .study-meta {
+        display: flex;
+        align-items: center;
+      }
+
+      .topbar {
+        justify-content: space-between;
+        gap: 20px;
+      }
+
+      .topbar-brand {
+        gap: 10px;
+        font-size: 15px;
+        font-weight: 700;
+      }
+
+      .eyebrow,
+      .label,
+      .variant-title {
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+      }
+
+      .lab-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--blue);
+        box-shadow: 0 0 0 5px rgb(9 105 218 / 10%);
+      }
+
+      .status {
+        padding: 6px 10px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--muted);
+        background: rgb(255 255 255 / 65%);
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .hero {
+        max-width: 760px;
+        padding: 88px 0 54px;
+      }
+
+      .eyebrow {
+        margin: 0 0 16px;
+        color: var(--blue);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      h1 {
+        max-width: 700px;
+        margin: 0;
+        font-size: clamp(40px, 6vw, 68px);
+        line-height: 0.98;
+        letter-spacing: -0.055em;
+      }
+
+      .lede {
+        max-width: 650px;
+        margin: 24px 0 0;
+        color: var(--muted);
+        font-size: 18px;
+        line-height: 1.6;
+      }
+
+      .studies {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 24px;
+      }
+
+      .study {
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--paper);
+        box-shadow: 0 12px 35px rgb(31 35 40 / 7%);
+      }
+
+      .study[data-selected="true"] {
+        border-color: var(--ink);
+        box-shadow: 0 0 0 1px var(--ink), 0 16px 42px rgb(31 35 40 / 12%);
+      }
+
+      .study-stage {
+        position: relative;
+        display: grid;
+        min-height: 270px;
+        place-items: center;
+        padding: 34px;
+        border-bottom: 1px solid var(--soft-line);
+        background:
+          linear-gradient(90deg, rgb(31 35 40 / 4%) 1px, transparent 1px),
+          linear-gradient(rgb(31 35 40 / 4%) 1px, transparent 1px),
+          #fbfcfd;
+        background-size: 24px 24px;
+      }
+
+      .selected-direction {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        padding: 5px 9px;
+        border-radius: 999px;
+        color: var(--paper);
+        background: var(--ink);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+      }
+
+      .hero-lockup {
+        gap: 17px;
+        font-size: clamp(36px, 5vw, 52px);
+        letter-spacing: -0.045em;
+      }
+
+      .hero-lockup .mark {
+        width: 58px;
+        height: 58px;
+      }
+
+      .wordmark {
+        font-weight: 740;
+        line-height: 1;
+      }
+
+      .mark {
+        display: inline-grid;
+        flex: none;
+        place-items: center;
+        border-radius: 999px;
+      }
+
+      .mark svg {
+        width: 64%;
+        height: 64%;
+      }
+
+      .mark--disc {
+        color: var(--paper);
+        background: var(--ink);
+      }
+
+      .mark--outline {
+        color: var(--ink);
+        border: 1.5px solid currentColor;
+        background: transparent;
+      }
+
+      .mark--naked {
+        color: var(--ink);
+        background: transparent;
+      }
+
+      .mark--native {
+        color: var(--ink);
+        background: transparent;
+      }
+
+      .mark--native svg {
+        width: 100%;
+        height: 100%;
+      }
+
+      .study-copy {
+        padding: 24px 26px 26px;
+      }
+
+      .study-meta {
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .study h2 {
+        margin: 0;
+        font-size: 25px;
+        letter-spacing: -0.025em;
+      }
+
+      .concept {
+        padding: 4px 8px;
+        border-radius: 6px;
+        color: var(--blue);
+        background: rgb(9 105 218 / 9%);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .study p {
+        min-height: 52px;
+        margin: 12px 0 20px;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.55;
+      }
+
+      .chip-row {
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .chip {
+        padding: 5px 9px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 600;
+      }
+
+      .section {
+        margin-top: 24px;
+        padding: 28px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--paper);
+      }
+
+      .section-head {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 24px;
+        align-items: end;
+        margin-bottom: 22px;
+      }
+
+      .label {
+        margin: 0 0 7px;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .section h2 {
+        margin: 0;
+        font-size: 24px;
+        letter-spacing: -0.025em;
+      }
+
+      .note {
+        max-width: 470px;
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.5;
+        text-align: right;
+      }
+
+      .contexts,
+      .treatments {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .context {
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+      }
+
+      .context--dark {
+        color: #f0f6fc;
+        border-color: var(--night-line);
+        background: var(--night);
+      }
+
+      .mini-nav {
+        justify-content: space-between;
+        min-height: 74px;
+        padding: 18px;
+      }
+
+      .mini-nav .wordmark {
+        gap: 9px;
+        font-size: 22px;
+        letter-spacing: -0.03em;
+      }
+
+      .mini-nav .mark {
+        width: 32px;
+        height: 32px;
+      }
+
+      .context--dark .mark--disc {
+        color: var(--night);
+        background: #f0f6fc;
+      }
+
+      .context--dark .mark--outline,
+      .context--dark .mark--naked,
+      .context--dark .mark--native {
+        color: #f0f6fc;
+      }
+
+      .mini-links {
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .context--dark .mini-links {
+        color: #9198a1;
+      }
+
+      .context-caption {
+        padding: 9px 12px;
+        border-top: 1px solid var(--soft-line);
+        color: var(--muted);
+        background: var(--canvas);
+        font-size: 11px;
+        font-weight: 600;
+      }
+
+      .context--dark .context-caption {
+        border-color: var(--night-line);
+        color: #9198a1;
+        background: var(--night-soft);
+      }
+
+      .treatment {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 22px;
+        align-items: center;
+        padding: 22px;
+        border: 1px solid var(--soft-line);
+        border-radius: 12px;
+        background: #fbfcfd;
+      }
+
+      .treatment-grid {
+        display: grid;
+        grid-template-columns: repeat(3, auto);
+        gap: 14px;
+        align-items: end;
+      }
+
+      .variant {
+        display: grid;
+        gap: 7px;
+        justify-items: center;
+      }
+
+      .variant .mark {
+        width: 44px;
+        height: 44px;
+      }
+
+      .variant-title {
+        color: var(--muted);
+        font-size: 9px;
+        font-weight: 700;
+      }
+
+      .scale {
+        justify-content: flex-end;
+        gap: 14px;
+      }
+
+      .scale .mark:nth-child(1) {
+        width: 16px;
+        height: 16px;
+      }
+
+      .scale .mark:nth-child(2) {
+        width: 24px;
+        height: 24px;
+      }
+
+      .scale .mark:nth-child(3) {
+        width: 32px;
+        height: 32px;
+      }
+
+      .scale .mark:nth-child(4) {
+        width: 48px;
+        height: 48px;
+      }
+
+      .scale .mark:nth-child(5) {
+        width: 64px;
+        height: 64px;
+      }
+
+      .footer {
+        display: flex;
+        justify-content: space-between;
+        gap: 24px;
+        padding-top: 28px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      @media (max-width: 760px) {
+        .page {
+          width: min(100% - 24px, 600px);
+          padding-top: 20px;
+        }
+
+        .hero {
+          padding: 62px 0 40px;
+        }
+
+        .studies,
+        .contexts,
+        .treatments {
+          grid-template-columns: 1fr;
+        }
+
+        .study-stage {
+          min-height: 220px;
+        }
+
+        .hero-lockup {
+          font-size: 34px;
+        }
+
+        .hero-lockup .mark {
+          width: 48px;
+          height: 48px;
+        }
+
+        .section {
+          padding: 20px;
+        }
+
+        .section-head {
+          grid-template-columns: 1fr;
+          gap: 9px;
+        }
+
+        .note {
+          text-align: left;
+        }
+
+        .treatment {
+          grid-template-columns: 1fr;
+        }
+
+        .scale {
+          justify-content: flex-start;
+        }
+
+        .footer {
+          flex-direction: column;
+        }
+      }
+
+      @media (min-width: 761px) and (max-width: 1000px) {
+        .studies {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header class="topbar">
+        <div class="topbar-brand"><span class="lab-dot" aria-hidden="true"></span>LeapView design</div>
+        <span class="status">Lucide study · 1.8px stroke</span>
+      </header>
+
+      <section class="hero">
+        <p class="eyebrow">Logo comparison</p>
+        <h1>Which mark gives LeapView the right point of view?</h1>
+        <p class="lede">Four monochrome directions, tested as a full lockup and at the small sizes where the final mark has to work hardest.</p>
+      </section>
+
+      <section class="studies" aria-label="Logo studies">
+        <article class="study" data-logo="aperture" aria-label="Aperture logo study">
+          <div class="study-stage">
+            <div class="wordmark hero-lockup">
+              <span class="mark mark--disc" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="m14.31 8 5.74 9.94"></path><path d="M9.69 8h11.48"></path><path d="m7.38 12 5.74-9.94"></path><path d="M9.69 16 3.95 6.06"></path><path d="M14.31 16H2.83"></path><path d="m16.62 12-5.74 9.94"></path></svg>
+              </span>
+              <span>LeapView</span>
+            </div>
+          </div>
+          <div class="study-copy">
+            <div class="study-meta"><h2>Aperture</h2><span class="concept">Focus + data</span></div>
+            <p>Compact and analytical. The geometry suggests a lens, coordinated views, and many inputs resolving into one answer.</p>
+            <div class="chip-row"><span class="chip">Abstract</span><span class="chip">Ownable silhouette</span><span class="chip">Strong at 16px</span></div>
+          </div>
+        </article>
+
+        <article class="study" data-logo="aperture-ring" data-selected="true" aria-label="Aperture ring logo study">
+          <div class="study-stage">
+            <span class="selected-direction">Selected direction</span>
+            <div class="wordmark hero-lockup">
+              <span class="mark mark--native" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="m14.31 8 5.74 9.94"></path><path d="M9.69 8h11.48"></path><path d="m7.38 12 5.74-9.94"></path><path d="M9.69 16 3.95 6.06"></path><path d="M14.31 16H2.83"></path><path d="m16.62 12-5.74 9.94"></path></svg>
+              </span>
+              <span>LeapView</span>
+            </div>
+          </div>
+          <div class="study-copy">
+            <div class="study-meta"><h2>Aperture ring</h2><span class="concept">Icon = circle</span></div>
+            <p>The Aperture’s own perimeter becomes the badge. Removing the filled disc creates a lighter mark with no nested circles.</p>
+            <div class="chip-row"><span class="chip">Single boundary</span><span class="chip">Lighter</span><span class="chip">Direct</span></div>
+          </div>
+        </article>
+
+        <article class="study" data-logo="telescope" aria-label="Telescope logo study">
+          <div class="study-stage">
+            <div class="wordmark hero-lockup">
+              <span class="mark mark--disc" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="m10.065 12.493-6.18 1.318a.934.934 0 0 1-1.108-.702l-.537-2.15a1.07 1.07 0 0 1 .691-1.265l13.504-4.44"></path><path d="m13.56 11.747 4.332-.924"></path><path d="m16 21-3.105-6.21"></path><path d="M16.485 5.94a2 2 0 0 1 1.455-2.425l1.09-.272a1 1 0 0 1 1.212.727l1.515 6.06a1 1 0 0 1-.727 1.213l-1.09.272a2 2 0 0 1-2.425-1.455z"></path><path d="m6.158 8.633 1.114 4.456"></path><path d="m8 21 3.105-6.21"></path><circle cx="12" cy="13" r="2"></circle></svg>
+              </span>
+              <span>LeapView</span>
+            </div>
+          </div>
+          <div class="study-copy">
+            <div class="study-meta"><h2>Telescope</h2><span class="concept">Discovery + reach</span></div>
+            <p>Distinctive and narrative. It makes “explore your data” tangible and gives the brand a more human, curious character.</p>
+            <div class="chip-row"><span class="chip">Expressive</span><span class="chip">Memorable object</span><span class="chip">More detail</span></div>
+          </div>
+        </article>
+
+        <article class="study" data-logo="mountain" aria-label="Mountain logo study">
+          <div class="study-stage">
+            <div class="wordmark hero-lockup">
+              <span class="mark mark--disc" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="m8 3 4 8 5-5 5 15H2L8 3z"></path></svg>
+              </span>
+              <span>LeapView</span>
+            </div>
+          </div>
+          <div class="study-copy">
+            <div class="study-meta"><h2>Mountain</h2><span class="concept">Perspective + ascent</span></div>
+            <p>Simple and optimistic. The peak suggests elevation, overview, and seeing the whole data landscape from a higher vantage point.</p>
+            <div class="chip-row"><span class="chip">Bold silhouette</span><span class="chip">Stable at 16px</span><span class="chip">Familiar motif</span></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="section" aria-labelledby="context-title">
+        <div class="section-head">
+          <div><p class="label">01 · Real context</p><h2 id="context-title">Navigation lockups</h2></div>
+          <p class="note">Same 32px footprint, 1.8px stroke, and wordmark weight on light and dark surfaces.</p>
+        </div>
+        <div class="contexts">
+          <div class="context">
+            <div class="mini-nav">
+              <div class="wordmark"><span class="mark mark--disc" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="m14.31 8 5.74 9.94"></path><path d="M9.69 8h11.48"></path><path d="m7.38 12 5.74-9.94"></path><path d="M9.69 16 3.95 6.06"></path><path d="M14.31 16H2.83"></path><path d="m16.62 12-5.74 9.94"></path></svg></span><span>LeapView</span></div>
+              <span class="mini-links">Docs&nbsp;&nbsp;&nbsp; Visuals</span>
+            </div>
+            <div class="context-caption">Aperture · light</div>
+          </div>
+          <div class="context context--dark">
+            <div class="mini-nav">
+              <div class="wordmark"><span class="mark mark--disc" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="m14.31 8 5.74 9.94"></path><path d="M9.69 8h11.48"></path><path d="m7.38 12 5.74-9.94"></path><path d="M9.69 16 3.95 6.06"></path><path d="M14.31 16H2.83"></path><path d="m16.62 12-5.74 9.94"></path></svg></span><span>LeapView</span></div>
+              <span class="mini-links">Docs&nbsp;&nbsp;&nbsp; Visuals</span>
+            </div>
+            <div class="context-caption">Aperture · dark</div>
+          </div>
+          <div class="context">
+            <div class="mini-nav">
+              <div class="wordmark"><span class="mark mark--native" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="m14.31 8 5.74 9.94"></path><path d="M9.69 8h11.48"></path><path d="m7.38 12 5.74-9.94"></path><path d="M9.69 16 3.95 6.06"></path><path d="M14.31 16H2.83"></path><path d="m16.62 12-5.74 9.94"></path></svg></span><span>LeapView</span></div>
+              <span class="mini-links">Docs&nbsp;&nbsp;&nbsp; Visuals</span>
+            </div>
+            <div class="context-caption">Aperture ring · light</div>
+          </div>
+          <div class="context context--dark">
+            <div class="mini-nav">
+              <div class="wordmark"><span class="mark mark--native" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="m14.31 8 5.74 9.94"></path><path d="M9.69 8h11.48"></path><path d="m7.38 12 5.74-9.94"></path><path d="M9.69 16 3.95 6.06"></path><path d="M14.31 16H2.83"></path><path d="m16.62 12-5.74 9.94"></path></svg></span><span>LeapView</span></div>
+              <span class="mini-links">Docs&nbsp;&nbsp;&nbsp; Visuals</span>
+            </div>
+            <div class="context-caption">Aperture ring · dark</div>
+          </div>
+          <div class="context">
+            <div class="mini-nav">
+              <div class="wordmark"><span class="mark mark--disc" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m10.065 12.493-6.18 1.318a.934.934 0 0 1-1.108-.702l-.537-2.15a1.07 1.07 0 0 1 .691-1.265l13.504-4.44"></path><path d="m13.56 11.747 4.332-.924"></path><path d="m16 21-3.105-6.21"></path><path d="M16.485 5.94a2 2 0 0 1 1.455-2.425l1.09-.272a1 1 0 0 1 1.212.727l1.515 6.06a1 1 0 0 1-.727 1.213l-1.09.272a2 2 0 0 1-2.425-1.455z"></path><path d="m6.158 8.633 1.114 4.456"></path><path d="m8 21 3.105-6.21"></path><circle cx="12" cy="13" r="2"></circle></svg></span><span>LeapView</span></div>
+              <span class="mini-links">Docs&nbsp;&nbsp;&nbsp; Visuals</span>
+            </div>
+            <div class="context-caption">Telescope · light</div>
+          </div>
+          <div class="context context--dark">
+            <div class="mini-nav">
+              <div class="wordmark"><span class="mark mark--disc" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m10.065 12.493-6.18 1.318a.934.934 0 0 1-1.108-.702l-.537-2.15a1.07 1.07 0 0 1 .691-1.265l13.504-4.44"></path><path d="m13.56 11.747 4.332-.924"></path><path d="m16 21-3.105-6.21"></path><path d="M16.485 5.94a2 2 0 0 1 1.455-2.425l1.09-.272a1 1 0 0 1 1.212.727l1.515 6.06a1 1 0 0 1-.727 1.213l-1.09.272a2 2 0 0 1-2.425-1.455z"></path><path d="m6.158 8.633 1.114 4.456"></path><path d="m8 21 3.105-6.21"></path><circle cx="12" cy="13" r="2"></circle></svg></span><span>LeapView</span></div>
+              <span class="mini-links">Docs&nbsp;&nbsp;&nbsp; Visuals</span>
+            </div>
+            <div class="context-caption">Telescope · dark</div>
+          </div>
+          <div class="context">
+            <div class="mini-nav">
+              <div class="wordmark"><span class="mark mark--disc" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m8 3 4 8 5-5 5 15H2L8 3z"></path></svg></span><span>LeapView</span></div>
+              <span class="mini-links">Docs&nbsp;&nbsp;&nbsp; Visuals</span>
+            </div>
+            <div class="context-caption">Mountain · light</div>
+          </div>
+          <div class="context context--dark">
+            <div class="mini-nav">
+              <div class="wordmark"><span class="mark mark--disc" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m8 3 4 8 5-5 5 15H2L8 3z"></path></svg></span><span>LeapView</span></div>
+              <span class="mini-links">Docs&nbsp;&nbsp;&nbsp; Visuals</span>
+            </div>
+            <div class="context-caption">Mountain · dark</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="treatment-title">
+        <div class="section-head">
+          <div><p class="label">02 · Mark system</p><h2 id="treatment-title">Treatment and scale</h2></div>
+          <p class="note">The filled disc is the most reliable lockup. Outline and naked marks are included to expose each icon’s underlying character.</p>
+        </div>
+        <div class="treatments">
+          <div class="treatment">
+            <div class="treatment-grid" aria-label="Aperture treatments">
+              <div class="variant"><span class="mark mark--disc"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="m14.31 8 5.74 9.94"></path><path d="M9.69 8h11.48"></path><path d="m7.38 12 5.74-9.94"></path><path d="M9.69 16 3.95 6.06"></path><path d="M14.31 16H2.83"></path><path d="m16.62 12-5.74 9.94"></path></svg></span><span class="variant-title">Disc</span></div>
+              <div class="variant"><span class="mark mark--outline"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="m14.31 8 5.74 9.94"></path><path d="M9.69 8h11.48"></path><path d="m7.38 12 5.74-9.94"></path><path d="M9.69 16 3.95 6.06"></path><path d="M14.31 16H2.83"></path><path d="m16.62 12-5.74 9.94"></path></svg></span><span class="variant-title">Outline</span></div>
+              <div class="variant"><span class="mark mark--native"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="m14.31 8 5.74 9.94"></path><path d="M9.69 8h11.48"></path><path d="m7.38 12 5.74-9.94"></path><path d="M9.69 16 3.95 6.06"></path><path d="M14.31 16H2.83"></path><path d="m16.62 12-5.74 9.94"></path></svg></span><span class="variant-title">Native</span></div>
+            </div>
+            <div class="scale" aria-label="Aperture scale test">
+              <span class="mark mark--disc"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="m14.31 8 5.74 9.94"></path><path d="M9.69 8h11.48"></path><path d="m7.38 12 5.74-9.94"></path><path d="M9.69 16 3.95 6.06"></path><path d="M14.31 16H2.83"></path><path d="m16.62 12-5.74 9.94"></path></svg></span><span class="mark mark--disc"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="m14.31 8 5.74 9.94"></path><path d="M9.69 8h11.48"></path><path d="m7.38 12 5.74-9.94"></path><path d="M9.69 16 3.95 6.06"></path><path d="M14.31 16H2.83"></path><path d="m16.62 12-5.74 9.94"></path></svg></span><span class="mark mark--disc"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="m14.31 8 5.74 9.94"></path><path d="M9.69 8h11.48"></path><path d="m7.38 12 5.74-9.94"></path><path d="M9.69 16 3.95 6.06"></path><path d="M14.31 16H2.83"></path><path d="m16.62 12-5.74 9.94"></path></svg></span><span class="mark mark--disc"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="m14.31 8 5.74 9.94"></path><path d="M9.69 8h11.48"></path><path d="m7.38 12 5.74-9.94"></path><path d="M9.69 16 3.95 6.06"></path><path d="M14.31 16H2.83"></path><path d="m16.62 12-5.74 9.94"></path></svg></span><span class="mark mark--disc"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="m14.31 8 5.74 9.94"></path><path d="M9.69 8h11.48"></path><path d="m7.38 12 5.74-9.94"></path><path d="M9.69 16 3.95 6.06"></path><path d="M14.31 16H2.83"></path><path d="m16.62 12-5.74 9.94"></path></svg></span>
+            </div>
+          </div>
+
+          <div class="treatment">
+            <div class="treatment-grid" aria-label="Telescope treatments">
+              <div class="variant"><span class="mark mark--disc"><svg viewBox="0 0 24 24"><path d="m10.065 12.493-6.18 1.318a.934.934 0 0 1-1.108-.702l-.537-2.15a1.07 1.07 0 0 1 .691-1.265l13.504-4.44"></path><path d="m13.56 11.747 4.332-.924"></path><path d="m16 21-3.105-6.21"></path><path d="M16.485 5.94a2 2 0 0 1 1.455-2.425l1.09-.272a1 1 0 0 1 1.212.727l1.515 6.06a1 1 0 0 1-.727 1.213l-1.09.272a2 2 0 0 1-2.425-1.455z"></path><path d="m6.158 8.633 1.114 4.456"></path><path d="m8 21 3.105-6.21"></path><circle cx="12" cy="13" r="2"></circle></svg></span><span class="variant-title">Disc</span></div>
+              <div class="variant"><span class="mark mark--outline"><svg viewBox="0 0 24 24"><path d="m10.065 12.493-6.18 1.318a.934.934 0 0 1-1.108-.702l-.537-2.15a1.07 1.07 0 0 1 .691-1.265l13.504-4.44"></path><path d="m13.56 11.747 4.332-.924"></path><path d="m16 21-3.105-6.21"></path><path d="M16.485 5.94a2 2 0 0 1 1.455-2.425l1.09-.272a1 1 0 0 1 1.212.727l1.515 6.06a1 1 0 0 1-.727 1.213l-1.09.272a2 2 0 0 1-2.425-1.455z"></path><path d="m6.158 8.633 1.114 4.456"></path><path d="m8 21 3.105-6.21"></path><circle cx="12" cy="13" r="2"></circle></svg></span><span class="variant-title">Outline</span></div>
+              <div class="variant"><span class="mark mark--naked"><svg viewBox="0 0 24 24"><path d="m10.065 12.493-6.18 1.318a.934.934 0 0 1-1.108-.702l-.537-2.15a1.07 1.07 0 0 1 .691-1.265l13.504-4.44"></path><path d="m13.56 11.747 4.332-.924"></path><path d="m16 21-3.105-6.21"></path><path d="M16.485 5.94a2 2 0 0 1 1.455-2.425l1.09-.272a1 1 0 0 1 1.212.727l1.515 6.06a1 1 0 0 1-.727 1.213l-1.09.272a2 2 0 0 1-2.425-1.455z"></path><path d="m6.158 8.633 1.114 4.456"></path><path d="m8 21 3.105-6.21"></path><circle cx="12" cy="13" r="2"></circle></svg></span><span class="variant-title">Naked</span></div>
+            </div>
+            <div class="scale" aria-label="Telescope scale test">
+              <span class="mark mark--disc"><svg viewBox="0 0 24 24"><path d="m10.065 12.493-6.18 1.318a.934.934 0 0 1-1.108-.702l-.537-2.15a1.07 1.07 0 0 1 .691-1.265l13.504-4.44"></path><path d="m13.56 11.747 4.332-.924"></path><path d="m16 21-3.105-6.21"></path><path d="M16.485 5.94a2 2 0 0 1 1.455-2.425l1.09-.272a1 1 0 0 1 1.212.727l1.515 6.06a1 1 0 0 1-.727 1.213l-1.09.272a2 2 0 0 1-2.425-1.455z"></path><path d="m6.158 8.633 1.114 4.456"></path><path d="m8 21 3.105-6.21"></path><circle cx="12" cy="13" r="2"></circle></svg></span><span class="mark mark--disc"><svg viewBox="0 0 24 24"><path d="m10.065 12.493-6.18 1.318a.934.934 0 0 1-1.108-.702l-.537-2.15a1.07 1.07 0 0 1 .691-1.265l13.504-4.44"></path><path d="m13.56 11.747 4.332-.924"></path><path d="m16 21-3.105-6.21"></path><path d="M16.485 5.94a2 2 0 0 1 1.455-2.425l1.09-.272a1 1 0 0 1 1.212.727l1.515 6.06a1 1 0 0 1-.727 1.213l-1.09.272a2 2 0 0 1-2.425-1.455z"></path><path d="m6.158 8.633 1.114 4.456"></path><path d="m8 21 3.105-6.21"></path><circle cx="12" cy="13" r="2"></circle></svg></span><span class="mark mark--disc"><svg viewBox="0 0 24 24"><path d="m10.065 12.493-6.18 1.318a.934.934 0 0 1-1.108-.702l-.537-2.15a1.07 1.07 0 0 1 .691-1.265l13.504-4.44"></path><path d="m13.56 11.747 4.332-.924"></path><path d="m16 21-3.105-6.21"></path><path d="M16.485 5.94a2 2 0 0 1 1.455-2.425l1.09-.272a1 1 0 0 1 1.212.727l1.515 6.06a1 1 0 0 1-.727 1.213l-1.09.272a2 2 0 0 1-2.425-1.455z"></path><path d="m6.158 8.633 1.114 4.456"></path><path d="m8 21 3.105-6.21"></path><circle cx="12" cy="13" r="2"></circle></svg></span><span class="mark mark--disc"><svg viewBox="0 0 24 24"><path d="m10.065 12.493-6.18 1.318a.934.934 0 0 1-1.108-.702l-.537-2.15a1.07 1.07 0 0 1 .691-1.265l13.504-4.44"></path><path d="m13.56 11.747 4.332-.924"></path><path d="m16 21-3.105-6.21"></path><path d="M16.485 5.94a2 2 0 0 1 1.455-2.425l1.09-.272a1 1 0 0 1 1.212.727l1.515 6.06a1 1 0 0 1-.727 1.213l-1.09.272a2 2 0 0 1-2.425-1.455z"></path><path d="m6.158 8.633 1.114 4.456"></path><path d="m8 21 3.105-6.21"></path><circle cx="12" cy="13" r="2"></circle></svg></span><span class="mark mark--disc"><svg viewBox="0 0 24 24"><path d="m10.065 12.493-6.18 1.318a.934.934 0 0 1-1.108-.702l-.537-2.15a1.07 1.07 0 0 1 .691-1.265l13.504-4.44"></path><path d="m13.56 11.747 4.332-.924"></path><path d="m16 21-3.105-6.21"></path><path d="M16.485 5.94a2 2 0 0 1 1.455-2.425l1.09-.272a1 1 0 0 1 1.212.727l1.515 6.06a1 1 0 0 1-.727 1.213l-1.09.272a2 2 0 0 1-2.425-1.455z"></path><path d="m6.158 8.633 1.114 4.456"></path><path d="m8 21 3.105-6.21"></path><circle cx="12" cy="13" r="2"></circle></svg></span>
+            </div>
+          </div>
+
+          <div class="treatment">
+            <div class="treatment-grid" aria-label="Mountain treatments">
+              <div class="variant"><span class="mark mark--disc"><svg viewBox="0 0 24 24"><path d="m8 3 4 8 5-5 5 15H2L8 3z"></path></svg></span><span class="variant-title">Disc</span></div>
+              <div class="variant"><span class="mark mark--outline"><svg viewBox="0 0 24 24"><path d="m8 3 4 8 5-5 5 15H2L8 3z"></path></svg></span><span class="variant-title">Outline</span></div>
+              <div class="variant"><span class="mark mark--naked"><svg viewBox="0 0 24 24"><path d="m8 3 4 8 5-5 5 15H2L8 3z"></path></svg></span><span class="variant-title">Naked</span></div>
+            </div>
+            <div class="scale" aria-label="Mountain scale test">
+              <span class="mark mark--disc"><svg viewBox="0 0 24 24"><path d="m8 3 4 8 5-5 5 15H2L8 3z"></path></svg></span><span class="mark mark--disc"><svg viewBox="0 0 24 24"><path d="m8 3 4 8 5-5 5 15H2L8 3z"></path></svg></span><span class="mark mark--disc"><svg viewBox="0 0 24 24"><path d="m8 3 4 8 5-5 5 15H2L8 3z"></path></svg></span><span class="mark mark--disc"><svg viewBox="0 0 24 24"><path d="m8 3 4 8 5-5 5 15H2L8 3z"></path></svg></span><span class="mark mark--disc"><svg viewBox="0 0 24 24"><path d="m8 3 4 8 5-5 5 15H2L8 3z"></path></svg></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <footer class="footer"><span>LeapView logo lab · Aperture disc · Aperture ring · Telescope · Mountain</span><span>Single-file HTML · no external assets</span></footer>
+    </main>
+  </body>
+</html>

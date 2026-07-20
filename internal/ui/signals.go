@@ -1,8 +1,8 @@
 package ui
 
 import (
-	"github.com/Yacobolo/libredash/internal/agent"
-	uisignals "github.com/Yacobolo/libredash/internal/ui/signals"
+	"github.com/Yacobolo/leapview/internal/agent"
+	uisignals "github.com/Yacobolo/leapview/internal/ui/signals"
 )
 
 type WorkspaceAccessResponse = uisignals.WorkspaceAccessResponse

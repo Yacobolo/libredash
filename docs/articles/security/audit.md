@@ -32,7 +32,7 @@ Audit access requires its own privilege. Restrict it to security and operational
 
 ## Correlate sources
 
-For authentication incidents, correlate LibreDash audit/application logs with identity-provider sign-in events, SCIM provider logs, reverse-proxy request IDs, and secret-manager access history.
+For authentication incidents, correlate LeapView audit/application logs with identity-provider sign-in events, SCIM provider logs, reverse-proxy request IDs, and secret-manager access history.
 
 For data or deployment incidents, correlate project commit, deployment ID, environment, managed revision digest, refresh generation, active serving state, and query request identity. Preserve timestamps in a consistent timezone.
 
@@ -43,7 +43,7 @@ Audit records should not contain bearer tokens, passwords, raw OIDC tokens, or s
 Use policy-driven bounded retention. The maintenance command defaults to separate windows for audit, query, auth-state, and archived agent-conversation history and runs as a dry-run unless `--apply` is supplied:
 
 ```sh
-libredash admin maintenance \
+leapview admin maintenance \
   --audit-days 365 \
   --query-days 90
 ```

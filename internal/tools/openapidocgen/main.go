@@ -1,4 +1,4 @@
-// Command openapidocgen turns the generated LibreDash OpenAPI contract into
+// Command openapidocgen turns the generated LeapView OpenAPI contract into
 // the Markdown sources consumed by the public documentation site.
 package main
 

@@ -47,7 +47,7 @@ test('theme bootstrap does not emit applied event during page reveal', async () 
       events: (window as any).themeAppliedEvents,
       colorMode: document.documentElement.dataset.colorMode,
       colorScheme: document.documentElement.style.colorScheme,
-      storedMode: localStorage.getItem('libredash-color-mode'),
+      storedMode: localStorage.getItem('leapview-color-mode'),
     }))
 
     expect(state).toEqual({
@@ -68,7 +68,7 @@ test('explicit theme changes still emit applied event', async () => {
     await page.waitForFunction(() => (window as any).themeBooted === true)
     await page.evaluate(() => {
       ;(window as any).themeAppliedEvents = []
-      document.dispatchEvent(new CustomEvent('libredash-theme-change', { detail: { mode: 'dark' } }))
+      document.dispatchEvent(new CustomEvent('leapview-theme-change', { detail: { mode: 'dark' } }))
     })
     await page.waitForFunction(() => (window as any).themeAppliedEvents.length === 1)
 
@@ -76,7 +76,7 @@ test('explicit theme changes still emit applied event', async () => {
       events: (window as any).themeAppliedEvents,
       colorMode: document.documentElement.dataset.colorMode,
       colorScheme: document.documentElement.style.colorScheme,
-      storedMode: localStorage.getItem('libredash-color-mode'),
+      storedMode: localStorage.getItem('leapview-color-mode'),
     }))
 
     expect(state).toEqual({
@@ -121,9 +121,9 @@ function testDocument(): string {
     <html data-color-mode="auto" data-light-theme="light" data-dark-theme="dark">
       <head>
         <script>
-          localStorage.setItem('libredash-color-mode', 'light');
+          localStorage.setItem('leapview-color-mode', 'light');
           window.themeAppliedEvents = [];
-          document.addEventListener('libredash-theme-applied', (event) => {
+          document.addEventListener('leapview-theme-applied', (event) => {
             window.themeAppliedEvents.push(event.detail);
           });
         </script>

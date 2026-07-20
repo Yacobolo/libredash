@@ -37,63 +37,63 @@ beforeAll(async () => {
         <head>
           <style>
             :root {
-              --ld-chart-surface: rgb(1, 2, 3);
-              --ld-border-default: 2px solid rgb(4, 5, 6);
+              --lv-chart-surface: rgb(1, 2, 3);
+              --lv-border-default: 2px solid rgb(4, 5, 6);
               --fontStack-system: system-ui;
               --fontStack-monospace: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-              --ld-bg-app: rgb(11, 12, 13);
-              --ld-bg-page: #fff;
-              --ld-bg-panel: #fff;
-              --ld-bg-panel-muted: #f6f8fa;
-              --ld-bg-control: #f6f8fa;
-              --ld-fg-default: #24292f;
-              --ld-fg-muted: #57606a;
-              --ld-fg-accent: #0969da;
-              --ld-line-muted: #d8dee4;
-              --ld-border-width: 1px;
-              --ld-border-muted: 1px solid #d8dee4;
-              --ld-radius-default: 6px;
+	              --lv-bg-app: rgb(11, 12, 13);
+              --lv-bg-page: #fff;
+              --lv-bg-panel: #fff;
+              --lv-bg-panel-muted: #f6f8fa;
+              --lv-bg-control: #f6f8fa;
+              --lv-fg-default: #24292f;
+              --lv-fg-muted: #57606a;
+              --lv-fg-accent: #0969da;
+              --lv-line-muted: #d8dee4;
+              --lv-border-width: 1px;
+              --lv-border-muted: 1px solid #d8dee4;
+              --lv-radius-default: 6px;
               --base-size-4: 4px;
               --base-size-8: 8px;
               --base-size-12: 12px;
               --base-size-16: 16px;
               --base-size-20: 20px;
-              --ld-space-sm: 8px;
-              --ld-font-size-caption: 12px;
-              --ld-font-size-body-sm: 14px;
-              --ld-font-size-body-md: 16px;
-              --ld-font-size-title-sm: 18px;
-              --ld-font-size-title-md: 22px;
-              --ld-font-weight-strong: 600;
-              --ld-line-height-compact: 1.3;
-              --ld-line-height-normal: 1.5;
-              --ld-line-height-relaxed: 1.55;
-              --ld-chat-thread-padding: 16px;
-              --ld-chat-stack-width: 760px;
-              --ld-chat-stack-gap: 16px;
-              --ld-chat-message-width: 760px;
-              --ld-chat-message-gap: 8px;
-              --ld-chat-agent-item-gap: 8px;
-              --ld-chat-empty-min-height: 180px;
-              --ld-chat-bubble-padding-block: 12px;
-              --ld-chat-bubble-padding-inline: 16px;
-              --ld-chat-markdown-block-gap: 10px;
-              --ld-chat-markdown-list-indent: 20px;
-              --ld-chat-markdown-list-item-gap: 2px;
-              --ld-chat-code-radius: 4px;
-              --ld-chat-code-padding-block: 1px;
-              --ld-chat-code-padding-inline: 4px;
-              --ld-chat-code-font-scale: 0.92em;
-              --ld-chat-pre-padding-block: 9px;
-              --ld-chat-pre-padding-inline: 10px;
-              --ld-chat-quote-border-width: 2px;
-              --ld-chat-link-underline-thickness: 1px;
-              --ld-chat-link-underline-offset: 2px;
+              --lv-space-sm: 8px;
+              --lv-font-size-caption: 12px;
+              --lv-font-size-body-sm: 14px;
+              --lv-font-size-body-md: 16px;
+              --lv-font-size-title-sm: 18px;
+              --lv-font-size-title-md: 22px;
+              --lv-font-weight-strong: 600;
+              --lv-line-height-compact: 1.3;
+              --lv-line-height-normal: 1.5;
+              --lv-line-height-relaxed: 1.55;
+              --lv-chat-thread-padding: 16px;
+              --lv-chat-stack-width: 760px;
+              --lv-chat-stack-gap: 16px;
+              --lv-chat-message-width: 760px;
+              --lv-chat-message-gap: 8px;
+              --lv-chat-agent-item-gap: 8px;
+              --lv-chat-empty-min-height: 180px;
+              --lv-chat-bubble-padding-block: 12px;
+              --lv-chat-bubble-padding-inline: 16px;
+              --lv-chat-markdown-block-gap: 10px;
+              --lv-chat-markdown-list-indent: 20px;
+              --lv-chat-markdown-list-item-gap: 2px;
+              --lv-chat-code-radius: 4px;
+              --lv-chat-code-padding-block: 1px;
+              --lv-chat-code-padding-inline: 4px;
+              --lv-chat-code-font-scale: 0.92em;
+              --lv-chat-pre-padding-block: 9px;
+              --lv-chat-pre-padding-inline: 10px;
+              --lv-chat-quote-border-width: 2px;
+              --lv-chat-link-underline-thickness: 1px;
+              --lv-chat-link-underline-offset: 2px;
             }
           </style>
           <script type="module" src="/chat-under-test.js"></script>
         </head>
-        <body><ld-chat-thread></ld-chat-thread><ld-visual-modal></ld-visual-modal></body>
+        <body><lv-chat-thread></lv-chat-thread><lv-visual-modal></lv-visual-modal></body>
       </html>
     `)
     }
@@ -113,9 +113,9 @@ afterAll(async () => {
 test('chat thread uses the surrounding app surface background', async () => {
   const page = await browser.newPage()
   await page.goto(baseURL)
-  await page.waitForFunction(() => customElements.get('ld-chat-thread'))
+  await page.waitForFunction(() => customElements.get('lv-chat-thread'))
 
-  const background = await page.locator('ld-chat-thread').evaluate((element: any) => {
+  const background = await page.locator('lv-chat-thread').evaluate((element: any) => {
     const thread = element.shadowRoot.querySelector('.thread') as HTMLElement
     return getComputedStyle(thread).backgroundColor
   })
@@ -128,8 +128,8 @@ test('chat thread preserves plain user message text without template whitespace'
   const page = await browser.newPage()
   await page.goto(baseURL)
   await page.evaluate(async () => {
-    await customElements.whenDefined('ld-chat-thread')
-    const thread = document.querySelector('ld-chat-thread') as any
+    await customElements.whenDefined('lv-chat-thread')
+    const thread = document.querySelector('lv-chat-thread') as any
     thread.transcript = [{
       id: 'user-1',
       kind: 'user',
@@ -138,7 +138,7 @@ test('chat thread preserves plain user message text without template whitespace'
     await thread.updateComplete
   })
 
-  const state = await page.locator('ld-chat-thread').evaluate((element: any) => {
+  const state = await page.locator('lv-chat-thread').evaluate((element: any) => {
     const bubble = element.shadowRoot.querySelector('.message.user .bubble.plain') as HTMLElement
     const rect = bubble.getBoundingClientRect()
     return {
@@ -158,9 +158,9 @@ test('chat thread renders visual artifacts with dashboard web components', async
   const page = await browser.newPage()
   await page.goto(baseURL)
   await page.evaluate(async () => {
-    await customElements.whenDefined('ld-chat-thread')
-    await customElements.whenDefined('ld-visual-modal')
-    const thread = document.querySelector('ld-chat-thread') as any
+    await customElements.whenDefined('lv-chat-thread')
+    await customElements.whenDefined('lv-visual-modal')
+    const thread = document.querySelector('lv-chat-thread') as any
     thread.visuals = {
       agent_chart_1: {
         version: 3,
@@ -236,29 +236,29 @@ test('chat thread renders visual artifacts with dashboard web components', async
     await thread.updateComplete
   })
   await page.waitForFunction(() => Boolean(
-    document.querySelector('ld-chat-thread')!
+    document.querySelector('lv-chat-thread')!
       .shadowRoot!
-      .querySelector('ld-visual-artifact[artifact-id="agent_chart_1"]')
+      .querySelector('lv-visual-artifact[artifact-id="agent_chart_1"]')
       ?.shadowRoot
-      ?.querySelector('ld-echart[visual-id="agent_chart_1"]'),
+      ?.querySelector('lv-echart[visual-id="agent_chart_1"]'),
   ))
   await page.waitForFunction(() => Boolean(
-    document.querySelector('ld-chat-thread')!
+    document.querySelector('lv-chat-thread')!
       .shadowRoot!
-      .querySelector('ld-visual-artifact[artifact-id="agent_table_1"]')
+      .querySelector('lv-visual-artifact[artifact-id="agent_table_1"]')
       ?.shadowRoot
-      ?.querySelector('ld-report-table[table-id="agent_table_1"]'),
+      ?.querySelector('lv-report-table[table-id="agent_table_1"]'),
   ))
 
   const rendered = await page.evaluate(() => {
-    const root = document.querySelector('ld-chat-thread')!.shadowRoot!
+    const root = document.querySelector('lv-chat-thread')!.shadowRoot!
     return {
-      chart: Boolean(root.querySelector('ld-visual-artifact[artifact-id="agent_chart_1"]')?.shadowRoot?.querySelector('ld-echart[visual-id="agent_chart_1"]')),
-      table: Boolean(root.querySelector('ld-visual-artifact[artifact-id="agent_table_1"]')?.shadowRoot?.querySelector('ld-report-table[table-id="agent_table_1"]')),
+      chart: Boolean(root.querySelector('lv-visual-artifact[artifact-id="agent_chart_1"]')?.shadowRoot?.querySelector('lv-echart[visual-id="agent_chart_1"]')),
+      table: Boolean(root.querySelector('lv-visual-artifact[artifact-id="agent_table_1"]')?.shadowRoot?.querySelector('lv-report-table[table-id="agent_table_1"]')),
       jsonDetails: root.querySelectorAll('.tool-details').length,
       bodyText: root.textContent || '',
-      artifactBackground: getComputedStyle(root.querySelector('ld-visual-artifact')!.shadowRoot!.querySelector('.artifact')!).backgroundColor,
-      artifactBorderTopWidth: getComputedStyle(root.querySelector('ld-visual-artifact')!.shadowRoot!.querySelector('.artifact')!).borderTopWidth,
+      artifactBackground: getComputedStyle(root.querySelector('lv-visual-artifact')!.shadowRoot!.querySelector('.artifact')!).backgroundColor,
+      artifactBorderTopWidth: getComputedStyle(root.querySelector('lv-visual-artifact')!.shadowRoot!.querySelector('.artifact')!).borderTopWidth,
     }
   })
   expect(rendered.chart).toBe(true)
@@ -268,18 +268,18 @@ test('chat thread renders visual artifacts with dashboard web components', async
   expect(rendered.artifactBackground).toBe('rgb(1, 2, 3)')
   expect(rendered.artifactBorderTopWidth).toBe('2px')
 
-  await page.locator('ld-chat-thread').evaluate(async (element: any) => {
+  await page.locator('lv-chat-thread').evaluate(async (element: any) => {
     const trigger = element.shadowRoot.querySelector('.tool-trigger') as HTMLButtonElement
     trigger.click()
     await element.updateComplete
   })
-  const detailText = await page.locator('ld-chat-thread').evaluate((element: any) => element.shadowRoot.querySelector('.tool-details')?.textContent || '')
+  const detailText = await page.locator('lv-chat-thread').evaluate((element: any) => element.shadowRoot.querySelector('.tool-details')?.textContent || '')
   expect(detailText.includes('"signal": "visuals.agent_chart_1"')).toBe(true)
   expect(detailText.includes('delivered')).toBe(false)
 
-  await page.locator('ld-chat-thread').evaluate(async (element: any) => {
-    const artifact = element.shadowRoot.querySelector('ld-visual-artifact[artifact-id="agent_chart_1"]') as any
-    const chart = artifact.shadowRoot.querySelector('ld-echart') as any
+  await page.locator('lv-chat-thread').evaluate(async (element: any) => {
+    const artifact = element.shadowRoot.querySelector('lv-visual-artifact[artifact-id="agent_chart_1"]') as any
+    const chart = artifact.shadowRoot.querySelector('lv-echart') as any
     await chart.updateComplete
     const summary = chart.shadowRoot.querySelector('.options summary') as HTMLElement
     summary.click()
@@ -287,7 +287,7 @@ test('chat thread renders visual artifacts with dashboard web components', async
     const showData = chart.shadowRoot.querySelector('.menu button') as HTMLButtonElement
     showData.click()
   })
-  const showDataState = await page.locator('ld-visual-modal').evaluate(async (modal: any) => {
+  const showDataState = await page.locator('lv-visual-modal').evaluate(async (modal: any) => {
     await modal.updateComplete
     return {
       hasDialog: Boolean(modal.shadowRoot.querySelector('.dialog')),
@@ -296,21 +296,21 @@ test('chat thread renders visual artifacts with dashboard web components', async
   })
   expect(showDataState.hasDialog).toBe(true)
   expect(showDataState.text.includes('1 row from current visual data')).toBe(true)
-  await page.locator('ld-visual-modal').evaluate(async (modal: any) => {
+  await page.locator('lv-visual-modal').evaluate(async (modal: any) => {
     modal.shadowRoot.querySelector('.close').click()
     await modal.updateComplete
   })
 
-  await page.locator('ld-chat-thread').evaluate(async (element: any) => {
-    const artifact = element.shadowRoot.querySelector('ld-visual-artifact[artifact-id="agent_chart_1"]') as any
-    const chart = artifact.shadowRoot.querySelector('ld-echart') as any
+  await page.locator('lv-chat-thread').evaluate(async (element: any) => {
+    const artifact = element.shadowRoot.querySelector('lv-visual-artifact[artifact-id="agent_chart_1"]') as any
+    const chart = artifact.shadowRoot.querySelector('lv-echart') as any
     await chart.updateComplete
     const expand = chart.shadowRoot.querySelector('.icon-action') as HTMLButtonElement
     expand.click()
   })
-  const focusState = await page.locator('ld-visual-modal').evaluate(async (modal: any) => {
+  const focusState = await page.locator('lv-visual-modal').evaluate(async (modal: any) => {
     await modal.updateComplete
-    const chart = document.querySelector('ld-echart[visual-id="agent_chart_1"]') as HTMLElement
+    const chart = document.querySelector('lv-echart[visual-id="agent_chart_1"]') as HTMLElement
     const dialog = modal.shadowRoot.querySelector('.focus-dialog')
     return {
       chartParent: chart.parentElement?.localName,
@@ -320,16 +320,16 @@ test('chat thread renders visual artifacts with dashboard web components', async
     }
   })
   expect(focusState).toEqual({
-    chartParent: 'ld-visual-modal',
+    chartParent: 'lv-visual-modal',
     slot: 'focus-visual',
     hasDialog: true,
     dialogBackground: 'rgb(1, 2, 3)',
   })
-  await page.locator('ld-visual-modal').evaluate(async (modal: any) => {
+  await page.locator('lv-visual-modal').evaluate(async (modal: any) => {
     modal.shadowRoot.querySelector('.focus-close').click()
     await modal.updateComplete
   })
-  const restored = await page.locator('ld-chat-thread').evaluate((element: any) => Boolean(element.shadowRoot.querySelector('ld-visual-artifact[artifact-id="agent_chart_1"]')?.shadowRoot?.querySelector('ld-echart[visual-id="agent_chart_1"]')))
+  const restored = await page.locator('lv-chat-thread').evaluate((element: any) => Boolean(element.shadowRoot.querySelector('lv-visual-artifact[artifact-id="agent_chart_1"]')?.shadowRoot?.querySelector('lv-echart[visual-id="agent_chart_1"]')))
   expect(restored).toBe(true)
   await page.close()
 })
@@ -338,8 +338,8 @@ test('chat thread renders tool details with compact json and toon code blocks', 
   const page = await browser.newPage()
   await page.goto(baseURL)
   await page.evaluate(async () => {
-    await customElements.whenDefined('ld-chat-thread')
-    const thread = document.querySelector('ld-chat-thread') as any
+    await customElements.whenDefined('lv-chat-thread')
+    const thread = document.querySelector('lv-chat-thread') as any
     thread.transcript = [
       {
         id: 'tool-toon',
@@ -366,8 +366,8 @@ test('chat thread renders tool details with compact json and toon code blocks', 
     await thread.updateComplete
   })
 
-  const state = await page.locator('ld-chat-thread').evaluate((element: any) => {
-    const blocks = Array.from(element.shadowRoot.querySelectorAll('ld-code-block')) as any[]
+  const state = await page.locator('lv-chat-thread').evaluate((element: any) => {
+    const blocks = Array.from(element.shadowRoot.querySelectorAll('lv-code-block')) as any[]
     return {
       blockCount: blocks.length,
       languages: blocks.map((block) => block.language),
@@ -389,9 +389,9 @@ test('chat thread renders assistant markdown through shared markdown view', asyn
   const page = await browser.newPage()
   await page.goto(baseURL)
   await page.evaluate(async () => {
-    await customElements.whenDefined('ld-chat-thread')
-    await customElements.whenDefined('ld-markdown-view')
-    const thread = document.querySelector('ld-chat-thread') as any
+    await customElements.whenDefined('lv-chat-thread')
+    await customElements.whenDefined('lv-markdown-view')
+    const thread = document.querySelector('lv-chat-thread') as any
     thread.transcript = [{
       id: 'assistant-1',
       kind: 'assistant',
@@ -407,8 +407,8 @@ test('chat thread renders assistant markdown through shared markdown view', asyn
     await thread.updateComplete
   })
 
-  const state = await page.locator('ld-chat-thread').evaluate(async (element: any) => {
-    const markdownView = element.shadowRoot.querySelector('ld-markdown-view') as any
+  const state = await page.locator('lv-chat-thread').evaluate(async (element: any) => {
+    const markdownView = element.shadowRoot.querySelector('lv-markdown-view') as any
     await markdownView.updateComplete
     return {
       hasMarkdownView: Boolean(markdownView),
@@ -433,8 +433,8 @@ test('chat thread rejects payloads embedded in artifact metadata', async () => {
   const page = await browser.newPage()
   await page.goto(baseURL)
   await page.evaluate(async () => {
-    await customElements.whenDefined('ld-chat-thread')
-    const thread = document.querySelector('ld-chat-thread') as any
+    await customElements.whenDefined('lv-chat-thread')
+    const thread = document.querySelector('lv-chat-thread') as any
     thread.transcript = [{
       id: 'tool-chart',
       kind: 'tool',
@@ -469,10 +469,10 @@ test('chat thread rejects payloads embedded in artifact metadata', async () => {
     }]
     await thread.updateComplete
   })
-  const artifact = page.locator('ld-chat-thread').locator('ld-visual-artifact[artifact-id="legacy_chart_1"]')
+  const artifact = page.locator('lv-chat-thread').locator('lv-visual-artifact[artifact-id="legacy_chart_1"]')
   await artifact.waitFor()
   const state = await artifact.evaluate((element) => ({
-    hasChart: Boolean(element.shadowRoot?.querySelector('ld-echart')),
+    hasChart: Boolean(element.shadowRoot?.querySelector('lv-echart')),
     text: element.shadowRoot?.textContent?.trim(),
   }))
   expect(state.hasChart).toBe(false)

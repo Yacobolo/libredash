@@ -1,5 +1,5 @@
 {
-  "$id": "https://libredash.dev/schemas/config/environment.schema.json",
+  "$id": "https://leapview.dev/schemas/config/environment.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": true,
   "allOf": [
@@ -7,7 +7,7 @@
       "description": "Production cannot bypass authentication.",
       "if": {
         "properties": {
-          "LIBREDASH_PRODUCTION": {
+          "LEAPVIEW_PRODUCTION": {
             "enum": [
               "1",
               "t",
@@ -19,13 +19,13 @@
           }
         },
         "required": [
-          "LIBREDASH_PRODUCTION"
+          "LEAPVIEW_PRODUCTION"
         ]
       },
       "then": {
         "not": {
           "properties": {
-            "LIBREDASH_DEV_AUTH_BYPASS": {
+            "LEAPVIEW_DEV_AUTH_BYPASS": {
               "enum": [
                 "1",
                 "t",
@@ -37,11 +37,11 @@
             }
           },
           "required": [
-            "LIBREDASH_DEV_AUTH_BYPASS"
+            "LEAPVIEW_DEV_AUTH_BYPASS"
           ]
         }
       },
-      "x-error-message": "production serve must not enable LIBREDASH_DEV_AUTH_BYPASS"
+      "x-error-message": "production serve must not enable LEAPVIEW_DEV_AUTH_BYPASS"
     },
     {
       "description": "OIDC settings are all-or-none in production.",
@@ -49,7 +49,7 @@
         "allOf": [
           {
             "properties": {
-              "LIBREDASH_PRODUCTION": {
+              "LEAPVIEW_PRODUCTION": {
                 "enum": [
                   "1",
                   "t",
@@ -61,59 +61,59 @@
               }
             },
             "required": [
-              "LIBREDASH_PRODUCTION"
+              "LEAPVIEW_PRODUCTION"
             ]
           },
           {
             "anyOf": [
               {
                 "properties": {
-                  "LIBREDASH_OIDC_ISSUER_URL": {
+                  "LEAPVIEW_OIDC_ISSUER_URL": {
                     "minLength": 1
                   }
                 },
                 "required": [
-                  "LIBREDASH_OIDC_ISSUER_URL"
+                  "LEAPVIEW_OIDC_ISSUER_URL"
                 ]
               },
               {
                 "properties": {
-                  "LIBREDASH_OIDC_CLIENT_ID": {
+                  "LEAPVIEW_OIDC_CLIENT_ID": {
                     "minLength": 1
                   }
                 },
                 "required": [
-                  "LIBREDASH_OIDC_CLIENT_ID"
+                  "LEAPVIEW_OIDC_CLIENT_ID"
                 ]
               },
               {
                 "properties": {
-                  "LIBREDASH_OIDC_CLIENT_SECRET": {
+                  "LEAPVIEW_OIDC_CLIENT_SECRET": {
                     "minLength": 1
                   }
                 },
                 "required": [
-                  "LIBREDASH_OIDC_CLIENT_SECRET"
+                  "LEAPVIEW_OIDC_CLIENT_SECRET"
                 ]
               },
               {
                 "properties": {
-                  "LIBREDASH_OIDC_CALLBACK_URL": {
+                  "LEAPVIEW_OIDC_CALLBACK_URL": {
                     "minLength": 1
                   }
                 },
                 "required": [
-                  "LIBREDASH_OIDC_CALLBACK_URL"
+                  "LEAPVIEW_OIDC_CALLBACK_URL"
                 ]
               },
               {
                 "properties": {
-                  "LIBREDASH_OIDC_SCOPES": {
+                  "LEAPVIEW_OIDC_SCOPES": {
                     "minLength": 1
                   }
                 },
                 "required": [
-                  "LIBREDASH_OIDC_SCOPES"
+                  "LEAPVIEW_OIDC_SCOPES"
                 ]
               }
             ]
@@ -124,47 +124,47 @@
         "allOf": [
           {
             "properties": {
-              "LIBREDASH_OIDC_ISSUER_URL": {
+              "LEAPVIEW_OIDC_ISSUER_URL": {
                 "minLength": 1
               }
             },
             "required": [
-              "LIBREDASH_OIDC_ISSUER_URL"
+              "LEAPVIEW_OIDC_ISSUER_URL"
             ]
           },
           {
             "properties": {
-              "LIBREDASH_OIDC_CLIENT_ID": {
+              "LEAPVIEW_OIDC_CLIENT_ID": {
                 "minLength": 1
               }
             },
             "required": [
-              "LIBREDASH_OIDC_CLIENT_ID"
+              "LEAPVIEW_OIDC_CLIENT_ID"
             ]
           },
           {
             "properties": {
-              "LIBREDASH_OIDC_CLIENT_SECRET": {
+              "LEAPVIEW_OIDC_CLIENT_SECRET": {
                 "minLength": 1
               }
             },
             "required": [
-              "LIBREDASH_OIDC_CLIENT_SECRET"
+              "LEAPVIEW_OIDC_CLIENT_SECRET"
             ]
           },
           {
             "properties": {
-              "LIBREDASH_OIDC_CALLBACK_URL": {
+              "LEAPVIEW_OIDC_CALLBACK_URL": {
                 "minLength": 1
               }
             },
             "required": [
-              "LIBREDASH_OIDC_CALLBACK_URL"
+              "LEAPVIEW_OIDC_CALLBACK_URL"
             ]
           }
         ]
       },
-      "x-error-message": "production OIDC auth requires LIBREDASH_OIDC_ISSUER_URL, LIBREDASH_OIDC_CLIENT_ID, LIBREDASH_OIDC_CLIENT_SECRET, and LIBREDASH_OIDC_CALLBACK_URL"
+      "x-error-message": "production OIDC auth requires LEAPVIEW_OIDC_ISSUER_URL, LEAPVIEW_OIDC_CLIENT_ID, LEAPVIEW_OIDC_CLIENT_SECRET, and LEAPVIEW_OIDC_CALLBACK_URL"
     },
     {
       "description": "Azure settings are all-or-none in production.",
@@ -172,7 +172,7 @@
         "allOf": [
           {
             "properties": {
-              "LIBREDASH_PRODUCTION": {
+              "LEAPVIEW_PRODUCTION": {
                 "enum": [
                   "1",
                   "t",
@@ -184,49 +184,49 @@
               }
             },
             "required": [
-              "LIBREDASH_PRODUCTION"
+              "LEAPVIEW_PRODUCTION"
             ]
           },
           {
             "anyOf": [
               {
                 "properties": {
-                  "LIBREDASH_AZURE_CLIENT_ID": {
+                  "LEAPVIEW_AZURE_CLIENT_ID": {
                     "minLength": 1
                   }
                 },
                 "required": [
-                  "LIBREDASH_AZURE_CLIENT_ID"
+                  "LEAPVIEW_AZURE_CLIENT_ID"
                 ]
               },
               {
                 "properties": {
-                  "LIBREDASH_AZURE_CLIENT_SECRET": {
+                  "LEAPVIEW_AZURE_CLIENT_SECRET": {
                     "minLength": 1
                   }
                 },
                 "required": [
-                  "LIBREDASH_AZURE_CLIENT_SECRET"
+                  "LEAPVIEW_AZURE_CLIENT_SECRET"
                 ]
               },
               {
                 "properties": {
-                  "LIBREDASH_AZURE_CALLBACK_URL": {
+                  "LEAPVIEW_AZURE_CALLBACK_URL": {
                     "minLength": 1
                   }
                 },
                 "required": [
-                  "LIBREDASH_AZURE_CALLBACK_URL"
+                  "LEAPVIEW_AZURE_CALLBACK_URL"
                 ]
               },
               {
                 "properties": {
-                  "LIBREDASH_AZURE_TENANT": {
+                  "LEAPVIEW_AZURE_TENANT": {
                     "minLength": 1
                   }
                 },
                 "required": [
-                  "LIBREDASH_AZURE_TENANT"
+                  "LEAPVIEW_AZURE_TENANT"
                 ]
               }
             ]
@@ -237,43 +237,43 @@
         "allOf": [
           {
             "properties": {
-              "LIBREDASH_AZURE_CLIENT_ID": {
+              "LEAPVIEW_AZURE_CLIENT_ID": {
                 "minLength": 1
               }
             },
             "required": [
-              "LIBREDASH_AZURE_CLIENT_ID"
+              "LEAPVIEW_AZURE_CLIENT_ID"
             ]
           },
           {
             "properties": {
-              "LIBREDASH_AZURE_CLIENT_SECRET": {
+              "LEAPVIEW_AZURE_CLIENT_SECRET": {
                 "minLength": 1
               }
             },
             "required": [
-              "LIBREDASH_AZURE_CLIENT_SECRET"
+              "LEAPVIEW_AZURE_CLIENT_SECRET"
             ]
           },
           {
             "properties": {
-              "LIBREDASH_AZURE_CALLBACK_URL": {
+              "LEAPVIEW_AZURE_CALLBACK_URL": {
                 "minLength": 1
               }
             },
             "required": [
-              "LIBREDASH_AZURE_CALLBACK_URL"
+              "LEAPVIEW_AZURE_CALLBACK_URL"
             ]
           }
         ]
       },
-      "x-error-message": "production Azure auth requires LIBREDASH_AZURE_CLIENT_ID, LIBREDASH_AZURE_CLIENT_SECRET, and LIBREDASH_AZURE_CALLBACK_URL"
+      "x-error-message": "production Azure auth requires LEAPVIEW_AZURE_CLIENT_ID, LEAPVIEW_AZURE_CLIENT_SECRET, and LEAPVIEW_AZURE_CALLBACK_URL"
     },
     {
       "description": "Production requires local, API-token-only, OIDC, or Azure authentication.",
       "if": {
         "properties": {
-          "LIBREDASH_PRODUCTION": {
+          "LEAPVIEW_PRODUCTION": {
             "enum": [
               "1",
               "t",
@@ -285,14 +285,14 @@
           }
         },
         "required": [
-          "LIBREDASH_PRODUCTION"
+          "LEAPVIEW_PRODUCTION"
         ]
       },
       "then": {
         "anyOf": [
           {
             "properties": {
-              "LIBREDASH_LOCAL_AUTH": {
+              "LEAPVIEW_LOCAL_AUTH": {
                 "enum": [
                   "1",
                   "t",
@@ -304,12 +304,12 @@
               }
             },
             "required": [
-              "LIBREDASH_LOCAL_AUTH"
+              "LEAPVIEW_LOCAL_AUTH"
             ]
           },
           {
             "properties": {
-              "LIBREDASH_API_TOKEN_ONLY_AUTH": {
+              "LEAPVIEW_API_TOKEN_ONLY_AUTH": {
                 "enum": [
                   "1",
                   "t",
@@ -321,49 +321,49 @@
               }
             },
             "required": [
-              "LIBREDASH_API_TOKEN_ONLY_AUTH"
+              "LEAPVIEW_API_TOKEN_ONLY_AUTH"
             ]
           },
           {
             "allOf": [
               {
                 "properties": {
-                  "LIBREDASH_OIDC_ISSUER_URL": {
+                  "LEAPVIEW_OIDC_ISSUER_URL": {
                     "minLength": 1
                   }
                 },
                 "required": [
-                  "LIBREDASH_OIDC_ISSUER_URL"
+                  "LEAPVIEW_OIDC_ISSUER_URL"
                 ]
               },
               {
                 "properties": {
-                  "LIBREDASH_OIDC_CLIENT_ID": {
+                  "LEAPVIEW_OIDC_CLIENT_ID": {
                     "minLength": 1
                   }
                 },
                 "required": [
-                  "LIBREDASH_OIDC_CLIENT_ID"
+                  "LEAPVIEW_OIDC_CLIENT_ID"
                 ]
               },
               {
                 "properties": {
-                  "LIBREDASH_OIDC_CLIENT_SECRET": {
+                  "LEAPVIEW_OIDC_CLIENT_SECRET": {
                     "minLength": 1
                   }
                 },
                 "required": [
-                  "LIBREDASH_OIDC_CLIENT_SECRET"
+                  "LEAPVIEW_OIDC_CLIENT_SECRET"
                 ]
               },
               {
                 "properties": {
-                  "LIBREDASH_OIDC_CALLBACK_URL": {
+                  "LEAPVIEW_OIDC_CALLBACK_URL": {
                     "minLength": 1
                   }
                 },
                 "required": [
-                  "LIBREDASH_OIDC_CALLBACK_URL"
+                  "LEAPVIEW_OIDC_CALLBACK_URL"
                 ]
               }
             ]
@@ -372,45 +372,45 @@
             "allOf": [
               {
                 "properties": {
-                  "LIBREDASH_AZURE_CLIENT_ID": {
+                  "LEAPVIEW_AZURE_CLIENT_ID": {
                     "minLength": 1
                   }
                 },
                 "required": [
-                  "LIBREDASH_AZURE_CLIENT_ID"
+                  "LEAPVIEW_AZURE_CLIENT_ID"
                 ]
               },
               {
                 "properties": {
-                  "LIBREDASH_AZURE_CLIENT_SECRET": {
+                  "LEAPVIEW_AZURE_CLIENT_SECRET": {
                     "minLength": 1
                   }
                 },
                 "required": [
-                  "LIBREDASH_AZURE_CLIENT_SECRET"
+                  "LEAPVIEW_AZURE_CLIENT_SECRET"
                 ]
               },
               {
                 "properties": {
-                  "LIBREDASH_AZURE_CALLBACK_URL": {
+                  "LEAPVIEW_AZURE_CALLBACK_URL": {
                     "minLength": 1
                   }
                 },
                 "required": [
-                  "LIBREDASH_AZURE_CALLBACK_URL"
+                  "LEAPVIEW_AZURE_CALLBACK_URL"
                 ]
               }
             ]
           }
         ]
       },
-      "x-error-message": "production serve requires OIDC auth env vars, Azure auth env vars, LIBREDASH_LOCAL_AUTH, or LIBREDASH_API_TOKEN_ONLY_AUTH"
+      "x-error-message": "production serve requires OIDC auth env vars, Azure auth env vars, LEAPVIEW_LOCAL_AUTH, or LEAPVIEW_API_TOKEN_ONLY_AUTH"
     },
     {
       "description": "Production requires a CSRF key with at least 32 characters.",
       "if": {
         "properties": {
-          "LIBREDASH_PRODUCTION": {
+          "LEAPVIEW_PRODUCTION": {
             "enum": [
               "1",
               "t",
@@ -422,26 +422,26 @@
           }
         },
         "required": [
-          "LIBREDASH_PRODUCTION"
+          "LEAPVIEW_PRODUCTION"
         ]
       },
       "then": {
         "properties": {
-          "LIBREDASH_CSRF_KEY": {
+          "LEAPVIEW_CSRF_KEY": {
             "minLength": 32
           }
         },
         "required": [
-          "LIBREDASH_CSRF_KEY"
+          "LEAPVIEW_CSRF_KEY"
         ]
       },
-      "x-error-message": "production serve requires LIBREDASH_CSRF_KEY with at least 32 characters"
+      "x-error-message": "production serve requires LEAPVIEW_CSRF_KEY with at least 32 characters"
     },
     {
       "description": "Production requires a metrics bearer token with at least 32 characters.",
       "if": {
         "properties": {
-          "LIBREDASH_PRODUCTION": {
+          "LEAPVIEW_PRODUCTION": {
             "enum": [
               "1",
               "t",
@@ -453,26 +453,26 @@
           }
         },
         "required": [
-          "LIBREDASH_PRODUCTION"
+          "LEAPVIEW_PRODUCTION"
         ]
       },
       "then": {
         "properties": {
-          "LIBREDASH_METRICS_BEARER_TOKEN": {
+          "LEAPVIEW_METRICS_BEARER_TOKEN": {
             "minLength": 32
           }
         },
         "required": [
-          "LIBREDASH_METRICS_BEARER_TOKEN"
+          "LEAPVIEW_METRICS_BEARER_TOKEN"
         ]
       },
-      "x-error-message": "production metrics scraping requires LIBREDASH_METRICS_BEARER_TOKEN with at least 32 characters"
+      "x-error-message": "production metrics scraping requires LEAPVIEW_METRICS_BEARER_TOKEN with at least 32 characters"
     },
     {
       "description": "Production requires a canonical public URL.",
       "if": {
         "properties": {
-          "LIBREDASH_PRODUCTION": {
+          "LEAPVIEW_PRODUCTION": {
             "enum": [
               "1",
               "t",
@@ -484,26 +484,26 @@
           }
         },
         "required": [
-          "LIBREDASH_PRODUCTION"
+          "LEAPVIEW_PRODUCTION"
         ]
       },
       "then": {
         "properties": {
-          "LIBREDASH_PUBLIC_URL": {
+          "LEAPVIEW_PUBLIC_URL": {
             "minLength": 1
           }
         },
         "required": [
-          "LIBREDASH_PUBLIC_URL"
+          "LEAPVIEW_PUBLIC_URL"
         ]
       },
-      "x-error-message": "production serve requires LIBREDASH_PUBLIC_URL"
+      "x-error-message": "production serve requires LEAPVIEW_PUBLIC_URL"
     },
     {
       "description": "The production public URL must be an HTTPS origin without a path, query, fragment, or credentials.",
       "if": {
         "properties": {
-          "LIBREDASH_PRODUCTION": {
+          "LEAPVIEW_PRODUCTION": {
             "enum": [
               "1",
               "t",
@@ -515,20 +515,20 @@
           }
         },
         "required": [
-          "LIBREDASH_PRODUCTION"
+          "LEAPVIEW_PRODUCTION"
         ]
       },
       "then": {
         "properties": {
-          "LIBREDASH_PUBLIC_URL": {
+          "LEAPVIEW_PUBLIC_URL": {
             "pattern": "^https://[^/@?#]+/?$"
           }
         },
         "required": [
-          "LIBREDASH_PUBLIC_URL"
+          "LEAPVIEW_PUBLIC_URL"
         ]
       },
-      "x-error-message": "production serve requires LIBREDASH_PUBLIC_URL to be an https origin"
+      "x-error-message": "production serve requires LEAPVIEW_PUBLIC_URL to be an https origin"
     },
     {
       "description": "An external production MCP OAuth issuer must use HTTPS.",
@@ -536,7 +536,7 @@
         "allOf": [
           {
             "properties": {
-              "LIBREDASH_PRODUCTION": {
+              "LEAPVIEW_PRODUCTION": {
                 "enum": [
                   "1",
                   "t",
@@ -548,38 +548,38 @@
               }
             },
             "required": [
-              "LIBREDASH_PRODUCTION"
+              "LEAPVIEW_PRODUCTION"
             ]
           },
           {
             "properties": {
-              "LIBREDASH_MCP_OAUTH_ISSUER_URL": {
+              "LEAPVIEW_MCP_OAUTH_ISSUER_URL": {
                 "minLength": 1
               }
             },
             "required": [
-              "LIBREDASH_MCP_OAUTH_ISSUER_URL"
+              "LEAPVIEW_MCP_OAUTH_ISSUER_URL"
             ]
           }
         ]
       },
       "then": {
         "properties": {
-          "LIBREDASH_MCP_OAUTH_ISSUER_URL": {
+          "LEAPVIEW_MCP_OAUTH_ISSUER_URL": {
             "pattern": "^https://[^/]+"
           }
         },
         "required": [
-          "LIBREDASH_MCP_OAUTH_ISSUER_URL"
+          "LEAPVIEW_MCP_OAUTH_ISSUER_URL"
         ]
       },
-      "x-error-message": "production serve requires LIBREDASH_MCP_OAUTH_ISSUER_URL to be an https URL"
+      "x-error-message": "production serve requires LEAPVIEW_MCP_OAUTH_ISSUER_URL to be an https URL"
     },
     {
       "description": "Production derives an allowed host from its public URL, explicit hosts, or a browser-auth callback host.",
       "if": {
         "properties": {
-          "LIBREDASH_PRODUCTION": {
+          "LEAPVIEW_PRODUCTION": {
             "enum": [
               "1",
               "t",
@@ -591,54 +591,54 @@
           }
         },
         "required": [
-          "LIBREDASH_PRODUCTION"
+          "LEAPVIEW_PRODUCTION"
         ]
       },
       "then": {
         "anyOf": [
           {
             "properties": {
-              "LIBREDASH_PUBLIC_URL": {
+              "LEAPVIEW_PUBLIC_URL": {
                 "minLength": 1
               }
             },
             "required": [
-              "LIBREDASH_PUBLIC_URL"
+              "LEAPVIEW_PUBLIC_URL"
             ]
           },
           {
             "properties": {
-              "LIBREDASH_ALLOWED_HOSTS": {
+              "LEAPVIEW_ALLOWED_HOSTS": {
                 "minLength": 1
               }
             },
             "required": [
-              "LIBREDASH_ALLOWED_HOSTS"
+              "LEAPVIEW_ALLOWED_HOSTS"
             ]
           },
           {
             "properties": {
-              "LIBREDASH_OIDC_CALLBACK_URL": {
+              "LEAPVIEW_OIDC_CALLBACK_URL": {
                 "minLength": 1
               }
             },
             "required": [
-              "LIBREDASH_OIDC_CALLBACK_URL"
+              "LEAPVIEW_OIDC_CALLBACK_URL"
             ]
           },
           {
             "properties": {
-              "LIBREDASH_AZURE_CALLBACK_URL": {
+              "LEAPVIEW_AZURE_CALLBACK_URL": {
                 "minLength": 1
               }
             },
             "required": [
-              "LIBREDASH_AZURE_CALLBACK_URL"
+              "LEAPVIEW_AZURE_CALLBACK_URL"
             ]
           }
         ]
       },
-      "x-error-message": "production serve requires LIBREDASH_PUBLIC_URL, LIBREDASH_ALLOWED_HOSTS, or an OIDC/Azure callback URL host"
+      "x-error-message": "production serve requires LEAPVIEW_PUBLIC_URL, LEAPVIEW_ALLOWED_HOSTS, or an OIDC/Azure callback URL host"
     },
     {
       "description": "Production browser authentication requires secure cookies unless API-token-only mode is also enabled.",
@@ -646,7 +646,7 @@
         "allOf": [
           {
             "properties": {
-              "LIBREDASH_PRODUCTION": {
+              "LEAPVIEW_PRODUCTION": {
                 "enum": [
                   "1",
                   "t",
@@ -658,14 +658,14 @@
               }
             },
             "required": [
-              "LIBREDASH_PRODUCTION"
+              "LEAPVIEW_PRODUCTION"
             ]
           },
           {
             "anyOf": [
               {
                 "properties": {
-                  "LIBREDASH_LOCAL_AUTH": {
+                  "LEAPVIEW_LOCAL_AUTH": {
                     "enum": [
                       "1",
                       "t",
@@ -677,49 +677,49 @@
                   }
                 },
                 "required": [
-                  "LIBREDASH_LOCAL_AUTH"
+                  "LEAPVIEW_LOCAL_AUTH"
                 ]
               },
               {
                 "allOf": [
                   {
                     "properties": {
-                      "LIBREDASH_OIDC_ISSUER_URL": {
+                      "LEAPVIEW_OIDC_ISSUER_URL": {
                         "minLength": 1
                       }
                     },
                     "required": [
-                      "LIBREDASH_OIDC_ISSUER_URL"
+                      "LEAPVIEW_OIDC_ISSUER_URL"
                     ]
                   },
                   {
                     "properties": {
-                      "LIBREDASH_OIDC_CLIENT_ID": {
+                      "LEAPVIEW_OIDC_CLIENT_ID": {
                         "minLength": 1
                       }
                     },
                     "required": [
-                      "LIBREDASH_OIDC_CLIENT_ID"
+                      "LEAPVIEW_OIDC_CLIENT_ID"
                     ]
                   },
                   {
                     "properties": {
-                      "LIBREDASH_OIDC_CLIENT_SECRET": {
+                      "LEAPVIEW_OIDC_CLIENT_SECRET": {
                         "minLength": 1
                       }
                     },
                     "required": [
-                      "LIBREDASH_OIDC_CLIENT_SECRET"
+                      "LEAPVIEW_OIDC_CLIENT_SECRET"
                     ]
                   },
                   {
                     "properties": {
-                      "LIBREDASH_OIDC_CALLBACK_URL": {
+                      "LEAPVIEW_OIDC_CALLBACK_URL": {
                         "minLength": 1
                       }
                     },
                     "required": [
-                      "LIBREDASH_OIDC_CALLBACK_URL"
+                      "LEAPVIEW_OIDC_CALLBACK_URL"
                     ]
                   }
                 ]
@@ -728,32 +728,32 @@
                 "allOf": [
                   {
                     "properties": {
-                      "LIBREDASH_AZURE_CLIENT_ID": {
+                      "LEAPVIEW_AZURE_CLIENT_ID": {
                         "minLength": 1
                       }
                     },
                     "required": [
-                      "LIBREDASH_AZURE_CLIENT_ID"
+                      "LEAPVIEW_AZURE_CLIENT_ID"
                     ]
                   },
                   {
                     "properties": {
-                      "LIBREDASH_AZURE_CLIENT_SECRET": {
+                      "LEAPVIEW_AZURE_CLIENT_SECRET": {
                         "minLength": 1
                       }
                     },
                     "required": [
-                      "LIBREDASH_AZURE_CLIENT_SECRET"
+                      "LEAPVIEW_AZURE_CLIENT_SECRET"
                     ]
                   },
                   {
                     "properties": {
-                      "LIBREDASH_AZURE_CALLBACK_URL": {
+                      "LEAPVIEW_AZURE_CALLBACK_URL": {
                         "minLength": 1
                       }
                     },
                     "required": [
-                      "LIBREDASH_AZURE_CALLBACK_URL"
+                      "LEAPVIEW_AZURE_CALLBACK_URL"
                     ]
                   }
                 ]
@@ -763,7 +763,7 @@
           {
             "not": {
               "properties": {
-                "LIBREDASH_API_TOKEN_ONLY_AUTH": {
+                "LEAPVIEW_API_TOKEN_ONLY_AUTH": {
                   "enum": [
                     "1",
                     "t",
@@ -775,7 +775,7 @@
                 }
               },
               "required": [
-                "LIBREDASH_API_TOKEN_ONLY_AUTH"
+                "LEAPVIEW_API_TOKEN_ONLY_AUTH"
               ]
             }
           }
@@ -783,7 +783,7 @@
       },
       "then": {
         "properties": {
-          "LIBREDASH_COOKIE_SECURE": {
+          "LEAPVIEW_COOKIE_SECURE": {
             "enum": [
               "1",
               "t",
@@ -795,10 +795,10 @@
           }
         },
         "required": [
-          "LIBREDASH_COOKIE_SECURE"
+          "LEAPVIEW_COOKIE_SECURE"
         ]
       },
-      "x-error-message": "production browser auth requires LIBREDASH_COOKIE_SECURE=true"
+      "x-error-message": "production browser auth requires LEAPVIEW_COOKIE_SECURE=true"
     },
     {
       "description": "The production OIDC issuer must use HTTPS.",
@@ -806,7 +806,7 @@
         "allOf": [
           {
             "properties": {
-              "LIBREDASH_PRODUCTION": {
+              "LEAPVIEW_PRODUCTION": {
                 "enum": [
                   "1",
                   "t",
@@ -818,49 +818,49 @@
               }
             },
             "required": [
-              "LIBREDASH_PRODUCTION"
+              "LEAPVIEW_PRODUCTION"
             ]
           },
           {
             "allOf": [
               {
                 "properties": {
-                  "LIBREDASH_OIDC_ISSUER_URL": {
+                  "LEAPVIEW_OIDC_ISSUER_URL": {
                     "minLength": 1
                   }
                 },
                 "required": [
-                  "LIBREDASH_OIDC_ISSUER_URL"
+                  "LEAPVIEW_OIDC_ISSUER_URL"
                 ]
               },
               {
                 "properties": {
-                  "LIBREDASH_OIDC_CLIENT_ID": {
+                  "LEAPVIEW_OIDC_CLIENT_ID": {
                     "minLength": 1
                   }
                 },
                 "required": [
-                  "LIBREDASH_OIDC_CLIENT_ID"
+                  "LEAPVIEW_OIDC_CLIENT_ID"
                 ]
               },
               {
                 "properties": {
-                  "LIBREDASH_OIDC_CLIENT_SECRET": {
+                  "LEAPVIEW_OIDC_CLIENT_SECRET": {
                     "minLength": 1
                   }
                 },
                 "required": [
-                  "LIBREDASH_OIDC_CLIENT_SECRET"
+                  "LEAPVIEW_OIDC_CLIENT_SECRET"
                 ]
               },
               {
                 "properties": {
-                  "LIBREDASH_OIDC_CALLBACK_URL": {
+                  "LEAPVIEW_OIDC_CALLBACK_URL": {
                     "minLength": 1
                   }
                 },
                 "required": [
-                  "LIBREDASH_OIDC_CALLBACK_URL"
+                  "LEAPVIEW_OIDC_CALLBACK_URL"
                 ]
               }
             ]
@@ -869,15 +869,15 @@
       },
       "then": {
         "properties": {
-          "LIBREDASH_OIDC_ISSUER_URL": {
+          "LEAPVIEW_OIDC_ISSUER_URL": {
             "pattern": "^https://[^/]+"
           }
         },
         "required": [
-          "LIBREDASH_OIDC_ISSUER_URL"
+          "LEAPVIEW_OIDC_ISSUER_URL"
         ]
       },
-      "x-error-message": "production serve requires LIBREDASH_OIDC_ISSUER_URL to be an https URL"
+      "x-error-message": "production serve requires LEAPVIEW_OIDC_ISSUER_URL to be an https URL"
     },
     {
       "description": "The production OIDC callback must use HTTPS.",
@@ -885,7 +885,7 @@
         "allOf": [
           {
             "properties": {
-              "LIBREDASH_PRODUCTION": {
+              "LEAPVIEW_PRODUCTION": {
                 "enum": [
                   "1",
                   "t",
@@ -897,49 +897,49 @@
               }
             },
             "required": [
-              "LIBREDASH_PRODUCTION"
+              "LEAPVIEW_PRODUCTION"
             ]
           },
           {
             "allOf": [
               {
                 "properties": {
-                  "LIBREDASH_OIDC_ISSUER_URL": {
+                  "LEAPVIEW_OIDC_ISSUER_URL": {
                     "minLength": 1
                   }
                 },
                 "required": [
-                  "LIBREDASH_OIDC_ISSUER_URL"
+                  "LEAPVIEW_OIDC_ISSUER_URL"
                 ]
               },
               {
                 "properties": {
-                  "LIBREDASH_OIDC_CLIENT_ID": {
+                  "LEAPVIEW_OIDC_CLIENT_ID": {
                     "minLength": 1
                   }
                 },
                 "required": [
-                  "LIBREDASH_OIDC_CLIENT_ID"
+                  "LEAPVIEW_OIDC_CLIENT_ID"
                 ]
               },
               {
                 "properties": {
-                  "LIBREDASH_OIDC_CLIENT_SECRET": {
+                  "LEAPVIEW_OIDC_CLIENT_SECRET": {
                     "minLength": 1
                   }
                 },
                 "required": [
-                  "LIBREDASH_OIDC_CLIENT_SECRET"
+                  "LEAPVIEW_OIDC_CLIENT_SECRET"
                 ]
               },
               {
                 "properties": {
-                  "LIBREDASH_OIDC_CALLBACK_URL": {
+                  "LEAPVIEW_OIDC_CALLBACK_URL": {
                     "minLength": 1
                   }
                 },
                 "required": [
-                  "LIBREDASH_OIDC_CALLBACK_URL"
+                  "LEAPVIEW_OIDC_CALLBACK_URL"
                 ]
               }
             ]
@@ -948,15 +948,15 @@
       },
       "then": {
         "properties": {
-          "LIBREDASH_OIDC_CALLBACK_URL": {
+          "LEAPVIEW_OIDC_CALLBACK_URL": {
             "pattern": "^https://[^/]+"
           }
         },
         "required": [
-          "LIBREDASH_OIDC_CALLBACK_URL"
+          "LEAPVIEW_OIDC_CALLBACK_URL"
         ]
       },
-      "x-error-message": "production serve requires LIBREDASH_OIDC_CALLBACK_URL to be an https URL"
+      "x-error-message": "production serve requires LEAPVIEW_OIDC_CALLBACK_URL to be an https URL"
     },
     {
       "description": "The OIDC provider identifier must be route-safe.",
@@ -964,7 +964,7 @@
         "allOf": [
           {
             "properties": {
-              "LIBREDASH_PRODUCTION": {
+              "LEAPVIEW_PRODUCTION": {
                 "enum": [
                   "1",
                   "t",
@@ -976,49 +976,49 @@
               }
             },
             "required": [
-              "LIBREDASH_PRODUCTION"
+              "LEAPVIEW_PRODUCTION"
             ]
           },
           {
             "allOf": [
               {
                 "properties": {
-                  "LIBREDASH_OIDC_ISSUER_URL": {
+                  "LEAPVIEW_OIDC_ISSUER_URL": {
                     "minLength": 1
                   }
                 },
                 "required": [
-                  "LIBREDASH_OIDC_ISSUER_URL"
+                  "LEAPVIEW_OIDC_ISSUER_URL"
                 ]
               },
               {
                 "properties": {
-                  "LIBREDASH_OIDC_CLIENT_ID": {
+                  "LEAPVIEW_OIDC_CLIENT_ID": {
                     "minLength": 1
                   }
                 },
                 "required": [
-                  "LIBREDASH_OIDC_CLIENT_ID"
+                  "LEAPVIEW_OIDC_CLIENT_ID"
                 ]
               },
               {
                 "properties": {
-                  "LIBREDASH_OIDC_CLIENT_SECRET": {
+                  "LEAPVIEW_OIDC_CLIENT_SECRET": {
                     "minLength": 1
                   }
                 },
                 "required": [
-                  "LIBREDASH_OIDC_CLIENT_SECRET"
+                  "LEAPVIEW_OIDC_CLIENT_SECRET"
                 ]
               },
               {
                 "properties": {
-                  "LIBREDASH_OIDC_CALLBACK_URL": {
+                  "LEAPVIEW_OIDC_CALLBACK_URL": {
                     "minLength": 1
                   }
                 },
                 "required": [
-                  "LIBREDASH_OIDC_CALLBACK_URL"
+                  "LEAPVIEW_OIDC_CALLBACK_URL"
                 ]
               }
             ]
@@ -1027,13 +1027,13 @@
       },
       "then": {
         "properties": {
-          "LIBREDASH_OIDC_PROVIDER_ID": {
+          "LEAPVIEW_OIDC_PROVIDER_ID": {
             "maxLength": 64,
             "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
           }
         }
       },
-      "x-error-message": "LIBREDASH_OIDC_PROVIDER_ID must be a route-safe slug containing only letters, numbers, dots, underscores, or dashes"
+      "x-error-message": "LEAPVIEW_OIDC_PROVIDER_ID must be a route-safe slug containing only letters, numbers, dots, underscores, or dashes"
     },
     {
       "description": "The production Azure callback must use HTTPS.",
@@ -1041,7 +1041,7 @@
         "allOf": [
           {
             "properties": {
-              "LIBREDASH_PRODUCTION": {
+              "LEAPVIEW_PRODUCTION": {
                 "enum": [
                   "1",
                   "t",
@@ -1053,39 +1053,39 @@
               }
             },
             "required": [
-              "LIBREDASH_PRODUCTION"
+              "LEAPVIEW_PRODUCTION"
             ]
           },
           {
             "allOf": [
               {
                 "properties": {
-                  "LIBREDASH_AZURE_CLIENT_ID": {
+                  "LEAPVIEW_AZURE_CLIENT_ID": {
                     "minLength": 1
                   }
                 },
                 "required": [
-                  "LIBREDASH_AZURE_CLIENT_ID"
+                  "LEAPVIEW_AZURE_CLIENT_ID"
                 ]
               },
               {
                 "properties": {
-                  "LIBREDASH_AZURE_CLIENT_SECRET": {
+                  "LEAPVIEW_AZURE_CLIENT_SECRET": {
                     "minLength": 1
                   }
                 },
                 "required": [
-                  "LIBREDASH_AZURE_CLIENT_SECRET"
+                  "LEAPVIEW_AZURE_CLIENT_SECRET"
                 ]
               },
               {
                 "properties": {
-                  "LIBREDASH_AZURE_CALLBACK_URL": {
+                  "LEAPVIEW_AZURE_CALLBACK_URL": {
                     "minLength": 1
                   }
                 },
                 "required": [
-                  "LIBREDASH_AZURE_CALLBACK_URL"
+                  "LEAPVIEW_AZURE_CALLBACK_URL"
                 ]
               }
             ]
@@ -1094,15 +1094,15 @@
       },
       "then": {
         "properties": {
-          "LIBREDASH_AZURE_CALLBACK_URL": {
+          "LEAPVIEW_AZURE_CALLBACK_URL": {
             "pattern": "^https://[^/]+"
           }
         },
         "required": [
-          "LIBREDASH_AZURE_CALLBACK_URL"
+          "LEAPVIEW_AZURE_CALLBACK_URL"
         ]
       },
-      "x-error-message": "production serve requires LIBREDASH_AZURE_CALLBACK_URL to be an https URL"
+      "x-error-message": "production serve requires LEAPVIEW_AZURE_CALLBACK_URL to be an https URL"
     },
     {
       "description": "A configured production SCIM token must contain at least 32 characters.",
@@ -1110,7 +1110,7 @@
         "allOf": [
           {
             "properties": {
-              "LIBREDASH_PRODUCTION": {
+              "LEAPVIEW_PRODUCTION": {
                 "enum": [
                   "1",
                   "t",
@@ -1122,48 +1122,48 @@
               }
             },
             "required": [
-              "LIBREDASH_PRODUCTION"
+              "LEAPVIEW_PRODUCTION"
             ]
           },
           {
             "properties": {
-              "LIBREDASH_SCIM_BEARER_TOKEN": {
+              "LEAPVIEW_SCIM_BEARER_TOKEN": {
                 "minLength": 1
               }
             },
             "required": [
-              "LIBREDASH_SCIM_BEARER_TOKEN"
+              "LEAPVIEW_SCIM_BEARER_TOKEN"
             ]
           }
         ]
       },
       "then": {
         "properties": {
-          "LIBREDASH_SCIM_BEARER_TOKEN": {
+          "LEAPVIEW_SCIM_BEARER_TOKEN": {
             "minLength": 32
           }
         },
         "required": [
-          "LIBREDASH_SCIM_BEARER_TOKEN"
+          "LEAPVIEW_SCIM_BEARER_TOKEN"
         ]
       },
-      "x-error-message": "production SCIM provisioning requires LIBREDASH_SCIM_BEARER_TOKEN with at least 32 characters"
+      "x-error-message": "production SCIM provisioning requires LEAPVIEW_SCIM_BEARER_TOKEN with at least 32 characters"
     },
     {
       "description": "Managed data uses a supported storage backend.",
       "if": {
         "properties": {
-          "LIBREDASH_MANAGED_DATA_BACKEND": {
+          "LEAPVIEW_MANAGED_DATA_BACKEND": {
             "minLength": 1
           }
         },
         "required": [
-          "LIBREDASH_MANAGED_DATA_BACKEND"
+          "LEAPVIEW_MANAGED_DATA_BACKEND"
         ]
       },
       "then": {
         "properties": {
-          "LIBREDASH_MANAGED_DATA_BACKEND": {
+          "LEAPVIEW_MANAGED_DATA_BACKEND": {
             "enum": [
               "local",
               "s3"
@@ -1171,83 +1171,83 @@
           }
         },
         "required": [
-          "LIBREDASH_MANAGED_DATA_BACKEND"
+          "LEAPVIEW_MANAGED_DATA_BACKEND"
         ]
       },
-      "x-error-message": "LIBREDASH_MANAGED_DATA_BACKEND must be local or s3"
+      "x-error-message": "LEAPVIEW_MANAGED_DATA_BACKEND must be local or s3"
     },
     {
       "description": "Every managed-data backend requires a private local runtime and staging directory.",
       "if": {
         "properties": {
-          "LIBREDASH_MANAGED_DATA_BACKEND": {
+          "LEAPVIEW_MANAGED_DATA_BACKEND": {
             "minLength": 1
           }
         },
         "required": [
-          "LIBREDASH_MANAGED_DATA_BACKEND"
+          "LEAPVIEW_MANAGED_DATA_BACKEND"
         ]
       },
       "then": {
         "properties": {
-          "LIBREDASH_MANAGED_DATA_DIR": {
+          "LEAPVIEW_MANAGED_DATA_DIR": {
             "minLength": 1
           }
         },
         "required": [
-          "LIBREDASH_MANAGED_DATA_DIR"
+          "LEAPVIEW_MANAGED_DATA_DIR"
         ]
       },
-      "x-error-message": "managed-data storage requires LIBREDASH_MANAGED_DATA_DIR"
+      "x-error-message": "managed-data storage requires LEAPVIEW_MANAGED_DATA_DIR"
     },
     {
       "description": "The S3 managed-data backend requires a bucket and region.",
       "if": {
         "properties": {
-          "LIBREDASH_MANAGED_DATA_BACKEND": {
+          "LEAPVIEW_MANAGED_DATA_BACKEND": {
             "const": "s3"
           }
         },
         "required": [
-          "LIBREDASH_MANAGED_DATA_BACKEND"
+          "LEAPVIEW_MANAGED_DATA_BACKEND"
         ]
       },
       "then": {
         "allOf": [
           {
             "properties": {
-              "LIBREDASH_MANAGED_DATA_S3_BUCKET": {
+              "LEAPVIEW_MANAGED_DATA_S3_BUCKET": {
                 "minLength": 1
               }
             },
             "required": [
-              "LIBREDASH_MANAGED_DATA_S3_BUCKET"
+              "LEAPVIEW_MANAGED_DATA_S3_BUCKET"
             ]
           },
           {
             "properties": {
-              "LIBREDASH_MANAGED_DATA_S3_REGION": {
+              "LEAPVIEW_MANAGED_DATA_S3_REGION": {
                 "minLength": 1
               }
             },
             "required": [
-              "LIBREDASH_MANAGED_DATA_S3_REGION"
+              "LEAPVIEW_MANAGED_DATA_S3_REGION"
             ]
           }
         ]
       },
-      "x-error-message": "S3 managed-data storage requires LIBREDASH_MANAGED_DATA_S3_BUCKET and LIBREDASH_MANAGED_DATA_S3_REGION"
+      "x-error-message": "S3 managed-data storage requires LEAPVIEW_MANAGED_DATA_S3_BUCKET and LEAPVIEW_MANAGED_DATA_S3_REGION"
     },
     {
       "description": "Managed-data S3 credentials are either omitted or configured as a complete key pair.",
       "if": {
         "properties": {
-          "LIBREDASH_MANAGED_DATA_BACKEND": {
+          "LEAPVIEW_MANAGED_DATA_BACKEND": {
             "const": "s3"
           }
         },
         "required": [
-          "LIBREDASH_MANAGED_DATA_BACKEND"
+          "LEAPVIEW_MANAGED_DATA_BACKEND"
         ]
       },
       "then": {
@@ -1257,36 +1257,36 @@
               {
                 "not": {
                   "properties": {
-                    "LIBREDASH_MANAGED_DATA_S3_ACCESS_KEY_ID": {
+                    "LEAPVIEW_MANAGED_DATA_S3_ACCESS_KEY_ID": {
                       "minLength": 1
                     }
                   },
                   "required": [
-                    "LIBREDASH_MANAGED_DATA_S3_ACCESS_KEY_ID"
+                    "LEAPVIEW_MANAGED_DATA_S3_ACCESS_KEY_ID"
                   ]
                 }
               },
               {
                 "not": {
                   "properties": {
-                    "LIBREDASH_MANAGED_DATA_S3_SECRET_ACCESS_KEY": {
+                    "LEAPVIEW_MANAGED_DATA_S3_SECRET_ACCESS_KEY": {
                       "minLength": 1
                     }
                   },
                   "required": [
-                    "LIBREDASH_MANAGED_DATA_S3_SECRET_ACCESS_KEY"
+                    "LEAPVIEW_MANAGED_DATA_S3_SECRET_ACCESS_KEY"
                   ]
                 }
               },
               {
                 "not": {
                   "properties": {
-                    "LIBREDASH_MANAGED_DATA_S3_SESSION_TOKEN": {
+                    "LEAPVIEW_MANAGED_DATA_S3_SESSION_TOKEN": {
                       "minLength": 1
                     }
                   },
                   "required": [
-                    "LIBREDASH_MANAGED_DATA_S3_SESSION_TOKEN"
+                    "LEAPVIEW_MANAGED_DATA_S3_SESSION_TOKEN"
                   ]
                 }
               }
@@ -1296,64 +1296,64 @@
             "allOf": [
               {
                 "properties": {
-                  "LIBREDASH_MANAGED_DATA_S3_ACCESS_KEY_ID": {
+                  "LEAPVIEW_MANAGED_DATA_S3_ACCESS_KEY_ID": {
                     "minLength": 1
                   }
                 },
                 "required": [
-                  "LIBREDASH_MANAGED_DATA_S3_ACCESS_KEY_ID"
+                  "LEAPVIEW_MANAGED_DATA_S3_ACCESS_KEY_ID"
                 ]
               },
               {
                 "properties": {
-                  "LIBREDASH_MANAGED_DATA_S3_SECRET_ACCESS_KEY": {
+                  "LEAPVIEW_MANAGED_DATA_S3_SECRET_ACCESS_KEY": {
                     "minLength": 1
                   }
                 },
                 "required": [
-                  "LIBREDASH_MANAGED_DATA_S3_SECRET_ACCESS_KEY"
+                  "LEAPVIEW_MANAGED_DATA_S3_SECRET_ACCESS_KEY"
                 ]
               }
             ]
           }
         ]
       },
-      "x-error-message": "managed-data S3 credentials require both LIBREDASH_MANAGED_DATA_S3_ACCESS_KEY_ID and LIBREDASH_MANAGED_DATA_S3_SECRET_ACCESS_KEY; a session token also requires that pair"
+      "x-error-message": "managed-data S3 credentials require both LEAPVIEW_MANAGED_DATA_S3_ACCESS_KEY_ID and LEAPVIEW_MANAGED_DATA_S3_SECRET_ACCESS_KEY; a session token also requires that pair"
     },
     {
       "description": "Managed-data upload, session, garbage-collection, and free-space limits are positive.",
       "if": {
         "properties": {
-          "LIBREDASH_MANAGED_DATA_BACKEND": {
+          "LEAPVIEW_MANAGED_DATA_BACKEND": {
             "minLength": 1
           }
         },
         "required": [
-          "LIBREDASH_MANAGED_DATA_BACKEND"
+          "LEAPVIEW_MANAGED_DATA_BACKEND"
         ]
       },
       "then": {
         "allOf": [
           {
-            "x-runtime-positive": "LIBREDASH_MANAGED_DATA_MAX_FILES"
+            "x-runtime-positive": "LEAPVIEW_MANAGED_DATA_MAX_FILES"
           },
           {
-            "x-runtime-positive": "LIBREDASH_MANAGED_DATA_MAX_FILE_BYTES"
+            "x-runtime-positive": "LEAPVIEW_MANAGED_DATA_MAX_FILE_BYTES"
           },
           {
-            "x-runtime-positive": "LIBREDASH_MANAGED_DATA_MAX_REVISION_BYTES"
+            "x-runtime-positive": "LEAPVIEW_MANAGED_DATA_MAX_REVISION_BYTES"
           },
           {
-            "x-runtime-positive": "LIBREDASH_MANAGED_DATA_UPLOAD_SESSION_TTL"
+            "x-runtime-positive": "LEAPVIEW_MANAGED_DATA_UPLOAD_SESSION_TTL"
           },
           {
-            "x-runtime-positive": "LIBREDASH_MANAGED_DATA_GC_INTERVAL"
+            "x-runtime-positive": "LEAPVIEW_MANAGED_DATA_GC_INTERVAL"
           },
           {
-            "x-runtime-positive": "LIBREDASH_MANAGED_DATA_GC_GRACE_PERIOD"
+            "x-runtime-positive": "LEAPVIEW_MANAGED_DATA_GC_GRACE_PERIOD"
           },
           {
-            "x-runtime-positive": "LIBREDASH_MANAGED_DATA_MIN_FREE_BYTES"
+            "x-runtime-positive": "LEAPVIEW_MANAGED_DATA_MIN_FREE_BYTES"
           }
         ]
       },
@@ -1363,121 +1363,121 @@
       "description": "The managed-data revision limit is at least the per-file limit.",
       "if": {
         "properties": {
-          "LIBREDASH_MANAGED_DATA_BACKEND": {
+          "LEAPVIEW_MANAGED_DATA_BACKEND": {
             "minLength": 1
           }
         },
         "required": [
-          "LIBREDASH_MANAGED_DATA_BACKEND"
+          "LEAPVIEW_MANAGED_DATA_BACKEND"
         ]
       },
       "then": {
         "x-runtime-at-least": [
-          "LIBREDASH_MANAGED_DATA_MAX_REVISION_BYTES",
-          "LIBREDASH_MANAGED_DATA_MAX_FILE_BYTES"
+          "LEAPVIEW_MANAGED_DATA_MAX_REVISION_BYTES",
+          "LEAPVIEW_MANAGED_DATA_MAX_FILE_BYTES"
         ]
       },
-      "x-error-message": "LIBREDASH_MANAGED_DATA_MAX_REVISION_BYTES must be at least LIBREDASH_MANAGED_DATA_MAX_FILE_BYTES"
+      "x-error-message": "LEAPVIEW_MANAGED_DATA_MAX_REVISION_BYTES must be at least LEAPVIEW_MANAGED_DATA_MAX_FILE_BYTES"
     }
   ],
   "properties": {
-    "LIBREDASH_ADDR": {
+    "LEAPVIEW_ADDR": {
       "description": "HTTP listen address.",
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "serve,healthcheck"
     },
-    "LIBREDASH_AGENT_API_KEY": {
+    "LEAPVIEW_AGENT_API_KEY": {
       "description": "API key for the configured agent model provider.",
       "type": "string",
       "writeOnly": true,
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_AGENT_BASE_URL": {
+    "LEAPVIEW_AGENT_BASE_URL": {
       "default": "https://api.openai.com/v1",
       "description": "OpenAI-compatible agent API base URL.",
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_AGENT_MODEL": {
+    "LEAPVIEW_AGENT_MODEL": {
       "description": "Agent model identifier.",
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_ALLOWED_HOSTS": {
+    "LEAPVIEW_ALLOWED_HOSTS": {
       "description": "Comma- or whitespace-separated exact hosts and wildcard suffixes accepted in production.",
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_API_TOKEN": {
+    "LEAPVIEW_API_TOKEN": {
       "description": "API token used by non-interactive CLI commands.",
       "type": "string",
       "writeOnly": true,
       "x-lifecycle": "supported",
       "x-scope": "publish,api"
     },
-    "LIBREDASH_API_TOKEN_ONLY_AUTH": {
+    "LEAPVIEW_API_TOKEN_ONLY_AUTH": {
       "description": "Disable browser authentication and accept API tokens only.",
       "pattern": "^(1|t|T|true|TRUE|True|0|f|F|false|FALSE|False)$",
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_ASSET_VERSION": {
+    "LEAPVIEW_ASSET_VERSION": {
       "description": "Optional browser asset cache-busting version override.",
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_AZURE_CALLBACK_URL": {
+    "LEAPVIEW_AZURE_CALLBACK_URL": {
       "description": "HTTPS callback URL registered with Azure AD or Entra ID.",
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_AZURE_CLIENT_ID": {
+    "LEAPVIEW_AZURE_CLIENT_ID": {
       "description": "Azure AD or Entra ID OAuth client identifier.",
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_AZURE_CLIENT_SECRET": {
+    "LEAPVIEW_AZURE_CLIENT_SECRET": {
       "description": "Azure AD or Entra ID OAuth client secret.",
       "type": "string",
       "writeOnly": true,
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_AZURE_TENANT": {
+    "LEAPVIEW_AZURE_TENANT": {
       "description": "Optional Azure AD or Entra ID tenant identifier.",
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_BASE_URL": {
+    "LEAPVIEW_BASE_URL": {
       "default": "http://localhost:8195",
       "description": "Base URL used by browser QA tooling.",
       "type": "string",
       "x-lifecycle": "development",
       "x-scope": "ui-qa"
     },
-    "LIBREDASH_BOOTSTRAP_ADMIN_EMAIL": {
+    "LEAPVIEW_BOOTSTRAP_ADMIN_EMAIL": {
       "description": "Email assigned to the initial production administrator.",
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "instance initialization"
     },
-    "LIBREDASH_BOOTSTRAP_CACHE_DIR": {
+    "LEAPVIEW_BOOTSTRAP_CACHE_DIR": {
       "description": "Download cache directory used by dataset bootstrap tools.",
       "type": "string",
       "x-lifecycle": "tooling",
       "x-scope": "bootstrap tools"
     },
-    "LIBREDASH_BOOTSTRAP_FORCE": {
+    "LEAPVIEW_BOOTSTRAP_FORCE": {
       "default": "false",
       "description": "Force dataset bootstrap tools to refresh existing files.",
       "pattern": "^(1|t|T|true|TRUE|True|0|f|F|false|FALSE|False)$",
@@ -1485,7 +1485,7 @@
       "x-lifecycle": "tooling",
       "x-scope": "bootstrap tools"
     },
-    "LIBREDASH_BRIDGE_BENCH_ITERATIONS": {
+    "LEAPVIEW_BRIDGE_BENCH_ITERATIONS": {
       "default": "120",
       "description": "Measured Datastar bridge benchmark iterations.",
       "pattern": "^-?[0-9]+$",
@@ -1493,7 +1493,7 @@
       "x-lifecycle": "development",
       "x-scope": "browser benchmark"
     },
-    "LIBREDASH_BRIDGE_BENCH_WARMUP": {
+    "LEAPVIEW_BRIDGE_BENCH_WARMUP": {
       "default": "20",
       "description": "Warm-up Datastar bridge benchmark iterations.",
       "pattern": "^-?[0-9]+$",
@@ -1501,27 +1501,27 @@
       "x-lifecycle": "development",
       "x-scope": "browser benchmark"
     },
-    "LIBREDASH_CLI_CONFIG": {
+    "LEAPVIEW_CLI_CONFIG": {
       "description": "Path to the local CLI target and token configuration file.",
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "client commands"
     },
-    "LIBREDASH_COOKIE_SECURE": {
+    "LEAPVIEW_COOKIE_SECURE": {
       "description": "Secure-cookie override; defaults to true for production browser authentication.",
       "pattern": "^(1|t|T|true|TRUE|True|0|f|F|false|FALSE|False)$",
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_CSRF_KEY": {
+    "LEAPVIEW_CSRF_KEY": {
       "description": "Key used for CSRF protection and OAuth state cookies; production requires at least 32 characters.",
       "type": "string",
       "writeOnly": true,
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_DEV_API_TOKEN": {
+    "LEAPVIEW_DEV_API_TOKEN": {
       "default": "dev",
       "description": "Static bearer credential accepted by the public API in development; replace the development default on shared machines.",
       "type": "string",
@@ -1529,7 +1529,7 @@
       "x-lifecycle": "development",
       "x-scope": "serve"
     },
-    "LIBREDASH_DEV_AUTH_BYPASS": {
+    "LEAPVIEW_DEV_AUTH_BYPASS": {
       "default": "false",
       "description": "Bypass authentication in development; forbidden in production.",
       "pattern": "^(1|t|T|true|TRUE|True|0|f|F|false|FALSE|False)$",
@@ -1537,7 +1537,7 @@
       "x-lifecycle": "development",
       "x-scope": "serve"
     },
-    "LIBREDASH_DEV_LOG_LINES": {
+    "LEAPVIEW_DEV_LOG_LINES": {
       "default": "120",
       "description": "Number of log lines shown by the managed development server.",
       "pattern": "^-?[0-9]+$",
@@ -1545,7 +1545,7 @@
       "x-lifecycle": "development",
       "x-scope": "dev server"
     },
-    "LIBREDASH_DEV_PORT_COUNT": {
+    "LEAPVIEW_DEV_PORT_COUNT": {
       "default": "100",
       "description": "Number of ports scanned by the managed development server.",
       "pattern": "^-?[0-9]+$",
@@ -1553,7 +1553,7 @@
       "x-lifecycle": "development",
       "x-scope": "dev server"
     },
-    "LIBREDASH_DEV_PORT_START": {
+    "LEAPVIEW_DEV_PORT_START": {
       "default": "8100",
       "description": "First port scanned by the managed development server.",
       "pattern": "^-?[0-9]+$",
@@ -1561,14 +1561,14 @@
       "x-lifecycle": "development",
       "x-scope": "dev server"
     },
-    "LIBREDASH_DEV_PROJECT": {
-      "default": "dashboards/libredash.yaml",
+    "LEAPVIEW_DEV_PROJECT": {
+      "default": "dashboards/leapview.yaml",
       "description": "Project published by the managed development server.",
       "type": "string",
       "x-lifecycle": "development",
       "x-scope": "dev server"
     },
-    "LIBREDASH_DEV_READY_ATTEMPTS": {
+    "LEAPVIEW_DEV_READY_ATTEMPTS": {
       "default": "150",
       "description": "Readiness attempts made by the managed development server.",
       "pattern": "^-?[0-9]+$",
@@ -1576,7 +1576,7 @@
       "x-lifecycle": "development",
       "x-scope": "dev server"
     },
-    "LIBREDASH_DEV_READY_INTERVAL": {
+    "LEAPVIEW_DEV_READY_INTERVAL": {
       "default": "200ms",
       "description": "Delay between managed development server readiness attempts.",
       "pattern": "^-?[0-9]+(ns|us|µs|ms|s|m|h)([0-9]+(ns|us|µs|ms|s|m|h))*$",
@@ -1584,7 +1584,7 @@
       "x-lifecycle": "development",
       "x-scope": "dev server"
     },
-    "LIBREDASH_DEV_RESTART": {
+    "LEAPVIEW_DEV_RESTART": {
       "default": "false",
       "description": "Force the managed development server to restart.",
       "pattern": "^(1|t|T|true|TRUE|True|0|f|F|false|FALSE|False)$",
@@ -1592,7 +1592,7 @@
       "x-lifecycle": "development",
       "x-scope": "dev server"
     },
-    "LIBREDASH_DEV_SKIP_PUBLISH": {
+    "LEAPVIEW_DEV_SKIP_PUBLISH": {
       "default": "false",
       "description": "Skip automatic project publishing in the managed development server.",
       "pattern": "^(1|t|T|true|TRUE|True|0|f|F|false|FALSE|False)$",
@@ -1600,31 +1600,31 @@
       "x-lifecycle": "development",
       "x-scope": "dev server"
     },
-    "LIBREDASH_DEV_WORKTREE": {
+    "LEAPVIEW_DEV_WORKTREE": {
       "description": "Worktree path exported by the managed development server.",
       "type": "string",
       "x-lifecycle": "internal",
       "x-scope": "dev server"
     },
-    "LIBREDASH_DUCKDB_DIR": {
+    "LEAPVIEW_DUCKDB_DIR": {
       "description": "Directory containing workspace DuckDB runtime files.",
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_DUCKLAKE_CATALOG_PATH": {
+    "LEAPVIEW_DUCKLAKE_CATALOG_PATH": {
       "description": "Path to the single global DuckLake catalog.",
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "serve,admin"
     },
-    "LIBREDASH_ENVIRONMENT": {
-      "description": "Single serving environment permanently bound to this LibreDash instance.",
+    "LEAPVIEW_ENVIRONMENT": {
+      "description": "Single serving environment permanently bound to this LeapView instance.",
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "serve,admin"
     },
-    "LIBREDASH_EXEC_JOB_LEASE_TIMEOUT": {
+    "LEAPVIEW_EXEC_JOB_LEASE_TIMEOUT": {
       "default": "2m",
       "description": "Lease duration before an abandoned refresh job may be reclaimed.",
       "pattern": "^-?[0-9]+(ns|us|µs|ms|s|m|h)([0-9]+(ns|us|µs|ms|s|m|h))*$",
@@ -1632,7 +1632,7 @@
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_EXEC_MAX_QUEUED_READS": {
+    "LEAPVIEW_EXEC_MAX_QUEUED_READS": {
       "default": "64",
       "description": "Maximum queued interactive read queries; negative disables queuing.",
       "pattern": "^-?[0-9]+$",
@@ -1640,7 +1640,7 @@
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_EXEC_MAX_QUEUED_WRITES": {
+    "LEAPVIEW_EXEC_MAX_QUEUED_WRITES": {
       "default": "64",
       "description": "Maximum queued refresh jobs; negative disables queuing.",
       "pattern": "^-?[0-9]+$",
@@ -1648,7 +1648,7 @@
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_EXEC_MAX_RUNNING_READS": {
+    "LEAPVIEW_EXEC_MAX_RUNNING_READS": {
       "default": "4",
       "description": "Maximum concurrently running interactive read queries.",
       "pattern": "^-?[0-9]+$",
@@ -1656,7 +1656,7 @@
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_EXEC_MAX_RUNNING_WRITES": {
+    "LEAPVIEW_EXEC_MAX_RUNNING_WRITES": {
       "default": "1",
       "description": "Maximum concurrently running refresh jobs.",
       "pattern": "^-?[0-9]+$",
@@ -1664,7 +1664,7 @@
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_EXEC_READ_QUEUE_TIMEOUT": {
+    "LEAPVIEW_EXEC_READ_QUEUE_TIMEOUT": {
       "default": "30s",
       "description": "Maximum time an interactive read may wait in the queue.",
       "pattern": "^-?[0-9]+(ns|us|µs|ms|s|m|h)([0-9]+(ns|us|µs|ms|s|m|h))*$",
@@ -1672,7 +1672,7 @@
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_EXEC_READ_TIMEOUT": {
+    "LEAPVIEW_EXEC_READ_TIMEOUT": {
       "default": "2m",
       "description": "Maximum execution time for an interactive read query.",
       "pattern": "^-?[0-9]+(ns|us|µs|ms|s|m|h)([0-9]+(ns|us|µs|ms|s|m|h))*$",
@@ -1680,46 +1680,46 @@
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_HEALTHCHECK_URL": {
+    "LEAPVIEW_HEALTHCHECK_URL": {
       "description": "Explicit readiness URL used by the healthcheck command.",
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "healthcheck"
     },
-    "LIBREDASH_HOME": {
-      "default": ".libredash",
+    "LEAPVIEW_HOME": {
+      "default": ".leapview",
       "description": "Instance state directory containing databases, artifacts, and runtime files.",
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "serve,admin,client"
     },
-    "LIBREDASH_IMAGE": {
-      "description": "Immutable LibreDash OCI image reference consumed by deployment tooling.",
+    "LEAPVIEW_IMAGE": {
+      "description": "Immutable LeapView OCI image reference consumed by deployment tooling.",
       "type": "string",
       "x-lifecycle": "tooling",
       "x-scope": "Hetzner provisioner"
     },
-    "LIBREDASH_LOCAL_AUTH": {
+    "LEAPVIEW_LOCAL_AUTH": {
       "description": "Enable administrator-managed local browser authentication.",
       "pattern": "^(1|t|T|true|TRUE|True|0|f|F|false|FALSE|False)$",
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_MANAGED_DATA_BACKEND": {
+    "LEAPVIEW_MANAGED_DATA_BACKEND": {
       "default": "local",
       "description": "Storage backend for project-global managed data; supported values are local and s3.",
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_MANAGED_DATA_DIR": {
-      "description": "Private local root for managed-data objects, upload staging, and verified runtime views; defaults beneath LIBREDASH_HOME.",
+    "LEAPVIEW_MANAGED_DATA_DIR": {
+      "description": "Private local root for managed-data objects, upload staging, and verified runtime views; defaults beneath LEAPVIEW_HOME.",
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_MANAGED_DATA_GC_GRACE_PERIOD": {
+    "LEAPVIEW_MANAGED_DATA_GC_GRACE_PERIOD": {
       "default": "24h",
       "description": "Minimum age of unreferenced managed-data objects before garbage collection.",
       "pattern": "^-?[0-9]+(ns|us|µs|ms|s|m|h)([0-9]+(ns|us|µs|ms|s|m|h))*$",
@@ -1727,7 +1727,7 @@
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_MANAGED_DATA_GC_INTERVAL": {
+    "LEAPVIEW_MANAGED_DATA_GC_INTERVAL": {
       "default": "1h",
       "description": "Interval between managed-data garbage-collection passes.",
       "pattern": "^-?[0-9]+(ns|us|µs|ms|s|m|h)([0-9]+(ns|us|µs|ms|s|m|h))*$",
@@ -1735,7 +1735,7 @@
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_MANAGED_DATA_MAX_FILES": {
+    "LEAPVIEW_MANAGED_DATA_MAX_FILES": {
       "default": "10000",
       "description": "Maximum number of files in one managed-data revision.",
       "pattern": "^-?[0-9]+$",
@@ -1743,7 +1743,7 @@
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_MANAGED_DATA_MAX_FILE_BYTES": {
+    "LEAPVIEW_MANAGED_DATA_MAX_FILE_BYTES": {
       "default": "1073741824",
       "description": "Maximum size in bytes of one managed-data file.",
       "pattern": "^-?[0-9]+$",
@@ -1751,7 +1751,7 @@
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_MANAGED_DATA_MAX_REVISION_BYTES": {
+    "LEAPVIEW_MANAGED_DATA_MAX_REVISION_BYTES": {
       "default": "10737418240",
       "description": "Maximum total size in bytes of one managed-data revision.",
       "pattern": "^-?[0-9]+$",
@@ -1759,7 +1759,7 @@
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_MANAGED_DATA_MIN_FREE_BYTES": {
+    "LEAPVIEW_MANAGED_DATA_MIN_FREE_BYTES": {
       "default": "5368709120",
       "description": "Minimum free bytes required before accepting local managed-data uploads.",
       "pattern": "^-?[0-9]+$",
@@ -1767,26 +1767,26 @@
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_MANAGED_DATA_S3_ACCESS_KEY_ID": {
+    "LEAPVIEW_MANAGED_DATA_S3_ACCESS_KEY_ID": {
       "description": "Optional S3 access-key identifier for managed-data storage.",
       "type": "string",
       "writeOnly": true,
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_MANAGED_DATA_S3_BUCKET": {
+    "LEAPVIEW_MANAGED_DATA_S3_BUCKET": {
       "description": "S3 bucket used for managed-data objects and staging.",
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_MANAGED_DATA_S3_ENDPOINT": {
+    "LEAPVIEW_MANAGED_DATA_S3_ENDPOINT": {
       "description": "Optional S3-compatible endpoint URL.",
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_MANAGED_DATA_S3_PATH_STYLE": {
+    "LEAPVIEW_MANAGED_DATA_S3_PATH_STYLE": {
       "default": "false",
       "description": "Use path-style addressing for S3-compatible managed-data storage.",
       "pattern": "^(1|t|T|true|TRUE|True|0|f|F|false|FALSE|False)$",
@@ -1794,34 +1794,34 @@
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_MANAGED_DATA_S3_PREFIX": {
+    "LEAPVIEW_MANAGED_DATA_S3_PREFIX": {
       "default": "managed-data",
       "description": "Object-key prefix for managed data in the configured S3 bucket.",
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_MANAGED_DATA_S3_REGION": {
+    "LEAPVIEW_MANAGED_DATA_S3_REGION": {
       "description": "S3 region used for managed-data requests.",
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_MANAGED_DATA_S3_SECRET_ACCESS_KEY": {
+    "LEAPVIEW_MANAGED_DATA_S3_SECRET_ACCESS_KEY": {
       "description": "Optional S3 secret access key for managed-data storage.",
       "type": "string",
       "writeOnly": true,
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_MANAGED_DATA_S3_SESSION_TOKEN": {
+    "LEAPVIEW_MANAGED_DATA_S3_SESSION_TOKEN": {
       "description": "Optional temporary S3 session token for managed-data storage.",
       "type": "string",
       "writeOnly": true,
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_MANAGED_DATA_UPLOAD_SESSION_TTL": {
+    "LEAPVIEW_MANAGED_DATA_UPLOAD_SESSION_TTL": {
       "default": "24h",
       "description": "Lifetime of an incomplete managed-data upload session.",
       "pattern": "^-?[0-9]+(ns|us|µs|ms|s|m|h)([0-9]+(ns|us|µs|ms|s|m|h))*$",
@@ -1829,58 +1829,58 @@
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_MCP_OAUTH_ISSUER_URL": {
-      "description": "Optional external OAuth issuer for MCP JWT access tokens; when omitted, LibreDash provides the MCP authorization server.",
+    "LEAPVIEW_MCP_OAUTH_ISSUER_URL": {
+      "description": "Optional external OAuth issuer for MCP JWT access tokens; when omitted, LeapView provides the MCP authorization server.",
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_METRICS_BEARER_TOKEN": {
+    "LEAPVIEW_METRICS_BEARER_TOKEN": {
       "description": "Bearer token protecting the Prometheus metrics endpoint; production requires at least 32 characters.",
       "type": "string",
       "writeOnly": true,
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_OIDC_CALLBACK_URL": {
+    "LEAPVIEW_OIDC_CALLBACK_URL": {
       "description": "HTTPS callback URL registered with the generic OIDC provider.",
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_OIDC_CLIENT_ID": {
+    "LEAPVIEW_OIDC_CLIENT_ID": {
       "description": "Generic OIDC client identifier.",
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_OIDC_CLIENT_SECRET": {
+    "LEAPVIEW_OIDC_CLIENT_SECRET": {
       "description": "Generic OIDC client secret.",
       "type": "string",
       "writeOnly": true,
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_OIDC_ISSUER_URL": {
+    "LEAPVIEW_OIDC_ISSUER_URL": {
       "description": "HTTPS issuer URL for the generic OIDC provider.",
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_OIDC_PROVIDER_ID": {
+    "LEAPVIEW_OIDC_PROVIDER_ID": {
       "default": "oidc",
       "description": "Route-safe identifier for the generic OIDC provider.",
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_OIDC_SCOPES": {
+    "LEAPVIEW_OIDC_SCOPES": {
       "description": "Comma- or whitespace-separated additional OIDC scopes.",
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_PERF_ENFORCE_THRESHOLDS": {
+    "LEAPVIEW_PERF_ENFORCE_THRESHOLDS": {
       "default": "false",
       "description": "Fail dashboard performance QA when phase latency or query-count thresholds are exceeded.",
       "pattern": "^(1|t|T|true|TRUE|True|0|f|F|false|FALSE|False)$",
@@ -1888,7 +1888,7 @@
       "x-lifecycle": "development",
       "x-scope": "dashboard performance QA"
     },
-    "LIBREDASH_PERF_ITERATIONS": {
+    "LEAPVIEW_PERF_ITERATIONS": {
       "default": "5",
       "description": "Measured interaction iterations run by the configured dashboard performance scenario.",
       "pattern": "^-?[0-9]+$",
@@ -1896,14 +1896,14 @@
       "x-lifecycle": "development",
       "x-scope": "dashboard performance QA"
     },
-    "LIBREDASH_PERF_LOG": {
+    "LEAPVIEW_PERF_LOG": {
       "default": ".tmp/dev-server.log",
       "description": "Development server log consumed by dashboard performance QA.",
       "type": "string",
       "x-lifecycle": "development",
       "x-scope": "dashboard performance QA"
     },
-    "LIBREDASH_PERF_MAX_ALL_TARGET_P95_MS": {
+    "LEAPVIEW_PERF_MAX_ALL_TARGET_P95_MS": {
       "default": "1000",
       "description": "Maximum all-target settlement p95 when performance thresholds are enforced.",
       "pattern": "^-?[0-9]+$",
@@ -1911,7 +1911,7 @@
       "x-lifecycle": "development",
       "x-scope": "dashboard performance QA"
     },
-    "LIBREDASH_PERF_MAX_CRITICAL_KPI_P95_MS": {
+    "LEAPVIEW_PERF_MAX_CRITICAL_KPI_P95_MS": {
       "default": "1000",
       "description": "Maximum critical-KPI settlement p95 when performance thresholds are enforced.",
       "pattern": "^-?[0-9]+$",
@@ -1919,7 +1919,7 @@
       "x-lifecycle": "development",
       "x-scope": "dashboard performance QA"
     },
-    "LIBREDASH_PERF_MAX_FIRST_TARGET_PAINT_P95_MS": {
+    "LEAPVIEW_PERF_MAX_FIRST_TARGET_PAINT_P95_MS": {
       "default": "500",
       "description": "Maximum first-target paint p95 when performance thresholds are enforced.",
       "pattern": "^-?[0-9]+$",
@@ -1927,7 +1927,7 @@
       "x-lifecycle": "development",
       "x-scope": "dashboard performance QA"
     },
-    "LIBREDASH_PERF_MAX_OPTIMISTIC_FEEDBACK_P95_MS": {
+    "LEAPVIEW_PERF_MAX_OPTIMISTIC_FEEDBACK_P95_MS": {
       "default": "16",
       "description": "Maximum local optimistic-feedback p95 when performance thresholds are enforced.",
       "pattern": "^-?[0-9]+$",
@@ -1935,7 +1935,7 @@
       "x-lifecycle": "development",
       "x-scope": "dashboard performance QA"
     },
-    "LIBREDASH_PERF_MAX_QUERIES": {
+    "LEAPVIEW_PERF_MAX_QUERIES": {
       "default": "4",
       "description": "Maximum physical queries per measured refresh when performance thresholds are enforced.",
       "pattern": "^-?[0-9]+$",
@@ -1943,20 +1943,20 @@
       "x-lifecycle": "development",
       "x-scope": "dashboard performance QA"
     },
-    "LIBREDASH_PERF_OUTPUT": {
+    "LEAPVIEW_PERF_OUTPUT": {
       "description": "Optional JSON output path; defaults to a suite-specific file under .tmp.",
       "type": "string",
       "x-lifecycle": "development",
       "x-scope": "dashboard performance QA"
     },
-    "LIBREDASH_PERF_SCENARIO": {
+    "LEAPVIEW_PERF_SCENARIO": {
       "default": "scripts/performance/movielens.json",
       "description": "Path to a dashboard performance scenario manifest.",
       "type": "string",
       "x-lifecycle": "development",
       "x-scope": "dashboard performance QA"
     },
-    "LIBREDASH_PRODUCTION": {
+    "LEAPVIEW_PRODUCTION": {
       "default": "false",
       "description": "Enable production serving and validation behavior.",
       "pattern": "^(1|t|T|true|TRUE|True|0|f|F|false|FALSE|False)$",
@@ -1964,20 +1964,20 @@
       "x-lifecycle": "supported",
       "x-scope": "serve,admin"
     },
-    "LIBREDASH_PUBLIC_URL": {
-      "description": "Canonical externally visible LibreDash origin used for MCP resource identity and OAuth discovery.",
+    "LEAPVIEW_PUBLIC_URL": {
+      "description": "Canonical externally visible LeapView origin used for MCP resource identity and OAuth discovery.",
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_QUACK_TOKEN": {
+    "LEAPVIEW_QUACK_TOKEN": {
       "description": "Credential injected into the Quack connection declaration.",
       "type": "string",
       "writeOnly": true,
       "x-lifecycle": "external",
       "x-scope": "Quack development profile"
     },
-    "LIBREDASH_QUERY_CACHE_MAX_BYTES": {
+    "LEAPVIEW_QUERY_CACHE_MAX_BYTES": {
       "default": "67108864",
       "description": "Maximum retained bytes for governed interactive query results per semantic model runtime.",
       "pattern": "^-?[0-9]+$",
@@ -1985,7 +1985,7 @@
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_QUERY_CACHE_MAX_ENTRIES": {
+    "LEAPVIEW_QUERY_CACHE_MAX_ENTRIES": {
       "default": "256",
       "description": "Maximum governed interactive query result entries retained per semantic model runtime.",
       "pattern": "^-?[0-9]+$",
@@ -1993,20 +1993,20 @@
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_SCIM_BEARER_TOKEN": {
+    "LEAPVIEW_SCIM_BEARER_TOKEN": {
       "description": "Bearer token enabling SCIM provisioning; production requires at least 32 characters when set.",
       "type": "string",
       "writeOnly": true,
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_SITE_BASE_URL": {
+    "LEAPVIEW_SITE_BASE_URL": {
       "description": "Externally visible HTTP(S) origin used for canonical URLs, discovery documents, and transport policy.",
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "public site"
     },
-    "LIBREDASH_SMOKE_PORT": {
+    "LEAPVIEW_SMOKE_PORT": {
       "default": "18080",
       "description": "Host port used by the production image smoke test.",
       "pattern": "^-?[0-9]+$",
@@ -2014,20 +2014,20 @@
       "x-lifecycle": "internal",
       "x-scope": "production image smoke test"
     },
-    "LIBREDASH_TARGET": {
-      "description": "Default LibreDash API target URL.",
+    "LEAPVIEW_TARGET": {
+      "description": "Default LeapView API target URL.",
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "client commands"
     },
-    "LIBREDASH_TOKEN_HASH_KEY": {
+    "LEAPVIEW_TOKEN_HASH_KEY": {
       "description": "Optional dedicated key for deterministic API-token fingerprints; falls back to the CSRF key.",
       "type": "string",
       "writeOnly": true,
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_TRUST_PROXY_HEADERS": {
+    "LEAPVIEW_TRUST_PROXY_HEADERS": {
       "default": "false",
       "description": "Trust client-address headers only when a trusted proxy overwrites them.",
       "pattern": "^(1|t|T|true|TRUE|True|0|f|F|false|FALSE|False)$",
@@ -2035,7 +2035,7 @@
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_WAREHOUSE_DSN": {
+    "LEAPVIEW_WAREHOUSE_DSN": {
       "description": "Example externally supplied warehouse connection credential.",
       "type": "string",
       "writeOnly": true,
@@ -2043,6 +2043,6 @@
       "x-scope": "example connection"
     }
   },
-  "title": "LibreDash process-global environment",
+  "title": "LeapView process-global environment",
   "type": "object"
 }

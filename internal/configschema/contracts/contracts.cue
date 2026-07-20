@@ -24,7 +24,7 @@ package contracts
 	accountName?: string
 })
 
-#APIVersion: "libredash.dev/v1"
+#APIVersion: "leapview.dev/v1"
 
 #Metadata: close({
 	name!:        #ResourceID

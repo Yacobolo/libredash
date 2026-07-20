@@ -3,10 +3,12 @@ package http
 import (
 	"net/url"
 	"strings"
+
+	"github.com/Yacobolo/leapview/internal/brand"
 	"time"
 
-	"github.com/Yacobolo/libredash/pkg/pagestream"
-	siteassets "github.com/Yacobolo/libredash/site"
+	"github.com/Yacobolo/leapview/pkg/pagestream"
+	siteassets "github.com/Yacobolo/leapview/site"
 	g "maragu.dev/gomponents"
 	dsattr "maragu.dev/gomponents-datastar"
 	h "maragu.dev/gomponents/html"
@@ -68,7 +70,7 @@ var siteStackGroups = []siteStackGroupSpec{
 }
 
 const siteDatastarScriptURL = "/static/vendor/datastar-1.0.2.js"
-const siteBrandName = "LeapView"
+const siteBrandName = brand.Name
 
 func sitePage(metadata sitePageMetadata) g.Node {
 	return pagestream.RenderPage(pagestream.PageSpec{
@@ -82,7 +84,7 @@ func sitePage(metadata sitePageMetadata) g.Node {
 			h.A(h.Class("skip-link"), h.Href("#main-content"), g.Text("Skip to content")),
 			siteHeader(false),
 			h.Section(h.ID("main-content"), h.Class("site-hero"),
-				g.El("ld-site-flow-background", h.Class("site-hero-background"), g.Attr("aria-hidden", "true")),
+				g.El("lv-site-flow-background", h.Class("site-hero-background"), g.Attr("aria-hidden", "true")),
 				h.Div(h.Class("site-hero-layout"),
 					h.Div(h.Class("site-hero-content"),
 						h.P(h.Class("site-eyebrow"), g.Text("Open-source analytics as code")),
@@ -93,22 +95,27 @@ func sitePage(metadata sitePageMetadata) g.Node {
 					g.El("figure", h.Class("site-product-frame"),
 						h.Div(h.Class("site-product-frame-bar"),
 							h.Span(h.Class("site-product-frame-dots"), g.Attr("aria-hidden", "true"), h.I(), h.I(), h.I()),
-							h.Span(g.Text("Visual Showcase · Overview")),
+							h.Span(g.Text("Dashboard + agent · Revenue overview")),
 						),
-						h.Img(
-							h.Class("site-product-screenshot site-product-screenshot-light"),
-							h.Src("/static/product-dashboard-light.png"),
-							h.Alt(siteBrandName+" Visual Showcase overview with KPIs, line, donut, and bar charts, and an analytical table"),
-							g.Attr("width", "1440"),
-							g.Attr("height", "900"),
-							g.Attr("fetchpriority", "high"),
-						),
-						h.Img(
-							h.Class("site-product-screenshot site-product-screenshot-dark"),
-							h.Src("/static/product-dashboard-dark.png"),
-							h.Alt(siteBrandName+" Visual Showcase overview with KPIs, line, donut, and bar charts, and an analytical table"),
-							g.Attr("width", "1440"),
-							g.Attr("height", "900"),
+						h.Div(h.Class("site-product-stage"),
+							h.Div(h.Class("site-product-dashboard"),
+								h.Img(
+									h.Class("site-product-screenshot site-product-screenshot-light"),
+									h.Src("/static/product-dashboard-light.png"),
+									h.Alt(siteBrandName+" Visual Showcase overview with KPIs, line, donut, and bar charts, and an analytical table"),
+									g.Attr("width", "1440"),
+									g.Attr("height", "900"),
+									g.Attr("fetchpriority", "high"),
+								),
+								h.Img(
+									h.Class("site-product-screenshot site-product-screenshot-dark"),
+									h.Src("/static/product-dashboard-dark.png"),
+									h.Alt(siteBrandName+" Visual Showcase overview with KPIs, line, donut, and bar charts, and an analytical table"),
+									g.Attr("width", "1440"),
+									g.Attr("height", "900"),
+								),
+							),
+							siteAgentPreview(),
 						),
 					),
 				),
@@ -122,25 +129,25 @@ func sitePage(metadata sitePageMetadata) g.Node {
 			h.Div(h.Class("site-shell"),
 				h.Section(h.Class("site-interfaces-section"),
 					h.Div(h.Class("site-interfaces-heading"),
-						h.P(h.Class("site-eyebrow"), g.Text("Agent-native BI")),
-						h.H2(g.Text("Dashboards and agents, together.")),
-						h.P(g.Text("Use dashboards for repeatable analysis and AI agents for questions you did not plan for.")),
-					),
-					h.Div(h.Class("site-interfaces-grid"),
-						siteInterfaceCard("dashboard", "Dashboards", "Build repeatable views for teams, reviews, and recurring decisions.", []string{"Charts and KPIs", "Filters and drill-downs", "Analytical tables"}, "Explore dashboard guides", "/docs/guides/build"),
-						siteInterfaceCard("agent", "AI agents", "Ask open-ended questions and investigate data through conversation.", []string{"Natural-language questions", "Visual, verifiable answers", "The same metrics and permissions"}, "Explore agent integrations", "/docs/guides/integrate/agent"),
+						h.P(h.Class("site-eyebrow"), g.Text("One governed analytics layer")),
+						h.H2(g.Text("One model. Two ways to explore.")),
+						h.P(g.Text("Define metrics, relationships, and access once. Dashboards and agents inherit the same governed context.")),
 					),
 					h.Div(h.Class("site-interface-core"),
 						siteFeatureIcon("blocks"),
 						h.Div(
-							h.H3(g.Text("One analytics layer")),
-							h.P(g.Text("Dashboards and AI agents use the same version-controlled definitions.")),
+							h.H3(g.Text("Version-controlled analytics")),
+							h.P(g.Text("Every answer starts from the same reviewed semantic definitions.")),
 						),
 						h.Ul(
 							h.Li(g.Text("Same metrics")),
 							h.Li(g.Text("Same permissions")),
 							h.Li(g.Text("Same data")),
 						),
+					),
+					h.Div(h.Class("site-interfaces-grid"),
+						siteInterfaceCard("dashboard", "Dashboards", "Repeatable views for teams, reviews, and recurring decisions.", []string{"Charts, KPIs, and tables", "Filters and drill-downs", "Reviewed metric definitions"}, "Explore dashboard guides", "/docs/guides/build"),
+						siteInterfaceCard("agent", "AI agents", "Open-ended investigation without creating a separate analytics surface.", []string{"Natural-language questions", "Visual, verifiable answers", "Permission-aware queries"}, "Explore agent integrations", "/docs/guides/integrate/agent"),
 					),
 				),
 				h.Section(h.ID("product"), h.Class("site-workflow"),
@@ -149,10 +156,13 @@ func sitePage(metadata sitePageMetadata) g.Node {
 						h.H2(g.Text("Ship analytics like software.")),
 						h.P(g.Text("Build in code. Review in Git. Deploy with confidence.")),
 					),
-					h.Ol(h.Class("site-workflow-flow"), g.Attr("aria-label", "Analytics delivery workflow"),
-						siteWorkflowCard("blocks", "01", "Build in code", "Create analytics in one versioned project."),
-						siteWorkflowCard("git-branch", "02", "Review in Git", "Validate and approve every change before release."),
-						siteWorkflowCard("server", "03", "Deploy with confidence", "Publish dashboards and AI agents together."),
+					h.Div(h.Class("site-workflow-demo"),
+						siteWorkflowArtifact(),
+						h.Ol(h.Class("site-workflow-flow"), g.Attr("aria-label", "Analytics delivery workflow"),
+							siteWorkflowCard("blocks", "01", "Build in code", "Define governed models, metrics, and dashboards in YAML."),
+							siteWorkflowCard("git-branch", "02", "Review in Git", "Validate contracts and approve every change before release."),
+							siteWorkflowCard("server", "03", "Deploy with confidence", "Publish dashboards and agent context as one immutable generation."),
+						),
 					),
 				),
 				h.Section(h.Class("site-stack-section"),
@@ -166,6 +176,7 @@ func sitePage(metadata sitePageMetadata) g.Node {
 						siteStackProductNode(),
 					),
 				),
+				siteTrustSection(),
 				h.Section(h.Class("site-cta"),
 					h.P(h.Class("site-eyebrow"), g.Text("Open-source BI")),
 					h.H2(g.Text("Put your analytics in version control.")),
@@ -195,7 +206,7 @@ func visualsPage(metadata sitePageMetadata) g.Node {
 					h.H1(g.Text("Every visual type, using one contract.")),
 					h.P(h.Class("site-lede"), g.Text("Each item below is a real "+siteBrandName+" visual rendered from the same type-discriminated payload contract.")),
 				),
-				g.El("ld-site-visual-showcase"),
+				g.El("lv-site-visual-showcase"),
 			),
 			siteFooter(),
 		},
@@ -317,9 +328,9 @@ func siteHeader(isDocs bool) g.Node {
 			h.A(h.Href("/visuals"), g.Text("Visuals")),
 		))
 	}
-	actions = append(actions, g.El("ld-site-theme-toggle"))
+	actions = append(actions, g.El("lv-site-theme-toggle"))
 	if !isDocs {
-		actions = append(actions, g.El("ld-site-mobile-menu"))
+		actions = append(actions, g.El("lv-site-mobile-menu"))
 	}
 
 	return h.Header(h.Class("site-header"),
@@ -331,7 +342,7 @@ func siteHeader(isDocs bool) g.Node {
 }
 
 func siteActiveSearch() g.Node {
-	return g.El("ld-site-search",
+	return g.El("lv-site-search",
 		h.A(h.Class("site-search-fallback"), h.Href("/docs/search"), g.Text("Search")),
 		h.Input(
 			h.Class("site-search-active-input"),
@@ -350,7 +361,7 @@ func siteActiveSearch() g.Node {
 
 func siteBrandLink() g.Node {
 	return h.A(h.Class("site-brand"), h.Href("/"),
-		g.El("ld-site-brand-mark", g.Attr("aria-hidden", "true")),
+		g.El("lv-brand-mark", g.Attr("aria-hidden", "true")),
 		h.Span(g.Text(siteBrandName)),
 	)
 }
@@ -363,14 +374,94 @@ func siteHTMLAttrs() []g.Node {
 	}
 }
 
+func siteAgentPreview() g.Node {
+	return h.Aside(
+		h.Class("site-agent-preview"),
+		g.Attr("aria-label", "Verified AI agent answer"),
+		h.Div(h.Class("site-agent-preview-header"),
+			h.Div(h.Class("site-agent-preview-title"),
+				siteFeatureIcon("agent"),
+				h.Strong(g.Text("Ask "+siteBrandName)),
+			),
+			h.Span(h.Class("site-agent-status"), g.Text("Verified")),
+		),
+		h.Div(h.Class("site-agent-question"),
+			h.Span(g.Attr("aria-hidden", "true"), g.Text("You")),
+			h.P(g.Text("Why did revenue fall in October?")),
+		),
+		h.Div(h.Class("site-agent-answer"),
+			h.P(h.Class("site-agent-answer-label"), g.Text("Revenue change")),
+			h.Div(h.Class("site-agent-metric"),
+				h.Strong(g.Text("21.4%")),
+				h.Span(g.Text("lower month over month")),
+			),
+			h.P(g.Text("Delivered order volume drove most of the decline. The revenue metric and active access policy were applied automatically.")),
+			h.Ul(h.Class("site-agent-evidence"),
+				h.Li(g.Text("Metric · revenue")),
+				h.Li(g.Text("Filter · October")),
+				h.Li(g.Text("Policy · sales.read")),
+			),
+		),
+		h.P(h.Class("site-agent-verified"), g.Text("Verified against the sales semantic model")),
+	)
+}
+
+func siteWorkflowArtifact() g.Node {
+	const semanticModel = `apiVersion: leapview.dev/v1
+kind: SemanticModel
+metadata:
+  workspace: sales
+  name: sales
+spec:
+  measures:
+    revenue:
+      fact: orders
+      aggregation: sum
+      input: {field: orders.revenue}`
+
+	return h.Article(h.Class("site-workflow-artifact"),
+		h.Div(h.Class("site-workflow-artifact-header"),
+			h.Span(h.Class("site-workflow-file"), g.Text("semantic-models/sales.yaml")),
+			h.Span(h.Class("site-workflow-valid"), g.Text("Validated")),
+		),
+		h.Pre(h.Code(g.Text(semanticModel))),
+		h.P(g.Text("One reviewed definition powers every dashboard and agent answer.")),
+	)
+}
+
+func siteTrustSection() g.Node {
+	return h.Section(h.Class("site-trust-section"),
+		h.Div(h.Class("site-trust-heading"),
+			h.P(h.Class("site-eyebrow"), g.Text("Governed by default")),
+			h.H2(g.Text("Governed from question to answer.")),
+			h.P(g.Text("The same controls apply whether a person opens a dashboard or an agent asks a question.")),
+		),
+		h.Div(h.Class("site-trust-grid"),
+			siteTrustCard("shield-check", "Shared permissions", "RBAC and data policies follow every governed query."),
+			siteTrustCard("search-check", "Verifiable answers", "Metrics, filters, and query context stay inspectable."),
+			siteTrustCard("server", "Safe deployments", "Immutable serving generations cut over without interrupting readers."),
+		),
+	)
+}
+
+func siteTrustCard(icon, title, body string) g.Node {
+	return h.Article(h.Class("site-trust-card"),
+		siteFeatureIcon(icon),
+		h.H3(g.Text(title)),
+		h.P(g.Text(body)),
+	)
+}
+
 func siteWorkflowCard(icon, number, title, body string) g.Node {
 	return h.Li(h.Class("site-workflow-card"),
 		h.Div(h.Class("site-workflow-card-top"),
 			siteFeatureIcon(icon),
 			h.Span(h.Class("site-workflow-number"), g.Attr("aria-hidden", "true"), g.Text(number)),
 		),
-		h.H3(g.Text(title)),
-		h.P(g.Text(body)),
+		h.Div(h.Class("site-workflow-card-copy"),
+			h.H3(g.Text(title)),
+			h.P(g.Text(body)),
+		),
 		h.Span(h.Class("site-workflow-arrow"), g.Attr("aria-hidden", "true")),
 	)
 }
@@ -411,7 +502,7 @@ func siteDataStackStage() g.Node {
 func siteStackProductNode() g.Node {
 	return h.Li(h.Class("site-stack-stage site-stack-node site-stack-product-node"),
 		h.H3(h.Class("site-stack-product-brand"),
-			g.El("ld-site-brand-mark", g.Attr("large", ""), g.Attr("aria-hidden", "true")),
+			g.El("lv-brand-mark", g.Attr("large", ""), g.Attr("aria-hidden", "true")),
 			h.Span(g.Text(siteBrandName)),
 		),
 		h.Div(h.Class("site-stack-client-surface"),
@@ -433,11 +524,12 @@ func siteStackClientInterface(label string, icon g.Node) g.Node {
 		g.Attr("data-label", label),
 		g.Attr("tabindex", "0"),
 		icon,
+		h.Span(h.Class("site-stack-integration-label"), g.Text(label)),
 	)
 }
 
 func siteStackFeatureIcon(name string) g.Node {
-	return g.El("ld-site-feature-icon", g.Attr("name", name), g.Attr("plain", ""), g.Attr("aria-hidden", "true"))
+	return g.El("lv-site-feature-icon", g.Attr("name", name), g.Attr("plain", ""), g.Attr("aria-hidden", "true"))
 }
 
 func siteStackMCPMark() g.Node {
@@ -512,6 +604,7 @@ func siteStackLogoList(integrations []siteStackIntegration) g.Node {
 			g.Attr("data-registry-key", integration.registryKey),
 			g.Attr("tabindex", "0"),
 			siteStackLogo(integration.icon),
+			h.Span(h.Class("site-stack-integration-label"), g.Text(integration.label)),
 		))
 	}
 	return h.Ul(h.Class("site-stack-logos"), g.Group(items))
@@ -549,7 +642,7 @@ func siteProofItem(icon, title, body string) g.Node {
 func siteHomepageActions() g.Node {
 	return h.Div(h.Class("site-actions"),
 		h.A(h.Class("site-button site-button-primary"), h.Href("/docs/getting-started"), g.Text("Get started")),
-		h.A(h.Class("site-button"), h.Href("https://github.com/Yacobolo/libredash"),
+		h.A(h.Class("site-button"), h.Href("https://github.com/Yacobolo/leapview"),
 			h.Span(h.Class("site-github-mark"), g.Attr("aria-hidden", "true")),
 			g.Text("View on GitHub"),
 		),
@@ -557,7 +650,7 @@ func siteHomepageActions() g.Node {
 }
 
 func siteFeatureIcon(name string) g.Node {
-	return g.El("ld-site-feature-icon", g.Attr("name", name), g.Attr("aria-hidden", "true"))
+	return g.El("lv-site-feature-icon", g.Attr("name", name), g.Attr("aria-hidden", "true"))
 }
 
 func siteFooter() g.Node {
@@ -573,8 +666,8 @@ func siteFooter() g.Node {
 				{label: "Visual gallery", href: "/visuals"},
 			}),
 			siteFooterGroup("Project", []siteFooterLink{
-				{label: "GitHub", href: "https://github.com/Yacobolo/libredash"},
-				{label: "Issues", href: "https://github.com/Yacobolo/libredash/issues"},
+				{label: "GitHub", href: "https://github.com/Yacobolo/leapview"},
+				{label: "Issues", href: "https://github.com/Yacobolo/leapview/issues"},
 			}),
 		),
 		h.Div(h.Class("site-footer-bottom"), h.P(g.Text(siteBrandName+" — open-source analytics as code."))),
@@ -604,7 +697,7 @@ func siteDocsLayout(document *siteDocument, content ...g.Node) g.Node {
 					siteDocsArticleHeader(document),
 					g.Group(content),
 				),
-				g.El("ld-site-article-toc"),
+				g.El("lv-site-article-toc"),
 			),
 		),
 	)
@@ -629,7 +722,7 @@ func siteDocsArticleHeader(document *siteDocument) g.Node {
 	}
 
 	return h.Header(h.Class("site-docs-article-header"),
-		g.El("ld-site-docs-drawer-toggle"),
+		g.El("lv-site-docs-drawer-toggle"),
 		h.Nav(h.Class("site-docs-breadcrumb"), g.Attr("aria-label", "Breadcrumb"), h.Ol(g.Group(breadcrumb))),
 	)
 }
@@ -671,7 +764,7 @@ func siteDocsSidebar(current *siteDocument) g.Node {
 	}
 	return h.Aside(h.Class("site-docs-sidebar"), h.ID("site-docs-sidebar"),
 		h.Div(h.Class("site-docs-drawer-actions"),
-			g.El("ld-site-docs-drawer-toggle", g.Attr("placement", "drawer")),
+			g.El("lv-site-docs-drawer-toggle", g.Attr("placement", "drawer")),
 		),
 		h.Nav(g.Attr("aria-label", "Documentation"), g.Group(sections)),
 	)

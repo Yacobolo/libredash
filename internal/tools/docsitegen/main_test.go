@@ -16,7 +16,7 @@ func TestGenerateBuildsUnifiedCatalogFromArticlesAndGeneratedCollections(t *test
 	writeFixture(t, root, "navigation.yaml", `sections:
   - id: start
     title: Start here
-    summary: Learn LibreDash.
+    summary: Learn LeapView.
     documents:
       - slug: getting-started
         title: Getting started
@@ -43,7 +43,7 @@ func TestGenerateBuildsUnifiedCatalogFromArticlesAndGeneratedCollections(t *test
 	writeFixture(t, root, "articles/getting-started.md", "# Getting started\n")
 	writeFixture(t, root, "reference/cli/index.md", "# CLI reference\n")
 	writeFixture(t, root, "reference/cli/deploy.md", "# Deploy\n")
-	writeFixture(t, root, "reference/cli/catalog.json", `{"documents":[{"slug":"deploy","title":"libredash deploy","summary":"Deploy a project."}]}`)
+	writeFixture(t, root, "reference/cli/catalog.json", `{"documents":[{"slug":"deploy","title":"leapview deploy","summary":"Deploy a project."}]}`)
 
 	searchPath := filepath.Join(root, "search-index.sqlite3")
 	if err := generate(filepath.Join(root, "navigation.yaml"), filepath.Join(root, "catalog.json"), searchPath); err != nil {
@@ -71,7 +71,7 @@ func TestGenerateBuildsUnifiedCatalogFromArticlesAndGeneratedCollections(t *test
 		t.Fatal("generated collection document is not marked as generated")
 	}
 	llms := readFixture(t, filepath.Join(root, "llms.txt"))
-	for _, want := range []string{"# LibreDash", "[Documentation MCP](/mcp)", "[libredash deploy](/docs/cli/deploy)"} {
+	for _, want := range []string{"# LeapView", "[Documentation MCP](/mcp)", "[leapview deploy](/docs/cli/deploy)"} {
 		if !strings.Contains(llms, want) {
 			t.Errorf("llms.txt missing %q:\n%s", want, llms)
 		}

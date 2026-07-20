@@ -6,11 +6,11 @@ import (
 	"sort"
 	"strings"
 
-	analyticsmaterialize "github.com/Yacobolo/libredash/internal/analytics/materialize"
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	"github.com/Yacobolo/libredash/internal/refreshpipeline"
-	"github.com/Yacobolo/libredash/internal/workspace"
+	analyticsmaterialize "github.com/Yacobolo/leapview/internal/analytics/materialize"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	"github.com/Yacobolo/leapview/internal/refreshpipeline"
+	"github.com/Yacobolo/leapview/internal/workspace"
 )
 
 func projectModelTable(spec projectModelTableSpec) semanticmodel.Table {

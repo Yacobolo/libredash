@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/cursorsigning"
-	platformdb "github.com/Yacobolo/libredash/internal/platform/db"
+	"github.com/Yacobolo/leapview/internal/cursorsigning"
+	platformdb "github.com/Yacobolo/leapview/internal/platform/db"
 )
 
 func Configure(ctx context.Context, database platformdb.DBTX) error {

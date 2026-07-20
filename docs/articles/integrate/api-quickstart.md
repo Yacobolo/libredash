@@ -4,7 +4,7 @@ The headless API is served beneath `/api/v1`. This guide verifies authentication
 
 ## Before you begin
 
-Choose a non-production or read-only workspace, create a narrowly scoped credential, and install `curl` plus the LibreDash CLI version compatible with the target. Keep a request-size limit and timeout policy ready for the client you will build.
+Choose a non-production or read-only workspace, create a narrowly scoped credential, and install `curl` plus the LeapView CLI version compatible with the target. Keep a request-size limit and timeout policy ready for the client you will build.
 
 Follow this discovery path:
 
@@ -19,8 +19,8 @@ Follow this discovery path:
 Use a dedicated service principal or a user token issued for this integration. Grant only the workspace and privileges needed for the first call. Store the values in the current shell from a secret manager:
 
 ```sh
-export LIBREDASH_TARGET=https://dash.example.com
-export LIBREDASH_API_TOKEN=<secret>
+export LEAPVIEW_TARGET=https://dash.example.com
+export LEAPVIEW_API_TOKEN=<secret>
 ```
 
 Do not include bearer tokens in URLs. Avoid shell tracing while secrets are present.
@@ -30,9 +30,9 @@ Do not include bearer tokens in URLs. Avoid shell tracing while secrets are pres
 ```sh
 curl --fail-with-body \
   --silent --show-error \
-  --header "Authorization: Bearer $LIBREDASH_API_TOKEN" \
+  --header "Authorization: Bearer $LEAPVIEW_API_TOKEN" \
   --header "Accept: application/json" \
-  "$LIBREDASH_TARGET/api/v1/me"
+  "$LEAPVIEW_TARGET/api/v1/me"
 ```
 
 A `200` response identifies the authenticated principal. `401` means the credential is absent, invalid, expired, or revoked. `403` on a later operation means authentication succeeded but effective privilege is insufficient.
@@ -44,9 +44,9 @@ Request a bounded page:
 ```sh
 curl --fail-with-body \
   --silent --show-error \
-  --header "Authorization: Bearer $LIBREDASH_API_TOKEN" \
+  --header "Authorization: Bearer $LEAPVIEW_API_TOKEN" \
   --header "Accept: application/json" \
-  "$LIBREDASH_TARGET/api/v1/workspaces?limit=50"
+  "$LEAPVIEW_TARGET/api/v1/workspaces?limit=50"
 ```
 
 Use stable workspace IDs from the response in path parameters. Titles are display metadata and are not safe identifiers. If the response provides a next-page token, pass it back as `pageToken` without inspecting or modifying it.
@@ -58,9 +58,9 @@ With a workspace ID such as `sales`:
 ```sh
 curl --fail-with-body \
   --silent --show-error \
-  --header "Authorization: Bearer $LIBREDASH_API_TOKEN" \
+  --header "Authorization: Bearer $LEAPVIEW_API_TOKEN" \
   --header "Accept: application/json" \
-  "$LIBREDASH_TARGET/api/v1/workspaces/sales/dashboards?limit=50"
+  "$LEAPVIEW_TARGET/api/v1/workspaces/sales/dashboards?limit=50"
 ```
 
 The BI API then provides dashboard description, page-component discovery, filter options, coordinated page queries, visual data, and table windows. Request and response bodies are defined by OpenAPI; do not infer them from browser network traffic.
@@ -70,11 +70,11 @@ The BI API then provides dashboard description, page-component discovery, filter
 The CLI can discover and call operations from the generated API registry:
 
 ```sh
-libredash api list
-libredash api describe <operation>
-libredash api call <operation> \
-  --target "$LIBREDASH_TARGET" \
-  --token "$LIBREDASH_API_TOKEN"
+leapview api list
+leapview api describe <operation>
+leapview api call <operation> \
+  --target "$LEAPVIEW_TARGET" \
+  --token "$LEAPVIEW_API_TOKEN"
 ```
 
 Use repeatable `--path key=value` and `--query key=value` arguments for parameters. Supply JSON through `--body-json` for small controlled values or `--body-file` to keep larger payloads out of shell quoting and history.

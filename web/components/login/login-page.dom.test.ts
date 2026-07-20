@@ -60,20 +60,23 @@ test('login page composes route UI', async () => {
   const page = await browser.newPage({ viewport: { width: 390, height: 820 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-login-page'))
-    await page.locator('ld-login-page').evaluate((element: any) => element.updateComplete)
+    await page.waitForFunction(() => customElements.get('lv-login-page'))
+    await page.locator('lv-login-page').evaluate((element: any) => element.updateComplete)
 
-    const state = await page.locator('ld-login-page').evaluate((element: any) => {
+    const state = await page.locator('lv-login-page').evaluate((element: any) => {
       const root = element.shadowRoot
       const panel = root.querySelector('.panel') as HTMLElement
       const hostRect = element.getBoundingClientRect()
       const panelRect = panel.getBoundingClientRect()
       const visibleThemeIcon = root.querySelector('[data-theme-icon]:not([hidden])') as HTMLElement | null
+      const brandMark = root.querySelector('lv-brand-mark') as HTMLElement | null
       return {
         title: root.querySelector('h1')?.textContent?.trim(),
-        hasBackground: Boolean(root.querySelector('ld-topology-background[data-login-background]')),
-        backgroundRegistered: Boolean(customElements.get('ld-topology-background')),
-        moduleSrc: root.querySelector('ld-topology-background')?.getAttribute('data-module-src'),
+        brandMarkCount: root.querySelectorAll('lv-brand-mark').length,
+        apertureCircleCount: brandMark?.shadowRoot?.querySelectorAll('circle[cx="12"][cy="12"][r="10"]').length,
+        hasBackground: Boolean(root.querySelector('lv-topology-background[data-login-background]')),
+        backgroundRegistered: Boolean(customElements.get('lv-topology-background')),
+        moduleSrc: root.querySelector('lv-topology-background')?.getAttribute('data-module-src'),
         hasThemeToggle: Boolean(root.querySelector('[data-theme-toggle]')),
         visibleThemeIcon: visibleThemeIcon?.getAttribute('data-theme-icon'),
         visibleThemeIconHasSvg: Boolean(visibleThemeIcon?.querySelector('svg')),
@@ -85,7 +88,9 @@ test('login page composes route UI', async () => {
     })
 
     expect(state).toEqual({
-      title: 'LibreDash',
+      title: 'LeapView',
+      brandMarkCount: 1,
+      apertureCircleCount: 1,
       hasBackground: true,
       backgroundRegistered: false,
       moduleSrc: '/static/topology-background.js?v=dev',
@@ -107,13 +112,13 @@ test('login background loader imports shadow DOM background module during idle t
   try {
     await page.goto(`${baseURL}/loader-test`)
     await page.waitForFunction(() => {
-      const host = document.querySelector('ld-login-page')
+      const host = document.querySelector('lv-login-page')
       const background = host?.shadowRoot?.querySelector('[data-login-background]')
       return Boolean((window as any).__loginBackgroundModuleLoaded && background?.getAttribute('data-background-state') === 'loaded')
     })
 
     const state = await page.evaluate(() => {
-      const host = document.querySelector('ld-login-page')
+      const host = document.querySelector('lv-login-page')
       const background = host?.shadowRoot?.querySelector('[data-login-background]')
       return {
         moduleLoaded: (window as any).__loginBackgroundModuleLoaded === true,
@@ -134,13 +139,13 @@ test('login theme toggle cycles shadow DOM icon and dispatches theme change', as
   const page = await browser.newPage({ viewport: { width: 390, height: 820 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-login-page'))
-    await page.locator('ld-login-page').evaluate((element: any) => element.updateComplete)
+    await page.waitForFunction(() => customElements.get('lv-login-page'))
+    await page.locator('lv-login-page').evaluate((element: any) => element.updateComplete)
 
-    const state = await page.locator('ld-login-page').evaluate(async (element: any) => {
+    const state = await page.locator('lv-login-page').evaluate(async (element: any) => {
       const root = element.shadowRoot
       const changes: string[] = []
-      document.addEventListener('libredash-theme-change', (event: CustomEvent) => changes.push(event.detail?.mode), { once: true })
+      document.addEventListener('leapview-theme-change', (event: CustomEvent) => changes.push(event.detail?.mode), { once: true })
       const toggle = root.querySelector('[data-theme-toggle]') as HTMLButtonElement
       toggle.click()
       await element.updateComplete
@@ -167,7 +172,7 @@ test('login theme toggle cycles shadow DOM icon and dispatches theme change', as
 function testDocument(): string {
   const page = {
     kind: 'login',
-    title: 'LibreDash',
+    title: 'LeapView',
     providerLabel: 'Sign in with Azure Active Directory',
     backgroundModuleSrc: '/static/topology-background.js?v=dev',
   }
@@ -177,12 +182,12 @@ function testDocument(): string {
       <head>
         <style>
           html, body { margin: 0; min-height: 100%; }
-          body { --fontStack-system: system-ui; --ld-bg-app: #f6f8fa; --ld-bg-panel: #fff; --ld-bg-control: #f6f8fa; --ld-bg-control-hover: #f3f4f6; --ld-fg-default: #24292f; --ld-fg-muted: #57606a; --ld-accent: #0969da; --bgColor-accent-emphasis: #0969da; --bgColor-inverse: #0d1117; --ld-topology-bg: #0d1117; --ld-border-default: 1px solid #d0d7de; --ld-radius-default: 6px; --base-size-12: 12px; --base-size-16: 16px; --base-size-20: 20px; --base-size-24: 24px; --control-medium-size: 32px; --control-xlarge-size: 40px; --ld-font-size-body-md: 16px; --ld-font-size-title-md: 20px; --ld-font-weight-medium: 500; --ld-font-weight-strong: 600; --ld-line-height-compact: 1.3; --shadow-resting-small: 0 1px 2px rgb(0 0 0 / .08); }
+          body { --fontStack-system: system-ui; --lv-bg-app: #f6f8fa; --lv-bg-panel: #fff; --lv-bg-control: #f6f8fa; --lv-bg-control-hover: #f3f4f6; --lv-fg-default: #24292f; --lv-fg-muted: #57606a; --lv-accent: #0969da; --bgColor-accent-emphasis: #0969da; --bgColor-inverse: #0d1117; --lv-topology-bg: #0d1117; --lv-border-default: 1px solid #d0d7de; --lv-radius-default: 6px; --base-size-12: 12px; --base-size-16: 16px; --base-size-20: 20px; --base-size-24: 24px; --control-medium-size: 32px; --control-xlarge-size: 40px; --lv-font-size-body-md: 16px; --lv-font-size-title-md: 20px; --lv-font-weight-medium: 500; --lv-font-weight-strong: 600; --lv-line-height-compact: 1.3; --shadow-resting-small: 0 1px 2px rgb(0 0 0 / .08); }
         </style>
       </head>
       <body>
         <main data-signals="${escapeHTML(JSON.stringify({ page }))}">
-          <ld-login-page></ld-login-page>
+          <lv-login-page></lv-login-page>
         </main>
         <script type="module" src="/static/vendor/datastar-1.0.2.js?v=dev"></script>
         <script type="module" src="/login-page-under-test.js"></script>
@@ -196,9 +201,9 @@ function loaderTestDocument(): string {
     <!doctype html>
     <html>
       <body>
-        <ld-login-page></ld-login-page>
+        <lv-login-page></lv-login-page>
         <script>
-          customElements.define('ld-login-page', class extends HTMLElement {
+          customElements.define('lv-login-page', class extends HTMLElement {
             connectedCallback() {
               this.attachShadow({ mode: 'open' }).innerHTML = '<div data-login-background data-module-src="/fake-topology-background.js"></div>'
             }

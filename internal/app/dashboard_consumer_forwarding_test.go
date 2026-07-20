@@ -4,12 +4,12 @@ import (
 	"context"
 	"testing"
 
-	queryauthz "github.com/Yacobolo/libredash/internal/analytics/query/authz"
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	"github.com/Yacobolo/libredash/internal/dashboard/command"
-	"github.com/Yacobolo/libredash/internal/dashboard/consumer"
-	dashboardstream "github.com/Yacobolo/libredash/internal/dashboard/stream"
-	"github.com/Yacobolo/libredash/internal/dataquery"
+	queryauthz "github.com/Yacobolo/leapview/internal/analytics/query/authz"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	"github.com/Yacobolo/leapview/internal/dashboard/command"
+	"github.com/Yacobolo/leapview/internal/dashboard/consumer"
+	dashboardstream "github.com/Yacobolo/leapview/internal/dashboard/stream"
+	"github.com/Yacobolo/leapview/internal/dataquery"
 )
 
 type consumerForwardingMetrics struct {

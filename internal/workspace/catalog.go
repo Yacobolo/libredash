@@ -1,9 +1,9 @@
 package workspace
 
 import (
-	"github.com/Yacobolo/libredash/internal/analytics/model"
-	"github.com/Yacobolo/libredash/internal/dashboard/report"
-	"github.com/Yacobolo/libredash/internal/refreshpipeline"
+	"github.com/Yacobolo/leapview/internal/analytics/model"
+	"github.com/Yacobolo/leapview/internal/dashboard/report"
+	"github.com/Yacobolo/leapview/internal/refreshpipeline"
 )
 
 type Catalog struct {

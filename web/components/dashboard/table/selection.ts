@@ -6,7 +6,7 @@ import {
   type InteractionSelectionMapping,
 } from '../interaction-selection'
 
-export const UI_ROW_SELECTION_FIELD = '__libredash.rowKey'
+export const UI_ROW_SELECTION_FIELD = '__leapview.rowKey'
 
 export type RowSelectionState = Record<string, boolean>
 

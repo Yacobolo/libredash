@@ -31,18 +31,18 @@ func TestGeneratedEnvironmentSchemaCompiles(t *testing.T) {
 func TestGeneratedEnvironmentSchemaEnforcesProductionRelationships(t *testing.T) {
 	schema := compileEnvironmentSchema(t)
 	valid := map[string]any{
-		"LIBREDASH_PRODUCTION":           "1",
-		"LIBREDASH_LOCAL_AUTH":           "true",
-		"LIBREDASH_CSRF_KEY":             "0123456789abcdef0123456789abcdef",
-		"LIBREDASH_METRICS_BEARER_TOKEN": "0123456789abcdef0123456789abcdef",
-		"LIBREDASH_ALLOWED_HOSTS":        "libredash.example.com",
-		"LIBREDASH_PUBLIC_URL":           "https://libredash.example.com",
-		"LIBREDASH_COOKIE_SECURE":        "true",
+		"LEAPVIEW_PRODUCTION":           "1",
+		"LEAPVIEW_LOCAL_AUTH":           "true",
+		"LEAPVIEW_CSRF_KEY":             "0123456789abcdef0123456789abcdef",
+		"LEAPVIEW_METRICS_BEARER_TOKEN": "0123456789abcdef0123456789abcdef",
+		"LEAPVIEW_ALLOWED_HOSTS":        "leapview.example.com",
+		"LEAPVIEW_PUBLIC_URL":           "https://leapview.example.com",
+		"LEAPVIEW_COOKIE_SECURE":        "true",
 	}
 	if err := schema.Validate(valid); err != nil {
 		t.Fatalf("valid production environment rejected: %v", err)
 	}
-	if err := schema.Validate(map[string]any{"LIBREDASH_PRODUCTION": "1"}); err == nil {
+	if err := schema.Validate(map[string]any{"LEAPVIEW_PRODUCTION": "1"}); err == nil {
 		t.Fatal("schema accepted production environment without authentication and secrets")
 	}
 }
@@ -59,7 +59,7 @@ func compileEnvironmentSchema(t *testing.T) *jsonschema.Schema {
 		t.Fatalf("unmarshal generated environment schema: %v", err)
 	}
 	compiler := jsonschema.NewCompiler()
-	const location = "https://libredash.dev/schemas/config/environment.schema.json"
+	const location = "https://leapview.dev/schemas/config/environment.schema.json"
 	if err := compiler.AddResource(location, document); err != nil {
 		t.Fatal(err)
 	}

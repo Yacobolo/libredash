@@ -5,8 +5,8 @@ import (
 	"net/url"
 	"strings"
 
-	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
-	apigencli "github.com/Yacobolo/libredash/internal/cli/gen"
+	apigenapi "github.com/Yacobolo/leapview/internal/api/gen"
+	apigencli "github.com/Yacobolo/leapview/internal/cli/gen"
 )
 
 func apiOperationURL(target, operationID string, pathParams map[string]string, query url.Values) (string, error) {

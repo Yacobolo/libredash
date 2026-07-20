@@ -8,8 +8,8 @@ import (
 	"strings"
 	"sync"
 
-	agentconfig "github.com/Yacobolo/libredash/internal/agent/config"
-	agentcore "github.com/Yacobolo/libredash/pkg/agent"
+	agentconfig "github.com/Yacobolo/leapview/internal/agent/config"
+	agentcore "github.com/Yacobolo/leapview/pkg/agent"
 )
 
 var (

@@ -11,12 +11,12 @@ function headers(): CommandHeaders {
 
 declare global {
   interface Window {
-    LibreDashCommand: {
+    LeapViewCommand: {
       headers(): CommandHeaders
     }
   }
 }
 
-window.LibreDashCommand = { headers }
+window.LeapViewCommand = { headers }
 
 export {}

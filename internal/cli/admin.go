@@ -13,15 +13,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/access"
-	accesssqlite "github.com/Yacobolo/libredash/internal/access/sqlite"
-	"github.com/Yacobolo/libredash/internal/config"
-	"github.com/Yacobolo/libredash/internal/instancelock"
-	"github.com/Yacobolo/libredash/internal/platform"
-	"github.com/Yacobolo/libredash/internal/securefs"
-	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
-	servingstatesqlite "github.com/Yacobolo/libredash/internal/servingstate/sqlite"
-	storagemaintenance "github.com/Yacobolo/libredash/internal/storage/maintenance"
+	"github.com/Yacobolo/leapview/internal/access"
+	accesssqlite "github.com/Yacobolo/leapview/internal/access/sqlite"
+	"github.com/Yacobolo/leapview/internal/config"
+	"github.com/Yacobolo/leapview/internal/instancelock"
+	"github.com/Yacobolo/leapview/internal/platform"
+	"github.com/Yacobolo/leapview/internal/securefs"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
+	servingstatesqlite "github.com/Yacobolo/leapview/internal/servingstate/sqlite"
+	storagemaintenance "github.com/Yacobolo/leapview/internal/storage/maintenance"
 	"github.com/spf13/cobra"
 )
 
@@ -66,7 +66,7 @@ func adminCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 	maintenance.Flags().IntVar(&opts.authStateDays, "auth-state-days", defaultAuthStateRetentionDays, "expired or revoked auth state retention in days; 0 disables auth-state pruning")
 	backup := &cobra.Command{
 		Use:   "backup",
-		Short: "Create a consistent LibreDash instance backup",
+		Short: "Create a consistent LeapView instance backup",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAdminBackup(ctx, opts, cmd.OutOrStdout())
 		},
@@ -75,20 +75,20 @@ func adminCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 	backup.Flags().BoolVar(&opts.databaseOnly, "database-only", false, "backup only the platform SQLite database")
 	restore := &cobra.Command{
 		Use:   "restore",
-		Short: "Restore LibreDash from a validated instance backup",
+		Short: "Restore LeapView from a validated instance backup",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAdminRestore(ctx, opts, cmd.InOrStdin(), cmd.OutOrStdout())
 		},
 	}
 	restore.Flags().StringVar(&opts.restoreFrom, "from", "", "backup archive path to restore")
 	restore.Flags().StringVar(&opts.restoreBefore, "current-out", "", "path for a backup of the current instance before replacement; - creates and discards a validated temporary checkpoint")
-	restore.Flags().BoolVar(&opts.confirmRestore, "confirm", false, "confirm replacement of the configured LibreDash instance")
+	restore.Flags().BoolVar(&opts.confirmRestore, "confirm", false, "confirm replacement of the configured LeapView instance")
 	restore.Flags().BoolVar(&opts.databaseOnly, "database-only", false, "restore only the platform SQLite database")
 	parent.AddCommand(initialize, storage, maintenance, backup, restore)
 	return parent
 }
 
-var errInstanceAlreadyInitialized = errors.New("LibreDash instance is already initialized")
+var errInstanceAlreadyInitialized = errors.New("LeapView instance is already initialized")
 
 const (
 	instanceInitializedSetting        = "instance.initialized"
@@ -219,7 +219,7 @@ func acknowledgeInitialCredentials(ctx context.Context) error {
 	}
 	if _, err := store.GetSetting(ctx, instanceInitializedSetting); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("LibreDash instance has not been initialized")
+			return fmt.Errorf("LeapView instance has not been initialized")
 		}
 		return err
 	}
@@ -310,13 +310,13 @@ func initialAdminEmail(cfg config.Config) (string, error) {
 	email := strings.TrimSpace(cfg.BootstrapEmail)
 	if email == "" {
 		if cfg.Production {
-			return "", fmt.Errorf("production instance initialization requires LIBREDASH_BOOTSTRAP_ADMIN_EMAIL")
+			return "", fmt.Errorf("production instance initialization requires LEAPVIEW_BOOTSTRAP_ADMIN_EMAIL")
 		}
 		email = "admin@localhost"
 	}
 	parsed, err := mail.ParseAddress(email)
 	if err != nil || parsed.Address == "" {
-		return "", fmt.Errorf("instance initialization requires a valid LIBREDASH_BOOTSTRAP_ADMIN_EMAIL")
+		return "", fmt.Errorf("instance initialization requires a valid LEAPVIEW_BOOTSTRAP_ADMIN_EMAIL")
 	}
 	return parsed.Address, nil
 }
@@ -330,7 +330,7 @@ func runAdminBackup(ctx context.Context, opts *rootOptions, out io.Writer) error
 	cfg := config.MustLoad()
 	if stream && opts.databaseOnly {
 		var err error
-		backupPath, err = unusedTemporaryPathIn(filepath.Dir(cfg.HomeDir), "libredash-backup-*.db")
+		backupPath, err = unusedTemporaryPathIn(filepath.Dir(cfg.HomeDir), "leapview-backup-*.db")
 		if err != nil {
 			return err
 		}
@@ -392,7 +392,7 @@ func runAdminRestore(ctx context.Context, opts *rootOptions, in io.Reader, out i
 			return fmt.Errorf("admin restore --from - requires standard input")
 		}
 		var err error
-		restorePath, err = copyReaderToTemporaryFile(in, filepath.Dir(cfg.HomeDir), "libredash-restore-*.db")
+		restorePath, err = copyReaderToTemporaryFile(in, filepath.Dir(cfg.HomeDir), "leapview-restore-*.db")
 		if err != nil {
 			return err
 		}
@@ -404,7 +404,7 @@ func runAdminRestore(ctx context.Context, opts *rootOptions, in io.Reader, out i
 	restoreBefore := opts.restoreBefore
 	if restoreBefore == "-" {
 		var err error
-		restoreBefore, err = unusedTemporaryPathIn(filepath.Dir(cfg.HomeDir), "libredash-current-backup-*.tar.gz")
+		restoreBefore, err = unusedTemporaryPathIn(filepath.Dir(cfg.HomeDir), "leapview-current-backup-*.tar.gz")
 		if err != nil {
 			return err
 		}
@@ -558,7 +558,7 @@ func validateFullInstanceArchiveLayout(cfg config.Config) error {
 		}
 		rel, err := filepath.Rel(homeAbs, pathAbs)
 		if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			return fmt.Errorf("full instance backup/restore requires %s path inside LIBREDASH_HOME; got %s outside %s", label, path, cfg.HomeDir)
+			return fmt.Errorf("full instance backup/restore requires %s path inside LEAPVIEW_HOME; got %s outside %s", label, path, cfg.HomeDir)
 		}
 	}
 	return nil
@@ -599,7 +599,7 @@ func offlineInstanceEnvironment(ctx context.Context, store *platform.Store, cfg 
 	bound, err := store.InstanceEnvironment(ctx)
 	if err == nil {
 		if requested := strings.TrimSpace(cfg.Environment); requested != "" && requested != bound {
-			return "", fmt.Errorf("LibreDash instance is bound to environment %q, not %q", bound, requested)
+			return "", fmt.Errorf("LeapView instance is bound to environment %q, not %q", bound, requested)
 		}
 		return servingstate.Environment(bound), nil
 	}

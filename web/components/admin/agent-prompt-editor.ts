@@ -19,26 +19,26 @@ class AgentPromptEditor extends LitElement {
     :host {
       display: block;
       min-width: 0;
-      color: var(--ld-fg-default);
-      --ld-agent-prompt-font-size: var(--ld-font-size-caption);
-      --ld-agent-prompt-line-height: var(--ld-line-height-snug);
-      font-family: var(--ld-font-family-ui, var(--fontStack-system));
+      color: var(--lv-fg-default);
+      --lv-agent-prompt-font-size: var(--lv-font-size-caption);
+      --lv-agent-prompt-line-height: var(--lv-line-height-snug);
+      font-family: var(--lv-font-family-ui, var(--fontStack-system));
     }
 
     .prompt-editor {
       display: grid;
       min-width: 0;
       overflow: hidden;
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-panel);
+      border: var(--lv-border-muted);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-panel);
     }
 
     .prompt-status {
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
-      line-height: var(--ld-line-height-tight);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
+      line-height: var(--lv-line-height-tight);
     }
 
     .prompt-control-row {
@@ -67,20 +67,20 @@ class AgentPromptEditor extends LitElement {
     .mode-toggle {
       display: inline-flex;
       overflow: hidden;
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-panel-muted);
+      border: var(--lv-border-muted);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-panel-muted);
       padding: 2px;
     }
 
     .mode-toggle button,
     .save-button {
       border: 0;
-      border-radius: calc(var(--ld-radius-default) - 2px);
+      border-radius: calc(var(--lv-radius-default) - 2px);
       font: inherit;
-      font-size: var(--ld-font-size-body-sm);
-      font-weight: var(--ld-font-weight-strong);
-      line-height: var(--ld-line-height-compact);
+      font-size: var(--lv-font-size-body-sm);
+      font-weight: var(--lv-font-weight-strong);
+      line-height: var(--lv-line-height-compact);
       cursor: pointer;
     }
 
@@ -91,18 +91,18 @@ class AgentPromptEditor extends LitElement {
       place-items: center;
       background: transparent;
       padding: 0;
-      color: var(--ld-fg-muted);
+      color: var(--lv-fg-muted);
     }
 
     .mode-toggle button.is-active {
-      background: var(--ld-bg-panel);
-      color: var(--ld-fg-default);
+      background: var(--lv-bg-panel);
+      color: var(--lv-fg-default);
       box-shadow: var(--shadow-inset);
     }
 
     .mode-toggle button:focus-visible,
     .save-button:focus-visible {
-      outline: 2px solid var(--ld-fg-accent);
+      outline: 2px solid var(--lv-fg-accent);
       outline-offset: 2px;
     }
 
@@ -112,24 +112,24 @@ class AgentPromptEditor extends LitElement {
       padding: var(--base-size-8) var(--base-size-12) var(--base-size-12);
     }
 
-    ld-code-editor,
-    ld-markdown-view {
+    lv-code-editor,
+    lv-markdown-view {
       box-sizing: border-box;
       width: 100%;
       min-height: 22rem;
     }
 
-    ld-markdown-view {
+    lv-markdown-view {
       max-height: 42rem;
       overflow: auto;
       padding: var(--base-size-16);
     }
 
-    ld-code-editor {
-      --ld-code-editor-border: 0;
-      --ld-code-editor-font-size: var(--ld-agent-prompt-font-size);
-      --ld-code-editor-line-height: var(--ld-agent-prompt-line-height);
-      --ld-code-editor-radius: 0;
+    lv-code-editor {
+      --lv-code-editor-border: 0;
+      --lv-code-editor-font-size: var(--lv-agent-prompt-font-size);
+      --lv-code-editor-line-height: var(--lv-agent-prompt-line-height);
+      --lv-code-editor-radius: 0;
     }
 
     .prompt-panel {
@@ -146,9 +146,9 @@ class AgentPromptEditor extends LitElement {
       display: inline-flex;
       align-items: center;
       gap: var(--base-size-6);
-      background: var(--ld-bg-accent);
+      background: var(--lv-bg-accent);
       padding: var(--base-size-6) var(--base-size-12);
-      color: var(--ld-fg-on-accent);
+      color: var(--lv-fg-on-accent);
     }
 
     .save-button:disabled {
@@ -254,19 +254,19 @@ class AgentPromptEditor extends LitElement {
 
   private renderEditor(prompt: string) {
     return html`
-      <ld-code-editor
+      <lv-code-editor
         aria-label="System prompt"
         language="markdown"
         value=${prompt}
         .value=${prompt}
         ?disabled=${this.disabled}
-        @ld-code-editor-change=${this.updateDraftFromCodeEditor}
-      ></ld-code-editor>
+        @lv-code-editor-change=${this.updateDraftFromCodeEditor}
+      ></lv-code-editor>
     `
   }
 
   private renderPreview(prompt: string) {
-    return html`<ld-markdown-view compact .value=${prompt} emptyText="No system prompt configured."></ld-markdown-view>`
+    return html`<lv-markdown-view compact .value=${prompt} emptyText="No system prompt configured."></lv-markdown-view>`
   }
 
   private updateDraftFromCodeEditor(event: CustomEvent<{ value: string }>): void {
@@ -278,7 +278,7 @@ class AgentPromptEditor extends LitElement {
   private savePrompt(): void {
     const systemPrompt = this.currentPrompt.trim()
     if (this.disabled || !systemPrompt) return
-    this.dispatchEvent(new CustomEvent('ld-agent-system-prompt-save', {
+    this.dispatchEvent(new CustomEvent('lv-agent-system-prompt-save', {
       bubbles: true,
       composed: true,
       detail: { systemPrompt },
@@ -320,4 +320,4 @@ class AgentPromptEditor extends LitElement {
   }
 }
 
-if (!customElements.get('ld-agent-prompt-editor')) customElements.define('ld-agent-prompt-editor', AgentPromptEditor)
+if (!customElements.get('lv-agent-prompt-editor')) customElements.define('lv-agent-prompt-editor', AgentPromptEditor)

@@ -3,9 +3,9 @@ package command
 import (
 	"fmt"
 
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	"github.com/Yacobolo/libredash/internal/dashboard/report"
-	"github.com/Yacobolo/libredash/internal/dashboard/reportmodel"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	"github.com/Yacobolo/leapview/internal/dashboard/report"
+	"github.com/Yacobolo/leapview/internal/dashboard/reportmodel"
 )
 
 type Metrics interface {

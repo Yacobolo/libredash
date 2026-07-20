@@ -3,7 +3,7 @@ package ui
 import (
 	"testing"
 
-	uisignals "github.com/Yacobolo/libredash/internal/ui/signals"
+	uisignals "github.com/Yacobolo/leapview/internal/ui/signals"
 )
 
 func TestChatSignalPatchStreamsSidebarHistoryState(t *testing.T) {

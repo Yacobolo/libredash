@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
-	"github.com/Yacobolo/libredash/internal/workspace"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	"github.com/Yacobolo/leapview/internal/workspace"
 )
 
 func ExtractLineage(workspaceID workspace.WorkspaceID, servingStateID workspace.ServingStateID, definition *workspace.Definition) (workspace.AssetGraph, error) {

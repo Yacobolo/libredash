@@ -48,7 +48,7 @@ test('asset lineage graph carries React Flow layout styles inside shadow hosts',
   const page = await browser.newPage({ viewport: { width: 1180, height: 760 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-asset-lineage-graph'))
+    await page.waitForFunction(() => customElements.get('lv-asset-lineage-graph'))
     await page.waitForFunction(() => {
       const host = document.querySelector('lineage-test-host') as HTMLElement & { shadowRoot: ShadowRoot }
       return Boolean(host?.shadowRoot?.querySelector('.react-flow__node'))
@@ -56,7 +56,7 @@ test('asset lineage graph carries React Flow layout styles inside shadow hosts',
 
     const state = await page.evaluate(() => {
       const host = document.querySelector('lineage-test-host') as HTMLElement & { shadowRoot: ShadowRoot }
-      const graph = host.shadowRoot.querySelector('ld-asset-lineage-graph') as HTMLElement
+      const graph = host.shadowRoot.querySelector('lv-asset-lineage-graph') as HTMLElement
       const flow = graph.querySelector('.react-flow') as HTMLElement
       const viewport = graph.querySelector('.react-flow__viewport') as HTMLElement
       const node = graph.querySelector('.react-flow__node') as HTMLElement
@@ -108,24 +108,24 @@ function testDocument(): string {
         <style>
           body {
             margin: 0;
-            --ld-bg-app: #f6f8fa;
-            --ld-bg-page: #f6f8fa;
-            --ld-bg-panel: #fff;
-            --ld-bg-panel-muted: #f6f8fa;
-            --ld-fg-default: #24292f;
-            --ld-fg-muted: #57606a;
-            --ld-fg-link: #0969da;
-            --ld-line-muted: #d8dee4;
-            --ld-line-accent: #0969da;
-            --ld-fg-on-emphasis: #fff;
-            --ld-font-family-mono: ui-monospace, SFMono-Regular, Consolas, monospace;
-            --ld-font-size-caption: 12px;
-            --ld-font-size-body-sm: 14px;
-            --ld-font-size-body-md: 16px;
-            --ld-font-weight-medium: 500;
-            --ld-font-weight-strong: 600;
-            --ld-line-height-tight: 1.2;
-            --ld-line-height-default: 1.5;
+            --lv-bg-app: #f6f8fa;
+            --lv-bg-page: #f6f8fa;
+            --lv-bg-panel: #fff;
+            --lv-bg-panel-muted: #f6f8fa;
+            --lv-fg-default: #24292f;
+            --lv-fg-muted: #57606a;
+            --lv-fg-link: #0969da;
+            --lv-line-muted: #d8dee4;
+            --lv-line-accent: #0969da;
+            --lv-fg-on-emphasis: #fff;
+            --lv-font-family-mono: ui-monospace, SFMono-Regular, Consolas, monospace;
+            --lv-font-size-caption: 12px;
+            --lv-font-size-body-sm: 14px;
+            --lv-font-size-body-md: 16px;
+            --lv-font-weight-medium: 500;
+            --lv-font-weight-strong: 600;
+            --lv-line-height-tight: 1.2;
+            --lv-line-height-default: 1.5;
             --base-size-2: 2px;
             --base-size-4: 4px;
             --base-size-6: 6px;
@@ -136,7 +136,7 @@ function testDocument(): string {
             --borderWidth-default: 1px;
             --borderWidth-thicker: 2px;
             --borderRadius-default: 6px;
-            --ld-border-default: 1px solid #d0d7de;
+            --lv-border-default: 1px solid #d0d7de;
             --shadow-resting-small: none;
           }
         </style>
@@ -155,8 +155,8 @@ function testDocument(): string {
           customElements.define('lineage-test-host', class extends HTMLElement {
             connectedCallback() {
               const root = this.attachShadow({ mode: 'open' })
-              root.innerHTML = '<ld-asset-lineage-graph style="display:block;width:900px;height:420px"></ld-asset-lineage-graph>'
-              root.querySelector('ld-asset-lineage-graph').graph = graph
+              root.innerHTML = '<lv-asset-lineage-graph style="display:block;width:900px;height:420px"></lv-asset-lineage-graph>'
+              root.querySelector('lv-asset-lineage-graph').graph = graph
             }
           })
         </script>

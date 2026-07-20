@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/config"
-	"github.com/Yacobolo/libredash/internal/manageddata/control"
-	"github.com/Yacobolo/libredash/internal/manageddata/maintenance"
-	"github.com/Yacobolo/libredash/internal/manageddata/storage"
+	"github.com/Yacobolo/leapview/internal/config"
+	"github.com/Yacobolo/leapview/internal/manageddata/control"
+	"github.com/Yacobolo/leapview/internal/manageddata/maintenance"
+	"github.com/Yacobolo/leapview/internal/manageddata/storage"
 )
 
 func TestNewManagedDataStorageLocal(t *testing.T) {

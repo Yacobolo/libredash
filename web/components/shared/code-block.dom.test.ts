@@ -48,7 +48,7 @@ test('code block highlights product and documentation languages with GitHub them
   const page = await browser.newPage({ viewport: { width: 900, height: 700 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-code-block'))
+    await page.waitForFunction(() => customElements.get('lv-code-block'))
 
     const state = await page.evaluate(async () => {
       const waitFor = async (predicate: () => boolean, timeoutMs = 5000): Promise<void> => {
@@ -60,21 +60,21 @@ test('code block highlights product and documentation languages with GitHub them
       }
 
       document.documentElement.style.colorScheme = 'light'
-      const json = document.createElement('ld-code-block') as any
+      const json = document.createElement('lv-code-block') as any
       json.language = 'json'
       json.code = '{\n  "ok": true,\n  "count": 3\n}'
       document.body.append(json)
       await waitFor(() => Boolean(json.querySelector('.shiki')))
 
-      const toon = document.createElement('ld-code-block') as any
+      const toon = document.createElement('lv-code-block') as any
       toon.language = 'toon'
       toon.code = 'items[2]{id,title}:\n  1,Sales\n  2,Ops\ncount: 2'
       document.body.append(toon)
       await waitFor(() => Boolean(toon.querySelector('.shiki')))
 
-      const yaml = document.createElement('ld-code-block') as any
+      const yaml = document.createElement('lv-code-block') as any
       yaml.language = 'yaml'
-      yaml.code = 'apiVersion: libredash.dev/v1\nkind: Project'
+      yaml.code = 'apiVersion: leapview.dev/v1\nkind: Project'
       yaml.highlightedLines = [2]
       yaml.copy = true
       yaml.toolbar = true
@@ -92,39 +92,39 @@ test('code block highlights product and documentation languages with GitHub them
       ;(yaml.querySelector('.code-block-copy') as HTMLButtonElement).click()
       await waitFor(() => yaml.querySelector('.code-block-copy')?.getAttribute('aria-label') === 'Code copied')
 
-      const shell = document.createElement('ld-code-block') as any
+      const shell = document.createElement('lv-code-block') as any
       shell.language = 'sh'
-      shell.code = 'libredash validate --project dashboards/libredash.yaml'
+      shell.code = 'leapview validate --project dashboards/leapview.yaml'
       document.body.append(shell)
       await waitFor(() => Boolean(shell.querySelector('.shiki')))
 
-      const formattedSQL = document.createElement('ld-code-block') as any
+      const formattedSQL = document.createElement('lv-code-block') as any
       formattedSQL.language = 'sql'
       formattedSQL.code = 'select status from orders'
       formattedSQL.format = true
       document.body.append(formattedSQL)
       await formattedSQL.updateComplete
 
-      const text = document.createElement('ld-code-block') as any
+      const text = document.createElement('lv-code-block') as any
       text.language = 'text'
       text.code = 'plain text'
       document.body.append(text)
       await text.updateComplete
 
-      const unknown = document.createElement('ld-code-block') as any
+      const unknown = document.createElement('lv-code-block') as any
       unknown.language = 'made-up'
       unknown.code = 'fallback text'
       document.body.append(unknown)
       await unknown.updateComplete
 
-      const compact = document.createElement('ld-code-block') as any
+      const compact = document.createElement('lv-code-block') as any
       compact.compact = true
       compact.language = 'json'
       compact.code = '{"compact":true}'
       document.body.append(compact)
       await compact.updateComplete
       document.documentElement.style.colorScheme = 'dark'
-      document.dispatchEvent(new CustomEvent('libredash-theme-applied'))
+      document.dispatchEvent(new CustomEvent('leapview-theme-applied'))
       await waitFor(() => Boolean(yaml.querySelector('.shiki.github-dark')))
       const compactPre = compact.querySelector('pre') as HTMLElement
 
@@ -162,14 +162,14 @@ test('code block highlights product and documentation languages with GitHub them
     expect(state.formattedSQL).toMatch(/\nFROM\n\s+orders/)
     expect(state.jsonText).toContain('"ok"')
     expect(state.toonText).toContain('items[2]{id,title}:')
-    expect(state.yamlText).toContain('apiVersion: libredash.dev/v1')
+    expect(state.yamlText).toContain('apiVersion: leapview.dev/v1')
     expect(state.yamlLanguage).toBe('YAML')
     expect(state.yamlHighlightedLines).toEqual(['kind: Project'])
     expect(state.yamlFocusedLines).toEqual(['kind: Project'])
     expect(state.yamlFocusCleared).toBe(true)
     expect(state.yamlHighlightMarkerWidth).toBe('4px')
     expect(state.yamlCopyLabel).toBe('Code copied')
-    expect(state.copiedCode).toBe('apiVersion: libredash.dev/v1\nkind: Project')
+    expect(state.copiedCode).toBe('apiVersion: leapview.dev/v1\nkind: Project')
     expect(state.textFallback).toBe(true)
     expect(state.textError).toBe(false)
     expect(state.unknownFallback).toBe(true)
@@ -189,8 +189,8 @@ function testDocument(): string {
       <head>
         <style>
           html, body { margin: 0; min-height: 100%; }
-          body { --fontStack-monospace: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; --ld-bg-panel-muted: #f6f8fa; --ld-fg-default: #24292f; --ld-fg-muted: #57606a; --ld-border-muted: 1px solid #d8dee4; --borderRadius-medium: 6px; --base-size-4: 4px; --base-size-8: 8px; --base-size-12: 12px; --base-size-16: 16px; --ld-font-size-caption: 12px; --ld-font-size-body-sm: 14px; --ld-line-height-snug: 1.35; }
-          ld-code-block { display: block; width: 760px; margin: 24px; }
+          body { --fontStack-monospace: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; --lv-bg-panel-muted: #f6f8fa; --lv-fg-default: #24292f; --lv-fg-muted: #57606a; --lv-border-muted: 1px solid #d8dee4; --borderRadius-medium: 6px; --base-size-4: 4px; --base-size-8: 8px; --base-size-12: 12px; --base-size-16: 16px; --lv-font-size-caption: 12px; --lv-font-size-body-sm: 14px; --lv-line-height-snug: 1.35; }
+          lv-code-block { display: block; width: 760px; margin: 24px; }
         </style>
       </head>
       <body>

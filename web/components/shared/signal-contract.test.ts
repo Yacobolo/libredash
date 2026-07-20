@@ -27,5 +27,5 @@ test('checkSignalContract warns for partially hydrated signal roots', () => {
 
   checkSignalContract('route page', { kind: 'catalog' }, { kind: 'required', dashboards: 'required' })
 
-  expect(warnings).toEqual([['[LibreDash] route page is missing signal fields: dashboards']])
+  expect(warnings).toEqual([['[LeapView] route page is missing signal fields: dashboards']])
 })

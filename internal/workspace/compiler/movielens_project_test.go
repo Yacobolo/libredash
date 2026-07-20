@@ -4,11 +4,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/workspace"
+	"github.com/Yacobolo/leapview/internal/workspace"
 )
 
 func TestMovieLensExperimentProjectCompiles(t *testing.T) {
-	projectPath := filepath.Join("..", "..", "..", "dashboards", "experiments", "movielens", "libredash.yaml")
+	projectPath := filepath.Join("..", "..", "..", "dashboards", "experiments", "movielens", "leapview.yaml")
 
 	compiled, err := CompileProject(projectPath, Options{ServingStateID: "dep_test"})
 	if err != nil {
@@ -59,7 +59,7 @@ func TestMovieLensExperimentProjectCompiles(t *testing.T) {
 }
 
 func TestMovieLensExperimentStaysOutOfDefaultProject(t *testing.T) {
-	defaultProjectPath := filepath.Join("..", "..", "..", "dashboards", "libredash.yaml")
+	defaultProjectPath := filepath.Join("..", "..", "..", "dashboards", "leapview.yaml")
 
 	compiled, err := CompileProject(defaultProjectPath, Options{ServingStateID: "dep_test"})
 	if err != nil {

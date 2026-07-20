@@ -4,10 +4,10 @@ import (
 	"errors"
 	"net/http"
 
-	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
-	"github.com/Yacobolo/libredash/internal/deployment"
-	"github.com/Yacobolo/libredash/internal/deployment/apiadapter"
-	"github.com/Yacobolo/libredash/internal/release"
+	apigenapi "github.com/Yacobolo/leapview/internal/api/gen"
+	"github.com/Yacobolo/leapview/internal/deployment"
+	"github.com/Yacobolo/leapview/internal/deployment/apiadapter"
+	"github.com/Yacobolo/leapview/internal/release"
 )
 
 func (a apiGenAdapter) CreateDeployment(w http.ResponseWriter, r *http.Request, project string, headers apigenapi.GenCreateDeploymentHeaders) {

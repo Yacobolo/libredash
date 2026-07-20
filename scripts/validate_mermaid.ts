@@ -71,7 +71,7 @@ async function loadMermaidParser(): Promise<(typeof import('mermaid'))['default'
   mermaidParser = (async () => {
     if (typeof document === 'undefined') {
       const { JSDOM } = await import('jsdom')
-      const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'https://docs.libredash.dev/' })
+      const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'https://docs.leapview.dev/' })
       const browserGlobals = [
         'window',
         'document',

@@ -12,32 +12,32 @@ import (
 	"syscall"
 	"time"
 
-	oidcauth "github.com/Yacobolo/libredash/internal/access/oidc"
-	accesssqlite "github.com/Yacobolo/libredash/internal/access/sqlite"
-	"github.com/Yacobolo/libredash/internal/agent"
-	agentsqlite "github.com/Yacobolo/libredash/internal/agent/sqlite"
-	materializesqlite "github.com/Yacobolo/libredash/internal/analytics/materialize/sqlite"
-	"github.com/Yacobolo/libredash/internal/app"
-	"github.com/Yacobolo/libredash/internal/config"
-	projectdeployment "github.com/Yacobolo/libredash/internal/deployment"
-	deploymentapiadapter "github.com/Yacobolo/libredash/internal/deployment/apiadapter"
-	deploymenthttp "github.com/Yacobolo/libredash/internal/deployment/http"
-	deploymentsqlite "github.com/Yacobolo/libredash/internal/deployment/sqlite"
-	"github.com/Yacobolo/libredash/internal/execution"
-	"github.com/Yacobolo/libredash/internal/instancelock"
-	manageddataapiadapter "github.com/Yacobolo/libredash/internal/manageddata/apiadapter"
-	manageddatahttp "github.com/Yacobolo/libredash/internal/manageddata/http"
-	manageddataresolver "github.com/Yacobolo/libredash/internal/manageddata/resolver"
-	"github.com/Yacobolo/libredash/internal/manageddata/s3multipart"
-	manageddatasqlite "github.com/Yacobolo/libredash/internal/manageddata/sqlite"
-	"github.com/Yacobolo/libredash/internal/platform"
-	"github.com/Yacobolo/libredash/internal/runtimehost"
-	"github.com/Yacobolo/libredash/internal/securefs"
-	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
-	servingstatesqlite "github.com/Yacobolo/libredash/internal/servingstate/sqlite"
-	storagemaintenance "github.com/Yacobolo/libredash/internal/storage/maintenance"
-	"github.com/Yacobolo/libredash/internal/workspace"
-	workspacesqlite "github.com/Yacobolo/libredash/internal/workspace/sqlite"
+	oidcauth "github.com/Yacobolo/leapview/internal/access/oidc"
+	accesssqlite "github.com/Yacobolo/leapview/internal/access/sqlite"
+	"github.com/Yacobolo/leapview/internal/agent"
+	agentsqlite "github.com/Yacobolo/leapview/internal/agent/sqlite"
+	materializesqlite "github.com/Yacobolo/leapview/internal/analytics/materialize/sqlite"
+	"github.com/Yacobolo/leapview/internal/app"
+	"github.com/Yacobolo/leapview/internal/config"
+	projectdeployment "github.com/Yacobolo/leapview/internal/deployment"
+	deploymentapiadapter "github.com/Yacobolo/leapview/internal/deployment/apiadapter"
+	deploymenthttp "github.com/Yacobolo/leapview/internal/deployment/http"
+	deploymentsqlite "github.com/Yacobolo/leapview/internal/deployment/sqlite"
+	"github.com/Yacobolo/leapview/internal/execution"
+	"github.com/Yacobolo/leapview/internal/instancelock"
+	manageddataapiadapter "github.com/Yacobolo/leapview/internal/manageddata/apiadapter"
+	manageddatahttp "github.com/Yacobolo/leapview/internal/manageddata/http"
+	manageddataresolver "github.com/Yacobolo/leapview/internal/manageddata/resolver"
+	"github.com/Yacobolo/leapview/internal/manageddata/s3multipart"
+	manageddatasqlite "github.com/Yacobolo/leapview/internal/manageddata/sqlite"
+	"github.com/Yacobolo/leapview/internal/platform"
+	"github.com/Yacobolo/leapview/internal/runtimehost"
+	"github.com/Yacobolo/leapview/internal/securefs"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
+	servingstatesqlite "github.com/Yacobolo/leapview/internal/servingstate/sqlite"
+	storagemaintenance "github.com/Yacobolo/leapview/internal/storage/maintenance"
+	"github.com/Yacobolo/leapview/internal/workspace"
+	workspacesqlite "github.com/Yacobolo/leapview/internal/workspace/sqlite"
 	"github.com/spf13/cobra"
 )
 
@@ -46,14 +46,14 @@ const defaultHTTPServerShutdownTimeout = 15 * time.Second
 func serveCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "serve",
-		Short: "Run the LibreDash HTTP server",
+		Short: "Run the LeapView HTTP server",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.environment = serveEnvironmentFlagValue(cmd.Flags().Changed("environment"), opts.environment)
 			return runServe(ctx, opts)
 		},
 	}
 	cmd.Flags().StringVar(&opts.addr, "addr", "", "listen address; defaults to the configured address")
-	cmd.Flags().StringVar(&opts.environment, "environment", "", "instance environment; overrides LIBREDASH_ENVIRONMENT, then defaults to prod in production and dev otherwise")
+	cmd.Flags().StringVar(&opts.environment, "environment", "", "instance environment; overrides LEAPVIEW_ENVIRONMENT, then defaults to prod in production and dev otherwise")
 	cmd.Flags().BoolVar(&opts.production, "production", false, "serve active serving state from the platform DB")
 	return cmd
 }
@@ -87,7 +87,7 @@ func runServe(ctx context.Context, opts *rootOptions) error {
 	serveCtx, stopServe := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stopServe()
 	server.StartBackgroundJobs(serveCtx)
-	slog.Info("LibreDash listening", "url", listenURL(addr), "environment", environment)
+	slog.Info("LeapView listening", "url", listenURL(addr), "environment", environment)
 	err = runHTTPServer(serveCtx, productionHTTPServer(addr, server.Routes()))
 	stopServe()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), defaultHTTPServerShutdownTimeout)

@@ -6,10 +6,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/configspec"
+	"github.com/Yacobolo/leapview/internal/configspec"
 )
 
-const versionEnv = configspec.EnvLIBREDASH_ASSET_VERSION
+const versionEnv = configspec.EnvLEAPVIEW_ASSET_VERSION
 const generatedVersionPath = "static/asset-version.txt"
 
 const DatastarScriptPath = "/static/vendor/datastar-1.0.2.js"
@@ -34,7 +34,7 @@ func Version() string {
 }
 
 func Production() bool {
-	value := strings.TrimSpace(os.Getenv(configspec.EnvLIBREDASH_PRODUCTION))
+	value := strings.TrimSpace(os.Getenv(configspec.EnvLEAPVIEW_PRODUCTION))
 	if value == "" {
 		return false
 	}

@@ -12,25 +12,25 @@ import (
 	"text/tabwriter"
 	"time"
 
-	agenttools "github.com/Yacobolo/libredash/internal/agent/tools"
-	"github.com/Yacobolo/libredash/internal/api"
-	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
-	agentcore "github.com/Yacobolo/libredash/pkg/agent"
+	agenttools "github.com/Yacobolo/leapview/internal/agent/tools"
+	"github.com/Yacobolo/leapview/internal/api"
+	apigenapi "github.com/Yacobolo/leapview/internal/api/gen"
+	agentcore "github.com/Yacobolo/leapview/pkg/agent"
 	apigenagenttool "github.com/Yacobolo/toolbelt/apigen/runtime/agenttool"
 	"github.com/spf13/cobra"
 )
 
 func agentCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
-	parent := &cobra.Command{Use: "agent", Short: "Use the LibreDash read-only agent"}
+	parent := &cobra.Command{Use: "agent", Short: "Use the LeapView read-only agent"}
 	ask := &cobra.Command{
 		Use:   "ask [question]",
-		Short: "Ask the LibreDash read-only agent a question",
+		Short: "Ask the LeapView read-only agent a question",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAgentAsk(ctx, opts, args[0])
 		},
 	}
-	ask.Flags().StringVar(&opts.target, "target", "", "LibreDash server URL")
+	ask.Flags().StringVar(&opts.target, "target", "", "LeapView server URL")
 	ask.Flags().StringVar(&opts.token, "token", "", "API token")
 	ask.Flags().StringVar(&opts.conversation, "conversation", "", "existing agent conversation id")
 	ask.Flags().BoolVar(&opts.jsonOutput, "json", false, "print JSON response")
@@ -42,7 +42,7 @@ func agentCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 			return runAgentConversations(ctx, opts)
 		},
 	}
-	conversations.Flags().StringVar(&opts.target, "target", "", "LibreDash server URL")
+	conversations.Flags().StringVar(&opts.target, "target", "", "LeapView server URL")
 	conversations.Flags().StringVar(&opts.token, "token", "", "API token")
 	conversations.Flags().BoolVar(&opts.jsonOutput, "json", false, "print JSON response")
 	addPaginationFlags(conversations, opts)

@@ -7,10 +7,10 @@ Start at the first boundary that reports failure and preserve the last active st
 Run production validation in the same environment as the service:
 
 ```sh
-libredash config validate --production
+leapview config validate --production
 ```
 
-Confirm `LIBREDASH_HOME`, DuckLake catalog, analytical data, and managed-data directories exist and are writable by the service identity. Check remote catalog and object-store connectivity, free space, file descriptor limits, and port binding.
+Confirm `LEAPVIEW_HOME`, DuckLake catalog, analytical data, and managed-data directories exist and are writable by the service identity. Check remote catalog and object-store connectivity, free space, file descriptor limits, and port binding.
 
 Verify required secrets are present by name without printing their values. An incomplete OIDC, Azure, S3, or credential pair is intentionally rejected.
 
@@ -62,7 +62,7 @@ Do not increase concurrency until CPU, memory, disk, and catalog write capacity 
 Identify whether growth is backups, managed upload staging, managed objects, DuckLake catalog, analytical Parquet, logs, or runtime cache. Run storage cleanup without `--apply` first:
 
 ```sh
-libredash admin storage cleanup
+leapview admin storage cleanup
 ```
 
 Review protected serving states and query leases, then use `--apply` only under the approved maintenance procedure. Do not delete catalog rows or Parquet objects manually.

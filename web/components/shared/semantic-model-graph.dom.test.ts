@@ -52,12 +52,12 @@ for (const viewport of [
     const page = await browser.newPage({ viewport })
     try {
       await page.goto(baseURL)
-      await page.waitForFunction(() => customElements.get('ld-semantic-model-graph'))
-      await page.waitForFunction(() => document.querySelectorAll('ld-semantic-model-graph .react-flow__node').length >= 2)
-      await page.waitForFunction(() => document.querySelectorAll('ld-semantic-model-graph .react-flow__edge').length >= 1)
+      await page.waitForFunction(() => customElements.get('lv-semantic-model-graph'))
+      await page.waitForFunction(() => document.querySelectorAll('lv-semantic-model-graph .react-flow__node').length >= 2)
+      await page.waitForFunction(() => document.querySelectorAll('lv-semantic-model-graph .react-flow__edge').length >= 1)
 
       const state = await page.evaluate(() => {
-        const graph = document.querySelector('ld-semantic-model-graph') as HTMLElement
+        const graph = document.querySelector('lv-semantic-model-graph') as HTMLElement
         const flow = graph.querySelector('.react-flow') as HTMLElement
         const nodes = Array.from(graph.querySelectorAll('.react-flow__node')) as HTMLElement[]
         const edges = Array.from(graph.querySelectorAll('.react-flow__edge')) as HTMLElement[]
@@ -148,9 +148,9 @@ test('semantic model graph persists dragged node layout and resets it', async ()
   const page = await browser.newPage({ viewport: { width: 1180, height: 760 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => document.querySelectorAll('ld-semantic-model-graph .react-flow__node').length >= 2)
+    await page.waitForFunction(() => document.querySelectorAll('lv-semantic-model-graph .react-flow__node').length >= 2)
 
-    const node = page.locator('ld-semantic-model-graph .react-flow__node').filter({ hasText: 'orders' })
+    const node = page.locator('lv-semantic-model-graph .react-flow__node').filter({ hasText: 'orders' })
     const nodeCount = await node.count()
     expect(nodeCount).toBe(1)
     const before = await node.boundingBox()
@@ -163,7 +163,7 @@ test('semantic model graph persists dragged node layout and resets it', async ()
 
     const after = await node.boundingBox()
     if (!after) throw new Error('orders node has no bounding box after drag')
-    const customers = page.locator('ld-semantic-model-graph .react-flow__node').filter({ hasText: 'customers' })
+    const customers = page.locator('lv-semantic-model-graph .react-flow__node').filter({ hasText: 'customers' })
     const customersCount = await customers.count()
     expect(customersCount).toBe(1)
     await customers.click()
@@ -171,7 +171,7 @@ test('semantic model graph persists dragged node layout and resets it', async ()
     if (!afterSelect) throw new Error('orders node has no bounding box after selection')
     const persisted = await page.evaluate(() => {
       const keys = Array.from({ length: localStorage.length }, (_, index) => localStorage.key(index) ?? '')
-      const key = keys.find((candidate) => candidate.startsWith('libredash:semantic-model-graph:v2:'))
+      const key = keys.find((candidate) => candidate.startsWith('leapview:semantic-model-graph:v2:'))
       return {
         keyFound: Boolean(key),
         value: key ? localStorage.getItem(key) ?? '' : '',
@@ -183,8 +183,8 @@ test('semantic model graph persists dragged node layout and resets it', async ()
     expect(persisted.keyFound).toBe(true)
     expect(persisted.value).toContain('orders')
 
-    await page.locator('ld-semantic-model-graph .semantic-model-reset-button').click()
-    const remaining = await page.evaluate(() => Array.from({ length: localStorage.length }, (_, index) => localStorage.key(index) ?? '').filter((key) => key.startsWith('libredash:semantic-model-graph:v2:')).length)
+    await page.locator('lv-semantic-model-graph .semantic-model-reset-button').click()
+    const remaining = await page.evaluate(() => Array.from({ length: localStorage.length }, (_, index) => localStorage.key(index) ?? '').filter((key) => key.startsWith('leapview:semantic-model-graph:v2:')).length)
     expect(remaining).toBe(0)
   } finally {
     await page.close()
@@ -199,22 +199,22 @@ function testDocument(): string {
         <style>
           body {
             margin: 0;
-            --ld-bg-app: #f6f8fa;
-            --ld-bg-page: #f6f8fa;
-            --ld-bg-panel: #fff;
-            --ld-bg-panel-muted: #f6f8fa;
-            --ld-fg-default: #24292f;
-            --ld-fg-muted: #57606a;
-            --ld-fg-link: #0969da;
-            --ld-line-muted: #d8dee4;
-            --ld-line-accent: #0969da;
-            --ld-asset-model-table-bg: #ddf4ff;
-            --ld-asset-model-table-border: #b6e3ff;
-            --ld-font-family-mono: ui-monospace, SFMono-Regular, Consolas, monospace;
-            --ld-font-size-caption: 12px;
-            --ld-font-size-body-sm: 14px;
-            --ld-font-weight-strong: 600;
-            --ld-line-height-tight: 1.2;
+            --lv-bg-app: #f6f8fa;
+            --lv-bg-page: #f6f8fa;
+            --lv-bg-panel: #fff;
+            --lv-bg-panel-muted: #f6f8fa;
+            --lv-fg-default: #24292f;
+            --lv-fg-muted: #57606a;
+            --lv-fg-link: #0969da;
+            --lv-line-muted: #d8dee4;
+            --lv-line-accent: #0969da;
+            --lv-asset-model-table-bg: #ddf4ff;
+            --lv-asset-model-table-border: #b6e3ff;
+            --lv-font-family-mono: ui-monospace, SFMono-Regular, Consolas, monospace;
+            --lv-font-size-caption: 12px;
+            --lv-font-size-body-sm: 14px;
+            --lv-font-weight-strong: 600;
+            --lv-line-height-tight: 1.2;
             --base-size-4: 4px;
             --base-size-6: 6px;
             --base-size-8: 8px;
@@ -223,14 +223,14 @@ function testDocument(): string {
             --base-size-16: 16px;
             --borderWidth-default: 1px;
             --borderRadius-default: 6px;
-            --ld-border-default: 1px solid #d0d7de;
-            --ld-border-muted: 1px solid #d8dee4;
-            --ld-radius-full: 999px;
+            --lv-border-default: 1px solid #d0d7de;
+            --lv-border-muted: 1px solid #d8dee4;
+            --lv-radius-full: 999px;
           }
         </style>
       </head>
       <body>
-        <ld-semantic-model-graph storagekey="test:semantic_model:olist" style="display:block;width:min(980px,100vw);height:460px"></ld-semantic-model-graph>
+        <lv-semantic-model-graph storagekey="test:semantic_model:olist" style="display:block;width:min(980px,100vw);height:460px"></lv-semantic-model-graph>
         <script type="module" src="/semantic-model-graph-under-test.js"></script>
         <script type="module">
           const graph = {
@@ -269,7 +269,7 @@ function testDocument(): string {
               },
             ],
           }
-          document.querySelector('ld-semantic-model-graph').graph = graph
+          document.querySelector('lv-semantic-model-graph').graph = graph
         </script>
       </body>
     </html>

@@ -47,12 +47,12 @@ func Execute(ctx context.Context) error {
 	return NewCommand(ctx).ExecuteContext(ctx)
 }
 
-// NewCommand constructs the LibreDash CLI command tree for execution and documentation.
+// NewCommand constructs the LeapView CLI command tree for execution and documentation.
 func NewCommand(ctx context.Context) *cobra.Command {
 	opts := &rootOptions{}
 	root := &cobra.Command{
-		Use:   "libredash",
-		Short: "LibreDash BI-as-code server and deployment CLI",
+		Use:   "leapview",
+		Short: "LeapView BI-as-code server and deployment CLI",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.environment = ""
 			return runServe(ctx, opts)
@@ -81,7 +81,7 @@ func NewCommand(ctx context.Context) *cobra.Command {
 func loginCommand(opts *rootOptions) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "login",
-		Short: "Store a LibreDash API token for a target",
+		Short: "Store a LeapView API token for a target",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if opts.target == "" || opts.token == "" {
 				return fmt.Errorf("login requires --target and --token for v1 CLI authentication")
@@ -100,7 +100,7 @@ func loginCommand(opts *rootOptions) *cobra.Command {
 			return saveClientConfig(config)
 		},
 	}
-	cmd.Flags().StringVar(&opts.target, "target", "", "LibreDash server URL")
+	cmd.Flags().StringVar(&opts.target, "target", "", "LeapView server URL")
 	cmd.Flags().StringVar(&opts.token, "token", "", "API token")
 	return cmd
 }

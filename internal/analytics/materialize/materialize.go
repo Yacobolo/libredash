@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/analytics/connectors"
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
+	"github.com/Yacobolo/leapview/internal/analytics/connectors"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 )
 
 type Executor interface {

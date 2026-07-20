@@ -1,7 +1,7 @@
 {
   "$defs": {
     "#APIVersion": {
-      "const": "libredash.dev/v1"
+      "const": "leapview.dev/v1"
     },
     "#Identifier": {
       "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",

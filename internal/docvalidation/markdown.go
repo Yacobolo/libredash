@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/configschema"
+	"github.com/Yacobolo/leapview/internal/configschema"
 	"gopkg.in/yaml.v3"
 )
 
@@ -52,7 +52,7 @@ type markdownFence struct {
 }
 
 // ValidateMarkdown syntax-checks every YAML fence and schema-checks complete
-// LibreDash resources containing an apiVersion and kind envelope.
+// LeapView resources containing an apiVersion and kind envelope.
 func ValidateMarkdown(filename string, content []byte) []Issue {
 	lines := strings.Split(strings.ReplaceAll(string(content), "\r\n", "\n"), "\n")
 	var issues []Issue
@@ -143,18 +143,18 @@ func validateYAMLBlock(filename string, contentLine int, content []byte) []Issue
 		return []Issue{{
 			File:    filename,
 			Line:    contentLine + relativeLine - 1,
-			Message: "LibreDash resource examples must include both apiVersion and kind",
+			Message: "LeapView resource examples must include both apiVersion and kind",
 		}}
 	}
 	if apiVersion == "" {
 		return nil
 	}
-	if !strings.HasPrefix(apiVersion, "libredash.dev/") {
+	if !strings.HasPrefix(apiVersion, "leapview.dev/") {
 		return nil
 	}
 	schemaKind, ok := schemaKinds[kind]
 	if !ok {
-		return []Issue{{File: filename, Line: contentLine + kindLine - 1, Message: fmt.Sprintf("unsupported LibreDash resource kind %q", kind)}}
+		return []Issue{{File: filename, Line: contentLine + kindLine - 1, Message: fmt.Sprintf("unsupported LeapView resource kind %q", kind)}}
 	}
 	if err := configschema.ValidateBytes(schemaKind, filename, content); err != nil {
 		diagnostics := configschema.Diagnostics(err)
@@ -168,7 +168,7 @@ func validateYAMLBlock(filename string, contentLine int, content []byte) []Issue
 			if diagnostic.FieldPath != "" {
 				message = diagnostic.FieldPath + ": " + message
 			}
-			issues = append(issues, Issue{File: filename, Line: line, Column: diagnostic.Column, Message: "invalid LibreDash " + kind + " example: " + message})
+			issues = append(issues, Issue{File: filename, Line: line, Column: diagnostic.Column, Message: "invalid LeapView " + kind + " example: " + message})
 		}
 		return issues
 	}

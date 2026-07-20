@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	"github.com/Yacobolo/libredash/internal/dashboard/report"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	"github.com/Yacobolo/leapview/internal/dashboard/report"
 )
 
 func TestResolveSelectionInteractionConformedAcrossFacts(t *testing.T) {

@@ -26,12 +26,12 @@ The rehearsal should cover startup migration, authentication, active deployments
 
 1. Confirm recent backups of every authoritative storage boundary.
 2. Record current image digest, configuration version, active projects, and revisions.
-3. Validate the target configuration with `libredash config validate --production`.
+3. Validate the target configuration with `leapview config validate --production`.
 4. Pause or drain conflicting deployments, refreshes, and maintenance jobs.
 5. Confirm disk headroom for migrations, new images, and rollback artifacts.
 6. Notify users of the expected availability impact.
 
-Use `libredash admin maintenance` or the deployment's maintenance mechanism only as documented by the release. Dry-run retention maintenance is not itself a general traffic-draining switch.
+Use `leapview admin maintenance` or the deployment's maintenance mechanism only as documented by the release. Dry-run retention maintenance is not itself a general traffic-draining switch.
 
 ## Apply the upgrade
 

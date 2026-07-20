@@ -39,6 +39,7 @@ import type {
 import { DatastarLit } from '../shared/datastar-lit'
 import { checkSignalContract } from '../shared/signal-contract'
 import { lucideIcon } from '../shared/lucide-icons'
+import '../shared/loading-spinner'
 import '../shared/record-table'
 import '../shared/code-block'
 import '../shared/workspace-access-control'
@@ -53,7 +54,7 @@ const emptyWorkspaceAccess: WorkspaceAccessSignal = {
   search: '',
 }
 
-class LibreDashWorkspacePage extends DatastarLit(LitElement) {
+class LeapViewWorkspacePage extends DatastarLit(LitElement) {
   @state() private assetQuery: string | null = null
   private lastPageKey = ''
 
@@ -93,7 +94,7 @@ class LibreDashWorkspacePage extends DatastarLit(LitElement) {
 
   private renderCatalog(page: WorkspacePageSignal) {
     return html`
-      <section class="page catalog" aria-label="LibreDash workspaces">
+      <section class="page catalog" aria-label="LeapView workspaces">
         ${this.renderHeader('', page.title, page.description)}
         <div class="cards">
           ${page.cards?.map((card) => html`
@@ -138,10 +139,10 @@ class LibreDashWorkspacePage extends DatastarLit(LitElement) {
   private renderAccessControl() {
     if (!this.workspaceAccess?.canManage) return nothing
     return html`
-      <ld-workspace-access-control
+      <lv-workspace-access-control
         .access=${this.workspaceAccess}
         search=${this.workspaceAccess.search ?? ''}
-      ></ld-workspace-access-control>
+      ></lv-workspace-access-control>
     `
   }
 
@@ -159,7 +160,7 @@ class LibreDashWorkspacePage extends DatastarLit(LitElement) {
   }
 }
 
-class LibreDashConnectionsPage extends DatastarLit(LitElement) {
+class LeapViewConnectionsPage extends DatastarLit(LitElement) {
   @state() private assetQuery: string | null = null
   private lastPageKey = ''
 
@@ -207,7 +208,7 @@ class LibreDashConnectionsPage extends DatastarLit(LitElement) {
   }
 }
 
-class LibreDashWorkspaceAssetPage extends DatastarLit(LitElement) {
+class LeapViewWorkspaceAssetPage extends DatastarLit(LitElement) {
   static get styles() {
     return workspaceStyles
   }
@@ -264,9 +265,9 @@ class LibreDashWorkspaceAssetPage extends DatastarLit(LitElement) {
           title=${action.label}
           aria-label=${action.label}
           ?disabled=${Boolean(action.disabled || page.refresh?.running)}
-          @click=${() => this.dispatchEvent(new CustomEvent('ld-run-refresh-pipeline', { bubbles: true, composed: true }))}
+          @click=${() => this.dispatchEvent(new CustomEvent('lv-run-refresh-pipeline', { bubbles: true, composed: true }))}
         >
-          ${lucideIcon(RefreshCw, { className: page.refresh?.running ? 'spin' : '' })}
+          ${page.refresh?.running ? html`<lv-loading-spinner aria-hidden="true"></lv-loading-spinner>` : lucideIcon(RefreshCw)}
         </button>
       `
     }
@@ -293,7 +294,7 @@ class LibreDashWorkspaceAssetPage extends DatastarLit(LitElement) {
   private renderLineage(page: WorkspaceAssetPageSignal) {
     return html`
       <section class="lineage" id="lineage" aria-label="Asset lineage">
-        <ld-asset-lineage-graph class="lineage-graph" .graph=${page.lineage?.graph ?? { nodes: [], edges: [] }}></ld-asset-lineage-graph>
+        <lv-asset-lineage-graph class="lineage-graph" .graph=${page.lineage?.graph ?? { nodes: [], edges: [] }}></lv-asset-lineage-graph>
         <div class="lineage-grids">
           ${renderRecordTableSection('Uses', page.lineage?.usesTable)}
           ${renderRecordTableSection('Used by', page.lineage?.usedByTable)}
@@ -376,7 +377,7 @@ function renderAssetTable(assets: WorkspaceAssetSummarySignal[], empty: string) 
   }
   return html`
     <div class="panel">
-      <ld-record-table variant="primary" .table=${table}></ld-record-table>
+      <lv-record-table variant="primary" .table=${table}></lv-record-table>
     </div>
   `
 }
@@ -400,7 +401,7 @@ function renderDetailSection(section: WorkspaceDetailSectionSignal) {
     return html`
       <section class="detail-section" aria-label=${section.title}>
         <h2>${section.title}</h2>
-        <ld-code-block language=${section.lang || 'text'} .code=${section.code}></ld-code-block>
+        <lv-code-block language=${section.lang || 'text'} .code=${section.code}></lv-code-block>
       </section>
     `
   }
@@ -411,7 +412,7 @@ function renderDetailSection(section: WorkspaceDetailSectionSignal) {
 function renderSemanticModelGraph(graph: NonNullable<NonNullable<WorkspaceAssetPageSignal['details']>['semanticModelGraph']>, page: WorkspaceAssetPageSignal) {
   return html`
     <section class="semantic-model-section" aria-label="Data model graph">
-      <ld-semantic-model-graph class="semantic-model-graph" .graph=${graph} storagekey=${`${page.workspaceId}:${page.assetId}`}></ld-semantic-model-graph>
+      <lv-semantic-model-graph class="semantic-model-graph" .graph=${graph} storagekey=${`${page.workspaceId}:${page.assetId}`}></lv-semantic-model-graph>
     </section>
   `
 }
@@ -441,7 +442,7 @@ function renderRecordTableSection(title: string, table?: RecordTableSignal) {
   return html`
     <section class="detail-section" aria-label=${title}>
       <h2>${title}</h2>
-      <ld-record-table .table=${table ?? null}></ld-record-table>
+      <lv-record-table .table=${table ?? null}></lv-record-table>
     </section>
   `
 }
@@ -538,22 +539,22 @@ const workspaceStyles = css`
     display: block;
     min-width: 0;
     min-height: 100svh;
-    color: var(--ld-fg-default);
-    font-family: var(--ld-font-family-ui, var(--fontStack-system));
-    background: var(--ld-bg-app);
+    color: var(--lv-fg-default);
+    font-family: var(--lv-font-family-ui, var(--fontStack-system));
+    background: var(--lv-bg-app);
   }
 
   .page,
   .asset-page {
     display: grid;
-    width: min(100%, var(--ld-page-content-max-width));
+    width: min(100%, var(--lv-page-content-max-width));
     min-width: 0;
     min-height: 100svh;
     align-content: start;
     gap: var(--base-size-12);
     box-sizing: border-box;
     margin-inline: auto;
-    background: var(--ld-bg-app);
+    background: var(--lv-bg-app);
     padding: var(--base-size-16);
   }
 
@@ -581,8 +582,8 @@ const workspaceStyles = css`
   }
 
   .breadcrumb-header {
-    border-bottom: var(--ld-border-muted);
-    padding: var(--ld-space-control) var(--base-size-16);
+    border-bottom: var(--lv-border-muted);
+    padding: var(--lv-space-control) var(--base-size-16);
   }
 
   .title-block {
@@ -597,26 +598,26 @@ const workspaceStyles = css`
 
   h1 {
     overflow: hidden;
-    color: var(--ld-fg-default);
+    color: var(--lv-fg-default);
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: var(--ld-font-size-title-sm);
-    font-weight: var(--ld-font-weight-strong);
-    line-height: var(--ld-line-height-compact);
+    font-size: var(--lv-font-size-title-sm);
+    font-weight: var(--lv-font-weight-strong);
+    line-height: var(--lv-line-height-compact);
   }
 
   h2 {
-    color: var(--ld-fg-default);
-    font-size: var(--ld-font-size-body-sm);
-    font-weight: var(--ld-font-weight-strong);
+    color: var(--lv-fg-default);
+    font-size: var(--lv-font-size-body-sm);
+    font-weight: var(--lv-font-weight-strong);
   }
 
   .eyebrow {
     margin-bottom: var(--base-size-4);
-    color: var(--ld-fg-muted);
-    font-size: var(--ld-font-size-caption);
-    font-weight: var(--ld-font-weight-medium);
-    line-height: var(--ld-line-height-tight);
+    color: var(--lv-fg-muted);
+    font-size: var(--lv-font-size-caption);
+    font-weight: var(--lv-font-weight-medium);
+    line-height: var(--lv-line-height-tight);
     text-transform: uppercase;
   }
 
@@ -624,11 +625,11 @@ const workspaceStyles = css`
   .muted {
     margin-top: var(--base-size-4);
     overflow: hidden;
-    color: var(--ld-fg-muted);
+    color: var(--lv-fg-muted);
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: var(--ld-font-size-body-sm);
-    line-height: var(--ld-line-height-compact);
+    font-size: var(--lv-font-size-body-sm);
+    line-height: var(--lv-line-height-compact);
   }
 
   .actions,
@@ -652,9 +653,9 @@ const workspaceStyles = css`
   .panel {
     min-width: 0;
     overflow: hidden;
-    border: var(--ld-border-muted);
-    border-radius: var(--ld-radius-default);
-    background: var(--ld-bg-panel);
+    border: var(--lv-border-muted);
+    border-radius: var(--lv-radius-default);
+    background: var(--lv-bg-panel);
   }
 
   .card {
@@ -676,11 +677,11 @@ const workspaceStyles = css`
     justify-content: space-between;
     gap: var(--base-size-12);
     margin-top: var(--base-size-16);
-    border-top: var(--ld-border-muted);
+    border-top: var(--lv-border-muted);
     padding-top: var(--base-size-12);
-    color: var(--ld-fg-muted);
-    font-size: var(--ld-font-size-caption);
-    font-weight: var(--ld-font-weight-medium);
+    color: var(--lv-fg-muted);
+    font-size: var(--lv-font-size-caption);
+    font-weight: var(--lv-font-weight-medium);
   }
 
   .primary-link,
@@ -688,42 +689,42 @@ const workspaceStyles = css`
   .icon-button {
     display: inline-grid;
     place-items: center;
-    border-radius: var(--ld-radius-default);
+    border-radius: var(--lv-radius-default);
     text-decoration: none;
   }
 
   .primary-link {
-    min-height: var(--ld-button-height-sm);
+    min-height: var(--lv-button-height-sm);
     grid-auto-flow: column;
     gap: var(--base-size-6);
-    border: var(--borderWidth-default) solid var(--ld-button-accent-border-rest);
-    background: var(--ld-button-accent-bg-rest);
-    color: var(--ld-button-accent-fg-rest);
-    padding: 0 var(--ld-button-padding-inline-sm);
-    font-size: var(--ld-font-size-caption);
-    font-weight: var(--ld-font-weight-strong);
+    border: var(--borderWidth-default) solid var(--lv-button-accent-border-rest);
+    background: var(--lv-button-accent-bg-rest);
+    color: var(--lv-button-accent-fg-rest);
+    padding: 0 var(--lv-button-padding-inline-sm);
+    font-size: var(--lv-font-size-caption);
+    font-weight: var(--lv-font-weight-strong);
   }
 
   .icon-link,
   .icon-button {
     width: var(--control-medium-size);
     height: var(--control-medium-size);
-    border: var(--ld-border-muted);
+    border: var(--lv-border-muted);
     padding: 0;
   }
 
   .icon-link {
     border-color: transparent;
     background: transparent;
-    color: var(--ld-fg-muted);
+    color: var(--lv-fg-muted);
     cursor: pointer;
   }
 
   .icon-link:hover,
   .icon-link:focus-visible {
-    border-color: var(--ld-line-muted);
-    background: var(--ld-bg-control-hover);
-    color: var(--ld-fg-default);
+    border-color: var(--lv-line-muted);
+    background: var(--lv-bg-control-hover);
+    color: var(--lv-fg-default);
     outline: 0;
   }
 
@@ -732,19 +733,9 @@ const workspaceStyles = css`
     cursor: wait;
   }
 
-  .spin {
-    animation: ld-spin 900ms linear infinite;
-  }
-
-  @keyframes ld-spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-
   .icon-button {
-    background: var(--ld-bg-panel);
-    color: var(--ld-fg-default);
+    background: var(--lv-bg-panel);
+    color: var(--lv-fg-default);
   }
 
   button,
@@ -756,7 +747,7 @@ const workspaceStyles = css`
     display: grid;
     min-width: 0;
     gap: var(--base-size-12);
-    border-bottom: var(--ld-border-default);
+    border-bottom: var(--lv-border-default);
     padding-top: var(--base-size-12);
   }
 
@@ -771,30 +762,30 @@ const workspaceStyles = css`
     min-width: 0;
     min-height: var(--control-medium-size);
     width: 100%;
-    border: var(--ld-border-default);
-    border-radius: var(--ld-radius-tight);
-    background: var(--ld-bg-control);
-    color: var(--ld-fg-default);
+    border: var(--lv-border-default);
+    border-radius: var(--lv-radius-tight);
+    background: var(--lv-bg-control);
+    color: var(--lv-fg-default);
     padding: 0 calc(var(--base-size-24) + var(--base-size-12)) 0 var(--base-size-12);
   }
 
   input[type='search']:focus {
-    border-color: var(--borderColor-accent-emphasis, var(--ld-line-accent));
-    background: var(--ld-bg-panel);
-    outline: var(--focus-outline, var(--ld-border-default));
-    outline-color: var(--borderColor-accent-emphasis, var(--ld-line-accent));
+    border-color: var(--borderColor-accent-emphasis, var(--lv-line-accent));
+    background: var(--lv-bg-panel);
+    outline: var(--focus-outline, var(--lv-border-default));
+    outline-color: var(--borderColor-accent-emphasis, var(--lv-line-accent));
     outline-offset: var(--focus-outline-offset, var(--base-size-2));
   }
 
   .search-icon {
     position: absolute;
     top: 50%;
-    right: var(--ld-space-control);
+    right: var(--lv-space-control);
     display: grid;
     width: var(--base-size-16);
     height: var(--base-size-16);
     place-items: center;
-    color: var(--ld-fg-muted);
+    color: var(--lv-fg-muted);
     pointer-events: none;
     transform: translateY(-50%);
   }
@@ -804,7 +795,7 @@ const workspaceStyles = css`
     min-width: 0;
     flex-wrap: wrap;
     gap: var(--base-size-24);
-    border-bottom: var(--ld-border-default);
+    border-bottom: var(--lv-border-default);
   }
 
   .toolbar .tabs {
@@ -817,33 +808,33 @@ const workspaceStyles = css`
     align-items: center;
     gap: var(--base-size-8);
     border-bottom: 2px solid transparent;
-    color: var(--ld-fg-muted);
-    font-size: var(--ld-font-size-body-sm);
-    font-weight: var(--ld-font-weight-medium);
+    color: var(--lv-fg-muted);
+    font-size: var(--lv-font-size-body-sm);
+    font-weight: var(--lv-font-weight-medium);
     text-decoration: none;
   }
 
   .tabs a.active {
-    border-bottom-color: var(--ld-accent);
-    color: var(--ld-fg-default);
-    font-weight: var(--ld-font-weight-strong);
+    border-bottom-color: var(--lv-accent);
+    color: var(--lv-fg-default);
+    font-weight: var(--lv-font-weight-strong);
   }
 
   .count {
     display: inline-grid;
     min-width: var(--base-size-16);
     place-items: center;
-    border-radius: var(--ld-radius-full);
-    background: var(--ld-bg-panel-muted);
-    color: var(--ld-fg-muted);
+    border-radius: var(--lv-radius-full);
+    background: var(--lv-bg-panel-muted);
+    color: var(--lv-fg-muted);
     padding: 0 var(--base-size-6);
-    font-size: var(--ld-font-size-caption);
+    font-size: var(--lv-font-size-caption);
   }
 
   code {
-    color: var(--ld-fg-muted);
+    color: var(--lv-fg-muted);
     font-family: var(--fontStack-monospace, ui-monospace, SFMono-Regular, Consolas, monospace);
-    font-size: var(--ld-font-size-caption);
+    font-size: var(--lv-font-size-caption);
   }
 
   .asset-glyph {
@@ -852,10 +843,10 @@ const workspaceStyles = css`
     height: var(--control-medium-size);
     flex: 0 0 auto;
     place-items: center;
-    border: var(--ld-border-muted);
-    border-radius: var(--ld-radius-default);
-    background: var(--ld-bg-panel-muted);
-    color: var(--ld-fg-muted);
+    border: var(--lv-border-muted);
+    border-radius: var(--lv-radius-default);
+    background: var(--lv-bg-panel-muted);
+    color: var(--lv-fg-muted);
   }
 
   .asset-glyph.inline {
@@ -864,81 +855,81 @@ const workspaceStyles = css`
   }
 
   .asset-kind-catalog {
-    background: var(--ld-asset-catalog-bg, var(--ld-bg-panel-muted));
-    border-color: var(--ld-asset-catalog-border, var(--ld-line-muted));
-    color: var(--ld-asset-catalog-accent, var(--ld-fg-muted));
+    background: var(--lv-asset-catalog-bg, var(--lv-bg-panel-muted));
+    border-color: var(--lv-asset-catalog-border, var(--lv-line-muted));
+    color: var(--lv-asset-catalog-accent, var(--lv-fg-muted));
   }
 
   .asset-kind-connection {
-    background: var(--ld-asset-connection-bg, var(--ld-bg-panel-muted));
-    border-color: var(--ld-asset-connection-border, var(--ld-line-muted));
-    color: var(--ld-asset-connection-accent, var(--ld-fg-muted));
+    background: var(--lv-asset-connection-bg, var(--lv-bg-panel-muted));
+    border-color: var(--lv-asset-connection-border, var(--lv-line-muted));
+    color: var(--lv-asset-connection-accent, var(--lv-fg-muted));
   }
 
   .asset-kind-dashboard {
-    background: var(--ld-asset-dashboard-bg, var(--ld-bg-panel-muted));
-    border-color: var(--ld-asset-dashboard-border, var(--ld-line-muted));
-    color: var(--ld-asset-dashboard-accent, var(--ld-fg-muted));
+    background: var(--lv-asset-dashboard-bg, var(--lv-bg-panel-muted));
+    border-color: var(--lv-asset-dashboard-border, var(--lv-line-muted));
+    color: var(--lv-asset-dashboard-accent, var(--lv-fg-muted));
   }
 
   .asset-kind-dimension {
-    background: var(--ld-asset-dimension-bg, var(--ld-bg-panel-muted));
-    border-color: var(--ld-asset-dimension-border, var(--ld-line-muted));
-    color: var(--ld-asset-dimension-accent, var(--ld-fg-muted));
+    background: var(--lv-asset-dimension-bg, var(--lv-bg-panel-muted));
+    border-color: var(--lv-asset-dimension-border, var(--lv-line-muted));
+    color: var(--lv-asset-dimension-accent, var(--lv-fg-muted));
   }
 
   .asset-kind-filter {
-    background: var(--ld-asset-filter-bg, var(--ld-bg-panel-muted));
-    border-color: var(--ld-asset-filter-border, var(--ld-line-muted));
-    color: var(--ld-asset-filter-accent, var(--ld-fg-muted));
+    background: var(--lv-asset-filter-bg, var(--lv-bg-panel-muted));
+    border-color: var(--lv-asset-filter-border, var(--lv-line-muted));
+    color: var(--lv-asset-filter-accent, var(--lv-fg-muted));
   }
 
   .asset-kind-measure {
-    background: var(--ld-asset-measure-bg, var(--ld-bg-panel-muted));
-    border-color: var(--ld-asset-measure-border, var(--ld-line-muted));
-    color: var(--ld-asset-measure-accent, var(--ld-fg-muted));
+    background: var(--lv-asset-measure-bg, var(--lv-bg-panel-muted));
+    border-color: var(--lv-asset-measure-border, var(--lv-line-muted));
+    color: var(--lv-asset-measure-accent, var(--lv-fg-muted));
   }
 
   .asset-kind-model-table {
-    background: var(--ld-asset-model-table-bg, var(--ld-bg-panel-muted));
-    border-color: var(--ld-asset-model-table-border, var(--ld-line-muted));
-    color: var(--ld-asset-model-table-accent, var(--ld-fg-muted));
+    background: var(--lv-asset-model-table-bg, var(--lv-bg-panel-muted));
+    border-color: var(--lv-asset-model-table-border, var(--lv-line-muted));
+    color: var(--lv-asset-model-table-accent, var(--lv-fg-muted));
   }
 
   .asset-kind-page {
-    background: var(--ld-asset-page-bg, var(--ld-bg-panel-muted));
-    border-color: var(--ld-asset-page-border, var(--ld-line-muted));
-    color: var(--ld-asset-page-accent, var(--ld-fg-muted));
+    background: var(--lv-asset-page-bg, var(--lv-bg-panel-muted));
+    border-color: var(--lv-asset-page-border, var(--lv-line-muted));
+    color: var(--lv-asset-page-accent, var(--lv-fg-muted));
   }
 
   .asset-kind-semantic-model {
-    background: var(--ld-asset-semantic-model-bg, var(--ld-bg-panel-muted));
-    border-color: var(--ld-asset-semantic-model-border, var(--ld-line-muted));
-    color: var(--ld-asset-semantic-model-accent, var(--ld-fg-muted));
+    background: var(--lv-asset-semantic-model-bg, var(--lv-bg-panel-muted));
+    border-color: var(--lv-asset-semantic-model-border, var(--lv-line-muted));
+    color: var(--lv-asset-semantic-model-accent, var(--lv-fg-muted));
   }
 
   .asset-kind-source {
-    background: var(--ld-asset-source-bg, var(--ld-bg-panel-muted));
-    border-color: var(--ld-asset-source-border, var(--ld-line-muted));
-    color: var(--ld-asset-source-accent, var(--ld-fg-muted));
+    background: var(--lv-asset-source-bg, var(--lv-bg-panel-muted));
+    border-color: var(--lv-asset-source-border, var(--lv-line-muted));
+    color: var(--lv-asset-source-accent, var(--lv-fg-muted));
   }
 
   .asset-kind-table {
-    background: var(--ld-asset-table-bg, var(--ld-bg-panel-muted));
-    border-color: var(--ld-asset-table-border, var(--ld-line-muted));
-    color: var(--ld-asset-table-accent, var(--ld-fg-muted));
+    background: var(--lv-asset-table-bg, var(--lv-bg-panel-muted));
+    border-color: var(--lv-asset-table-border, var(--lv-line-muted));
+    color: var(--lv-asset-table-accent, var(--lv-fg-muted));
   }
 
   .asset-kind-visual {
-    background: var(--ld-asset-visual-bg, var(--ld-bg-panel-muted));
-    border-color: var(--ld-asset-visual-border, var(--ld-line-muted));
-    color: var(--ld-asset-visual-accent, var(--ld-fg-muted));
+    background: var(--lv-asset-visual-bg, var(--lv-bg-panel-muted));
+    border-color: var(--lv-asset-visual-border, var(--lv-line-muted));
+    color: var(--lv-asset-visual-accent, var(--lv-fg-muted));
   }
 
   .empty {
-    color: var(--ld-fg-muted);
+    color: var(--lv-fg-muted);
     padding: var(--base-size-12);
-    font-size: var(--ld-font-size-body-sm);
+    font-size: var(--lv-font-size-body-sm);
   }
 
   .breadcrumb-header ol {
@@ -950,18 +941,18 @@ const workspaceStyles = css`
     margin: 0;
     padding: 0;
     list-style: none;
-    font-size: var(--ld-font-size-body-sm);
-    font-weight: var(--ld-font-weight-medium);
+    font-size: var(--lv-font-size-body-sm);
+    font-weight: var(--lv-font-weight-medium);
   }
 
   .breadcrumb-header li:not(:last-child)::after {
     content: '/';
     margin-left: var(--base-size-6);
-    color: var(--ld-fg-muted);
+    color: var(--lv-fg-muted);
   }
 
   .breadcrumb-header a {
-    color: var(--ld-fg-muted);
+    color: var(--lv-fg-muted);
     text-decoration: none;
   }
 
@@ -1017,10 +1008,10 @@ const workspaceStyles = css`
 
   .lineage-graph {
     display: block;
-    height: var(--ld-lineage-graph-height);
+    height: var(--lv-lineage-graph-height);
     min-height: 0;
-    border-bottom: var(--ld-border-muted);
-    background: var(--ld-bg-panel);
+    border-bottom: var(--lv-border-muted);
+    background: var(--lv-bg-panel);
   }
 
   .semantic-model-section {
@@ -1032,8 +1023,8 @@ const workspaceStyles = css`
     height: min(72svh, 48rem);
     min-height: 0;
     overflow: hidden;
-    border-bottom: var(--ld-border-muted);
-    background: var(--ld-bg-panel);
+    border-bottom: var(--lv-border-muted);
+    background: var(--lv-bg-panel);
   }
 
   .lineage-grids {
@@ -1045,7 +1036,7 @@ const workspaceStyles = css`
     min-width: 0;
     align-content: start;
     gap: var(--base-size-12);
-    border-bottom: var(--ld-border-muted);
+    border-bottom: var(--lv-border-muted);
     padding-bottom: var(--base-size-20);
   }
 
@@ -1074,19 +1065,19 @@ const workspaceStyles = css`
   }
 
   .facts span:first-child {
-    color: var(--ld-fg-muted);
-    font-size: var(--ld-font-size-caption);
-    font-weight: var(--ld-font-weight-medium);
+    color: var(--lv-fg-muted);
+    font-size: var(--lv-font-size-caption);
+    font-weight: var(--lv-font-weight-medium);
     text-transform: uppercase;
   }
 
   .facts p,
   .facts code {
     overflow: hidden;
-    color: var(--ld-fg-default);
+    color: var(--lv-fg-default);
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: var(--ld-font-size-body-sm);
+    font-size: var(--lv-font-size-body-sm);
   }
 
   .facts .wide p,
@@ -1124,6 +1115,6 @@ const workspaceStyles = css`
   }
 `
 
-if (!customElements.get('ld-workspace-page')) customElements.define('ld-workspace-page', LibreDashWorkspacePage)
-if (!customElements.get('ld-workspace-asset-page')) customElements.define('ld-workspace-asset-page', LibreDashWorkspaceAssetPage)
-if (!customElements.get('ld-connections-page')) customElements.define('ld-connections-page', LibreDashConnectionsPage)
+if (!customElements.get('lv-workspace-page')) customElements.define('lv-workspace-page', LeapViewWorkspacePage)
+if (!customElements.get('lv-workspace-asset-page')) customElements.define('lv-workspace-asset-page', LeapViewWorkspaceAssetPage)
+if (!customElements.get('lv-connections-page')) customElements.define('lv-connections-page', LeapViewConnectionsPage)

@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/servingstate"
+	"github.com/Yacobolo/leapview/internal/servingstate"
 )
 
 func TestActiveRefreshPipelineScopesMatchServerEnvironment(t *testing.T) {

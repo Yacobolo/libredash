@@ -59,9 +59,9 @@ func assetTypeInlineIcon(typ string) g.Node {
 func assetPresentationFor(icon assetIconFactory, tokenName string) assetPresentation {
 	return assetPresentation{
 		Icon:        icon,
-		Background:  "--ld-asset-" + tokenName + "-bg",
-		Accent:      "--ld-asset-" + tokenName + "-accent",
-		BorderColor: "--ld-asset-" + tokenName + "-border",
+		Background:  "--lv-asset-" + tokenName + "-bg",
+		Accent:      "--lv-asset-" + tokenName + "-accent",
+		BorderColor: "--lv-asset-" + tokenName + "-border",
 	}
 }
 
@@ -72,9 +72,9 @@ func assetPresentationForType(typ string) assetPresentation {
 	}
 	return assetPresentation{
 		Icon:        lucide.Component,
-		Background:  "--ld-bg-panel-muted",
-		Accent:      "--ld-fg-muted",
-		BorderColor: "--ld-line-muted",
+		Background:  "--lv-bg-panel-muted",
+		Accent:      "--lv-fg-muted",
+		BorderColor: "--lv-line-muted",
 	}
 }
 

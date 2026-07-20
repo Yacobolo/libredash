@@ -10,9 +10,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/analytics/connectors"
-	analyticsmaterialize "github.com/Yacobolo/libredash/internal/analytics/materialize"
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
+	"github.com/Yacobolo/leapview/internal/analytics/connectors"
+	analyticsmaterialize "github.com/Yacobolo/leapview/internal/analytics/materialize"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 )
 
 var identifierPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
@@ -691,7 +691,7 @@ func connectionSecretName(name string) (string, error) {
 	if err := validateIdentifier(name); err != nil {
 		return "", fmt.Errorf("invalid connection %q: %w", name, err)
 	}
-	return "libredash_" + name, nil
+	return "leapview_" + name, nil
 }
 
 func connectionStringOption(connection semanticmodel.Connection) (string, error) {

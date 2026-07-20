@@ -4,8 +4,8 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/Yacobolo/libredash/internal/manageddata/control"
-	manageddatahttp "github.com/Yacobolo/libredash/internal/manageddata/http"
+	"github.com/Yacobolo/leapview/internal/manageddata/control"
+	manageddatahttp "github.com/Yacobolo/leapview/internal/manageddata/http"
 )
 
 func (s *Server) managedDataHTTPHandler() *manageddatahttp.Handler {

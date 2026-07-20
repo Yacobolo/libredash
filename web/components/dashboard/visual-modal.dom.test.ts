@@ -24,10 +24,10 @@ beforeAll(async () => {
         <body>
           <button id="trigger">Expand</button>
           <section id="parent">
-            <ld-echart id="first"></ld-echart>
-            <ld-report-table id="second"></ld-report-table>
+            <lv-echart id="first"></lv-echart>
+            <lv-report-table id="second"></lv-report-table>
           </section>
-          <ld-visual-modal id="modal"></ld-visual-modal>
+          <lv-visual-modal id="modal"></lv-visual-modal>
           <script type="module" src="/visual-modal-under-test.js"></script>
         </body>
       </html>
@@ -48,7 +48,7 @@ afterAll(async () => {
 async function setupPage() {
   const page = await browser.newPage()
   await page.goto(baseURL)
-  await page.waitForFunction(() => customElements.get('ld-visual-modal'))
+  await page.waitForFunction(() => customElements.get('lv-visual-modal'))
   return page
 }
 
@@ -56,12 +56,12 @@ async function dispatchVisualAction(page: Awaited<ReturnType<typeof setupPage>>,
   await page.evaluate(({ sourceId, action }) => {
     const source = document.getElementById(sourceId)
     if (!source) throw new Error(`missing source ${sourceId}`)
-    source.dispatchEvent(new CustomEvent('ld-visual-action', {
+    source.dispatchEvent(new CustomEvent('lv-visual-action', {
       bubbles: true,
       composed: true,
       detail: {
         action,
-        visualType: source.localName === 'ld-report-table' ? 'table' : 'chart',
+        visualType: source.localName === 'lv-report-table' ? 'table' : 'chart',
         visualId: sourceId,
         title: sourceId,
         columns: [{ key: 'label', label: 'Label' }],
@@ -70,7 +70,7 @@ async function dispatchVisualAction(page: Awaited<ReturnType<typeof setupPage>>,
       },
     }))
   }, { sourceId, action })
-  await page.locator('ld-visual-modal').evaluate((modal: any) => modal.updateComplete)
+  await page.locator('lv-visual-modal').evaluate((modal: any) => modal.updateComplete)
 }
 
 test('focus action moves the original source into the modal and close restores it', async () => {
@@ -80,7 +80,7 @@ test('focus action moves the original source into the modal and close restores i
     await dispatchVisualAction(page, 'first', 'focus')
 
     const focusedState = await page.evaluate(() => {
-      const modal = document.querySelector('ld-visual-modal')!
+      const modal = document.querySelector('lv-visual-modal')!
       const first = document.getElementById('first')!
       const parent = document.getElementById('parent')!
       return {
@@ -92,19 +92,19 @@ test('focus action moves the original source into the modal and close restores i
     })
 
     expect(focusedState).toEqual({
-      sourceParent: 'ld-visual-modal',
+      sourceParent: 'lv-visual-modal',
       slot: 'focus-visual',
       placeholderAtSource: true,
       activeInModal: true,
     })
 
     await page.keyboard.press('Tab')
-    expect(await page.locator('ld-visual-modal').evaluate((modal: any) => (
+    expect(await page.locator('lv-visual-modal').evaluate((modal: any) => (
       modal.shadowRoot.activeElement?.classList.contains('focus-close') ?? false
     ))).toBe(true)
 
-    await page.locator('ld-visual-modal').evaluate((modal: any) => modal.shadowRoot.querySelector('.focus-close').click())
-    await page.locator('ld-visual-modal').evaluate((modal: any) => modal.updateComplete)
+    await page.locator('lv-visual-modal').evaluate((modal: any) => modal.shadowRoot.querySelector('.focus-close').click())
+    await page.locator('lv-visual-modal').evaluate((modal: any) => modal.updateComplete)
 
     const restoredState = await page.evaluate(() => {
       const first = document.getElementById('first')!
@@ -149,7 +149,7 @@ test('opening another focused source restores the previous element first', async
     expect(state).toEqual({
       firstParent: 'parent',
       firstPosition: true,
-      secondParent: 'ld-visual-modal',
+      secondParent: 'lv-visual-modal',
       secondSlot: 'focus-visual',
     })
   } finally {
@@ -164,7 +164,7 @@ test('non-focus visual actions do not move the source element', async () => {
 
     const state = await page.evaluate(() => {
       const first = document.getElementById('first')!
-      const modal = document.querySelector('ld-visual-modal')!
+      const modal = document.querySelector('lv-visual-modal')!
       return {
         sourceParent: first.parentElement?.id,
         slot: first.getAttribute('slot'),

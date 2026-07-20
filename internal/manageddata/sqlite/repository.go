@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/manageddata"
-	platformdb "github.com/Yacobolo/libredash/internal/platform/db"
+	"github.com/Yacobolo/leapview/internal/manageddata"
+	platformdb "github.com/Yacobolo/leapview/internal/platform/db"
 )
 
 type Repository struct {

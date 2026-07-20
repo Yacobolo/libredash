@@ -11,7 +11,7 @@ export function mountVisualFocus<T extends Element>(element: T, target: Node, op
   if (!sourceParent) return null
 
   const previousSlot = options.slot ? element.getAttribute('slot') : undefined
-  const placeholder = element.ownerDocument.createComment('ld-visual-focus-placeholder')
+  const placeholder = element.ownerDocument.createComment('lv-visual-focus-placeholder')
   const nextSibling = element.nextSibling
   if (options.slot) element.setAttribute('slot', options.slot)
   sourceParent.insertBefore(placeholder, element)
@@ -47,5 +47,5 @@ export function visualSourceFromEvent(event: Event): HTMLElement | null {
 }
 
 function isFocusableVisual(element: HTMLElement): boolean {
-  return element.localName === 'ld-echart' || element.localName === 'ld-report-table'
+  return element.localName === 'lv-echart' || element.localName === 'lv-report-table'
 }

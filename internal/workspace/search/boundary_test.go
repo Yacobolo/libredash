@@ -12,9 +12,9 @@ import (
 func AssertNoForbiddenImports(t *testing.T) {
 	t.Helper()
 	forbidden := map[string]bool{
-		"github.com/Yacobolo/libredash/internal/api": true,
-		"github.com/Yacobolo/libredash/internal/app": true,
-		"github.com/Yacobolo/libredash/internal/ui":  true,
+		"github.com/Yacobolo/leapview/internal/api": true,
+		"github.com/Yacobolo/leapview/internal/app": true,
+		"github.com/Yacobolo/leapview/internal/ui":  true,
 		"github.com/go-chi/chi/v5":                   true,
 		"net/http":                                   true,
 	}

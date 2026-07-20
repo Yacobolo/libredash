@@ -9,7 +9,7 @@ import (
 	ds "github.com/starfederation/datastar-go/datastar"
 )
 
-const defaultClientIDCookieName = "ld_client_id"
+const defaultClientIDCookieName = "lv_client_id"
 
 func ReadSignals(r *http.Request, target any) error {
 	return ds.ReadSignals(r, target)

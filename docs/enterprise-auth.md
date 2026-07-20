@@ -1,25 +1,25 @@
 # Enterprise Auth
 
-LibreDash uses the standard enterprise split:
+LeapView uses the standard enterprise split:
 
 ```text
 OIDC = interactive human login
 SCIM = enterprise user and group provisioning
-Grant engine = LibreDash authorization
+Grant engine = LeapView authorization
 Service principals = non-human workload identity
 API tokens = scoped credentials, not identities
 ```
 
 OIDC proves who a user is. SCIM syncs users, groups, and memberships.
-LibreDash grants remain the only source of product authorization.
+LeapView grants remain the only source of product authorization.
 
 ## Local Auth
 
 Enable local browser login for self-hosted deployments or break-glass access:
 
 ```sh
-LIBREDASH_LOCAL_AUTH=1
-LIBREDASH_CSRF_KEY=<32+ byte secret>
+LEAPVIEW_LOCAL_AUTH=1
+LEAPVIEW_CSRF_KEY=<32+ byte secret>
 ```
 
 Local users are admin-created only. A grant manager creates the user from
@@ -37,12 +37,12 @@ sessions, API tokens, and audit events as OIDC and SCIM identities.
 Configure one browser identity provider with:
 
 ```sh
-LIBREDASH_OIDC_PROVIDER_ID=entra
-LIBREDASH_OIDC_ISSUER_URL=https://login.microsoftonline.com/<tenant-id>/v2.0
-LIBREDASH_OIDC_CLIENT_ID=<client-id>
-LIBREDASH_OIDC_CLIENT_SECRET=<client-secret>
-LIBREDASH_OIDC_CALLBACK_URL=https://<host>/auth/entra/callback
-LIBREDASH_OIDC_SCOPES="openid profile email"
+LEAPVIEW_OIDC_PROVIDER_ID=entra
+LEAPVIEW_OIDC_ISSUER_URL=https://login.microsoftonline.com/<tenant-id>/v2.0
+LEAPVIEW_OIDC_CLIENT_ID=<client-id>
+LEAPVIEW_OIDC_CLIENT_SECRET=<client-secret>
+LEAPVIEW_OIDC_CALLBACK_URL=https://<host>/auth/entra/callback
+LEAPVIEW_OIDC_SCOPES="openid profile email"
 ```
 
 Provider examples:
@@ -58,7 +58,7 @@ Register the callback URL as:
 https://<host>/auth/{provider_id}/callback
 ```
 
-LibreDash maps identity by OIDC issuer plus subject. Email and display name are
+LeapView maps identity by OIDC issuer plus subject. Email and display name are
 metadata and may change.
 
 ## SCIM
@@ -66,10 +66,10 @@ metadata and may change.
 Enable SCIM by setting a dedicated provisioning bearer token:
 
 ```sh
-LIBREDASH_SCIM_BEARER_TOKEN=<long-random-secret>
+LEAPVIEW_SCIM_BEARER_TOKEN=<long-random-secret>
 ```
 
-When the token is set, LibreDash mounts:
+When the token is set, LeapView mounts:
 
 ```text
 https://<host>/scim/v2
@@ -96,7 +96,7 @@ of truth.
 
 ## Authorization
 
-After OIDC or SCIM establishes identities, grant access in LibreDash:
+After OIDC or SCIM establishes identities, grant access in LeapView:
 
 ```text
 principal/group/service_principal -> privilege -> securable_object

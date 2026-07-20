@@ -4,7 +4,7 @@ A refresh rebuilds workspace analytical tables from the sources and revisions se
 
 ## What a refresh uses
 
-At refresh start, LibreDash resolves:
+At refresh start, LeapView resolves:
 
 - the target workspace, instance environment, and active deployment;
 - workspace source permissions;

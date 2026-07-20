@@ -2,6 +2,7 @@ import { LitElement, css, html, type PropertyValues } from 'lit'
 import { property, state } from 'lit/decorators.js'
 import { ChevronLeft, ChevronRight, type IconNode } from 'lucide'
 import { lucideIcon } from '../shared/lucide-icons'
+import '../shared/loading-spinner'
 
 type SubSidebarItem = {
   id: string
@@ -45,7 +46,7 @@ const defaultConfig: ResolvedConfig = {
   label: 'Items',
   railLabel: 'Items',
   ariaLabel: 'Sub navigation',
-  storageKey: 'libredash-sub-sidebar-collapsed',
+  storageKey: 'leapview-sub-sidebar-collapsed',
   activeId: '',
   emptyText: 'No items.',
   disabled: false,
@@ -77,22 +78,22 @@ class SubSidebar extends LitElement {
 
   static styles = css`
     :host {
-      --ld-sub-sidebar-width: var(--ld-sub-sidebar-width-expanded);
+      --lv-sub-sidebar-width: var(--lv-sub-sidebar-width-expanded);
       display: block;
-      width: var(--ld-sub-sidebar-width);
+      width: var(--lv-sub-sidebar-width);
       height: 100%;
       min-height: 0;
       box-sizing: border-box;
       overflow: hidden;
-      border-right: var(--ld-border-muted);
-      background: var(--ld-sidebar-bg);
-      color: var(--ld-fg-default);
+      border-right: var(--lv-border-muted);
+      background: var(--lv-sidebar-bg);
+      color: var(--lv-fg-default);
       font-family: var(--fontStack-system);
       transition: width var(--motion-transition-stateChange);
     }
 
     :host([data-collapsed]) {
-      --ld-sub-sidebar-width: var(--ld-sub-sidebar-width-collapsed);
+      --lv-sub-sidebar-width: var(--lv-sub-sidebar-width-collapsed);
       z-index: var(--zIndex-sticky);
       overflow: visible;
     }
@@ -107,7 +108,7 @@ class SubSidebar extends LitElement {
       max-height: 100svh;
       grid-template-rows: auto minmax(0, 1fr);
       overflow: hidden;
-      background: var(--ld-sidebar-bg);
+      background: var(--lv-sidebar-bg);
       transition: width var(--motion-transition-stateChange);
     }
 
@@ -131,11 +132,11 @@ class SubSidebar extends LitElement {
 
     .section-title {
       overflow: hidden;
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-strong);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-strong);
       letter-spacing: 0;
       text-transform: uppercase;
     }
@@ -147,8 +148,8 @@ class SubSidebar extends LitElement {
       flex: 0 0 auto;
       place-items: center;
       margin-left: auto;
-      border: var(--ld-border-transparent);
-      border-radius: var(--ld-radius-default);
+      border: var(--lv-border-transparent);
+      border-radius: var(--lv-radius-default);
       background: transparent;
       color: var(--fgColor-disabled);
       cursor: pointer;
@@ -157,9 +158,9 @@ class SubSidebar extends LitElement {
 
     .collapse:hover,
     .collapse:focus-visible {
-      border-color: var(--ld-line-muted);
+      border-color: var(--lv-line-muted);
       background: var(--control-bgColor-hover);
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
       outline: 0;
     }
 
@@ -187,7 +188,7 @@ class SubSidebar extends LitElement {
       overflow-y: auto;
       padding: var(--base-size-8) var(--base-size-4);
       scrollbar-gutter: stable;
-      scrollbar-color: var(--ld-scrollbar-thumb) transparent;
+      scrollbar-color: var(--lv-scrollbar-thumb) transparent;
       scrollbar-width: thin;
     }
 
@@ -200,12 +201,12 @@ class SubSidebar extends LitElement {
     }
 
     nav::-webkit-scrollbar-thumb {
-      border-radius: var(--ld-radius-full);
-      background: var(--ld-scrollbar-thumb);
+      border-radius: var(--lv-radius-full);
+      background: var(--lv-scrollbar-thumb);
     }
 
     nav::-webkit-scrollbar-thumb:hover {
-      background: var(--ld-scrollbar-thumb-hover);
+      background: var(--lv-scrollbar-thumb-hover);
     }
 
     a {
@@ -220,16 +221,16 @@ class SubSidebar extends LitElement {
       min-height: calc(var(--control-small-size) + var(--base-size-2));
       align-items: center;
       gap: var(--base-size-6);
-      border: var(--ld-border-transparent);
-      border-radius: var(--ld-radius-default);
+      border: var(--lv-border-transparent);
+      border-radius: var(--lv-radius-default);
       background: transparent;
       color: var(--fgColor-disabled);
       cursor: pointer;
       padding: 0 var(--control-xsmall-paddingInline-normal);
       text-align: left;
       font: inherit;
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
     }
 
     .item-link.unnumbered {
@@ -239,15 +240,15 @@ class SubSidebar extends LitElement {
 
     .item-link:hover,
     .item-link:focus-visible {
-      background: var(--ld-bg-hover);
-      color: var(--ld-fg-default);
+      background: var(--lv-bg-hover);
+      color: var(--lv-fg-default);
       outline: 0;
     }
 
     .item-link[aria-current='page'] {
       border-color: transparent;
-      background: var(--ld-bg-hover);
-      color: var(--ld-fg-default);
+      background: var(--lv-bg-hover);
+      color: var(--lv-fg-default);
     }
 
     .item-link[aria-current='page']::before {
@@ -256,8 +257,8 @@ class SubSidebar extends LitElement {
       inset-block: var(--base-size-8);
       left: 0;
       width: var(--base-size-2);
-      border-radius: var(--ld-radius-full);
-      background: var(--ld-accent);
+      border-radius: var(--lv-radius-full);
+      background: var(--lv-accent);
     }
 
     .item-link:disabled {
@@ -270,17 +271,17 @@ class SubSidebar extends LitElement {
       width: var(--control-xsmall-size);
       height: var(--control-xsmall-size);
       place-items: center;
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
       font-variant-numeric: tabular-nums;
-      font-weight: var(--ld-font-weight-strong);
-      line-height: var(--ld-line-height-none);
+      font-weight: var(--lv-font-weight-strong);
+      line-height: var(--lv-line-height-none);
     }
 
     .item-link:hover .item-index,
     .item-link:focus-visible .item-index,
     .item-link[aria-current='page'] .item-index {
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
     }
 
     .item-text {
@@ -305,38 +306,33 @@ class SubSidebar extends LitElement {
     }
 
     .item-title {
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
-      line-height: var(--ld-line-height-tight);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
+      line-height: var(--lv-line-height-tight);
     }
 
     .pending-spinner {
-      width: var(--ld-spinner-size-sm);
-      height: var(--ld-spinner-size-sm);
+      --lv-spinner-size: var(--lv-spinner-size-sm);
       flex: 0 0 auto;
-      border: var(--ld-spinner-border-width) solid var(--ld-line-muted);
-      border-top-color: var(--ld-fg-muted);
-      border-radius: var(--ld-radius-full);
-      animation: pending-spin var(--ld-duration-slow) linear infinite;
     }
 
     .item-link:hover .item-title,
     .item-link:focus-visible .item-title,
     .item-link[aria-current='page'] .item-title {
-      font-weight: var(--ld-font-weight-strong);
+      font-weight: var(--lv-font-weight-strong);
     }
 
     .item-meta {
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      line-height: var(--ld-line-height-none);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      line-height: var(--lv-line-height-none);
     }
 
     .empty {
       padding: 8px 9px;
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      line-height: var(--ld-line-height-relaxed);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      line-height: var(--lv-line-height-relaxed);
     }
 
     :host([data-collapsed]) header {
@@ -378,7 +374,7 @@ class SubSidebar extends LitElement {
     :host([data-collapsed]) .item-link:hover .item-index,
     :host([data-collapsed]) .item-link:focus-visible .item-index,
     :host([data-collapsed]) .item-link[aria-current='page'] .item-index {
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
     }
 
     :host([data-collapsed]) .item-link[aria-current='page']::before {
@@ -401,11 +397,11 @@ class SubSidebar extends LitElement {
       align-items: center;
       gap: var(--base-size-6);
       padding: 0 var(--control-xsmall-paddingInline-normal) 0 0;
-      background: var(--ld-sidebar-bg);
-      color: var(--ld-fg-default);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-strong);
-      line-height: var(--ld-line-height-none);
+      background: var(--lv-sidebar-bg);
+      color: var(--lv-fg-default);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-strong);
+      line-height: var(--lv-line-height-none);
       pointer-events: none;
       transform: translateY(-50%);
       animation: rail-title-fade-in var(--motion-duration-micro) var(--motion-easing-enter);
@@ -418,8 +414,8 @@ class SubSidebar extends LitElement {
       inset-block: var(--base-size-8);
       left: var(--base-size-negative-2);
       width: var(--base-size-2);
-      border-radius: var(--ld-radius-full);
-      background: var(--ld-accent);
+      border-radius: var(--lv-radius-full);
+      background: var(--lv-accent);
     }
 
     .hover-title-index {
@@ -427,9 +423,9 @@ class SubSidebar extends LitElement {
       width: var(--control-xsmall-size);
       height: var(--control-xsmall-size);
       place-items: center;
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
       font-variant-numeric: tabular-nums;
-      font-weight: var(--ld-font-weight-strong);
+      font-weight: var(--lv-font-weight-strong);
     }
 
     .hover-title-name {
@@ -446,11 +442,11 @@ class SubSidebar extends LitElement {
     :host([data-collapsed]) .rail-label {
       display: block;
       margin: var(--base-size-8) auto;
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-strong);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-strong);
       letter-spacing: 0;
-      line-height: var(--ld-line-height-none);
+      line-height: var(--lv-line-height-none);
       text-orientation: mixed;
       text-transform: uppercase;
       transform: rotate(180deg);
@@ -460,13 +456,13 @@ class SubSidebar extends LitElement {
     @media (max-width: 640px) {
       :host,
       :host([data-collapsed]) {
-        --ld-sub-sidebar-width: 100%;
+        --lv-sub-sidebar-width: 100%;
         width: 100%;
         height: auto;
         min-height: auto;
         overflow: hidden;
         border-right: 0;
-        border-bottom: var(--ld-border-muted);
+        border-bottom: var(--lv-border-muted);
       }
 
       aside {
@@ -478,7 +474,7 @@ class SubSidebar extends LitElement {
       }
 
       .top-row {
-        padding-block: var(--ld-space-control) var(--base-size-6);
+        padding-block: var(--lv-space-control) var(--base-size-6);
       }
 
       nav {
@@ -486,7 +482,7 @@ class SubSidebar extends LitElement {
         gap: var(--base-size-4);
         overflow-x: auto;
         overflow-y: hidden;
-        padding-block: var(--base-size-6) var(--ld-space-control);
+        padding-block: var(--base-size-6) var(--lv-space-control);
         scrollbar-gutter: auto;
       }
 
@@ -524,11 +520,6 @@ class SubSidebar extends LitElement {
       }
     }
 
-    @keyframes pending-spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
   `
 
   updated(changed: PropertyValues<this>): void {
@@ -610,7 +601,7 @@ class SubSidebar extends LitElement {
       <span class="item-text">
         <span class="item-title-row">
           <span class="item-title">${title}</span>
-          ${item.pending ? html`<span class="pending-spinner" aria-label="Title loading"></span>` : null}
+          ${item.pending ? html`<lv-loading-spinner class="pending-spinner" aria-label="Title loading"></lv-loading-spinner>` : null}
         </span>
         ${cleanText(item.meta) ? html`<span class="item-meta">${item.meta}</span>` : null}
       </span>
@@ -659,7 +650,7 @@ class SubSidebar extends LitElement {
 
   private selectItem(id: string, disabled: boolean): void {
     if (!id || disabled) return
-    this.dispatchEvent(new CustomEvent('ld-sub-sidebar-select', {
+    this.dispatchEvent(new CustomEvent('lv-sub-sidebar-select', {
       bubbles: true,
       composed: true,
       detail: { id },
@@ -739,6 +730,6 @@ function icon(name: 'chevron-left' | 'chevron-right') {
   return lucideIcon(icons[name])
 }
 
-if (!customElements.get('ld-sub-sidebar')) {
-  customElements.define('ld-sub-sidebar', SubSidebar)
+if (!customElements.get('lv-sub-sidebar')) {
+  customElements.define('lv-sub-sidebar', SubSidebar)
 }

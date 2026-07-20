@@ -1,41 +1,41 @@
 # Local authentication
 
-Local authentication supports self-hosted browser login and a controlled break-glass path. Local users are administrator-created; LibreDash does not provide public self-registration.
+Local authentication supports self-hosted browser login and a controlled break-glass path. Local users are administrator-created; LeapView does not provide public self-registration.
 
 ## Enable the mode
 
 Configure local auth with production security requirements:
 
 ```sh
-LIBREDASH_PRODUCTION=true
-LIBREDASH_LOCAL_AUTH=true
-LIBREDASH_CSRF_KEY=<at-least-32-character-random-secret>
-LIBREDASH_COOKIE_SECURE=true
-LIBREDASH_PUBLIC_URL=https://dash.example.com
-LIBREDASH_ALLOWED_HOSTS=dash.example.com
+LEAPVIEW_PRODUCTION=true
+LEAPVIEW_LOCAL_AUTH=true
+LEAPVIEW_CSRF_KEY=<at-least-32-character-random-secret>
+LEAPVIEW_COOKIE_SECURE=true
+LEAPVIEW_PUBLIC_URL=https://dash.example.com
+LEAPVIEW_ALLOWED_HOSTS=dash.example.com
 ```
 
 Validate the complete environment:
 
 ```sh
-libredash config validate --production
+leapview config validate --production
 ```
 
 The CSRF key protects CSRF state and OAuth state cookies. Store it in the deployment secret manager. Rotating it can invalidate security state and should follow a controlled maintenance procedure.
 
 ## Initialize the first administrator
 
-Before the server starts for the first time, set `LIBREDASH_BOOTSTRAP_ADMIN_EMAIL` and run:
+Before the server starts for the first time, set `LEAPVIEW_BOOTSTRAP_ADMIN_EMAIL` and run:
 
 ```sh
 umask 077
-libredash admin initialize --format json > initial-credentials.json
-libredash admin initialize --acknowledge-credentials
+leapview admin initialize --format json > initial-credentials.json
+leapview admin initialize --acknowledge-credentials
 ```
 
 The one-shot offline initializer atomically binds the instance environment and creates a platform administrator with a forced-change temporary password plus a privilege-restricted publisher token that expires after 24 hours. It does not start an HTTP server or create an unrestricted bootstrap token. Until acknowledgement, rerunning the initializer returns the same credential bundle so an output-delivery failure is recoverable. After acknowledgement, a second initialization attempt fails.
 
-The generic Compose controller and Hetzner provider recipe wrap this command and expose the result once through `libredashctl first-login`, which deletes the credential file after printing it.
+The generic Compose controller and Hetzner provider recipe wrap this command and expose the result once through `leapviewctl first-login`, which deletes the credential file after printing it.
 
 ## Create local users
 
@@ -45,7 +45,7 @@ Do not place temporary passwords in tickets, chat rooms, shell history, deployme
 
 ## Reset access
 
-Use `POST /api/v1/principals/{principal}/password-reset` to issue a new temporary credential. LibreDash never reveals the previous password. A reset should force a password change and produce an audit event.
+Use `POST /api/v1/principals/{principal}/password-reset` to issue a new temporary credential. LeapView never reveals the previous password. A reset should force a password change and produce an audit event.
 
 When a principal is no longer trusted, deactivate the principal and revoke sessions and API tokens rather than only resetting the password. Review direct grants and group membership as part of offboarding.
 

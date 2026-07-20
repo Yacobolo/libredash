@@ -10,14 +10,14 @@ import (
 	"testing"
 	"time"
 
-	analyticsducklake "github.com/Yacobolo/libredash/internal/analytics/ducklake"
-	"github.com/Yacobolo/libredash/internal/instancelock"
-	"github.com/Yacobolo/libredash/internal/platform"
-	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
-	servingstatesqlite "github.com/Yacobolo/libredash/internal/servingstate/sqlite"
-	storagemaintenance "github.com/Yacobolo/libredash/internal/storage/maintenance"
-	"github.com/Yacobolo/libredash/internal/workspace"
-	workspacesqlite "github.com/Yacobolo/libredash/internal/workspace/sqlite"
+	analyticsducklake "github.com/Yacobolo/leapview/internal/analytics/ducklake"
+	"github.com/Yacobolo/leapview/internal/instancelock"
+	"github.com/Yacobolo/leapview/internal/platform"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
+	servingstatesqlite "github.com/Yacobolo/leapview/internal/servingstate/sqlite"
+	storagemaintenance "github.com/Yacobolo/leapview/internal/storage/maintenance"
+	"github.com/Yacobolo/leapview/internal/workspace"
+	workspacesqlite "github.com/Yacobolo/leapview/internal/workspace/sqlite"
 )
 
 func TestAdminDoesNotExposeUnrestrictedBootstrap(t *testing.T) {
@@ -33,7 +33,7 @@ func TestAdminBackupWritesInstanceArchive(t *testing.T) {
 	ctx := context.Background()
 	home := t.TempDir()
 	setAdminStorageEnv(t, home)
-	store, err := platform.Open(ctx, filepath.Join(home, "libredash.db"))
+	store, err := platform.Open(ctx, filepath.Join(home, "leapview.db"))
 	if err != nil {
 		t.Fatalf("open platform store: %v", err)
 	}
@@ -46,7 +46,7 @@ func TestAdminBackupWritesInstanceArchive(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(home, "artifacts", "dep_1.tar.gz"), []byte("artifact"), 0o644); err != nil {
 		t.Fatalf("write artifact: %v", err)
 	}
-	backupPath := filepath.Join(t.TempDir(), "libredash.backup.tar.gz")
+	backupPath := filepath.Join(t.TempDir(), "leapview.backup.tar.gz")
 	opts := &rootOptions{}
 	cmd := adminCommand(ctx, opts)
 	var out bytes.Buffer
@@ -67,7 +67,7 @@ func TestAdminBackupStreamsRestorableInstanceArchive(t *testing.T) {
 	ctx := context.Background()
 	home := t.TempDir()
 	setAdminStorageEnv(t, home)
-	store, err := platform.Open(ctx, filepath.Join(home, "libredash.db"))
+	store, err := platform.Open(ctx, filepath.Join(home, "leapview.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +93,7 @@ func TestAdminBackupStreamsRestorableInstanceArchive(t *testing.T) {
 	if !strings.Contains(restoreOutput.String(), "instance restored from: stdin") {
 		t.Fatalf("restore output = %q", restoreOutput.String())
 	}
-	restored, err := platform.Open(ctx, filepath.Join(targetHome, "libredash.db"))
+	restored, err := platform.Open(ctx, filepath.Join(targetHome, "leapview.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,8 +107,8 @@ func TestAdminBackupRejectsExternalDuckLakeCatalog(t *testing.T) {
 	ctx := context.Background()
 	home := t.TempDir()
 	setAdminStorageEnv(t, home)
-	t.Setenv("LIBREDASH_DUCKLAKE_CATALOG_PATH", filepath.Join(t.TempDir(), "catalog.sqlite"))
-	store, err := platform.Open(ctx, filepath.Join(home, "libredash.db"))
+	t.Setenv("LEAPVIEW_DUCKLAKE_CATALOG_PATH", filepath.Join(t.TempDir(), "catalog.sqlite"))
+	store, err := platform.Open(ctx, filepath.Join(home, "leapview.db"))
 	if err != nil {
 		t.Fatalf("open platform store: %v", err)
 	}
@@ -118,9 +118,9 @@ func TestAdminBackupRejectsExternalDuckLakeCatalog(t *testing.T) {
 
 	opts := &rootOptions{}
 	cmd := adminCommand(ctx, opts)
-	cmd.SetArgs([]string{"backup", "--out", filepath.Join(t.TempDir(), "libredash.backup.tar.gz")})
+	cmd.SetArgs([]string{"backup", "--out", filepath.Join(t.TempDir(), "leapview.backup.tar.gz")})
 	err = cmd.Execute()
-	if err == nil || !strings.Contains(err.Error(), "DuckLake catalog path inside LIBREDASH_HOME") {
+	if err == nil || !strings.Contains(err.Error(), "DuckLake catalog path inside LEAPVIEW_HOME") {
 		t.Fatalf("admin backup error = %v, want external DuckLake catalog rejection", err)
 	}
 }
@@ -130,7 +130,7 @@ func TestAdminRestoreRequiresConfirmation(t *testing.T) {
 	home := t.TempDir()
 	setAdminStorageEnv(t, home)
 	backupPath := filepath.Join(t.TempDir(), "backup.db")
-	store, err := platform.Open(ctx, filepath.Join(home, "libredash.db"))
+	store, err := platform.Open(ctx, filepath.Join(home, "leapview.db"))
 	if err != nil {
 		t.Fatalf("open platform store: %v", err)
 	}
@@ -152,7 +152,7 @@ func TestAdminRestoreRequiresConfirmation(t *testing.T) {
 func TestAdminRestoreRejectsExternalDuckLakeCatalog(t *testing.T) {
 	ctx := context.Background()
 	backupHome := filepath.Join(t.TempDir(), "backup-source")
-	backupSource, err := platform.Open(ctx, filepath.Join(backupHome, "libredash.db"))
+	backupSource, err := platform.Open(ctx, filepath.Join(backupHome, "leapview.db"))
 	if err != nil {
 		t.Fatalf("open backup source: %v", err)
 	}
@@ -162,7 +162,7 @@ func TestAdminRestoreRejectsExternalDuckLakeCatalog(t *testing.T) {
 	backupPath := filepath.Join(t.TempDir(), "restore.tar.gz")
 	if err := platform.BackupInstance(ctx, platform.InstanceBackupOptions{
 		HomeDir: backupHome,
-		DBPath:  filepath.Join(backupHome, "libredash.db"),
+		DBPath:  filepath.Join(backupHome, "leapview.db"),
 		OutPath: backupPath,
 	}); err != nil {
 		t.Fatalf("backup source: %v", err)
@@ -170,12 +170,12 @@ func TestAdminRestoreRejectsExternalDuckLakeCatalog(t *testing.T) {
 
 	home := t.TempDir()
 	setAdminStorageEnv(t, home)
-	t.Setenv("LIBREDASH_DUCKLAKE_CATALOG_PATH", filepath.Join(t.TempDir(), "catalog.sqlite"))
+	t.Setenv("LEAPVIEW_DUCKLAKE_CATALOG_PATH", filepath.Join(t.TempDir(), "catalog.sqlite"))
 	opts := &rootOptions{}
 	cmd := adminCommand(ctx, opts)
 	cmd.SetArgs([]string{"restore", "--from", backupPath, "--current-out", filepath.Join(t.TempDir(), "before.tar.gz"), "--confirm"})
 	err = cmd.Execute()
-	if err == nil || !strings.Contains(err.Error(), "DuckLake catalog path inside LIBREDASH_HOME") {
+	if err == nil || !strings.Contains(err.Error(), "DuckLake catalog path inside LEAPVIEW_HOME") {
 		t.Fatalf("admin restore error = %v, want external DuckLake catalog rejection", err)
 	}
 }
@@ -184,7 +184,7 @@ func TestAdminRestoreReplacesPlatformDatabase(t *testing.T) {
 	ctx := context.Background()
 	home := t.TempDir()
 	setAdminStorageEnv(t, home)
-	currentPath := filepath.Join(home, "libredash.db")
+	currentPath := filepath.Join(home, "leapview.db")
 	current, err := platform.Open(ctx, currentPath)
 	if err != nil {
 		t.Fatalf("open current platform store: %v", err)
@@ -203,7 +203,7 @@ func TestAdminRestoreReplacesPlatformDatabase(t *testing.T) {
 	}
 
 	backupHome := filepath.Join(home, "backup-source")
-	backupSource, err := platform.Open(ctx, filepath.Join(backupHome, "libredash.db"))
+	backupSource, err := platform.Open(ctx, filepath.Join(backupHome, "leapview.db"))
 	if err != nil {
 		t.Fatalf("open backup source: %v", err)
 	}
@@ -222,7 +222,7 @@ func TestAdminRestoreReplacesPlatformDatabase(t *testing.T) {
 	backupPath := filepath.Join(t.TempDir(), "restore.tar.gz")
 	if err := platform.BackupInstance(ctx, platform.InstanceBackupOptions{
 		HomeDir: backupHome,
-		DBPath:  filepath.Join(backupHome, "libredash.db"),
+		DBPath:  filepath.Join(backupHome, "leapview.db"),
 		OutPath: backupPath,
 	}); err != nil {
 		t.Fatalf("backup source: %v", err)
@@ -275,7 +275,7 @@ func TestAdminDatabaseRestoreRejectsAnotherInstanceEnvironment(t *testing.T) {
 	ctx := context.Background()
 	home := t.TempDir()
 	setAdminStorageEnv(t, home)
-	current, err := platform.Open(ctx, filepath.Join(home, "libredash.db"))
+	current, err := platform.Open(ctx, filepath.Join(home, "leapview.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -305,7 +305,7 @@ func TestAdminDatabaseRestoreRejectsAnotherInstanceEnvironment(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), `bound to environment "prod"`) {
 		t.Fatalf("database restore error = %v", err)
 	}
-	after, err := platform.Open(ctx, filepath.Join(home, "libredash.db"))
+	after, err := platform.Open(ctx, filepath.Join(home, "leapview.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -409,7 +409,7 @@ func TestDestructiveAdminMaintenanceRequiresExclusiveInstanceLock(t *testing.T) 
 			defer held.Release()
 			var out bytes.Buffer
 			err = test.run(context.Background(), &rootOptions{apply: true}, &out)
-			if err == nil || !strings.Contains(err.Error(), "already using LIBREDASH_HOME") {
+			if err == nil || !strings.Contains(err.Error(), "already using LEAPVIEW_HOME") {
 				t.Fatalf("destructive maintenance error = %v", err)
 			}
 		})
@@ -419,7 +419,7 @@ func TestDestructiveAdminMaintenanceRequiresExclusiveInstanceLock(t *testing.T) 
 func TestOfflineInstanceOperationsRequireExclusiveInstanceLock(t *testing.T) {
 	home := t.TempDir()
 	setAdminStorageEnv(t, home)
-	t.Setenv("LIBREDASH_BOOTSTRAP_ADMIN_EMAIL", "owner@example.com")
+	t.Setenv("LEAPVIEW_BOOTSTRAP_ADMIN_EMAIL", "owner@example.com")
 	held, err := instancelock.Acquire(home)
 	if err != nil {
 		t.Fatal(err)
@@ -439,7 +439,7 @@ func TestOfflineInstanceOperationsRequireExclusiveInstanceLock(t *testing.T) {
 	} {
 		t.Run(operation.name, func(t *testing.T) {
 			err := operation.run()
-			if err == nil || !strings.Contains(err.Error(), "already using LIBREDASH_HOME") {
+			if err == nil || !strings.Contains(err.Error(), "already using LEAPVIEW_HOME") {
 				t.Fatalf("offline operation error = %v", err)
 			}
 		})
@@ -640,13 +640,13 @@ func TestAdminStorageCleanupApplyProtectsLeasedDrainingSnapshot(t *testing.T) {
 
 func setAdminStorageEnv(t *testing.T, home string) {
 	t.Helper()
-	t.Setenv("LIBREDASH_HOME", home)
-	t.Setenv("LIBREDASH_DUCKDB_DIR", filepath.Join(home, "duckdb"))
+	t.Setenv("LEAPVIEW_HOME", home)
+	t.Setenv("LEAPVIEW_DUCKDB_DIR", filepath.Join(home, "duckdb"))
 }
 
 func seedAdminOperationalHistory(t *testing.T, ctx context.Context, home string, now time.Time) {
 	t.Helper()
-	store, err := platform.Open(ctx, filepath.Join(home, "libredash.db"))
+	store, err := platform.Open(ctx, filepath.Join(home, "leapview.db"))
 	if err != nil {
 		t.Fatalf("open platform store: %v", err)
 	}
@@ -705,7 +705,7 @@ func seedAdminOperationalHistory(t *testing.T, ctx context.Context, home string,
 
 func requireAdminTableCount(t *testing.T, ctx context.Context, home, table string, want int64) {
 	t.Helper()
-	store, err := platform.Open(ctx, filepath.Join(home, "libredash.db"))
+	store, err := platform.Open(ctx, filepath.Join(home, "leapview.db"))
 	if err != nil {
 		t.Fatalf("open platform store: %v", err)
 	}
@@ -721,7 +721,7 @@ func requireAdminTableCount(t *testing.T, ctx context.Context, home, table strin
 
 func requireAdminRowExists(t *testing.T, ctx context.Context, home, table, id string) {
 	t.Helper()
-	store, err := platform.Open(ctx, filepath.Join(home, "libredash.db"))
+	store, err := platform.Open(ctx, filepath.Join(home, "leapview.db"))
 	if err != nil {
 		t.Fatalf("open platform store: %v", err)
 	}
@@ -777,7 +777,7 @@ func recordAdminDeploymentSnapshot(t *testing.T, ctx context.Context, home strin
 
 func recordAdminDeploymentSnapshotWithStatus(t *testing.T, ctx context.Context, home string, environment servingstate.Environment, snapshotID int64, status servingstate.Status) servingstate.ID {
 	t.Helper()
-	store, err := platform.Open(ctx, filepath.Join(home, "libredash.db"))
+	store, err := platform.Open(ctx, filepath.Join(home, "leapview.db"))
 	if err != nil {
 		t.Fatalf("open platform store: %v", err)
 	}
@@ -801,7 +801,7 @@ func recordAdminDeploymentSnapshotWithStatus(t *testing.T, ctx context.Context, 
 
 func createAdminSnapshotLease(t *testing.T, ctx context.Context, home string, servingStateID servingstate.ID, snapshotID int64) {
 	t.Helper()
-	store, err := platform.Open(ctx, filepath.Join(home, "libredash.db"))
+	store, err := platform.Open(ctx, filepath.Join(home, "leapview.db"))
 	if err != nil {
 		t.Fatalf("open platform store: %v", err)
 	}
@@ -821,7 +821,7 @@ func createAdminSnapshotLease(t *testing.T, ctx context.Context, home string, se
 
 func adminDeploymentStatus(t *testing.T, ctx context.Context, home string, servingStateID servingstate.ID) string {
 	t.Helper()
-	store, err := platform.Open(ctx, filepath.Join(home, "libredash.db"))
+	store, err := platform.Open(ctx, filepath.Join(home, "leapview.db"))
 	if err != nil {
 		t.Fatalf("open platform store: %v", err)
 	}

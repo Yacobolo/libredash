@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/agent"
-	"github.com/Yacobolo/libredash/internal/asyncjob"
-	asyncjobsqlite "github.com/Yacobolo/libredash/internal/asyncjob/sqlite"
-	platformdb "github.com/Yacobolo/libredash/internal/platform/db"
+	"github.com/Yacobolo/leapview/internal/agent"
+	"github.com/Yacobolo/leapview/internal/asyncjob"
+	asyncjobsqlite "github.com/Yacobolo/leapview/internal/asyncjob/sqlite"
+	platformdb "github.com/Yacobolo/leapview/internal/platform/db"
 )
 
 type Repository struct {

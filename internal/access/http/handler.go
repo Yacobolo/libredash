@@ -15,9 +15,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/access"
-	"github.com/Yacobolo/libredash/internal/api"
-	"github.com/Yacobolo/libredash/internal/queryaudit"
+	"github.com/Yacobolo/leapview/internal/access"
+	"github.com/Yacobolo/leapview/internal/api"
+	"github.com/Yacobolo/leapview/internal/queryaudit"
 	"github.com/go-chi/chi/v5"
 )
 

@@ -1,11 +1,11 @@
 import "@yacobolo/apigen";
 
 @apigen.`package`(#{
-  title: "LibreDash UI Signal Contracts",
+  title: "LeapView UI Signal Contracts",
   version: "1.0.0",
-  description: "Typed Datastar payload contracts shared by the LibreDash Go backend and Lit web components.",
+  description: "Typed Datastar payload contracts shared by the LeapView Go backend and Lit web components.",
 })
-namespace LibreDashUISignals;
+namespace LeapViewUISignals;
 
 /** Route surfaces supported by the shared UI signal transport. */
 enum RouteKind {
@@ -22,7 +22,7 @@ enum RouteKind {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["admin", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "admin" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "admin" })
 model AdminAgentSignal {
   `canWrite`: boolean;
   `enabled`: boolean;
@@ -33,7 +33,7 @@ model AdminAgentSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["admin", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "admin" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "admin" })
 model AdminAgentToolSignal {
   `defaults`: Record<unknown>;
   `description`: string;
@@ -44,7 +44,7 @@ model AdminAgentToolSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["admin", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "admin" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "admin" })
 model AdminContentSectionSignal {
   `facts`?: DefinitionFactSignal[];
   `table`?: RecordTableSignal;
@@ -52,7 +52,7 @@ model AdminContentSectionSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["admin", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "admin" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "admin" })
 model AdminMetricSignal {
   `detail`?: string;
   `label`: string;
@@ -60,20 +60,20 @@ model AdminMetricSignal {
 }
 
 @apigen.contract(#{ kind: "ui-envelope", tags: #["admin", "envelope"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "envelope", `x-libredash-surface`: "admin" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "envelope", `x-leapview-surface`: "admin" })
 model AdminPageEnvelope {
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "chrome" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "chrome" })
   `chrome`: ChromeSignal;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "page" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "page" })
   `page`: AdminPageSignal;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "runtime" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "runtime" })
   `runtime`: RouteRuntimeSignal;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "status" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "status" })
   `status`: DashboardStatus;
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["admin", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "admin" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "admin" })
 model AdminPageSignal {
   `active`: string;
   `agent`?: AdminAgentSignal;
@@ -89,7 +89,7 @@ model AdminPageSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["admin", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "admin" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "admin" })
 model AdminQueryDetailSignal {
   `connectionWaitMs`: int64;
   `correlationId`?: string;
@@ -120,7 +120,7 @@ model AdminQueryDetailSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["admin", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "admin" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "admin" })
 model AdminQueryEventSignal {
   `correlationId`: string;
   `connectionWaitMs`: int64;
@@ -148,7 +148,7 @@ model AdminQueryEventSignal {
 }
 
 @apigen.contract(#{ kind: "ui-command", tags: #["admin", "command"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "command", `x-libredash-surface`: "admin" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "command", `x-leapview-surface`: "admin" })
 model AdminQueryHistoryCommand {
   `action`: string;
   `eventId`?: string;
@@ -159,7 +159,7 @@ model AdminQueryHistoryCommand {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["admin", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "admin" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "admin" })
 model AdminQueryHistoryFilters {
   `from`?: string;
   `kinds`?: string[];
@@ -173,7 +173,7 @@ model AdminQueryHistoryFilters {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["admin", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "admin" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "admin" })
 model AdminQueryHistorySignal {
   `error`: string;
   `filterMenus`?: FilterMenuSignal[];
@@ -187,7 +187,7 @@ model AdminQueryHistorySignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["admin", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "admin" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "admin" })
 model AdminStorageColumnSignal {
   `beginSnapshot`: int64;
   `containsNan`: string;
@@ -207,7 +207,7 @@ model AdminStorageColumnSignal {
 }
 
 @apigen.contract(#{ kind: "ui-command", tags: #["admin", "command"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "command", `x-libredash-surface`: "admin" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "command", `x-leapview-surface`: "admin" })
 model AdminStorageCommand {
   `databaseId`: string;
   `schema`: string;
@@ -238,7 +238,7 @@ model AdminStorageServingStateSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["admin", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "admin" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "admin" })
 model AdminStorageSignal {
   `selectedKey`: string;
   `selectedTable`?: AdminStorageTableSignal;
@@ -263,7 +263,7 @@ model AdminStorageSnapshotSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["admin", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "admin" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "admin" })
 model AdminStorageSummary {
   `catalogPath`: string;
   `catalogSizeLabel`: string;
@@ -289,7 +289,7 @@ model AdminStorageTableHistorySignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["admin", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "admin" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "admin" })
 model AdminStorageTableSignal {
   `beginSnapshot`: int64;
   `columnCount`: int64;
@@ -348,7 +348,7 @@ model AssetLineageNodeSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["catalog", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "catalog" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "catalog" })
 model CatalogDashboardSignal {
   `description`?: string;
   `href`: string;
@@ -360,20 +360,20 @@ model CatalogDashboardSignal {
 }
 
 @apigen.contract(#{ kind: "ui-envelope", tags: #["catalog", "envelope"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "envelope", `x-libredash-surface`: "catalog" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "envelope", `x-leapview-surface`: "catalog" })
 model CatalogPageEnvelope {
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "chrome" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "chrome" })
   `chrome`: ChromeSignal;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "page" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "page" })
   `page`: CatalogPageSignal;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "runtime" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "runtime" })
   `runtime`: RouteRuntimeSignal;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "status" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "status" })
   `status`: DashboardStatus;
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["catalog", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "catalog" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "catalog" })
 model CatalogPageSignal {
   `dashboards`: CatalogDashboardSignal[];
   `description`: string;
@@ -401,22 +401,22 @@ model ChatConversationSummary {
 }
 
 @apigen.contract(#{ kind: "ui-envelope", tags: #["chat", "envelope"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "envelope", `x-libredash-surface`: "chat" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "envelope", `x-leapview-surface`: "chat" })
 model ChatEnvelope {
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "agent" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "agent" })
   `agent`: ChatSignal;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "chrome" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "chrome" })
   `chrome`: ChromeSignal;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "page" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "page" })
   `page`: ChatPageSignal;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "runtime" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "runtime" })
   `runtime`: RouteRuntimeSignal;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "merge", `x-libredash-signal-key`: "visuals" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "merge", `x-leapview-signal-key`: "visuals" })
   `visuals`: Record<DashboardVisual>;
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["chat", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "chat" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "chat" })
 model ChatPageSignal {
   `description`: string;
   `kind`: RouteKind;
@@ -425,7 +425,7 @@ model ChatPageSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["chat", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "chat" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "chat" })
 model ChatSignal {
   `activeConversationId`: string;
   `composer`: ComposerSignal;
@@ -464,7 +464,7 @@ model ChatTranscriptItemSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["shared", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "shared" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "shared" })
 model ChromeSignal {
   `sidebar`: SidebarSignal;
 }
@@ -476,20 +476,20 @@ model ComposerSignal {
 }
 
 @apigen.contract(#{ kind: "ui-envelope", tags: #["connections", "envelope"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "envelope", `x-libredash-surface`: "connections" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "envelope", `x-leapview-surface`: "connections" })
 model ConnectionsPageEnvelope {
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "chrome" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "chrome" })
   `chrome`: ChromeSignal;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "page" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "page" })
   `page`: ConnectionsPageSignal;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "runtime" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "runtime" })
   `runtime`: RouteRuntimeSignal;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "status" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "status" })
   `status`: DashboardStatus;
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["connections", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "connections" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "connections" })
 model ConnectionsPageSignal {
   `assetList`?: WorkspaceAssetListSignal;
   `description`?: string;
@@ -500,7 +500,7 @@ model ConnectionsPageSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["dashboard", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "dashboard" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "dashboard" })
 model DashboardComponentSignal {
   `badges`?: string[];
   `description`?: string;
@@ -526,33 +526,33 @@ model DashboardComponentStatus {
 }
 
 @apigen.contract(#{ kind: "ui-envelope", tags: #["dashboard", "envelope"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "envelope", `x-libredash-surface`: "dashboard" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "envelope", `x-leapview-surface`: "dashboard" })
 model DashboardEnvelope {
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "chrome" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "chrome" })
   `chrome`: ChromeSignal;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "merge", `x-libredash-signal-key`: "componentStatus" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "merge", `x-leapview-signal-key`: "componentStatus" })
   `componentStatus`: Record<DashboardComponentStatus>;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "filterConfig" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "filterConfig" })
   `filterConfig`: ReportFilterConfig[];
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "merge", `x-libredash-signal-key`: "filterOptions" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "merge", `x-leapview-signal-key`: "filterOptions" })
   `filterOptions`: Record<DashboardFilterOption[]>;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "filters" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "filters" })
   `filters`: DashboardFilters;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "interactionCommand" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "interactionCommand" })
   `interactionCommand`: DashboardInteractionCommand;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "page" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "page" })
   `page`: DashboardPageSignal;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "runtime" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "runtime" })
   `runtime`: RouteRuntimeSignal;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "status" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "status" })
   `status`: DashboardStatus;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "visualWindowCommand" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "visualWindowCommand" })
   `visualWindowCommand`: DashboardVisualWindowRequest;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "merge", `x-libredash-signal-key`: "urlParamShape" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "merge", `x-leapview-signal-key`: "urlParamShape" })
   `urlParamShape`: Record<unknown>;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "merge", `x-libredash-signal-key`: "urlParams" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "merge", `x-leapview-signal-key`: "urlParams" })
   `urlParams`: Record<unknown>;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "merge", `x-libredash-signal-key`: "visuals" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "merge", `x-leapview-signal-key`: "visuals" })
   `visuals`: Record<DashboardVisual>;
 }
 
@@ -646,7 +646,7 @@ model DashboardPageGrid {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["dashboard", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "dashboard" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "dashboard" })
 model DashboardPageNavSignal {
   `active`: boolean;
   `href`: string;
@@ -662,7 +662,7 @@ model DashboardPagePlacement {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["dashboard", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "dashboard" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "dashboard" })
 model DashboardPageSignal {
   `canvas`: DashboardPageCanvas;
   `components`: DashboardComponentSignal[];
@@ -811,7 +811,7 @@ model MatrixDashboardVisual extends DashboardVisual { `type`: "matrix"; }
 model PivotDashboardVisual extends DashboardVisual { `type`: "pivot"; }
 
 @apigen.contract(#{ kind: "ui-command", tags: #["data", "command"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "command", `x-libredash-surface`: "data" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "command", `x-leapview-surface`: "data" })
 model DataExplorerCommand {
   `block`?: string;
   `columnWidths`?: Record<float64>;
@@ -828,7 +828,7 @@ model DataExplorerCommand {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["data", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "data" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "data" })
 model DataExplorerObjectSignal {
   `assetId`?: string;
   `columnCount`: int64;
@@ -847,22 +847,22 @@ model DataExplorerObjectSignal {
 }
 
 @apigen.contract(#{ kind: "ui-envelope", tags: #["data", "envelope"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "envelope", `x-libredash-surface`: "data" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "envelope", `x-leapview-surface`: "data" })
 model DataExplorerPageEnvelope {
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "chrome" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "chrome" })
   `chrome`: ChromeSignal;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "dataExplorer" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "dataExplorer" })
   `dataExplorer`: DataExplorerSignal;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "page" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "page" })
   `page`: DataExplorerPageSignal;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "runtime" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "runtime" })
   `runtime`: RouteRuntimeSignal;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "status" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "status" })
   `status`: DashboardStatus;
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["data", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "data" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "data" })
 model DataExplorerPageSignal {
   `description`?: string;
   `kind`: RouteKind;
@@ -875,7 +875,7 @@ model DataExplorerPageSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["data", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "data" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "data" })
 model DataExplorerSignal {
   `command`: DataExplorerCommand;
   `objects`: DataExplorerObjectSignal[];
@@ -887,7 +887,7 @@ model DataExplorerSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["data", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "data" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "data" })
 model DataExplorerWorkspaceSignal {
   `active`: boolean;
   `href`: string;
@@ -897,7 +897,7 @@ model DataExplorerWorkspaceSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["data", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "data" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "data" })
 model DataPreviewBlockSignal {
   `requestSeq`: int64;
   `resetVersion`: int64;
@@ -907,7 +907,7 @@ model DataPreviewBlockSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["data", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "data" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "data" })
 model DataPreviewColumnSignal {
   `key`: string;
   `label`: string;
@@ -915,7 +915,7 @@ model DataPreviewColumnSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["data", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "data" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "data" })
 model DataPreviewSignal {
   `availableRows`: int64;
   `blocks`: Record<DataPreviewBlockSignal>;
@@ -932,14 +932,14 @@ model DataPreviewSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["data", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "data" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "data" })
 model DataPreviewSortSignal {
   `column`?: string;
   `direction`?: string;
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["shared", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "shared" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "shared" })
 model DefinitionFactSignal {
   `code`?: boolean;
   `label`: string;
@@ -948,7 +948,7 @@ model DefinitionFactSignal {
 }
 
 @apigen.contract(#{ kind: "ui-command", tags: #["shared", "command"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "command", `x-libredash-surface`: "shared" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "command", `x-leapview-surface`: "shared" })
 model FilterMenuCommand {
   `action`?: string;
   `menuId`?: string;
@@ -958,7 +958,7 @@ model FilterMenuCommand {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["shared", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "shared" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "shared" })
 model FilterMenuOptionSignal {
   `countLabel`?: string;
   `description`?: string;
@@ -970,7 +970,7 @@ model FilterMenuOptionSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["shared", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "shared" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "shared" })
 model FilterMenuSignal {
   `emptyLabel`?: string;
   `error`?: string;
@@ -986,18 +986,18 @@ model FilterMenuSignal {
 }
 
 @apigen.contract(#{ kind: "ui-envelope", tags: #["login", "envelope"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "envelope", `x-libredash-surface`: "login" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "envelope", `x-leapview-surface`: "login" })
 model LoginPageEnvelope {
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "page" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "page" })
   `page`: LoginPageSignal;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "runtime" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "runtime" })
   `runtime`: RouteRuntimeSignal;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "status" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "status" })
   `status`: DashboardStatus;
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["login", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "login" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "login" })
 model LoginPageSignal {
   `backgroundModuleSrc`: string;
   `kind`: RouteKind;
@@ -1009,7 +1009,7 @@ model LoginPageSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["shared", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "shared" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "shared" })
 model RecordTableBadgeSignal {
   `label`: string;
   `tone`?: string;
@@ -1023,7 +1023,7 @@ model RecordTableColumnSelector {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["shared", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "shared" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "shared" })
 model RecordTableColumnSignal {
   `align`?: string;
   `header`: string;
@@ -1035,7 +1035,7 @@ model RecordTableColumnSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["shared", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "shared" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "shared" })
 model RecordTableSignal {
   `columnSelector`?: RecordTableColumnSelector;
   `columns`: RecordTableColumnSignal[];
@@ -1121,7 +1121,7 @@ model ReportFilterValues {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["shared", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "shared" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "shared" })
 model RouteRuntimeSignal {
   `clientId`?: string;
   `dashboardId`?: string;
@@ -1133,7 +1133,7 @@ model RouteRuntimeSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["workspace", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "workspace" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "workspace" })
 model SemanticModelGraphEdgeSignal {
   `cardinality`: string;
   `id`: string;
@@ -1145,7 +1145,7 @@ model SemanticModelGraphEdgeSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["workspace", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "workspace" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "workspace" })
 model SemanticModelGraphFieldSignal {
   `join`?: boolean;
   `label`?: string;
@@ -1156,7 +1156,7 @@ model SemanticModelGraphFieldSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["workspace", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "workspace" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "workspace" })
 model SemanticModelGraphNodeSignal {
   `badges`?: string[];
   `description`?: string;
@@ -1167,7 +1167,7 @@ model SemanticModelGraphNodeSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["workspace", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "workspace" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "workspace" })
 model SemanticModelGraphSignal {
   `edges`: SemanticModelGraphEdgeSignal[];
   `facts`?: string[];
@@ -1175,7 +1175,7 @@ model SemanticModelGraphSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["shared", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "shared" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "shared" })
 model SidebarActionSignal {
   `href`: string;
   `icon`: string;
@@ -1183,14 +1183,14 @@ model SidebarActionSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["shared", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "shared" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "shared" })
 model SidebarGroupSignal {
   `items`: SidebarItemSignal[];
   `label`: string;
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["shared", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "shared" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "shared" })
 model SidebarHistoryItemSignal {
   `active`: boolean;
   `href`: string;
@@ -1200,7 +1200,7 @@ model SidebarHistoryItemSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["shared", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "shared" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "shared" })
 model SidebarHistorySignal {
   `emptyText`?: string;
   `items`: SidebarHistoryItemSignal[];
@@ -1208,7 +1208,7 @@ model SidebarHistorySignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["shared", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "shared" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "shared" })
 model SidebarItemSignal {
   `active`?: boolean;
   `href`: string;
@@ -1219,7 +1219,7 @@ model SidebarItemSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["shared", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "shared" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "shared" })
 model SidebarSignal {
   `active`: string;
   `compact`: boolean;
@@ -1236,7 +1236,7 @@ model SidebarSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["shared", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "shared" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "shared" })
 model SubSidebarItemSignal {
   `active`: boolean;
   `href`: string;
@@ -1246,7 +1246,7 @@ model SubSidebarItemSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["shared", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "shared" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "shared" })
 model SubSidebarSignal {
   `activeId`: string;
   `ariaLabel`: string;
@@ -1283,7 +1283,7 @@ model WorkspaceAccessResponse {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["workspace", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "workspace" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "workspace" })
 model WorkspaceAccessSignal {
   `bindings`: unknown[];
   `canManage`: boolean;
@@ -1305,7 +1305,7 @@ model WorkspaceAccessStatus {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["workspace", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "workspace" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "workspace" })
 model WorkspaceActionSignal {
   `command`?: string;
   `disabled`?: boolean;
@@ -1315,7 +1315,7 @@ model WorkspaceActionSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["workspace", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "workspace" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "workspace" })
 model WorkspaceAssetDetailsSignal {
   `overview`: DefinitionFactSignal[];
   `sections`: WorkspaceDetailSectionSignal[];
@@ -1323,7 +1323,7 @@ model WorkspaceAssetDetailsSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["workspace", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "workspace" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "workspace" })
 model WorkspaceAssetLineageSignal {
   `count`: int64;
   `graph`: AssetLineageGraphSignal;
@@ -1342,20 +1342,20 @@ model WorkspaceAssetListSignal {
 }
 
 @apigen.contract(#{ kind: "ui-envelope", tags: #["workspace", "envelope"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "envelope", `x-libredash-surface`: "workspace" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "envelope", `x-leapview-surface`: "workspace" })
 model WorkspaceAssetPageEnvelope {
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "chrome" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "chrome" })
   `chrome`: ChromeSignal;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "page" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "page" })
   `page`: WorkspaceAssetPageSignal;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "runtime" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "runtime" })
   `runtime`: RouteRuntimeSignal;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "status" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "status" })
   `status`: DashboardStatus;
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["workspace", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "workspace" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "workspace" })
 model WorkspaceAssetPageSignal {
   `actions`?: WorkspaceActionSignal[];
   `activeSection`: string;
@@ -1374,7 +1374,7 @@ model WorkspaceAssetPageSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["workspace", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "workspace" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "workspace" })
 model WorkspaceAssetRefreshSignal {
   `lastSuccessful`: string;
   `running`: boolean;
@@ -1383,7 +1383,7 @@ model WorkspaceAssetRefreshSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["workspace", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "workspace" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "workspace" })
 model WorkspaceAssetSummarySignal {
   `description`?: string;
   `detailHref`: string;
@@ -1403,7 +1403,7 @@ model WorkspaceAssetVersionsSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["workspace", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "workspace" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "workspace" })
 model WorkspaceBreadcrumbSignal {
   `current`?: boolean;
   `href`?: string;
@@ -1411,7 +1411,7 @@ model WorkspaceBreadcrumbSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["workspace", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "workspace" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "workspace" })
 model WorkspaceCardSignal {
   `description`: string;
   `href`: string;
@@ -1421,7 +1421,7 @@ model WorkspaceCardSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["workspace", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "workspace" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "workspace" })
 model WorkspaceDetailSectionSignal {
   `code`?: string;
   `facts`?: DefinitionFactSignal[];
@@ -1431,22 +1431,22 @@ model WorkspaceDetailSectionSignal {
 }
 
 @apigen.contract(#{ kind: "ui-envelope", tags: #["workspace", "envelope"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "envelope", `x-libredash-surface`: "workspace" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "envelope", `x-leapview-surface`: "workspace" })
 model WorkspacePageEnvelope {
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "chrome" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "chrome" })
   `chrome`: ChromeSignal;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "page" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "page" })
   `page`: WorkspacePageSignal;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "runtime" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "runtime" })
   `runtime`: RouteRuntimeSignal;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "status" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "status" })
   `status`: DashboardStatus;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "workspaceAccess" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "workspaceAccess" })
   `workspaceAccess`?: WorkspaceAccessSignal;
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["workspace", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "workspace" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "workspace" })
 model WorkspacePageSignal {
   `assetList`?: WorkspaceAssetListSignal;
   `cards`?: WorkspaceCardSignal[];
@@ -1458,7 +1458,7 @@ model WorkspacePageSignal {
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["workspace", "signal"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "workspace" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "workspace" })
 model WorkspaceTabSignal {
   `active`: boolean;
   `count`?: int64;

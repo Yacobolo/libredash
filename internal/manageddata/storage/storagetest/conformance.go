@@ -10,7 +10,7 @@ import (
 	"io"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/manageddata/storage"
+	"github.com/Yacobolo/leapview/internal/manageddata/storage"
 )
 
 type Factory func(t *testing.T) storage.BlobStore

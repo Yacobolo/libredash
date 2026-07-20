@@ -16,10 +16,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/manageddata"
-	"github.com/Yacobolo/libredash/internal/manageddata/maintenance"
-	"github.com/Yacobolo/libredash/internal/manageddata/storage"
-	platformdb "github.com/Yacobolo/libredash/internal/platform/db"
+	"github.com/Yacobolo/leapview/internal/manageddata"
+	"github.com/Yacobolo/leapview/internal/manageddata/maintenance"
+	"github.com/Yacobolo/leapview/internal/manageddata/storage"
+	platformdb "github.com/Yacobolo/leapview/internal/platform/db"
 )
 
 const transactionCleanupTimeout = 5 * time.Second

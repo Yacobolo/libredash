@@ -39,7 +39,7 @@ func acquireControllerLock(path string) (*controllerLock, error) {
 	}
 	if !acquired {
 		_ = file.Close()
-		return nil, fmt.Errorf("another LibreDash operation is running")
+		return nil, fmt.Errorf("another LeapView operation is running")
 	}
 	return &controllerLock{file: file}, nil
 }

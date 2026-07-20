@@ -1,7 +1,7 @@
 package report
 
 import (
-	"github.com/Yacobolo/libredash/internal/dashboard"
+	"github.com/Yacobolo/leapview/internal/dashboard"
 	"net/url"
 	"sort"
 )

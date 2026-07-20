@@ -5,12 +5,12 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/access"
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	"github.com/Yacobolo/libredash/internal/api"
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
-	"github.com/Yacobolo/libredash/internal/workspace/search"
+	"github.com/Yacobolo/leapview/internal/access"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	"github.com/Yacobolo/leapview/internal/api"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	"github.com/Yacobolo/leapview/internal/workspace/search"
 	"github.com/go-chi/chi/v5"
 )
 

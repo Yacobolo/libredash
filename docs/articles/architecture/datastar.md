@@ -1,6 +1,6 @@
 # Datastar signal flow
 
-LibreDash uses Datastar as the transport between server-owned application state and Lit browser components. Signals are typed product contracts, not an unstructured global store.
+LeapView uses Datastar as the transport between server-owned application state and Lit browser components. Signals are typed product contracts, not an unstructured global store.
 
 ## Bootstrap state
 

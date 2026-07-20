@@ -1,6 +1,6 @@
 # Write documentation
 
-LibreDash documentation is maintained like product code: authored Markdown stays close to the implementation, executable examples are validated, generated reference is derived from source contracts, and structural changes are reviewed in the public site. Choose an article type before writing so readers know whether they are learning, completing a task, understanding a design, or looking up exact syntax.
+LeapView documentation is maintained like product code: authored Markdown stays close to the implementation, executable examples are validated, generated reference is derived from source contracts, and structural changes are reviewed in the public site. Choose an article type before writing so readers know whether they are learning, completing a task, understanding a design, or looking up exact syntax.
 
 ## Choose the article type
 
@@ -33,7 +33,7 @@ Explain what the reader will achieve and when to use this procedure.
 3. Keep the complete configuration close to the step that introduces it.
 
 ```yaml
-# A schema-valid LibreDash resource or focused fragment.
+# A schema-valid LeapView resource or focused fragment.
 ```
 
 ## Validate the configuration

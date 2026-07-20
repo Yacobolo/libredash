@@ -9,7 +9,7 @@ export function checkSignalContract(name: string, value: unknown, shape: Contrac
     .map(([key]) => key)
     .filter((key) => object[key] === undefined)
   if (missing.length === 0) return
-  console.warn(`[LibreDash] ${name} is missing signal fields: ${missing.join(', ')}`)
+  console.warn(`[LeapView] ${name} is missing signal fields: ${missing.join(', ')}`)
 }
 
 function isDev(): boolean {

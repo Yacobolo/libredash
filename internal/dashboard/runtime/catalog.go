@@ -4,9 +4,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	"github.com/Yacobolo/libredash/internal/workspace"
-	workspacecompiler "github.com/Yacobolo/libredash/internal/workspace/compiler"
+	"github.com/Yacobolo/leapview/internal/brand"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	"github.com/Yacobolo/leapview/internal/workspace"
+	workspacecompiler "github.com/Yacobolo/leapview/internal/workspace/compiler"
 )
 
 type CatalogService struct {
@@ -96,5 +97,5 @@ func workspaceTitle(workspace workspace.CatalogWorkspace) string {
 	if strings.TrimSpace(workspace.ID) != "" {
 		return workspace.ID
 	}
-	return "LibreDash"
+	return brand.Name
 }

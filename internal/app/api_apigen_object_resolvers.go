@@ -3,14 +3,14 @@ package app
 import (
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/access/httpauth"
-	queryhttp "github.com/Yacobolo/libredash/internal/analytics/query/http"
-	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
-	dashboardhttp "github.com/Yacobolo/libredash/internal/dashboard/http"
-	workspacehttp "github.com/Yacobolo/libredash/internal/workspace/http"
+	"github.com/Yacobolo/leapview/internal/access/httpauth"
+	queryhttp "github.com/Yacobolo/leapview/internal/analytics/query/http"
+	apigenapi "github.com/Yacobolo/leapview/internal/api/gen"
+	dashboardhttp "github.com/Yacobolo/leapview/internal/dashboard/http"
+	workspacehttp "github.com/Yacobolo/leapview/internal/workspace/http"
 )
 
-const apiGenObjectScopeExtension = "x-libredash-object-scope"
+const apiGenObjectScopeExtension = "x-leapview-object-scope"
 
 type apiGenObjectScope struct {
 	pathParameter string

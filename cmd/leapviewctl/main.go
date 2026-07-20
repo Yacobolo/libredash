@@ -9,20 +9,20 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/Yacobolo/libredash/internal/composectl"
+	"github.com/Yacobolo/leapview/internal/composectl"
 )
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if err := run(ctx); err != nil {
-		fmt.Fprintf(os.Stderr, "libredashctl: %v\n", err)
+		fmt.Fprintf(os.Stderr, "leapviewctl: %v\n", err)
 		os.Exit(1)
 	}
 }
 
 func run(ctx context.Context) error {
-	root := strings.TrimSpace(os.Getenv("LIBREDASHCTL_ROOT"))
+	root := strings.TrimSpace(os.Getenv("LEAPVIEWCTL_ROOT"))
 	if root == "" {
 		executable, err := os.Executable()
 		if err != nil {
@@ -32,7 +32,7 @@ func run(ctx context.Context) error {
 	}
 	controller, err := composectl.New(composectl.Options{
 		Root:      root,
-		DockerBin: os.Getenv("LIBREDASHCTL_DOCKER_BIN"),
+		DockerBin: os.Getenv("LEAPVIEWCTL_DOCKER_BIN"),
 		Stdin:     os.Stdin,
 		Stdout:    os.Stdout,
 		Stderr:    os.Stderr,

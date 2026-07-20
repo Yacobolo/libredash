@@ -1,0 +1,6 @@
+#!/usr/bin/env sh
+set -eu
+
+export LEAPVIEWCTL_ROOT=/opt/leapview
+export LEAPVIEWCTL_BACKUP_HOOK=/usr/local/sbin/leapview-backup-hook
+exec /opt/leapview/leapviewctl "$@"

@@ -1,18 +1,18 @@
 sections:
   - id: start
     title: Start here
-    summary: Install LibreDash, run the sample workspace, and understand the project layout.
+    summary: Install LeapView, run the sample workspace, and understand the project layout.
     documents:
       - slug: introduction
-        title: What is LibreDash?
-        summary: Understand the problems LibreDash solves and its code-native model.
+        title: What is LeapView?
+        summary: Understand the problems LeapView solves and its code-native model.
         source: articles/start/introduction.md
       - slug: installation
         title: Installation
         summary: Pull the public image locally or prepare a durable production instance.
         source: articles/start/installation.md
       - slug: getting-started
-        title: Get started with LibreDash
+        title: Get started with LeapView
         summary: Bootstrap, edit, and run the included project from a source checkout.
         source: getting-started.md
         breadcrumb: Getting started
@@ -27,12 +27,12 @@ sections:
 
   - id: concepts
     title: Core concepts
-    summary: Learn the resource model and runtime ideas behind LibreDash.
+    summary: Learn the resource model and runtime ideas behind LeapView.
     documents:
       - slug: concepts
         title: Core concepts
         navigationTitle: Overview
-        summary: A map of the concepts used throughout LibreDash.
+        summary: A map of the concepts used throughout LeapView.
         source: articles/concepts/overview.md
       - slug: concepts/projects-workspaces-environments
         title: Projects, workspaces, and environments
@@ -129,10 +129,10 @@ sections:
 
   - id: operate
     title: Deploy and operate
-    summary: Move reviewed projects into environments and run LibreDash in production.
+    summary: Move reviewed projects into environments and run LeapView in production.
     documents:
       - slug: guides/operate
-        title: Deploy and operate LibreDash
+        title: Deploy and operate LeapView
         navigationTitle: Overview
         summary: Understand the production delivery and operations workflow.
         source: articles/operate/overview.md
@@ -176,7 +176,7 @@ sections:
       - slug: enterprise-auth
         title: Authentication and authorization
         navigationTitle: Overview
-        summary: Understand LibreDash identity and authorization boundaries.
+        summary: Understand LeapView identity and authorization boundaries.
         source: enterprise-auth.md
       - slug: security/local-auth
         title: Local authentication
@@ -205,10 +205,10 @@ sections:
 
   - id: integrate
     title: Integrate
-    summary: Automate LibreDash through the CLI, API, and agent surfaces.
+    summary: Automate LeapView through the CLI, API, and agent surfaces.
     documents:
       - slug: integrate
-        title: Integrate with LibreDash
+        title: Integrate with LeapView
         navigationTitle: Overview
         summary: Choose between CLI, API, and agent integration surfaces.
         source: articles/integrate/overview.md
@@ -238,7 +238,7 @@ sections:
         source: articles/integrate/agent.md
       - slug: guides/integrate/mcp
         title: Connect an MCP host
-        summary: Connect Claude and other MCP hosts to a LibreDash deployment over OAuth.
+        summary: Connect Claude and other MCP hosts to a LeapView deployment over OAuth.
         source: articles/integrate/mcp.md
       - slug: cli/automation
         title: Automation and CI
@@ -295,7 +295,7 @@ sections:
             slug: cli/reference
             title: CLI command reference
             navigationTitle: Overview
-            summary: Browse every generated LibreDash command.
+            summary: Browse every generated LeapView command.
             source: reference/cli/index.md
             generated: true
       - id: api
@@ -325,13 +325,13 @@ sections:
             slug: visuals/overview
             title: Visual types
             navigationTitle: Overview
-            summary: Choose from every supported LibreDash visual type.
+            summary: Choose from every supported LeapView visual type.
             source: visuals/index.md
             breadcrumb: Visuals
 
   - id: architecture
     title: Architecture and contributing
-    summary: Understand the implementation and extend LibreDash safely.
+    summary: Understand the implementation and extend LeapView safely.
     groups:
       - id: architecture
         title: Architecture
@@ -360,12 +360,12 @@ sections:
             source: articles/architecture/visual-plugins.md
       - id: contributing
         title: Contributing
-        summary: Develop LibreDash and extend its generated contracts safely.
+        summary: Develop LeapView and extend its generated contracts safely.
         documents:
           - slug: contributing/repository
             title: Repository and development workflow
             navigationTitle: Overview
-            summary: Work effectively in the LibreDash monorepo.
+            summary: Work effectively in the LeapView monorepo.
             source: articles/contributing/repository.md
           - slug: contributing/visual
             title: Add a visual type

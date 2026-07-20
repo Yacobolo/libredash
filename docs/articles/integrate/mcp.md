@@ -1,40 +1,40 @@
-# Connect an MCP host to LibreDash
+# Connect an MCP host to LeapView
 
-LibreDash exposes the same governed BI tool catalog used by its built-in agent through a tools-only MCP endpoint. The endpoint belongs to each LibreDash deployment:
+LeapView exposes the same governed BI tool catalog used by its built-in agent through a tools-only MCP endpoint. The endpoint belongs to each LeapView deployment:
 
 ```text
-${LIBREDASH_PUBLIC_URL}/mcp
+${LEAPVIEW_PUBLIC_URL}/mcp
 ```
 
-For example, a deployment whose public URL is `https://bi.example.com` exposes MCP at `https://bi.example.com/mcp`. `https://leapview.dev` hosts the LibreDash website and documentation; it is not a shared MCP gateway for independently deployed instances.
+For example, a deployment whose public URL is `https://bi.example.com` exposes MCP at `https://bi.example.com/mcp`. `https://leapview.dev` hosts the LeapView website and documentation; it is not a shared MCP gateway for independently deployed instances.
 
-LibreDash implements stateless Streamable HTTP 2025-11-25. It exposes tools, not MCP resources, prompts, nested conversations, or stdio transport. The built-in agent and MCP use the same catalog, input and output schemas, handlers, authorization, projections, audit path, and execution errors.
+LeapView implements stateless Streamable HTTP 2025-11-25. It exposes tools, not MCP resources, prompts, nested conversations, or stdio transport. The built-in agent and MCP use the same catalog, input and output schemas, handlers, authorization, projections, audit path, and execution errors.
 
 ## Before you connect
 
 Configure the deployment's exact externally reachable HTTPS origin:
 
 ```sh
-LIBREDASH_PUBLIC_URL=https://bi.example.com
-LIBREDASH_ALLOWED_HOSTS=bi.example.com
+LEAPVIEW_PUBLIC_URL=https://bi.example.com
+LEAPVIEW_ALLOWED_HOSTS=bi.example.com
 ```
 
 The origin must have no path, query, fragment, or credentials. Reverse proxies must preserve the public scheme and host. The resulting OAuth resource and audience are exactly `https://bi.example.com/mcp`; changing the public URL creates a different resource identity.
 
 An interactive user needs browser authentication and permission to use the agent. Grant `USE_AGENT` through at least one workspace the principal may access. Each tool call then checks the selected workspace and the tool's resource privileges and data policies. A workspace is not encoded in the MCP connection URL; workspace-aware tools require an explicit `workspace` argument.
 
-The MCP endpoint is independent of `LIBREDASH_AGENT_MODEL` and `LIBREDASH_AGENT_API_KEY`. External MCP hosts can use LibreDash when the built-in model is disabled.
+The MCP endpoint is independent of `LEAPVIEW_AGENT_MODEL` and `LEAPVIEW_AGENT_API_KEY`. External MCP hosts can use LeapView when the built-in model is disabled.
 
 ## Connect Claude
 
-Claude connects to LibreDash as a remote custom connector:
+Claude connects to LeapView as a remote custom connector:
 
 1. In Claude, open **Customize**, then **Connectors**.
 2. Choose **Add custom connector**.
-3. Name the connector, for example `LibreDash`.
+3. Name the connector, for example `LeapView`.
 4. Enter your deployment URL followed by `/mcp`, for example `https://bi.example.com/mcp`.
-5. Leave advanced OAuth client ID and client secret fields empty. LibreDash supports automatic client registration and Client ID Metadata Documents.
-6. Connect the new connector. Claude opens the LibreDash sign-in and consent flow in the browser.
+5. Leave advanced OAuth client ID and client secret fields empty. LeapView supports automatic client registration and Client ID Metadata Documents.
+6. Connect the new connector. Claude opens the LeapView sign-in and consent flow in the browser.
 7. Review and approve the `mcp:use` request, then enable the connector in the conversation where it should be available.
 
 Organization owners may need to add the custom connector before members can connect it. Claude's UI and plan availability can change; use Anthropic's current [remote MCP custom connector guide](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp) when its labels differ from the steps above.
@@ -57,13 +57,13 @@ curl -fsS https://bi.example.com/.well-known/oauth-protected-resource/mcp
 curl -fsS https://bi.example.com/.well-known/oauth-authorization-server
 ```
 
-LibreDash's embedded authorization server supports authorization code with S256 PKCE, Dynamic Client Registration, Client ID Metadata Documents, refresh-token rotation, and explicit resource indicators. Browser sessions authenticate the consent page but are not accepted as MCP credentials. The issued OAuth access token is a bearer token on the wire, lasts 15 minutes, and has an exact MCP audience. Refresh tokens last 30 days and rotate when used.
+LeapView's embedded authorization server supports authorization code with S256 PKCE, Dynamic Client Registration, Client ID Metadata Documents, refresh-token rotation, and explicit resource indicators. Browser sessions authenticate the consent page but are not accepted as MCP credentials. The issued OAuth access token is a bearer token on the wire, lasts 15 minutes, and has an exact MCP audience. Refresh tokens last 30 days and rotate when used.
 
-General LibreDash API tokens are intentionally rejected at `/mcp`. They have different audience and delegation semantics and should continue to be used for the REST API and CLI.
+General LeapView API tokens are intentionally rejected at `/mcp`. They have different audience and delegation semantics and should continue to be used for the REST API and CLI.
 
 ## Connect an automated workload
 
-Use a dedicated LibreDash service principal for a non-interactive MCP client. Grant it `USE_AGENT` and only the workspace and resource privileges its tools require. Exchange the service-principal ID and secret at the deployment's OAuth token endpoint:
+Use a dedicated LeapView service principal for a non-interactive MCP client. Grant it `USE_AGENT` and only the workspace and resource privileges its tools require. Exchange the service-principal ID and secret at the deployment's OAuth token endpoint:
 
 ```sh
 curl -fsS https://bi.example.com/oauth/token \
@@ -78,25 +78,25 @@ Pass the returned access token to the MCP transport as `Authorization: Bearer <a
 
 ## Use an external authorization server
 
-Set `LIBREDASH_MCP_OAUTH_ISSUER_URL` to delegate MCP authorization to an organization-wide issuer. The issuer must publish OpenID Connect discovery and sign JWT access tokens with:
+Set `LEAPVIEW_MCP_OAUTH_ISSUER_URL` to delegate MCP authorization to an organization-wide issuer. The issuer must publish OpenID Connect discovery and sign JWT access tokens with:
 
-- an audience exactly equal to `${LIBREDASH_PUBLIC_URL}/mcp`;
-- a subject that LibreDash can map to an existing principal;
+- an audience exactly equal to `${LEAPVIEW_PUBLIC_URL}/mcp`;
+- a subject that LeapView can map to an existing principal;
 - an `mcp:use` scope.
 
-LibreDash still performs live RBAC and data-policy checks for every tool call. In external-issuer mode, clients use the external provider's advertised authorization endpoints and LibreDash's embedded authorization endpoints are unavailable. Ensure the provider and client together support the interactive remote-MCP flow you intend to use.
+LeapView still performs live RBAC and data-policy checks for every tool call. In external-issuer mode, clients use the external provider's advertised authorization endpoints and LeapView's embedded authorization endpoints are unavailable. Ensure the provider and client together support the interactive remote-MCP flow you intend to use.
 
 ## Troubleshoot connections
 
 | Symptom | What to check |
 | --- | --- |
-| The client cannot discover OAuth | Confirm public DNS and TLS, then fetch both well-known URLs. Verify `LIBREDASH_PUBLIC_URL` exactly matches the connection origin. |
+| The client cannot discover OAuth | Confirm public DNS and TLS, then fetch both well-known URLs. Verify `LEAPVIEW_PUBLIC_URL` exactly matches the connection origin. |
 | Sign-in loops or returns to the wrong host | Check reverse-proxy scheme and host handling, allowed hosts, secure cookies, and registered browser-auth callback URLs. |
-| MCP returns `401` | Acquire a fresh OAuth token with `mcp:use` and the exact MCP resource. Do not substitute a LibreDash API token. |
+| MCP returns `401` | Acquire a fresh OAuth token with `mcp:use` and the exact MCP resource. Do not substitute a LeapView API token. |
 | MCP returns `403` before a tool runs | Grant the principal `USE_AGENT` through an allowed workspace. |
 | A tool returns an authorization error | Check the explicit `workspace` argument, the principal's resource privilege, data policy, and any service-principal restrictions. |
 | Claude cannot reach an internally healthy deployment | Remote connectors run outside your private network. Expose a trusted HTTPS endpoint or use a client that can reach the deployment. |
-| A browser-origin request is rejected | Connect through an MCP host. LibreDash rejects cross-origin MCP transport requests deliberately. |
+| A browser-origin request is rejected | Connect through an MCP host. LeapView rejects cross-origin MCP transport requests deliberately. |
 
 Successful calls return both MCP `structuredContent` and equivalent JSON text. Expected tool failures are returned as tool errors; malformed MCP requests use protocol errors. Request cancellation propagates into query execution, and every call is recorded through the agent-tool audit path.
 

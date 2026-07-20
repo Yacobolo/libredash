@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/manageddata/storage"
+	"github.com/Yacobolo/leapview/internal/manageddata/storage"
 )
 
 var (

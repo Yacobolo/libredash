@@ -1,15 +1,15 @@
 # OIDC
 
-OpenID Connect provides interactive browser identity. LibreDash identifies a person by the stable pair of issuer and subject. Email and display name are profile metadata and may change without creating a new identity.
+OpenID Connect provides interactive browser identity. LeapView identifies a person by the stable pair of issuer and subject. Email and display name are profile metadata and may change without creating a new identity.
 
 ## Before you begin
 
-Choose one trusted OIDC provider, a stable provider ID, and the exact external HTTPS origin served by the trusted reverse proxy. Obtain a test user without administrator privileges and access to both provider and LibreDash logs.
+Choose one trusted OIDC provider, a stable provider ID, and the exact external HTTPS origin served by the trusted reverse proxy. Obtain a test user without administrator privileges and access to both provider and LeapView logs.
 
 Roll out identity in this order:
 
 1. Register one confidential web client with an exact callback URI.
-2. Store its secret and configure the complete LibreDash OIDC tuple.
+2. Store its secret and configure the complete LeapView OIDC tuple.
 3. Configure trusted proxy, host, cookie, CSRF, and clock boundaries.
 4. Bind the test principal or provisioned group to a narrow role.
 5. Validate configuration and verify login, logout, denial, and audit behavior.
@@ -24,15 +24,15 @@ https://dash.example.com/auth/{provider_id}/callback
 
 The provider ID must contain only route-safe letters, numbers, dots, underscores, or dashes. Use one stable value; changing it changes the callback route and requires a coordinated provider update.
 
-Configure LibreDash:
+Configure LeapView:
 
 ```sh
-LIBREDASH_OIDC_PROVIDER_ID=entra
-LIBREDASH_OIDC_ISSUER_URL=https://login.microsoftonline.com/<tenant>/v2.0
-LIBREDASH_OIDC_CLIENT_ID=<client-id>
-LIBREDASH_OIDC_CLIENT_SECRET=<client-secret>
-LIBREDASH_OIDC_CALLBACK_URL=https://dash.example.com/auth/entra/callback
-LIBREDASH_OIDC_SCOPES="openid profile email"
+LEAPVIEW_OIDC_PROVIDER_ID=entra
+LEAPVIEW_OIDC_ISSUER_URL=https://login.microsoftonline.com/<tenant>/v2.0
+LEAPVIEW_OIDC_CLIENT_ID=<client-id>
+LEAPVIEW_OIDC_CLIENT_SECRET=<client-secret>
+LEAPVIEW_OIDC_CALLBACK_URL=https://dash.example.com/auth/entra/callback
+LEAPVIEW_OIDC_SCOPES="openid profile email"
 ```
 
 Production validation requires the issuer and callback to use HTTPS and treats issuer, client ID, client secret, and callback as an all-or-none set. Store the client secret in the deployment secret manager.
@@ -41,13 +41,13 @@ Production validation requires the issuer and callback to use HTTPS and treats i
 
 Terminate TLS at a maintained trusted proxy and ensure the application sees the correct public scheme and host used by the callback. Set exact allowed hosts. Enable proxy-header trust only when that proxy overwrites client-supplied forwarding headers.
 
-Secure cookies must remain enabled for browser auth. Clock synchronization matters for token and state validation on both LibreDash and the identity provider.
+Secure cookies must remain enabled for browser auth. Clock synchronization matters for token and state validation on both LeapView and the identity provider.
 
 ## Understand identity mapping
 
 The issuer URL and the token's subject claim form identity. Do not map identity by email alone: email addresses can be renamed or reassigned. Profile changes may update display metadata while privileges remain attached to the same principal.
 
-LibreDash intentionally does not treat OIDC group claims as the enterprise group source of truth. Use SCIM for directory users, groups, and membership, then use LibreDash grants and role bindings for product authorization.
+LeapView intentionally does not treat OIDC group claims as the enterprise group source of truth. Use SCIM for directory users, groups, and membership, then use LeapView grants and role bindings for product authorization.
 
 ## Assign access
 
@@ -63,7 +63,7 @@ When rotating the client secret, install the new value through the secret manage
 
 ## Validate the configuration
 
-Start LibreDash with production validation enabled before changing traffic. It must reject partial OIDC configuration, non-HTTPS production issuer or callback URLs, malformed provider IDs, and insecure cookie boundaries. Compare the configured callback with the provider registration character for character, including path and provider ID.
+Start LeapView with production validation enabled before changing traffic. It must reject partial OIDC configuration, non-HTTPS production issuer or callback URLs, malformed provider IDs, and insecure cookie boundaries. Compare the configured callback with the provider registration character for character, including path and provider ID.
 
 Validate that the reverse proxy overwrites forwarding headers, the application trusts only that proxy, and the public host is explicitly allowed. Keep the previous authentication path available to an operator until the new flow is verified.
 
@@ -81,9 +81,9 @@ Repeat a login after changing only profile metadata such as display name; it sho
 
 ## Troubleshooting
 
-If the provider rejects the request, compare the callback URL character for character. If callback reaches LibreDash but state or cookie validation fails, check HTTPS, cookie security, allowed hosts, CSRF key consistency, proxy headers, and clock skew. If login succeeds but access is empty, inspect principal identity and grants rather than the OIDC handshake.
+If the provider rejects the request, compare the callback URL character for character. If callback reaches LeapView but state or cookie validation fails, check HTTPS, cookie security, allowed hosts, CSRF key consistency, proxy headers, and clock skew. If login succeeds but access is empty, inspect principal identity and grants rather than the OIDC handshake.
 
-Preserve correlation timestamps and inspect both provider logs and LibreDash audit/application logs without recording raw tokens.
+Preserve correlation timestamps and inspect both provider logs and LeapView audit/application logs without recording raw tokens.
 
 ## Next steps
 

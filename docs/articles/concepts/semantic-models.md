@@ -59,7 +59,7 @@ relationships:
     cardinality: many_to_one
 ```
 
-LibreDash supports the cardinalities documented by the generated schema. The declared direction matters: the `to` side of a `many_to_one` relationship should be unique for the join field. A false cardinality declaration can duplicate fact rows and corrupt measures, so confirm it from data rather than naming convention.
+LeapView supports the cardinalities documented by the generated schema. The declared direction matters: the `to` side of a `many_to_one` relationship should be unique for the join field. A false cardinality declaration can duplicate fact rows and corrupt measures, so confirm it from data rather than naming convention.
 
 Avoid multiple plausible paths between the same facts and dimensions. Ambiguous paths should be redesigned or rejected instead of letting query order determine results.
 

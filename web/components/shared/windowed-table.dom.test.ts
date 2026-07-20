@@ -48,7 +48,7 @@ test('windowed table loads requested blocks and rejects stale payloads', async (
   const page = await browser.newPage({ viewport: { width: 960, height: 560 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-windowed-table'))
+    await page.waitForFunction(() => customElements.get('lv-windowed-table'))
 
     const state = await page.evaluate(async () => {
       const makeBlock = (start: number, requestSeq: number, resetVersion: number, sort: Record<string, string>, rows: Array<Record<string, unknown>>) => ({ start, requestSeq, resetVersion, sort, rows })
@@ -83,7 +83,7 @@ test('windowed table loads requested blocks and rejects stale payloads', async (
           ...overrides,
         }
       }
-      const element = document.createElement('ld-windowed-table') as any
+      const element = document.createElement('lv-windowed-table') as any
       const sort = { key: 'id', direction: 'asc' }
       element.table = makeTable({
         sort,
@@ -94,7 +94,7 @@ test('windowed table loads requested blocks and rejects stale payloads', async (
         },
       })
       const requests: any[] = []
-      element.addEventListener('ld-windowed-table-request', (event: CustomEvent) => requests.push(event.detail))
+      element.addEventListener('lv-windowed-table-request', (event: CustomEvent) => requests.push(event.detail))
       document.body.append(element)
       await element.updateComplete
 
@@ -159,10 +159,10 @@ test('windowed table resizes columns and emits width state', async () => {
   const page = await browser.newPage({ viewport: { width: 960, height: 560 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-windowed-table'))
+    await page.waitForFunction(() => customElements.get('lv-windowed-table'))
 
     const state = await page.evaluate(async () => {
-      const element = document.createElement('ld-windowed-table') as any
+      const element = document.createElement('lv-windowed-table') as any
       const sort = { key: 'id', direction: 'asc' }
       element.table = {
         title: 'Customers',
@@ -186,7 +186,7 @@ test('windowed table resizes columns and emits width state', async () => {
         columnWidths: {},
       }
       const widthEvents: any[] = []
-      element.addEventListener('ld-windowed-table-column-widths', (event: CustomEvent) => widthEvents.push(event.detail))
+      element.addEventListener('lv-windowed-table-column-widths', (event: CustomEvent) => widthEvents.push(event.detail))
       document.body.append(element)
       await element.updateComplete
 
@@ -247,11 +247,11 @@ test('windowed table clears cached rows when table key changes without reset ver
   const page = await browser.newPage({ viewport: { width: 960, height: 560 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-windowed-table'))
+    await page.waitForFunction(() => customElements.get('lv-windowed-table'))
 
     const state = await page.evaluate(async () => {
       const sort = { key: 'id', direction: 'asc' }
-      const element = document.createElement('ld-windowed-table') as any
+      const element = document.createElement('lv-windowed-table') as any
       const makeTable = (tableKey: string, rows: Array<Record<string, unknown>>) => ({
         tableKey,
         title: 'Rows',
@@ -307,7 +307,7 @@ function testDocument() {
         <style>
           html, body { margin: 0; min-height: 100%; }
           body { font-family: Inter, system-ui, sans-serif; }
-          ld-windowed-table { display: grid; width: 900px; height: 420px; min-height: 0; }
+          lv-windowed-table { display: grid; width: 900px; height: 420px; min-height: 0; }
         </style>
       </head>
       <body>

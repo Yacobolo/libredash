@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/manageddata/storage"
+	"github.com/Yacobolo/leapview/internal/manageddata/storage"
 	awsv4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"

@@ -15,15 +15,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/access"
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	semanticquery "github.com/Yacobolo/libredash/internal/analytics/query"
-	queryauthz "github.com/Yacobolo/libredash/internal/analytics/query/authz"
-	"github.com/Yacobolo/libredash/internal/api"
-	"github.com/Yacobolo/libredash/internal/cursorsigning"
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
-	"github.com/Yacobolo/libredash/internal/dataquery"
+	"github.com/Yacobolo/leapview/internal/access"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	semanticquery "github.com/Yacobolo/leapview/internal/analytics/query"
+	queryauthz "github.com/Yacobolo/leapview/internal/analytics/query/authz"
+	"github.com/Yacobolo/leapview/internal/api"
+	"github.com/Yacobolo/leapview/internal/cursorsigning"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	"github.com/Yacobolo/leapview/internal/dataquery"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -1033,7 +1033,7 @@ func queryRowsFromDataResult(rows []dataquery.Row) reportdef.QueryRows {
 }
 
 func (h Handler) requestQueryMetadata(r *nethttp.Request, surface, operation, objectType, objectID string) dataquery.Metadata {
-	if surface == dataquery.SurfaceAPI && r.Header.Get("X-LibreDash-Client") == dataquery.SurfaceCLI {
+	if surface == dataquery.SurfaceAPI && r.Header.Get("X-LeapView-Client") == dataquery.SurfaceCLI {
 		surface = dataquery.SurfaceCLI
 	}
 	metadata := dataquery.Metadata{

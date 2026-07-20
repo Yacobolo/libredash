@@ -14,15 +14,15 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/access"
-	agentconfig "github.com/Yacobolo/libredash/internal/agent/config"
-	analyticsducklake "github.com/Yacobolo/libredash/internal/analytics/ducklake"
-	"github.com/Yacobolo/libredash/internal/instancelock"
+	"github.com/Yacobolo/leapview/internal/access"
+	agentconfig "github.com/Yacobolo/leapview/internal/agent/config"
+	analyticsducklake "github.com/Yacobolo/leapview/internal/analytics/ducklake"
+	"github.com/Yacobolo/leapview/internal/instancelock"
 )
 
 func TestStoreMigratesAndSeedsRoles(t *testing.T) {
 	ctx := context.Background()
-	dbPath := filepath.Join(t.TempDir(), "libredash.db")
+	dbPath := filepath.Join(t.TempDir(), "leapview.db")
 	store, err := Open(ctx, dbPath)
 	if err != nil {
 		t.Fatalf("open store: %v", err)
@@ -70,7 +70,7 @@ func TestStoreMigratesAndSeedsRoles(t *testing.T) {
 
 func TestStoreReconcilesDefaultSeedDataWithoutOverwritingSettings(t *testing.T) {
 	ctx := t.Context()
-	dbPath := filepath.Join(t.TempDir(), "libredash.db")
+	dbPath := filepath.Join(t.TempDir(), "leapview.db")
 	store, err := Open(ctx, dbPath)
 	if err != nil {
 		t.Fatalf("open store: %v", err)
@@ -143,7 +143,7 @@ func TestStoreReconcilesDefaultSeedDataWithoutOverwritingSettings(t *testing.T) 
 
 func TestStoreOpenMakesDatabasePrivate(t *testing.T) {
 	ctx := context.Background()
-	dbPath := filepath.Join(t.TempDir(), "libredash.db")
+	dbPath := filepath.Join(t.TempDir(), "leapview.db")
 	if err := os.WriteFile(dbPath, nil, 0o644); err != nil {
 		t.Fatalf("seed world-readable db file: %v", err)
 	}
@@ -159,13 +159,13 @@ func TestStoreOpenMakesDatabasePrivate(t *testing.T) {
 func TestStoreBackupCreatesReadableSQLiteCopy(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
-	store, err := Open(ctx, filepath.Join(dir, "libredash.db"))
+	store, err := Open(ctx, filepath.Join(dir, "leapview.db"))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
 	defer store.Close()
 
-	backupPath := filepath.Join(dir, "backups", "libredash.backup.db")
+	backupPath := filepath.Join(dir, "backups", "leapview.backup.db")
 	if err := store.Backup(ctx, backupPath); err != nil {
 		t.Fatalf("backup store: %v", err)
 	}
@@ -191,14 +191,14 @@ func TestStoreBackupCreatesReadableSQLiteCopy(t *testing.T) {
 func TestStoreBackupCreatesPrivateDatabaseCopy(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
-	store, err := Open(ctx, filepath.Join(dir, "libredash.db"))
+	store, err := Open(ctx, filepath.Join(dir, "leapview.db"))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
 	defer store.Close()
 
 	restoreUmask := setUmask(t, 0)
-	backupPath := filepath.Join(dir, "backups", "libredash.backup.db")
+	backupPath := filepath.Join(dir, "backups", "leapview.backup.db")
 	if err := store.Backup(ctx, backupPath); err != nil {
 		restoreUmask()
 		t.Fatalf("backup store: %v", err)
@@ -210,12 +210,12 @@ func TestStoreBackupCreatesPrivateDatabaseCopy(t *testing.T) {
 func TestStoreBackupRefusesOverwrite(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
-	store, err := Open(ctx, filepath.Join(dir, "libredash.db"))
+	store, err := Open(ctx, filepath.Join(dir, "leapview.db"))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
 	defer store.Close()
-	backupPath := filepath.Join(dir, "libredash.backup.db")
+	backupPath := filepath.Join(dir, "leapview.backup.db")
 	if err := os.WriteFile(backupPath, []byte("existing"), 0o644); err != nil {
 		t.Fatalf("write existing backup: %v", err)
 	}
@@ -227,7 +227,7 @@ func TestStoreBackupRefusesOverwrite(t *testing.T) {
 func TestRestoreReplacesPlatformDatabaseAndBacksUpCurrent(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
-	currentPath := filepath.Join(dir, "current", "libredash.db")
+	currentPath := filepath.Join(dir, "current", "leapview.db")
 	current, err := Open(ctx, currentPath)
 	if err != nil {
 		t.Fatalf("open current store: %v", err)
@@ -239,14 +239,14 @@ func TestRestoreReplacesPlatformDatabaseAndBacksUpCurrent(t *testing.T) {
 		t.Fatalf("close current store: %v", err)
 	}
 
-	backupSource, err := Open(ctx, filepath.Join(dir, "source", "libredash.db"))
+	backupSource, err := Open(ctx, filepath.Join(dir, "source", "leapview.db"))
 	if err != nil {
 		t.Fatalf("open backup source: %v", err)
 	}
 	if err := backupSource.UpsertSetting(ctx, "restore-test", "restored"); err != nil {
 		t.Fatalf("seed backup setting: %v", err)
 	}
-	backupPath := filepath.Join(dir, "backups", "libredash.restore.db")
+	backupPath := filepath.Join(dir, "backups", "leapview.restore.db")
 	if err := backupSource.Backup(ctx, backupPath); err != nil {
 		t.Fatalf("backup source: %v", err)
 	}
@@ -254,7 +254,7 @@ func TestRestoreReplacesPlatformDatabaseAndBacksUpCurrent(t *testing.T) {
 		t.Fatalf("close backup source: %v", err)
 	}
 
-	currentBackupPath := filepath.Join(dir, "backups", "libredash.before-restore.db")
+	currentBackupPath := filepath.Join(dir, "backups", "leapview.before-restore.db")
 	if err := Restore(ctx, currentPath, backupPath, currentBackupPath); err != nil {
 		t.Fatalf("restore: %v", err)
 	}
@@ -293,7 +293,7 @@ func TestRestoreReplacesPlatformDatabaseAndBacksUpCurrent(t *testing.T) {
 func TestRestoreRequiresCurrentBackupWhenTargetExists(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
-	currentPath := filepath.Join(dir, "libredash.db")
+	currentPath := filepath.Join(dir, "leapview.db")
 	store, err := Open(ctx, currentPath)
 	if err != nil {
 		t.Fatalf("open current store: %v", err)
@@ -314,7 +314,7 @@ func TestRestoreRequiresCurrentBackupWhenTargetExists(t *testing.T) {
 func TestRestoreRejectsInvalidBackupWithoutChangingCurrent(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
-	currentPath := filepath.Join(dir, "libredash.db")
+	currentPath := filepath.Join(dir, "leapview.db")
 	store, err := Open(ctx, currentPath)
 	if err != nil {
 		t.Fatalf("open current store: %v", err)
@@ -356,7 +356,7 @@ func TestBackupInstanceArchivesDatabaseAndPersistentFiles(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
 	home := filepath.Join(dir, "home")
-	dbPath := filepath.Join(home, "libredash.db")
+	dbPath := filepath.Join(home, "leapview.db")
 	store, err := Open(ctx, dbPath)
 	if err != nil {
 		t.Fatalf("open store: %v", err)
@@ -372,7 +372,7 @@ func TestBackupInstanceArchivesDatabaseAndPersistentFiles(t *testing.T) {
 	writeTestFile(t, filepath.Join(home, "runtime", "runtime-state"), "runtime")
 	writeTestFile(t, dbPath+"-wal", "stale wal sidecar")
 
-	backupPath := filepath.Join(dir, "backups", "libredash-instance.tar.gz")
+	backupPath := filepath.Join(dir, "backups", "leapview-instance.tar.gz")
 	if err := BackupInstance(ctx, InstanceBackupOptions{HomeDir: home, DBPath: dbPath, OutPath: backupPath}); err != nil {
 		t.Fatalf("backup instance: %v", err)
 	}
@@ -380,7 +380,7 @@ func TestBackupInstanceArchivesDatabaseAndPersistentFiles(t *testing.T) {
 	entries := readTarGzEntries(t, backupPath)
 	for _, want := range []string{
 		instanceBackupManifestName,
-		"libredash.db",
+		"leapview.db",
 		"artifacts/dep_1.tar.gz",
 		"data/ducklake-file.parquet",
 		"runtime/runtime-state",
@@ -389,11 +389,11 @@ func TestBackupInstanceArchivesDatabaseAndPersistentFiles(t *testing.T) {
 			t.Fatalf("instance backup missing %q; entries=%v", want, sortedKeys(entries))
 		}
 	}
-	if _, ok := entries["libredash.db-wal"]; ok {
+	if _, ok := entries["leapview.db-wal"]; ok {
 		t.Fatalf("instance backup included sqlite WAL sidecar; entries=%v", sortedKeys(entries))
 	}
 	backupDBPath := filepath.Join(dir, "backup.db")
-	if err := os.WriteFile(backupDBPath, entries["libredash.db"], 0o644); err != nil {
+	if err := os.WriteFile(backupDBPath, entries["leapview.db"], 0o644); err != nil {
 		t.Fatalf("write backup db: %v", err)
 	}
 	backupDB, err := sql.Open("sqlite", backupDBPath+"?_pragma=query_only(1)")
@@ -414,7 +414,7 @@ func TestBackupInstanceCreatesPrivateArchive(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
 	home := filepath.Join(dir, "home")
-	dbPath := filepath.Join(home, "libredash.db")
+	dbPath := filepath.Join(home, "leapview.db")
 	store, err := Open(ctx, dbPath)
 	if err != nil {
 		t.Fatalf("open store: %v", err)
@@ -424,7 +424,7 @@ func TestBackupInstanceCreatesPrivateArchive(t *testing.T) {
 	}
 
 	restoreUmask := setUmask(t, 0)
-	backupPath := filepath.Join(dir, "backups", "libredash-instance.tar.gz")
+	backupPath := filepath.Join(dir, "backups", "leapview-instance.tar.gz")
 	if err := BackupInstance(ctx, InstanceBackupOptions{HomeDir: home, DBPath: dbPath, OutPath: backupPath}); err != nil {
 		restoreUmask()
 		t.Fatalf("backup instance: %v", err)
@@ -437,7 +437,7 @@ func TestBackupInstanceRejectsUnsafeSymlink(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
 	home := filepath.Join(dir, "home")
-	dbPath := filepath.Join(home, "libredash.db")
+	dbPath := filepath.Join(home, "leapview.db")
 	store, err := Open(ctx, dbPath)
 	if err != nil {
 		t.Fatalf("open store: %v", err)
@@ -452,7 +452,7 @@ func TestBackupInstanceRejectsUnsafeSymlink(t *testing.T) {
 		t.Fatalf("create unsafe symlink: %v", err)
 	}
 
-	backupPath := filepath.Join(dir, "backups", "libredash-instance.tar.gz")
+	backupPath := filepath.Join(dir, "backups", "leapview-instance.tar.gz")
 	err = BackupInstance(ctx, InstanceBackupOptions{HomeDir: home, DBPath: dbPath, OutPath: backupPath})
 	if err == nil || !strings.Contains(err.Error(), "unsafe symlink") {
 		t.Fatalf("backup error = %v, want unsafe symlink", err)
@@ -466,7 +466,7 @@ func TestBackupInstanceRejectsSymlinkState(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
 	home := filepath.Join(dir, "home")
-	dbPath := filepath.Join(home, "libredash.db")
+	dbPath := filepath.Join(home, "leapview.db")
 	store, err := Open(ctx, dbPath)
 	if err != nil {
 		t.Fatalf("open store: %v", err)
@@ -484,7 +484,7 @@ func TestBackupInstanceRejectsSymlinkState(t *testing.T) {
 		t.Fatalf("create symlink: %v", err)
 	}
 
-	backupPath := filepath.Join(dir, "backups", "libredash-instance.tar.gz")
+	backupPath := filepath.Join(dir, "backups", "leapview-instance.tar.gz")
 	err = BackupInstance(ctx, InstanceBackupOptions{HomeDir: home, DBPath: dbPath, OutPath: backupPath})
 	if err == nil || !strings.Contains(err.Error(), "symlink entries are not supported") {
 		t.Fatalf("backup error = %v, want symlink rejection", err)
@@ -497,7 +497,7 @@ func TestBackupInstanceRejectsSymlinkState(t *testing.T) {
 func TestBackupInstanceRejectsOutputInsideHomeDir(t *testing.T) {
 	ctx := context.Background()
 	home := t.TempDir()
-	dbPath := filepath.Join(home, "libredash.db")
+	dbPath := filepath.Join(home, "leapview.db")
 	store, err := Open(ctx, dbPath)
 	if err != nil {
 		t.Fatalf("open store: %v", err)
@@ -505,7 +505,7 @@ func TestBackupInstanceRejectsOutputInsideHomeDir(t *testing.T) {
 	if err := store.Close(); err != nil {
 		t.Fatalf("close store: %v", err)
 	}
-	backupPath := filepath.Join(home, "backups", "libredash-instance.tar.gz")
+	backupPath := filepath.Join(home, "backups", "leapview-instance.tar.gz")
 	err = BackupInstance(ctx, InstanceBackupOptions{HomeDir: home, DBPath: dbPath, OutPath: backupPath})
 	if err == nil || !strings.Contains(err.Error(), "backup output path must not be inside home dir") {
 		t.Fatalf("backup error = %v, want in-home output rejection", err)
@@ -516,7 +516,7 @@ func TestRestoreInstanceReplacesHomeAndBacksUpCurrent(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
 	currentHome := filepath.Join(dir, "current")
-	currentDBPath := filepath.Join(currentHome, "libredash.db")
+	currentDBPath := filepath.Join(currentHome, "leapview.db")
 	current, err := Open(ctx, currentDBPath)
 	if err != nil {
 		t.Fatalf("open current store: %v", err)
@@ -530,7 +530,7 @@ func TestRestoreInstanceReplacesHomeAndBacksUpCurrent(t *testing.T) {
 	writeTestFile(t, filepath.Join(currentHome, "artifacts", "old.tar.gz"), "old artifact")
 
 	sourceHome := filepath.Join(dir, "source")
-	sourceDBPath := filepath.Join(sourceHome, "libredash.db")
+	sourceDBPath := filepath.Join(sourceHome, "leapview.db")
 	source, err := Open(ctx, sourceDBPath)
 	if err != nil {
 		t.Fatalf("open source store: %v", err)
@@ -660,7 +660,7 @@ func TestRestoreInstanceRequiresCurrentBackupWhenTargetHasState(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
 	sourceHome := filepath.Join(dir, "source")
-	sourceDBPath := filepath.Join(sourceHome, "libredash.db")
+	sourceDBPath := filepath.Join(sourceHome, "leapview.db")
 	source, err := Open(ctx, sourceDBPath)
 	if err != nil {
 		t.Fatalf("open source store: %v", err)
@@ -673,7 +673,7 @@ func TestRestoreInstanceRequiresCurrentBackupWhenTargetHasState(t *testing.T) {
 		t.Fatalf("backup source: %v", err)
 	}
 	targetHome := filepath.Join(dir, "target")
-	target, err := Open(ctx, filepath.Join(targetHome, "libredash.db"))
+	target, err := Open(ctx, filepath.Join(targetHome, "leapview.db"))
 	if err != nil {
 		t.Fatalf("open target store: %v", err)
 	}
@@ -699,7 +699,7 @@ func TestRestoreInstanceSanitizesArchivePermissions(t *testing.T) {
 	}
 	backupPath := filepath.Join(dir, "backup.tar.gz")
 	writeInstanceBackupArchive(t, backupPath, []testTarEntry{
-		{name: instanceBackupManifestName, mode: 0o777, body: []byte(`{"version":1,"kind":"libredash-instance","dbPath":"libredash.db"}` + "\n")},
+		{name: instanceBackupManifestName, mode: 0o777, body: []byte(`{"version":1,"kind":"leapview-instance","dbPath":"leapview.db"}` + "\n")},
 		{name: instanceBackupDBName, mode: 0o777, body: readTestBytes(t, sourceDBPath)},
 		{name: "artifacts", mode: 0o777, dir: true},
 		{name: "artifacts/publish.tar.gz", mode: 0o777, body: []byte("artifact")},
@@ -746,7 +746,7 @@ func TestRestoreInstanceRejectsSymlinkEntries(t *testing.T) {
 	}
 	backupPath := filepath.Join(dir, "backup.tar.gz")
 	writeInstanceBackupArchive(t, backupPath, []testTarEntry{
-		{name: instanceBackupManifestName, mode: 0o644, body: []byte(`{"version":1,"kind":"libredash-instance","dbPath":"libredash.db"}` + "\n")},
+		{name: instanceBackupManifestName, mode: 0o644, body: []byte(`{"version":1,"kind":"leapview-instance","dbPath":"leapview.db"}` + "\n")},
 		{name: instanceBackupDBName, mode: 0o600, body: readTestBytes(t, sourceDBPath)},
 		{name: "artifacts/latest.tar.gz", mode: 0o777, symlink: true, linkname: "target.tar.gz"},
 	})
@@ -760,7 +760,7 @@ func TestRestoreInstanceRejectsSymlinkEntries(t *testing.T) {
 
 func TestStorePingReportsOpenState(t *testing.T) {
 	ctx := context.Background()
-	store, err := Open(ctx, filepath.Join(t.TempDir(), "libredash.db"))
+	store, err := Open(ctx, filepath.Join(t.TempDir(), "leapview.db"))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
@@ -778,7 +778,7 @@ func TestStorePingReportsOpenState(t *testing.T) {
 func TestStoreCatalogCanBeSharedWithDuckLake(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "libredash.db")
+	dbPath := filepath.Join(dir, "leapview.db")
 	store, err := Open(ctx, dbPath)
 	if err != nil {
 		t.Fatalf("open store: %v", err)
@@ -817,7 +817,7 @@ func TestStoreCatalogCanBeSharedWithDuckLake(t *testing.T) {
 
 func TestStoreUsesServingStateSchemaTerminology(t *testing.T) {
 	ctx := context.Background()
-	store, err := Open(ctx, filepath.Join(t.TempDir(), "libredash.db"))
+	store, err := Open(ctx, filepath.Join(t.TempDir(), "leapview.db"))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}

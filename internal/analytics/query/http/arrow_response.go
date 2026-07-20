@@ -6,7 +6,7 @@ import (
 	stdhttp "net/http"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/api"
+	"github.com/Yacobolo/leapview/internal/api"
 	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/apache/arrow-go/v18/arrow/array"
 	"github.com/apache/arrow-go/v18/arrow/ipc"
@@ -49,12 +49,12 @@ func acceptsMediaType(header, mediaType string) bool {
 
 func encodeSemanticArrow(response api.SemanticQueryResponse) ([]byte, error) {
 	metadata := arrow.NewMetadata(
-		[]string{"libredash.query_id", "libredash.serving_snapshot", "libredash.next_cursor"},
+		[]string{"leapview.query_id", "leapview.serving_snapshot", "leapview.next_cursor"},
 		[]string{response.QueryID, response.ServingSnapshot, response.Page.NextCursor},
 	)
 	fields := make([]arrow.Field, len(response.Columns))
 	for index, column := range response.Columns {
-		fields[index] = arrow.Field{Name: column.Name, Type: arrow.BinaryTypes.String, Nullable: column.Nullable, Metadata: arrow.NewMetadata([]string{"libredash.logical_type"}, []string{column.Type})}
+		fields[index] = arrow.Field{Name: column.Name, Type: arrow.BinaryTypes.String, Nullable: column.Nullable, Metadata: arrow.NewMetadata([]string{"leapview.logical_type"}, []string{column.Type})}
 	}
 	schema := arrow.NewSchema(fields, &metadata)
 	allocator := memory.NewGoAllocator()

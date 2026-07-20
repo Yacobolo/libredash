@@ -138,7 +138,7 @@ func TestEnvironmentCommitsAndReadsStableSnapshots(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "data")); err != nil {
 		t.Fatalf("data dir missing: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "libredash-workspace.duckdb")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(dir, "leapview-workspace.duckdb")); !os.IsNotExist(err) {
 		t.Fatalf("legacy DuckDB workspace file exists or stat failed: %v", err)
 	}
 }

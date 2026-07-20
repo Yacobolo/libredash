@@ -19,7 +19,7 @@
   const findBackground = () => {
     const direct = document.querySelector('[data-login-background]')
     if (direct) return direct
-    return document.querySelector('ld-login-page')?.shadowRoot?.querySelector('[data-login-background]') ?? null
+    return document.querySelector('lv-login-page')?.shadowRoot?.querySelector('[data-login-background]') ?? null
   }
 
   const load = (attempt = 0) => {
@@ -39,11 +39,11 @@
       })
       .catch((error) => {
         el.dataset.backgroundState = 'error'
-        console.error('LibreDash login background failed to load', error)
+        console.error('LeapView login background failed to load', error)
       })
   }
 
   const start = () => schedule(() => load())
   start()
-  document.addEventListener('libredash-login-background-init', start)
+  document.addEventListener('leapview-login-background-init', start)
 })()

@@ -20,6 +20,8 @@ import {
   type IconNode,
 } from 'lucide'
 import { lucideIcon } from '../shared/lucide-icons'
+import { leapViewBrandName } from '../shared/brand-mark'
+import '../shared/loading-spinner'
 
 type NavItem = {
   id: string
@@ -98,7 +100,7 @@ type IconName =
 
 const defaultConfig: SidebarConfig = {
   active: 'dashboards',
-  workspaceTitle: 'LibreDash Workspace',
+  workspaceTitle: 'LeapView Workspace',
   groups: [
     { label: 'Workspace', items: [{ id: 'dashboards', label: 'Dashboards', href: '/', icon: 'dashboard' }] },
   ],
@@ -132,7 +134,7 @@ const statusConverter = {
   },
 }
 
-class LibreDashSidebar extends LitElement {
+class LeapViewSidebar extends LitElement {
   @property({ attribute: 'config', converter: configConverter }) config: SidebarConfig = defaultConfig
   @property({ attribute: 'status', converter: statusConverter }) status: SidebarStatus = {}
   @state() private mode: ThemeMode = storedThemeMode()
@@ -142,27 +144,27 @@ class LibreDashSidebar extends LitElement {
 
   static styles = css`
     :host {
-      --ld-sidebar-width: var(--ld-sidebar-width-expanded);
+      --lv-sidebar-width: var(--lv-sidebar-width-expanded);
       display: block;
-      width: var(--ld-sidebar-width);
+      width: var(--lv-sidebar-width);
       min-height: 100svh;
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
       font-family: var(--fontStack-system);
       transition: width var(--motion-transition-stateChange);
     }
 
     :host([data-collapsed]) {
-      --ld-sidebar-width: var(--ld-sidebar-width-collapsed);
+      --lv-sidebar-width: var(--lv-sidebar-width-collapsed);
     }
 
     aside {
       position: sticky;
       top: 0;
       display: grid;
-      width: var(--ld-sidebar-width);
+      width: var(--lv-sidebar-width);
       min-height: 100svh;
       grid-template-rows: auto minmax(0, 1fr) auto;
-      background: var(--ld-sidebar-bg);
+      background: var(--lv-sidebar-bg);
       transition: width var(--motion-transition-stateChange);
     }
 
@@ -182,34 +184,34 @@ class LibreDashSidebar extends LitElement {
     .name {
       overflow: hidden;
       min-width: 0;
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: var(--ld-font-size-body-lg);
-      font-weight: var(--ld-font-weight-strong);
+      font-size: var(--lv-font-size-body-lg);
+      font-weight: var(--lv-font-weight-strong);
       letter-spacing: 0;
     }
 
     .collapse-button {
       display: grid;
-      width: var(--ld-button-height-xs);
-      height: var(--ld-button-height-xs);
+      width: var(--lv-button-height-xs);
+      height: var(--lv-button-height-xs);
       flex: 0 0 auto;
       place-items: center;
       margin-left: auto;
-      border: var(--borderWidth-default) solid var(--ld-button-invisible-border-rest);
-      border-radius: var(--ld-button-radius);
-      background: var(--ld-button-invisible-bg-rest);
-      color: var(--ld-button-invisible-icon-rest);
+      border: var(--borderWidth-default) solid var(--lv-button-invisible-border-rest);
+      border-radius: var(--lv-button-radius);
+      background: var(--lv-button-invisible-bg-rest);
+      color: var(--lv-button-invisible-icon-rest);
       cursor: pointer;
       padding: 0;
     }
 
     .collapse-button:hover,
     .collapse-button:focus-visible {
-      border-color: var(--ld-button-invisible-border-hover);
-      background: var(--ld-button-invisible-bg-hover);
-      color: var(--ld-fg-default);
+      border-color: var(--lv-button-invisible-border-hover);
+      background: var(--lv-button-invisible-bg-hover);
+      color: var(--lv-fg-default);
       outline: var(--focus-outline);
       outline-offset: var(--focus-outline-offset);
     }
@@ -220,7 +222,7 @@ class LibreDashSidebar extends LitElement {
     }
 
     .collapse-button:disabled:hover {
-      border-color: var(--ld-button-invisible-border-rest);
+      border-color: var(--lv-button-invisible-border-rest);
       color: var(--fgColor-disabled);
     }
 
@@ -238,7 +240,7 @@ class LibreDashSidebar extends LitElement {
       min-height: 0;
       overflow: auto;
       padding: var(--base-size-8);
-      border-bottom: var(--ld-border-muted);
+      border-bottom: var(--lv-border-muted);
     }
 
     .nav-group {
@@ -254,23 +256,23 @@ class LibreDashSidebar extends LitElement {
       min-height: var(--control-medium-size);
       border-color: transparent;
       background: transparent;
-      color: var(--ld-fg-default);
-      font-weight: var(--ld-font-weight-strong);
+      color: var(--lv-fg-default);
+      font-weight: var(--lv-font-weight-strong);
     }
 
     .primary-action .nav-item:hover,
     .primary-action .nav-item:focus-visible {
       border-color: transparent;
       background: var(--control-bgColor-hover);
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
     }
 
     .primary-action .nav-icon {
       width: calc(var(--control-xsmall-size) + var(--base-size-2));
       height: calc(var(--control-xsmall-size) + var(--base-size-2));
-      border-radius: var(--ld-radius-full);
+      border-radius: var(--lv-radius-full);
       background: var(--control-bgColor-hover);
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
       transition:
         background var(--motion-transition-stateChange),
         transform var(--motion-transition-stateChange);
@@ -278,7 +280,7 @@ class LibreDashSidebar extends LitElement {
 
     .primary-action .nav-item:hover .nav-icon,
     .primary-action .nav-item:focus-visible .nav-icon {
-      background: var(--ld-bg-selected);
+      background: var(--lv-bg-selected);
       transform: rotate(-3deg) scale(1.06);
     }
 
@@ -295,12 +297,12 @@ class LibreDashSidebar extends LitElement {
         0
         var(--control-xsmall-paddingInline-normal)
         0
-        calc(var(--control-xsmall-paddingInline-normal) + var(--ld-border-width));
+        calc(var(--control-xsmall-paddingInline-normal) + var(--lv-border-width));
       color: var(--fgColor-disabled);
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-strong);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-strong);
       letter-spacing: 0;
     }
 
@@ -319,24 +321,19 @@ class LibreDashSidebar extends LitElement {
       min-width: 0;
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
     }
 
     .history-empty {
       padding: var(--base-size-4) var(--control-xsmall-paddingInline-normal);
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      line-height: var(--ld-line-height-compact);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      line-height: var(--lv-line-height-compact);
     }
 
     .pending-spinner {
-      width: var(--ld-spinner-size-sm);
-      height: var(--ld-spinner-size-sm);
-      border: var(--ld-spinner-border-width) solid var(--ld-line-muted);
-      border-top-color: var(--ld-fg-muted);
-      border-radius: var(--ld-radius-full);
-      animation: pending-spin var(--ld-duration-slow) linear infinite;
+      --lv-spinner-size: var(--lv-spinner-size-sm);
     }
 
     a,
@@ -352,13 +349,13 @@ class LibreDashSidebar extends LitElement {
       min-height: var(--control-medium-size);
       align-items: center;
       gap: var(--base-size-8);
-      border: var(--ld-border-transparent);
-      border-radius: var(--ld-radius-default);
-      color: var(--ld-fg-muted);
+      border: var(--lv-border-transparent);
+      border-radius: var(--lv-radius-default);
+      color: var(--lv-fg-muted);
       padding: 0 var(--control-xsmall-paddingInline-normal);
       text-decoration: none;
-      font-size: var(--ld-font-size-body-md);
-      font-weight: var(--ld-font-weight-medium);
+      font-size: var(--lv-font-size-body-md);
+      font-weight: var(--lv-font-weight-medium);
     }
 
     .nav-text {
@@ -372,21 +369,21 @@ class LibreDashSidebar extends LitElement {
       color: inherit;
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
     }
 
     .nav-item:hover,
     .nav-item:focus-visible {
       background: var(--control-bgColor-hover);
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
       outline: 0;
     }
 
     .nav-item[aria-current='page'] {
       border-color: transparent;
       background: var(--control-bgColor-hover);
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
     }
 
     .nav-item[aria-current='page']::before {
@@ -403,7 +400,7 @@ class LibreDashSidebar extends LitElement {
       width: var(--control-xsmall-size);
       height: var(--control-xsmall-size);
       place-items: center;
-      border-radius: var(--ld-radius-default);
+      border-radius: var(--lv-radius-default);
       background: transparent;
     }
 
@@ -423,7 +420,7 @@ class LibreDashSidebar extends LitElement {
       gap: var(--base-size-6);
       align-items: center;
       padding: var(--base-size-8);
-      border-top: var(--ld-border-muted);
+      border-top: var(--lv-border-muted);
       background: transparent;
     }
 
@@ -433,8 +430,8 @@ class LibreDashSidebar extends LitElement {
       min-height: calc(var(--control-medium-size) + var(--base-size-2));
       align-items: center;
       gap: var(--base-size-8);
-      border-radius: var(--ld-radius-default);
-      color: var(--ld-fg-default);
+      border-radius: var(--lv-radius-default);
+      color: var(--lv-fg-default);
       padding: 0 var(--control-xsmall-paddingInline-normal);
     }
 
@@ -449,9 +446,9 @@ class LibreDashSidebar extends LitElement {
       place-items: center;
       border-radius: 50%;
       background: var(--bgColor-neutral-muted);
-      color: var(--ld-fg-default);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-strong);
+      color: var(--lv-fg-default);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-strong);
       letter-spacing: 0;
     }
 
@@ -469,14 +466,14 @@ class LibreDashSidebar extends LitElement {
     }
 
     .user-name {
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
     }
 
     .user-role {
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
     }
 
     .actions {
@@ -488,35 +485,35 @@ class LibreDashSidebar extends LitElement {
 
     .theme-button {
       display: inline-flex;
-      width: var(--ld-button-height);
-      height: var(--ld-button-height);
-      min-height: var(--ld-button-height);
+      width: var(--lv-button-height);
+      height: var(--lv-button-height);
+      min-height: var(--lv-button-height);
       align-items: center;
       justify-content: center;
       gap: var(--base-size-8);
-      border: var(--borderWidth-default) solid var(--ld-button-border-rest);
-      border-radius: var(--ld-button-radius);
-      background: var(--ld-button-bg-rest);
-      color: var(--ld-button-fg-rest);
+      border: var(--borderWidth-default) solid var(--lv-button-border-rest);
+      border-radius: var(--lv-button-radius);
+      background: var(--lv-button-bg-rest);
+      color: var(--lv-button-fg-rest);
       cursor: pointer;
       padding: 0;
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
     }
 
     .theme-button:hover,
     .theme-button:focus-visible {
-      border-color: var(--ld-button-border-hover);
-      background: var(--ld-button-bg-hover);
-      color: var(--ld-fg-default);
+      border-color: var(--lv-button-border-hover);
+      background: var(--lv-button-bg-hover);
+      color: var(--lv-fg-default);
       outline: var(--focus-outline);
       outline-offset: var(--focus-outline-offset);
     }
 
     .theme-button {
-      border-color: var(--ld-button-border-rest);
-      background: var(--ld-button-bg-rest);
-      color: var(--ld-button-fg-rest);
+      border-color: var(--lv-button-border-rest);
+      background: var(--lv-button-bg-rest);
+      color: var(--lv-button-fg-rest);
     }
 
     :host([data-collapsed]) .brand {
@@ -583,9 +580,9 @@ class LibreDashSidebar extends LitElement {
     }
 
     :host([data-collapsed]) .theme-button {
-      width: calc(var(--ld-button-height) + var(--base-size-2));
-      min-height: calc(var(--ld-button-height) + var(--base-size-2));
-      height: calc(var(--ld-button-height) + var(--base-size-2));
+      width: calc(var(--lv-button-height) + var(--base-size-2));
+      min-height: calc(var(--lv-button-height) + var(--base-size-2));
+      height: calc(var(--lv-button-height) + var(--base-size-2));
       padding: 0;
     }
 
@@ -598,7 +595,7 @@ class LibreDashSidebar extends LitElement {
     @media (max-width: 640px) {
       :host,
       :host([data-collapsed]) {
-        --ld-sidebar-width: 100%;
+        --lv-sidebar-width: 100%;
         width: 100%;
         min-height: var(--control-large-size);
       }
@@ -617,13 +614,13 @@ class LibreDashSidebar extends LitElement {
       .mobile-menu-button,
       .mobile-close-button {
         display: inline-grid;
-        width: var(--ld-button-height-xs);
-        height: var(--ld-button-height-xs);
+        width: var(--lv-button-height-xs);
+        height: var(--lv-button-height-xs);
         place-items: center;
-        border: var(--ld-border-transparent);
-        border-radius: var(--ld-button-radius);
+        border: var(--lv-border-transparent);
+        border-radius: var(--lv-button-radius);
         background: transparent;
-        color: var(--ld-fg-muted);
+        color: var(--lv-fg-muted);
         cursor: pointer;
         padding: 0;
       }
@@ -637,7 +634,7 @@ class LibreDashSidebar extends LitElement {
       .mobile-close-button:hover,
       .mobile-close-button:focus-visible {
         background: var(--control-bgColor-hover);
-        color: var(--ld-fg-default);
+        color: var(--lv-fg-default);
         outline: var(--focus-outline);
         outline-offset: var(--focus-outline-offset);
       }
@@ -653,7 +650,7 @@ class LibreDashSidebar extends LitElement {
         inset: 0;
         display: block;
         border: 0;
-        background: var(--ld-modal-backdrop);
+        background: var(--lv-modal-backdrop);
         cursor: pointer;
         opacity: 0;
         pointer-events: none;
@@ -674,9 +671,9 @@ class LibreDashSidebar extends LitElement {
         align-content: start;
         overflow-y: auto;
         border: 0;
-        border-right: var(--ld-border-default);
-        background: var(--ld-sidebar-bg);
-        box-shadow: var(--ld-shadow-floating);
+        border-right: var(--lv-border-default);
+        background: var(--lv-sidebar-bg);
+        box-shadow: var(--lv-shadow-floating);
         padding: var(--base-size-12);
         pointer-events: none;
         transform: translateX(-100%);
@@ -701,13 +698,13 @@ class LibreDashSidebar extends LitElement {
         align-items: center;
         justify-content: space-between;
         margin-bottom: var(--base-size-8);
-        border-bottom: var(--ld-border-muted);
+        border-bottom: var(--lv-border-muted);
         padding-bottom: var(--base-size-8);
       }
 
       .mobile-drawer-title {
-        font-size: var(--ld-font-size-body-lg);
-        font-weight: var(--ld-font-weight-strong);
+        font-size: var(--lv-font-size-body-lg);
+        font-weight: var(--lv-font-weight-strong);
       }
 
       .history,
@@ -751,16 +748,11 @@ class LibreDashSidebar extends LitElement {
       }
     }
 
-    @keyframes pending-spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
   `
 
   connectedCallback(): void {
     super.connectedCallback()
-    document.addEventListener('libredash-theme-applied', this.onThemeApplied as EventListener)
+    document.addEventListener('leapview-theme-applied', this.onThemeApplied as EventListener)
     document.addEventListener('keydown', this.onKeyDown)
     this.mobileMediaQuery = window.matchMedia('(max-width: 640px)')
     this.mobileMediaQuery.addEventListener('change', this.onMobileViewportChange)
@@ -769,7 +761,7 @@ class LibreDashSidebar extends LitElement {
   }
 
   disconnectedCallback(): void {
-    document.removeEventListener('libredash-theme-applied', this.onThemeApplied as EventListener)
+    document.removeEventListener('leapview-theme-applied', this.onThemeApplied as EventListener)
     document.removeEventListener('keydown', this.onKeyDown)
     this.mobileMediaQuery?.removeEventListener('change', this.onMobileViewportChange)
     this.mobileMediaQuery = undefined
@@ -781,7 +773,7 @@ class LibreDashSidebar extends LitElement {
   }
 
   private changeTheme(mode: ThemeMode): void {
-    this.dispatchEvent(new CustomEvent('libredash-theme-change', {
+    this.dispatchEvent(new CustomEvent('leapview-theme-change', {
       detail: { mode },
       bubbles: true,
       composed: true,
@@ -795,10 +787,10 @@ class LibreDashSidebar extends LitElement {
   private syncCollapsedState(): void {
     if (this.effectiveCollapsed) {
       this.setAttribute('data-collapsed', '')
-      this.style.setProperty('--ld-sidebar-width', 'var(--ld-sidebar-width-collapsed)')
+      this.style.setProperty('--lv-sidebar-width', 'var(--lv-sidebar-width-collapsed)')
     } else {
       this.removeAttribute('data-collapsed')
-      this.style.setProperty('--ld-sidebar-width', 'var(--ld-sidebar-width-expanded)')
+      this.style.setProperty('--lv-sidebar-width', 'var(--lv-sidebar-width-expanded)')
     }
   }
 
@@ -806,11 +798,11 @@ class LibreDashSidebar extends LitElement {
     if (this.config.compact) return
     this.collapsed = !this.collapsed
     try {
-      localStorage.setItem('libredash-sidebar-collapsed', String(this.collapsed))
+      localStorage.setItem('leapview-sidebar-collapsed', String(this.collapsed))
     } catch {
       // Ignore storage failures; the current session state still updates.
     }
-    this.dispatchEvent(new CustomEvent('ld-sidebar-collapse', {
+    this.dispatchEvent(new CustomEvent('lv-sidebar-collapse', {
       detail: { collapsed: this.collapsed },
       bubbles: true,
       composed: true,
@@ -850,10 +842,10 @@ class LibreDashSidebar extends LitElement {
     const collapsed = this.effectiveCollapsed
     const mobileNavigationClosed = this.isMobileViewport && !this.mobileOpen
     return html`
-      <aside aria-label="LibreDash workspace" ?data-mobile-open=${this.mobileOpen}>
+      <aside aria-label="${leapViewBrandName} workspace" ?data-mobile-open=${this.mobileOpen}>
         <header class="brand">
           <div class="brand-row">
-            <span class="name">LibreDash</span>
+            ${collapsed ? null : html`<span class="name">${leapViewBrandName}</span>`}
             <button
               class="collapse-button"
               type="button"
@@ -886,7 +878,7 @@ class LibreDashSidebar extends LitElement {
 
         <nav id="mobile-navigation" aria-label="Primary" aria-hidden=${String(mobileNavigationClosed)} ?inert=${mobileNavigationClosed}>
           <div class="mobile-drawer-header">
-            <strong class="mobile-drawer-title">LibreDash</strong>
+            <strong class="mobile-drawer-title">${leapViewBrandName}</strong>
             <button class="mobile-close-button" type="button" aria-label="Close navigation" title="Close navigation" @click=${() => this.closeMobileNavigation(true)}>
               ${icon('close')}
             </button>
@@ -998,7 +990,7 @@ class LibreDashSidebar extends LitElement {
     return html`
       <a class="nav-item history-item" href=${item.href} aria-current=${item.active ? 'page' : 'false'} aria-label=${title} title=${title} @click=${(event: MouseEvent) => this.followInternalLink(event, item.href)}>
         <span class="history-title">${title}</span>
-        ${item.pending ? html`<span class="pending-spinner" aria-label="Title loading"></span>` : null}
+        ${item.pending ? html`<lv-loading-spinner class="pending-spinner" aria-label="Title loading"></lv-loading-spinner>` : null}
       </a>
     `
   }
@@ -1038,7 +1030,7 @@ function icon(name: string) {
 
 function storedCollapsed(): boolean {
   try {
-    return localStorage.getItem('libredash-sidebar-collapsed') === 'true'
+    return localStorage.getItem('leapview-sidebar-collapsed') === 'true'
   } catch {
     return false
   }
@@ -1046,7 +1038,7 @@ function storedCollapsed(): boolean {
 
 function storedThemeMode(): ThemeMode {
   try {
-    return normalizeThemeMode(localStorage.getItem('libredash-color-mode') || document.documentElement.dataset.colorMode)
+    return normalizeThemeMode(localStorage.getItem('leapview-color-mode') || document.documentElement.dataset.colorMode)
   } catch {
     return normalizeThemeMode(document.documentElement.dataset.colorMode)
   }
@@ -1057,4 +1049,4 @@ function normalizeThemeMode(mode: string | null | undefined): ThemeMode {
   return 'system'
 }
 
-customElements.define('ld-sidebar', LibreDashSidebar)
+customElements.define('lv-sidebar', LeapViewSidebar)

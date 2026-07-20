@@ -6,15 +6,15 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
-	"github.com/Yacobolo/libredash/internal/dataquery"
-	"github.com/Yacobolo/libredash/internal/queryaudit"
-	queryauditsqlite "github.com/Yacobolo/libredash/internal/queryaudit/sqlite"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	"github.com/Yacobolo/leapview/internal/dataquery"
+	"github.com/Yacobolo/leapview/internal/queryaudit"
+	queryauditsqlite "github.com/Yacobolo/leapview/internal/queryaudit/sqlite"
 	"github.com/go-chi/chi/v5"
 )
 
-const cliClientHeader = "X-LibreDash-Client"
+const cliClientHeader = "X-LeapView-Client"
 
 type queryAuditMetrics struct {
 	QueryMetrics

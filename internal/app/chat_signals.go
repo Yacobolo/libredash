@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/Yacobolo/libredash/internal/agent"
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	"github.com/Yacobolo/libredash/internal/ui"
-	uisignals "github.com/Yacobolo/libredash/internal/ui/signals"
+	"github.com/Yacobolo/leapview/internal/agent"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	"github.com/Yacobolo/leapview/internal/ui"
+	uisignals "github.com/Yacobolo/leapview/internal/ui/signals"
 )
 
 func chatSignalWithConversations(conversations []ui.ChatConversationSummary, activeID string, transcript []agent.ChatTranscriptItem, artifacts agent.ChatArtifactSignals, statusErr string, running, enabled bool) ui.ChatViewState {

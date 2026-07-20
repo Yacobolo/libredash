@@ -5,7 +5,7 @@ import {
 	interactionSelectionValue,
 } from '../interaction-selection'
 
-export const libreDashPayloadRowIndexKey = '__libredashPayloadRowIndex'
+export const leapViewPayloadRowIndexKey = '__leapviewPayloadRowIndex'
 
 export function stylesFor(element: HTMLElement): ChartTokens {
   const styles = getComputedStyle(element)
@@ -17,24 +17,24 @@ export function stylesFor(element: HTMLElement): ChartTokens {
     return ''
   }
   const value = (...names: string[]) => token(...names) || 'currentColor'
-  const chart1 = value('--ld-data-1', '--ld-chart-1', '--fgColor-accent')
+  const chart1 = value('--lv-data-1', '--lv-chart-1', '--fgColor-accent')
   return {
-    text: value('--ld-fg-default', '--fgColor-default'),
-    muted: value('--ld-fg-muted', '--fgColor-muted'),
-    border: value('--ld-line-default', '--borderColor-default'),
-    grid: value('--ld-chart-grid', '--ld-line-muted', '--borderColor-muted'),
-    surface: value('--ld-chart-surface', '--report-chart-surface', '--card-bgColor', '--bgColor-default'),
-    fill: token('--ld-data-1-muted') || token('--ld-chart-1-muted') || colorWithAlpha(chart1, 0.35),
-    dimmed: value('--ld-line-muted', '--borderColor-muted'),
+    text: value('--lv-fg-default', '--fgColor-default'),
+    muted: value('--lv-fg-muted', '--fgColor-muted'),
+    border: value('--lv-line-default', '--borderColor-default'),
+    grid: value('--lv-chart-grid', '--lv-line-muted', '--borderColor-muted'),
+    surface: value('--lv-chart-surface', '--report-chart-surface', '--card-bgColor', '--bgColor-default'),
+    fill: token('--lv-data-1-muted') || token('--lv-chart-1-muted') || colorWithAlpha(chart1, 0.35),
+    dimmed: value('--lv-line-muted', '--borderColor-muted'),
     palette: [
       chart1,
-      value('--ld-data-2', '--ld-chart-2', '--fgColor-success'),
-      value('--ld-data-3', '--ld-chart-3', '--fgColor-done'),
-      value('--ld-data-4', '--ld-chart-4', '--fgColor-danger'),
-      value('--ld-data-5', '--ld-chart-5', '--fgColor-success'),
-      value('--ld-data-6', '--ld-chart-6', '--fgColor-sponsors'),
-      value('--ld-data-7', '--fgColor-accent'),
-      value('--ld-data-8', '--fgColor-attention'),
+      value('--lv-data-2', '--lv-chart-2', '--fgColor-success'),
+      value('--lv-data-3', '--lv-chart-3', '--fgColor-done'),
+      value('--lv-data-4', '--lv-chart-4', '--fgColor-danger'),
+      value('--lv-data-5', '--lv-chart-5', '--fgColor-success'),
+      value('--lv-data-6', '--lv-chart-6', '--fgColor-sponsors'),
+      value('--lv-data-7', '--fgColor-accent'),
+      value('--lv-data-8', '--fgColor-attention'),
     ],
   }
 }
@@ -180,12 +180,12 @@ export function booleanValue(row: ChartDatum | undefined, key: string): boolean 
 }
 
 export function withPayloadRowIndex<T extends Record<string, unknown>>(item: T, index: number): T {
-  return { ...item, [libreDashPayloadRowIndexKey]: index } as T
+  return { ...item, [leapViewPayloadRowIndexKey]: index } as T
 }
 
 export function payloadRowIndexFromData(data: unknown): number | undefined {
   if (!data || typeof data !== 'object') return undefined
-  const index = (data as Record<string, unknown>)[libreDashPayloadRowIndexKey]
+  const index = (data as Record<string, unknown>)[leapViewPayloadRowIndexKey]
   return typeof index === 'number' && Number.isInteger(index) && index >= 0 ? index : undefined
 }
 

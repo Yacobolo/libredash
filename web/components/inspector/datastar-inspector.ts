@@ -66,8 +66,8 @@ export class DatastarInspector extends LitElement {
       --ds-accent-fg: var(--fgColor-onEmphasis, #ffffff);
       --ds-success: var(--fgColor-success, #3fb950);
       --ds-warning: var(--fgColor-attention, #d29922);
-      --ds-radius: var(--ld-radius-default, 6px);
-      --ds-radius-full: var(--ld-radius-full, 999px);
+      --ds-radius: var(--lv-radius-default, 6px);
+      --ds-radius-full: var(--lv-radius-full, 999px);
       --ds-shadow: 0 18px 48px rgb(0 0 0 / 42%), 0 0 0 1px rgb(255 255 255 / 4%);
       color: var(--ds-fg);
       font-family: var(--fontStack-system, Inter, ui-sans-serif, system-ui, sans-serif);
@@ -99,7 +99,7 @@ export class DatastarInspector extends LitElement {
       color: var(--ds-accent-fg);
       cursor: pointer;
       font-size: 12px;
-      font-weight: var(--ld-font-weight-strong);
+      font-weight: var(--lv-font-weight-strong);
       letter-spacing: 0;
       line-height: 1;
       box-shadow: 0 10px 28px rgb(0 0 0 / 38%), 0 0 0 1px rgb(255 255 255 / 8%) inset;
@@ -166,7 +166,7 @@ export class DatastarInspector extends LitElement {
       background: var(--ds-accent);
       color: var(--ds-accent-fg);
       font-size: 11px;
-      font-weight: var(--ld-font-weight-strong);
+      font-weight: var(--lv-font-weight-strong);
       line-height: 1;
     }
 
@@ -298,7 +298,7 @@ export class DatastarInspector extends LitElement {
 
     .key {
       color: color-mix(in srgb, var(--ds-muted), var(--ds-fg) 18%);
-      font-weight: var(--ld-font-weight-regular);
+      font-weight: var(--lv-font-weight-regular);
     }
 
     .separator,
@@ -326,7 +326,7 @@ export class DatastarInspector extends LitElement {
       background: var(--ds-panel-muted);
       color: var(--ds-muted);
       font-size: 10px;
-      font-weight: var(--ld-font-weight-regular);
+      font-weight: var(--lv-font-weight-regular);
       line-height: 16px;
       padding: 0 6px;
     }
@@ -386,7 +386,7 @@ export class DatastarInspector extends LitElement {
       color: var(--ds-fg);
       font-family: var(--fontStack-monospace, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
       font-size: 12px;
-      font-weight: var(--ld-font-weight-strong);
+      font-weight: var(--lv-font-weight-strong);
       overflow-wrap: anywhere;
     }
 

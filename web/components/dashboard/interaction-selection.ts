@@ -95,7 +95,7 @@ export function validateInteractionCommand(
   if (mappings.length === 0) {
     return command.interactionKind === 'row_selection'
       && command.mappings.length === 1
-      && command.mappings[0]?.field === '__libredash.rowKey'
+      && command.mappings[0]?.field === '__leapview.rowKey'
       && !command.mappings[0]?.fact
       && !command.mappings[0]?.grain
       && validCommandMapping(command.mappings[0])

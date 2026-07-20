@@ -311,7 +311,7 @@ function toFlowEdge(edge: SemanticModelGraphEdgeSignal, selectedEdges: Set<strin
     interactionWidth: 18,
     data: { ...edge, selected, sourceMarker, targetMarker },
     style: {
-		stroke: 'var(--ld-fg-muted)',
+		stroke: 'var(--lv-fg-muted)',
       strokeWidth: selected ? 2.2 : 1.4,
       opacity: selected ? 0.92 : 0.18,
     },
@@ -370,7 +370,7 @@ function relationshipEndpointMarkers(cardinality: string): [string, string] {
 function graphLayoutKey(graph: SemanticModelGraphSignal, storageKey: string): string {
   const nodePart = graph.nodes.map((node) => `${node.id}:${node.fields.map((field) => field.name).join(',')}`).join('|')
   const edgePart = graph.edges.map((edge) => `${edge.id}:${edge.source}.${edge.sourceField}->${edge.target}.${edge.targetField}:${edge.cardinality}`).join('|')
-  return `libredash:semantic-model-graph:v2:${storageKey || (graph.facts ?? []).join(',') || 'model'}:${nodePart}:${edgePart}`
+  return `leapview:semantic-model-graph:v2:${storageKey || (graph.facts ?? []).join(',') || 'model'}:${nodePart}:${edgePart}`
 }
 
 function loadLayout(key: string): Map<string, NodePosition> {
@@ -490,43 +490,43 @@ function iconElement(icon: IconNode, className: string) {
 }
 
 const semanticModelGraphStyles = `
-  ld-semantic-model-graph,
-  ld-semantic-model-graph .semantic-model-graph-root,
-  ld-semantic-model-graph .semantic-model-graph-layout {
+  lv-semantic-model-graph,
+  lv-semantic-model-graph .semantic-model-graph-root,
+  lv-semantic-model-graph .semantic-model-graph-layout {
     display: block;
     height: 100%;
     min-width: 0;
     min-height: 0;
   }
 
-  ld-semantic-model-graph .semantic-model-graph-layout {
+  lv-semantic-model-graph .semantic-model-graph-layout {
     background:
-      linear-gradient(var(--ld-bg-page, var(--ld-bg-app)), var(--ld-bg-page, var(--ld-bg-app))),
-      radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--ld-fg-muted), transparent 88%) 1px, transparent 0);
+      linear-gradient(var(--lv-bg-page, var(--lv-bg-app)), var(--lv-bg-page, var(--lv-bg-app))),
+      radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--lv-fg-muted), transparent 88%) 1px, transparent 0);
     background-size: auto, 20px 20px;
   }
 
-  ld-semantic-model-graph .react-flow {
+  lv-semantic-model-graph .react-flow {
     position: relative;
     overflow: hidden;
     width: 100%;
     height: 100%;
-    color: var(--ld-fg-default);
+    color: var(--lv-fg-default);
     background-color: transparent;
   }
 
-  ld-semantic-model-graph .react-flow__container,
-  ld-semantic-model-graph .react-flow__renderer,
-  ld-semantic-model-graph .react-flow__viewport,
-  ld-semantic-model-graph .react-flow__pane,
-  ld-semantic-model-graph .react-flow__nodes,
-  ld-semantic-model-graph .react-flow .react-flow__edges,
-  ld-semantic-model-graph .react-flow .react-flow__edges svg {
+  lv-semantic-model-graph .react-flow__container,
+  lv-semantic-model-graph .react-flow__renderer,
+  lv-semantic-model-graph .react-flow__viewport,
+  lv-semantic-model-graph .react-flow__pane,
+  lv-semantic-model-graph .react-flow__nodes,
+  lv-semantic-model-graph .react-flow .react-flow__edges,
+  lv-semantic-model-graph .react-flow .react-flow__edges svg {
     position: absolute;
   }
 
-  ld-semantic-model-graph .react-flow__container,
-  ld-semantic-model-graph .react-flow__viewport {
+  lv-semantic-model-graph .react-flow__container,
+  lv-semantic-model-graph .react-flow__viewport {
     top: 0;
     left: 0;
     width: 100%;
@@ -534,7 +534,7 @@ const semanticModelGraphStyles = `
     transform-origin: 0 0;
   }
 
-  ld-semantic-model-graph .react-flow__node {
+  lv-semantic-model-graph .react-flow__node {
     position: absolute;
     box-sizing: border-box;
     pointer-events: all;
@@ -542,21 +542,21 @@ const semanticModelGraphStyles = `
     user-select: none;
   }
 
-  ld-semantic-model-graph .react-flow .react-flow__edges svg {
+  lv-semantic-model-graph .react-flow .react-flow__edges svg {
     overflow: visible;
     pointer-events: none;
   }
 
-  ld-semantic-model-graph .react-flow__edge-path,
-  ld-semantic-model-graph .react-flow__connection-path {
+  lv-semantic-model-graph .react-flow__edge-path,
+  lv-semantic-model-graph .react-flow__connection-path {
     fill: none;
   }
 
-  ld-semantic-model-graph .semantic-model-relationship-path {
+  lv-semantic-model-graph .semantic-model-relationship-path {
     pointer-events: visibleStroke;
   }
 
-  ld-semantic-model-graph .react-flow__edgelabel-renderer {
+  lv-semantic-model-graph .react-flow__edgelabel-renderer {
     position: absolute;
     width: 100%;
     height: 100%;
@@ -564,285 +564,285 @@ const semanticModelGraphStyles = `
     user-select: none;
   }
 
-  ld-semantic-model-graph .react-flow__background {
+  lv-semantic-model-graph .react-flow__background {
     pointer-events: none;
     z-index: -1;
   }
 
-  ld-semantic-model-graph .react-flow__handle {
+  lv-semantic-model-graph .react-flow__handle {
     position: absolute;
     width: 8px;
     height: 8px;
     min-width: 8px;
     min-height: 8px;
-    border: 1px solid var(--ld-bg-panel);
+    border: 1px solid var(--lv-bg-panel);
     border-radius: 50%;
-    background: var(--ld-fg-muted);
+    background: var(--lv-fg-muted);
     pointer-events: none;
   }
 
-  ld-semantic-model-graph .react-flow__handle-left {
+  lv-semantic-model-graph .react-flow__handle-left {
     left: 0;
     transform: translate(-50%, -50%);
   }
 
-  ld-semantic-model-graph .react-flow__handle-right {
+  lv-semantic-model-graph .react-flow__handle-right {
     right: 0;
     transform: translate(50%, -50%);
   }
 
-  ld-semantic-model-graph .react-flow__panel {
+  lv-semantic-model-graph .react-flow__panel {
     position: absolute;
     z-index: 5;
     margin: var(--base-size-16);
   }
 
-  ld-semantic-model-graph .react-flow__panel.left {
+  lv-semantic-model-graph .react-flow__panel.left {
     left: 0;
   }
 
-  ld-semantic-model-graph .react-flow__panel.bottom {
+  lv-semantic-model-graph .react-flow__panel.bottom {
     bottom: 0;
   }
 
-  ld-semantic-model-graph .react-flow__controls {
+  lv-semantic-model-graph .react-flow__controls {
     display: flex;
     flex-direction: column;
-    border: var(--ld-border-default);
-    background: var(--ld-bg-panel);
+    border: var(--lv-border-default);
+    background: var(--lv-bg-panel);
     box-shadow: var(--shadow-resting-small, none);
   }
 
-  ld-semantic-model-graph .react-flow__controls-button {
+  lv-semantic-model-graph .react-flow__controls-button {
     display: flex;
     width: 26px;
     height: 26px;
     align-items: center;
     justify-content: center;
     border: 0;
-    border-bottom: var(--ld-border-muted);
-    background: var(--ld-bg-panel);
-    color: var(--ld-fg-default);
+    border-bottom: var(--lv-border-muted);
+    background: var(--lv-bg-panel);
+    color: var(--lv-fg-default);
     padding: 4px;
     cursor: pointer;
   }
 
-  ld-semantic-model-graph .react-flow__controls-button svg {
+  lv-semantic-model-graph .react-flow__controls-button svg {
     width: 100%;
     max-width: 12px;
     max-height: 12px;
     fill: currentColor;
   }
 
-  ld-semantic-model-graph .semantic-model-reset-button {
+  lv-semantic-model-graph .semantic-model-reset-button {
     display: inline-flex;
     width: 28px;
     height: 28px;
     align-items: center;
     justify-content: center;
-    border: var(--ld-border-default);
-    border-radius: var(--ld-radius-tight);
-    background: var(--ld-bg-panel);
-    color: var(--ld-fg-default);
+    border: var(--lv-border-default);
+    border-radius: var(--lv-radius-tight);
+    background: var(--lv-bg-panel);
+    color: var(--lv-fg-default);
     padding: 0;
     font: inherit;
     cursor: pointer;
   }
 
-  ld-semantic-model-graph .semantic-model-reset-button:hover,
-  ld-semantic-model-graph .semantic-model-reset-button:focus-visible {
-    background: var(--ld-bg-control-hover, var(--ld-bg-panel-muted));
+  lv-semantic-model-graph .semantic-model-reset-button:hover,
+  lv-semantic-model-graph .semantic-model-reset-button:focus-visible {
+    background: var(--lv-bg-control-hover, var(--lv-bg-panel-muted));
     outline: 0;
   }
 
-  ld-semantic-model-graph .semantic-model-reset-icon {
+  lv-semantic-model-graph .semantic-model-reset-icon {
     display: block;
     width: 14px;
     height: 14px;
   }
 
-  ld-semantic-model-graph .react-flow__attribution {
+  lv-semantic-model-graph .react-flow__attribution {
     display: none;
   }
 
-  ld-semantic-model-graph .semantic-model-edge-label,
-  ld-semantic-model-graph .semantic-model-edge-endpoint {
+  lv-semantic-model-graph .semantic-model-edge-label,
+  lv-semantic-model-graph .semantic-model-edge-endpoint {
     position: absolute;
     display: inline-grid;
     place-items: center;
-    border: var(--ld-border-muted);
-    border-radius: var(--ld-radius-full);
-    background: var(--ld-bg-panel);
+    border: var(--lv-border-muted);
+    border-radius: var(--lv-radius-full);
+    background: var(--lv-bg-panel);
     box-shadow: var(--shadow-resting-small, none);
-    color: var(--ld-fg-default);
-    font-size: var(--ld-font-size-caption);
-    font-weight: var(--ld-font-weight-strong);
+    color: var(--lv-fg-default);
+    font-size: var(--lv-font-size-caption);
+    font-weight: var(--lv-font-weight-strong);
     line-height: 1;
     pointer-events: none;
   }
 
-  ld-semantic-model-graph .semantic-model-edge-label {
+  lv-semantic-model-graph .semantic-model-edge-label {
     min-width: 30px;
     min-height: 20px;
     padding: 0 var(--base-size-6);
   }
 
-  ld-semantic-model-graph .semantic-model-edge-label.selected {
-    border-color: var(--ld-fg-muted);
-    color: var(--ld-fg-default);
+  lv-semantic-model-graph .semantic-model-edge-label.selected {
+    border-color: var(--lv-fg-muted);
+    color: var(--lv-fg-default);
   }
 
-  ld-semantic-model-graph .semantic-model-edge-endpoint {
+  lv-semantic-model-graph .semantic-model-edge-endpoint {
     width: 20px;
     height: 20px;
-    border-color: color-mix(in srgb, var(--ld-fg-muted), transparent 35%);
-    color: var(--ld-fg-default);
+    border-color: color-mix(in srgb, var(--lv-fg-muted), transparent 35%);
+    color: var(--lv-fg-default);
   }
 
-  ld-semantic-model-graph .semantic-model-edge-endpoint.source {
+  lv-semantic-model-graph .semantic-model-edge-endpoint.source {
     margin-left: -16px;
   }
 
-  ld-semantic-model-graph .semantic-model-edge-endpoint.target {
+  lv-semantic-model-graph .semantic-model-edge-endpoint.target {
     margin-left: 16px;
   }
 
-  ld-semantic-model-graph .semantic-model-node {
+  lv-semantic-model-graph .semantic-model-node {
     width: ${NODE_WIDTH}px;
     overflow: hidden;
-    border: var(--borderWidth-default) solid var(--ld-line-muted);
+    border: var(--borderWidth-default) solid var(--lv-line-muted);
     border-radius: var(--borderRadius-default);
-    background: var(--ld-bg-panel);
+    background: var(--lv-bg-panel);
     box-shadow: var(--shadow-resting-small, none);
-    color: var(--ld-fg-default);
+    color: var(--lv-fg-default);
     cursor: pointer;
   }
 
-  ld-semantic-model-graph .semantic-model-node-selected {
-    border-color: var(--ld-fg-muted);
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--ld-fg-muted), transparent 35%), var(--shadow-resting-small, none);
+  lv-semantic-model-graph .semantic-model-node-selected {
+    border-color: var(--lv-fg-muted);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--lv-fg-muted), transparent 35%), var(--shadow-resting-small, none);
   }
 
-  ld-semantic-model-graph .semantic-model-node-dimmed {
+  lv-semantic-model-graph .semantic-model-node-dimmed {
     opacity: 0.42;
   }
 
-  ld-semantic-model-graph .semantic-model-node:focus-visible {
-    outline: 2px solid var(--ld-fg-muted);
+  lv-semantic-model-graph .semantic-model-node:focus-visible {
+    outline: 2px solid var(--lv-fg-muted);
     outline-offset: 2px;
   }
 
-  ld-semantic-model-graph .semantic-model-node-header {
+  lv-semantic-model-graph .semantic-model-node-header {
     display: flex;
     min-height: ${HEADER_HEIGHT}px;
     min-width: 0;
     gap: var(--base-size-8);
-    border-bottom: var(--ld-border-muted);
-    background: var(--ld-bg-panel);
+    border-bottom: var(--lv-border-muted);
+    background: var(--lv-bg-panel);
     padding: 0 var(--base-size-12);
     align-items: center;
     justify-content: space-between;
   }
 
-  ld-semantic-model-graph .semantic-model-node-title {
+  lv-semantic-model-graph .semantic-model-node-title {
     display: inline-flex;
     min-width: 0;
     align-items: center;
     gap: var(--base-size-6);
-    font-size: var(--ld-font-size-body-sm);
-    font-weight: var(--ld-font-weight-strong);
-    line-height: var(--ld-line-height-tight);
+    font-size: var(--lv-font-size-body-sm);
+    font-weight: var(--lv-font-weight-strong);
+    line-height: var(--lv-line-height-tight);
   }
 
-  ld-semantic-model-graph .semantic-model-node-title span {
+  lv-semantic-model-graph .semantic-model-node-title span {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  ld-semantic-model-graph .semantic-model-node-badges {
+  lv-semantic-model-graph .semantic-model-node-badges {
     display: flex;
     min-height: ${BADGE_HEIGHT}px;
     align-items: center;
     gap: var(--base-size-4);
     overflow: hidden;
-    border-bottom: var(--ld-border-muted);
+    border-bottom: var(--lv-border-muted);
     padding: 0 var(--base-size-12);
   }
 
-  ld-semantic-model-graph .semantic-model-node-badge {
+  lv-semantic-model-graph .semantic-model-node-badge {
     flex: 0 0 auto;
-    border: var(--ld-border-muted);
-    border-radius: var(--ld-radius-full);
-    color: var(--ld-fg-muted);
-    font-size: var(--ld-font-size-caption);
-    font-weight: var(--ld-font-weight-normal);
+    border: var(--lv-border-muted);
+    border-radius: var(--lv-radius-full);
+    color: var(--lv-fg-muted);
+    font-size: var(--lv-font-size-caption);
+    font-weight: var(--lv-font-weight-normal);
     line-height: 1;
     padding: 3px 6px;
   }
 
-  ld-semantic-model-graph .semantic-model-table-icon {
+  lv-semantic-model-graph .semantic-model-table-icon {
     flex: 0 0 auto;
-    color: var(--ld-fg-muted);
+    color: var(--lv-fg-muted);
   }
 
-  ld-semantic-model-graph .semantic-model-node-fields {
+  lv-semantic-model-graph .semantic-model-node-fields {
     display: grid;
   }
 
-  ld-semantic-model-graph .semantic-model-field {
+  lv-semantic-model-graph .semantic-model-field {
     display: grid;
     min-height: ${FIELD_HEIGHT}px;
     grid-template-columns: 18px minmax(0, 1fr) auto;
     align-items: center;
     gap: var(--base-size-6);
-    border-bottom: var(--ld-border-muted);
+    border-bottom: var(--lv-border-muted);
     box-shadow: inset 0 0 0 0 transparent;
-    padding: 0 var(--ld-space-control);
+    padding: 0 var(--lv-space-control);
   }
 
-  ld-semantic-model-graph .semantic-model-field:last-child {
+  lv-semantic-model-graph .semantic-model-field:last-child {
     border-bottom: 0;
   }
 
-  ld-semantic-model-graph .semantic-model-field-join {
-    background: color-mix(in srgb, var(--ld-fg-muted), transparent 90%);
-    box-shadow: inset 2px 0 0 color-mix(in srgb, var(--ld-fg-muted), transparent 42%);
+  lv-semantic-model-graph .semantic-model-field-join {
+    background: color-mix(in srgb, var(--lv-fg-muted), transparent 90%);
+    box-shadow: inset 2px 0 0 color-mix(in srgb, var(--lv-fg-muted), transparent 42%);
   }
 
-  ld-semantic-model-graph .semantic-model-field-name {
+  lv-semantic-model-graph .semantic-model-field-name {
     overflow: hidden;
-    color: var(--ld-fg-default);
+    color: var(--lv-fg-default);
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-family: var(--ld-font-family-mono, ui-monospace, SFMono-Regular, Consolas, monospace);
-    font-size: var(--ld-font-size-caption);
+    font-family: var(--lv-font-family-mono, ui-monospace, SFMono-Regular, Consolas, monospace);
+    font-size: var(--lv-font-size-caption);
   }
 
-  ld-semantic-model-graph .semantic-model-field-primary .semantic-model-field-name {
-    font-weight: var(--ld-font-weight-strong);
+  lv-semantic-model-graph .semantic-model-field-primary .semantic-model-field-name {
+    font-weight: var(--lv-font-weight-strong);
   }
 
-  ld-semantic-model-graph .semantic-model-field-type-icon {
+  lv-semantic-model-graph .semantic-model-field-type-icon {
     display: inline-grid;
     width: 18px;
     height: 18px;
     place-items: center;
-    color: var(--ld-fg-muted);
+    color: var(--lv-fg-muted);
   }
 
-  ld-semantic-model-graph .semantic-model-type-icon {
+  lv-semantic-model-graph .semantic-model-type-icon {
     display: block;
     width: 14px;
     height: 14px;
   }
 
-  ld-semantic-model-graph .semantic-model-field-key {
-    color: var(--ld-fg-muted);
-    font-size: var(--ld-font-size-caption);
-    font-weight: var(--ld-font-weight-strong);
+  lv-semantic-model-graph .semantic-model-field-key {
+    color: var(--lv-fg-muted);
+    font-size: var(--lv-font-size-caption);
+    font-weight: var(--lv-font-weight-strong);
     line-height: 1;
   }
 `
 
-if (!customElements.get('ld-semantic-model-graph')) customElements.define('ld-semantic-model-graph', SemanticModelGraphElement)
+if (!customElements.get('lv-semantic-model-graph')) customElements.define('lv-semantic-model-graph', SemanticModelGraphElement)

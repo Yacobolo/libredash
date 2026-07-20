@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/manageddata"
-	"github.com/Yacobolo/libredash/internal/manageddata/localplan"
+	"github.com/Yacobolo/leapview/internal/manageddata"
+	"github.com/Yacobolo/leapview/internal/manageddata/localplan"
 )
 
 func TestDataPlanCommandPlansWithPreviousManifest(t *testing.T) {
@@ -45,7 +45,7 @@ func TestDataPlanCommandPlansWithPreviousManifest(t *testing.T) {
 	command.SetErr(&stdout)
 	command.SetArgs([]string{
 		"plan",
-		"--project", "/project/libredash.yaml",
+		"--project", "/project/leapview.yaml",
 		"--connection", "warehouse",
 		"--from", "/local/export",
 		"--previous-manifest", previousPath,
@@ -54,7 +54,7 @@ func TestDataPlanCommandPlansWithPreviousManifest(t *testing.T) {
 	if err := command.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	if planner.request.ProjectPath != "/project/libredash.yaml" || planner.request.Connection != "warehouse" {
+	if planner.request.ProjectPath != "/project/leapview.yaml" || planner.request.Connection != "warehouse" {
 		t.Fatalf("planner request = %#v", planner.request)
 	}
 	if planner.request.From != "/local/export" {

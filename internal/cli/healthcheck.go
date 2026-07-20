@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/configspec"
+	"github.com/Yacobolo/leapview/internal/configspec"
 	"github.com/spf13/cobra"
 )
 
@@ -19,7 +19,7 @@ const defaultHealthcheckURL = "http://127.0.0.1:8080/readyz"
 func healthcheckCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "healthcheck",
-		Short: "Check the local LibreDash readiness endpoint",
+		Short: "Check the local LeapView readiness endpoint",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runHealthcheck(ctx, opts, cmd.OutOrStdout())
 		},
@@ -62,10 +62,10 @@ func healthcheckURL(opts *rootOptions) string {
 			return url
 		}
 	}
-	if url := strings.TrimSpace(os.Getenv(configspec.EnvLIBREDASH_HEALTHCHECK_URL)); url != "" {
+	if url := strings.TrimSpace(os.Getenv(configspec.EnvLEAPVIEW_HEALTHCHECK_URL)); url != "" {
 		return url
 	}
-	if url := healthcheckURLForListenAddr(os.Getenv(configspec.EnvLIBREDASH_ADDR)); url != "" {
+	if url := healthcheckURLForListenAddr(os.Getenv(configspec.EnvLEAPVIEW_ADDR)); url != "" {
 		return url
 	}
 	return defaultHealthcheckURL

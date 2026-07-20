@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/manageddata"
-	"github.com/Yacobolo/libredash/internal/manageddata/storage"
+	"github.com/Yacobolo/leapview/internal/manageddata"
+	"github.com/Yacobolo/leapview/internal/manageddata/storage"
 )
 
 func TestConcurrentMaterializeStreamsRevisionOnlyOnce(t *testing.T) {
@@ -121,9 +121,9 @@ func TestRevisionLockCoordinatesAcrossProcessesAndHonorsContext(t *testing.T) {
 	releasePath := filepath.Join(root, "release")
 	command := exec.Command(os.Args[0], "-test.run=^TestRevisionLockHelperProcess$")
 	command.Env = append(os.Environ(),
-		"LIBREDASH_RUNTIMEVIEW_HELPER_LOCK="+lockPath,
-		"LIBREDASH_RUNTIMEVIEW_HELPER_READY="+readyPath,
-		"LIBREDASH_RUNTIMEVIEW_HELPER_RELEASE="+releasePath,
+		"LEAPVIEW_RUNTIMEVIEW_HELPER_LOCK="+lockPath,
+		"LEAPVIEW_RUNTIMEVIEW_HELPER_READY="+readyPath,
+		"LEAPVIEW_RUNTIMEVIEW_HELPER_RELEASE="+releasePath,
 	)
 	if err := command.Start(); err != nil {
 		t.Fatal(err)
@@ -170,7 +170,7 @@ func TestRevisionLockCoordinatesAcrossProcessesAndHonorsContext(t *testing.T) {
 }
 
 func TestRevisionLockHelperProcess(t *testing.T) {
-	lockPath := os.Getenv("LIBREDASH_RUNTIMEVIEW_HELPER_LOCK")
+	lockPath := os.Getenv("LEAPVIEW_RUNTIMEVIEW_HELPER_LOCK")
 	if lockPath == "" {
 		return
 	}
@@ -179,12 +179,12 @@ func TestRevisionLockHelperProcess(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer held.release()
-	if err := os.WriteFile(os.Getenv("LIBREDASH_RUNTIMEVIEW_HELPER_READY"), []byte("ready"), 0o600); err != nil {
+	if err := os.WriteFile(os.Getenv("LEAPVIEW_RUNTIMEVIEW_HELPER_READY"), []byte("ready"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	deadline := time.Now().Add(10 * time.Second)
 	for {
-		if _, err := os.Stat(os.Getenv("LIBREDASH_RUNTIMEVIEW_HELPER_RELEASE")); err == nil {
+		if _, err := os.Stat(os.Getenv("LEAPVIEW_RUNTIMEVIEW_HELPER_RELEASE")); err == nil {
 			return
 		} else if !errors.Is(err, os.ErrNotExist) {
 			t.Fatal(err)

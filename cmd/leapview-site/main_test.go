@@ -10,12 +10,12 @@ func TestParseBaseURL(t *testing.T) {
 		wantErr bool
 	}{
 		{name: "empty for development", raw: ""},
-		{name: "HTTPS origin", raw: "https://docs.libredash.dev/", want: "https://docs.libredash.dev"},
+		{name: "HTTPS origin", raw: "https://docs.leapview.dev/", want: "https://docs.leapview.dev"},
 		{name: "HTTP origin", raw: "http://localhost:8081", want: "http://localhost:8081"},
 		{name: "relative", raw: "/docs", wantErr: true},
-		{name: "unsupported scheme", raw: "ftp://docs.libredash.dev", wantErr: true},
-		{name: "path", raw: "https://docs.libredash.dev/docs", wantErr: true},
-		{name: "query", raw: "https://docs.libredash.dev?preview=1", wantErr: true},
+		{name: "unsupported scheme", raw: "ftp://docs.leapview.dev", wantErr: true},
+		{name: "path", raw: "https://docs.leapview.dev/docs", wantErr: true},
+		{name: "query", raw: "https://docs.leapview.dev?preview=1", wantErr: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			baseURL, err := parseBaseURL(test.raw)

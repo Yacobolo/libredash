@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/runtimehost"
-	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
+	"github.com/Yacobolo/leapview/internal/runtimehost"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
 )
 
 func TestActivateResolvesPersistedBindingsPreparesAndAtomicallyCommits(t *testing.T) {

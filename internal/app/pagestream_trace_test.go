@@ -9,11 +9,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Yacobolo/libredash/pkg/pagestream"
+	"github.com/Yacobolo/leapview/pkg/pagestream"
 )
 
 func TestDevelopmentPageStreamTraceEndpointReturnsSanitizedEvents(t *testing.T) {
-	t.Setenv("LIBREDASH_PRODUCTION", "")
+	t.Setenv("LEAPVIEW_PRODUCTION", "")
 	var logs bytes.Buffer
 	server := NewWithOptions(fakeMetrics{}, Options{
 		Logger: slog.New(slog.NewJSONHandler(&logs, nil)),
@@ -45,7 +45,7 @@ func TestDevelopmentPageStreamTraceEndpointReturnsSanitizedEvents(t *testing.T) 
 }
 
 func TestProductionOmitsPageStreamTraceEndpoint(t *testing.T) {
-	t.Setenv("LIBREDASH_PRODUCTION", "1")
+	t.Setenv("LEAPVIEW_PRODUCTION", "1")
 	server := New(fakeMetrics{})
 	req := httptest.NewRequest(http.MethodGet, "/__dev/pagestream/traces", nil)
 	rec := httptest.NewRecorder()
@@ -56,7 +56,7 @@ func TestProductionOmitsPageStreamTraceEndpoint(t *testing.T) {
 }
 
 func TestDevelopmentPageStreamSignalsEndpointReturnsStateAndSelectedHistory(t *testing.T) {
-	t.Setenv("LIBREDASH_PRODUCTION", "")
+	t.Setenv("LEAPVIEW_PRODUCTION", "")
 	server := New(fakeMetrics{})
 	server.pageStreamTrace.Record(pagestream.TraceRecord{
 		StreamID: "trace:test", Stage: pagestream.TraceStageDelivered,
@@ -98,7 +98,7 @@ func TestDevelopmentPageStreamSignalsEndpointReturnsStateAndSelectedHistory(t *t
 }
 
 func TestProductionOmitsPageStreamSignalsEndpoint(t *testing.T) {
-	t.Setenv("LIBREDASH_PRODUCTION", "1")
+	t.Setenv("LEAPVIEW_PRODUCTION", "1")
 	server := New(fakeMetrics{})
 	req := httptest.NewRequest(http.MethodGet, "/__dev/pagestream/signals", nil)
 	rec := httptest.NewRecorder()

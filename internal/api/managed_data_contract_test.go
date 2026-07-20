@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	apigen "github.com/Yacobolo/libredash/internal/api/gen"
-	cligen "github.com/Yacobolo/libredash/internal/cli/gen"
+	apigen "github.com/Yacobolo/leapview/internal/api/gen"
+	cligen "github.com/Yacobolo/leapview/internal/cli/gen"
 )
 
 func TestManagedDataAPIContractIsProjectGlobalAndComplete(t *testing.T) {

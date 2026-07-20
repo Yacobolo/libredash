@@ -6,8 +6,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/analytics/materialize"
-	"github.com/Yacobolo/libredash/internal/execution"
+	"github.com/Yacobolo/leapview/internal/analytics/materialize"
+	"github.com/Yacobolo/leapview/internal/execution"
 )
 
 type QueueRepository interface {
@@ -35,7 +35,7 @@ func (d Dispatcher) Run(ctx context.Context) {
 	}
 	owner := d.Owner
 	if owner == "" {
-		owner = fmt.Sprintf("libredash-%d", time.Now().UnixNano())
+		owner = fmt.Sprintf("leapview-%d", time.Now().UnixNano())
 	}
 	for {
 		queueStats, _ := d.Runs.JobQueueStats(ctx, d.Environment)

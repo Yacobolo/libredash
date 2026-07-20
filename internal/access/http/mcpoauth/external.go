@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Yacobolo/libredash/internal/access"
+	"github.com/Yacobolo/leapview/internal/access"
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 )
 

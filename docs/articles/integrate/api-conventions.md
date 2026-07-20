@@ -1,6 +1,6 @@
 # API conventions
 
-LibreDash APIs use explicit workspace/resource paths, bearer authentication, JSON payloads, bounded pagination, and conventional HTTP status. The OpenAPI document is authoritative for each operation's parameters and schemas.
+LeapView APIs use explicit workspace/resource paths, bearer authentication, JSON payloads, bounded pagination, and conventional HTTP status. The OpenAPI document is authoritative for each operation's parameters and schemas.
 
 ## Base path and content
 

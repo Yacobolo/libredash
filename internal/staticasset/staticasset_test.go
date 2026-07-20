@@ -7,8 +7,8 @@ import (
 )
 
 func TestVersionDefaultsToDevOutsideProduction(t *testing.T) {
-	t.Setenv("LIBREDASH_PRODUCTION", "")
-	t.Setenv("LIBREDASH_ASSET_VERSION", "")
+	t.Setenv("LEAPVIEW_PRODUCTION", "")
+	t.Setenv("LEAPVIEW_ASSET_VERSION", "")
 
 	if got := Version(); got != "dev" {
 		t.Fatalf("Version = %q, want dev", got)
@@ -16,8 +16,8 @@ func TestVersionDefaultsToDevOutsideProduction(t *testing.T) {
 }
 
 func TestVersionUsesConfiguredEnvOverride(t *testing.T) {
-	t.Setenv("LIBREDASH_PRODUCTION", "1")
-	t.Setenv("LIBREDASH_ASSET_VERSION", "release-123")
+	t.Setenv("LEAPVIEW_PRODUCTION", "1")
+	t.Setenv("LEAPVIEW_ASSET_VERSION", "release-123")
 
 	if got := URL("/static/app-shell.js"); got != "/static/app-shell.js?v=release-123" {
 		t.Fatalf("URL = %q, want configured version", got)
@@ -33,8 +33,8 @@ func TestVersionUsesGeneratedFileInProduction(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Chdir(dir)
-	t.Setenv("LIBREDASH_PRODUCTION", "1")
-	t.Setenv("LIBREDASH_ASSET_VERSION", "")
+	t.Setenv("LEAPVIEW_PRODUCTION", "1")
+	t.Setenv("LEAPVIEW_ASSET_VERSION", "")
 
 	if got := URL("/static/app-shell.js"); got != "/static/app-shell.js?v=abc123" {
 		t.Fatalf("URL = %q, want generated version", got)
@@ -42,12 +42,12 @@ func TestVersionUsesGeneratedFileInProduction(t *testing.T) {
 }
 
 func TestProductionParsesBooleanEnv(t *testing.T) {
-	t.Setenv("LIBREDASH_PRODUCTION", "true")
+	t.Setenv("LEAPVIEW_PRODUCTION", "true")
 	if !Production() {
 		t.Fatal("Production() = false, want true")
 	}
 
-	t.Setenv("LIBREDASH_PRODUCTION", "not-bool")
+	t.Setenv("LEAPVIEW_PRODUCTION", "not-bool")
 	if Production() {
 		t.Fatal("Production() = true for invalid boolean, want false")
 	}

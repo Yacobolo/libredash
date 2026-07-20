@@ -8,16 +8,16 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/configschema"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
-	"github.com/Yacobolo/libredash/internal/workspace"
+	"github.com/Yacobolo/leapview/internal/configschema"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	"github.com/Yacobolo/leapview/internal/workspace"
 )
 
 func TestCompileProjectSupportsTwoWorkspacesSharingSources(t *testing.T) {
 	projectPath := writeProjectFixture(t, map[string]string{
-		"libredash.yaml": projectYAML(),
+		"leapview.yaml": projectYAML(),
 		"connections/olist.yaml": `
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Connection
 metadata:
   name: olist
@@ -95,7 +95,7 @@ spec:
 
 func TestCompileRequiresExplicitWorkspaceID(t *testing.T) {
 	projectPath := writeProjectFixture(t, map[string]string{
-		"libredash.yaml":                                   projectYAML(),
+		"leapview.yaml":                                   projectYAML(),
 		"connections/olist.yaml":                           connectionYAML("olist"),
 		"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
 		"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -121,7 +121,7 @@ func TestCompileRequiresExplicitWorkspaceID(t *testing.T) {
 
 func TestCompileProjectCompilesRefreshPipeline(t *testing.T) {
 	projectPath := writeProjectFixture(t, map[string]string{
-		"libredash.yaml":                                        projectYAML(),
+		"leapview.yaml":                                        projectYAML(),
 		"connections/olist.yaml":                                connectionYAML("olist"),
 		"sources/olist.orders.yaml":                             sourceYAML("olist.orders", "orders.csv", "order_id"),
 		"sources/olist.customers.yaml":                          sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -152,7 +152,7 @@ func TestCompileProjectCompilesRefreshPipeline(t *testing.T) {
 
 func TestCompileProjectSupportsManualOnlyRefreshPipeline(t *testing.T) {
 	projectPath := writeProjectFixture(t, map[string]string{
-		"libredash.yaml":                                        projectYAML(),
+		"leapview.yaml":                                        projectYAML(),
 		"connections/olist.yaml":                                connectionYAML("olist"),
 		"sources/olist.orders.yaml":                             sourceYAML("olist.orders", "orders.csv", "order_id"),
 		"sources/olist.customers.yaml":                          sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -212,7 +212,7 @@ func TestCompileProjectRejectsInvalidRefreshPipeline(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			files := map[string]string{
-				"libredash.yaml":                                   projectYAML(),
+				"leapview.yaml":                                   projectYAML(),
 				"connections/olist.yaml":                           connectionYAML("olist"),
 				"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
 				"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -280,7 +280,7 @@ func TestCompileProjectRejectsInvalidAccessResources(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			files := map[string]string{
-				"libredash.yaml":                                   projectYAML(),
+				"leapview.yaml":                                   projectYAML(),
 				"connections/olist.yaml":                           connectionYAML("olist"),
 				"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
 				"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -307,9 +307,9 @@ func TestCompileProjectRejectsInvalidAccessResources(t *testing.T) {
 
 func TestCompileProjectRejectsWorkspaceReadsOutsideAllowlist(t *testing.T) {
 	projectPath := writeProjectFixture(t, map[string]string{
-		"libredash.yaml": projectYAML(),
+		"leapview.yaml": projectYAML(),
 		"connections/olist.yaml": `
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Connection
 metadata:
   name: olist
@@ -338,7 +338,7 @@ spec:
 }
 
 func TestCompileShowcaseProject(t *testing.T) {
-	projectPath := filepath.Join("..", "..", "..", "dashboards", "libredash.yaml")
+	projectPath := filepath.Join("..", "..", "..", "dashboards", "leapview.yaml")
 	compiled, err := CompileProject(projectPath, Options{})
 	if err != nil {
 		t.Fatalf("CompileProject() error = %v", err)
@@ -371,7 +371,7 @@ func TestCompileShowcaseProject(t *testing.T) {
 
 func TestPlanProjectIsStableAndSorted(t *testing.T) {
 	projectPath := writeProjectFixture(t, map[string]string{
-		"libredash.yaml":                                   projectYAML(),
+		"leapview.yaml":                                   projectYAML(),
 		"connections/olist.yaml":                           connectionYAML("olist"),
 		"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
 		"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -408,7 +408,7 @@ func TestPlanProjectIsStableAndSorted(t *testing.T) {
 
 func TestPlanProjectAgainstGraphReportsStableDiff(t *testing.T) {
 	projectPath := writeProjectFixture(t, map[string]string{
-		"libredash.yaml":                                   projectYAML(),
+		"leapview.yaml":                                   projectYAML(),
 		"connections/olist.yaml":                           connectionYAML("olist"),
 		"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
 		"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -472,7 +472,7 @@ func TestPlanProjectAgainstGraphReportsStableDiff(t *testing.T) {
 
 func TestPlanProjectAgainstGraphReportsSemanticAndAccessImpact(t *testing.T) {
 	projectPath := writeProjectFixture(t, map[string]string{
-		"libredash.yaml":                                   projectYAML(),
+		"leapview.yaml":                                   projectYAML(),
 		"connections/olist.yaml":                           connectionYAML("olist"),
 		"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
 		"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -893,7 +893,7 @@ func TestCompileProjectValidatesUnusedGlobalConnectionsAndSources(t *testing.T) 
 	t.Run("unused unsupported connection", func(t *testing.T) {
 		projectPath := writeProjectFixture(t, minimalProjectFiles(map[string]string{
 			"connections/bad.yaml": `
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Connection
 metadata:
   name: bad
@@ -910,7 +910,7 @@ spec:
 	t.Run("unused source path outside connection scope", func(t *testing.T) {
 		projectPath := writeProjectFixture(t, minimalProjectFiles(map[string]string{
 			"connections/scoped.yaml": `
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Connection
 metadata:
   name: scoped
@@ -919,7 +919,7 @@ spec:
   scope: https://example.com/data/allowed
 `,
 			"sources/unused.escape.yaml": `
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Source
 metadata:
   name: unused.escape
@@ -938,7 +938,7 @@ spec:
 
 func TestCompileProjectSupportsMultipleSemanticModelsInWorkspace(t *testing.T) {
 	projectPath := writeProjectFixture(t, map[string]string{
-		"libredash.yaml":                                   projectYAML(),
+		"leapview.yaml":                                   projectYAML(),
 		"connections/olist.yaml":                           connectionYAML("olist"),
 		"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
 		"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -963,7 +963,7 @@ func TestCompileProjectSupportsMultipleSemanticModelsInWorkspace(t *testing.T) {
 
 func TestCompileProjectAllowsDuplicateDashboardIDsAcrossWorkspaces(t *testing.T) {
 	projectPath := writeProjectFixture(t, map[string]string{
-		"libredash.yaml":                                        projectYAML(),
+		"leapview.yaml":                                        projectYAML(),
 		"connections/olist.yaml":                                connectionYAML("olist"),
 		"sources/olist.orders.yaml":                             sourceYAML("olist.orders", "orders.csv", "order_id"),
 		"sources/olist.customers.yaml":                          sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -987,7 +987,7 @@ func TestCompileProjectAllowsDuplicateDashboardIDsAcrossWorkspaces(t *testing.T)
 
 func TestCompileProjectRejectsDuplicateDashboardIDsWithinWorkspace(t *testing.T) {
 	projectPath := writeProjectFixture(t, map[string]string{
-		"libredash.yaml":                              projectYAML(),
+		"leapview.yaml":                              projectYAML(),
 		"connections/olist.yaml":                      connectionYAML("olist"),
 		"sources/olist.orders.yaml":                   sourceYAML("olist.orders", "orders.csv", "order_id"),
 		"sources/olist.customers.yaml":                sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -1006,7 +1006,7 @@ func TestCompileProjectRejectsDuplicateDashboardIDsWithinWorkspace(t *testing.T)
 func TestCompileProjectRejectsUnknownReferences(t *testing.T) {
 	t.Run("source connection", func(t *testing.T) {
 		projectPath := writeProjectFixture(t, map[string]string{
-			"libredash.yaml":                                   projectYAML(),
+			"leapview.yaml":                                   projectYAML(),
 			"connections/olist.yaml":                           connectionYAML("olist"),
 			"sources/olist.orders.yaml":                        strings.Replace(sourceYAML("olist.orders", "orders.csv", "order_id"), "connection: olist", "connection: missing", 1),
 			"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -1022,7 +1022,7 @@ func TestCompileProjectRejectsUnknownReferences(t *testing.T) {
 
 	t.Run("dashboard semantic model", func(t *testing.T) {
 		projectPath := writeProjectFixture(t, map[string]string{
-			"libredash.yaml":                                   projectYAML(),
+			"leapview.yaml":                                   projectYAML(),
 			"connections/olist.yaml":                           connectionYAML("olist"),
 			"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
 			"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -1039,9 +1039,9 @@ func TestCompileProjectRejectsUnknownReferences(t *testing.T) {
 
 func TestCompileProjectRejectsInlineConnectionAuthWithResourceDiagnostic(t *testing.T) {
 	projectPath := writeProjectFixture(t, map[string]string{
-		"libredash.yaml": projectYAML(),
+		"leapview.yaml": projectYAML(),
 		"connections/olist.yaml": `
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Connection
 metadata:
   name: olist
@@ -1059,7 +1059,7 @@ spec:
 
 func TestCompileProjectRejectsWorkspaceMismatchWithResourceDiagnostic(t *testing.T) {
 	projectPath := writeProjectFixture(t, map[string]string{
-		"libredash.yaml":                                   projectYAML(),
+		"leapview.yaml":                                   projectYAML(),
 		"connections/olist.yaml":                           connectionYAML("olist"),
 		"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
 		"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -1077,7 +1077,7 @@ func TestCompileProjectRejectsWorkspaceMismatchWithResourceDiagnostic(t *testing
 func TestCompileProjectRejectsHiddenImportsAndUnsafeIncludes(t *testing.T) {
 	t.Run("raw relation", func(t *testing.T) {
 		projectPath := writeProjectFixture(t, map[string]string{
-			"libredash.yaml":                                   projectYAML(),
+			"leapview.yaml":                                   projectYAML(),
 			"connections/olist.yaml":                           connectionYAML("olist"),
 			"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
 			"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -1093,7 +1093,7 @@ func TestCompileProjectRejectsHiddenImportsAndUnsafeIncludes(t *testing.T) {
 
 	t.Run("unqualified relation", func(t *testing.T) {
 		projectPath := writeProjectFixture(t, map[string]string{
-			"libredash.yaml":                                   projectYAML(),
+			"leapview.yaml":                                   projectYAML(),
 			"connections/olist.yaml":                           connectionYAML("olist"),
 			"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
 			"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -1109,7 +1109,7 @@ func TestCompileProjectRejectsHiddenImportsAndUnsafeIncludes(t *testing.T) {
 
 	t.Run("escaping include", func(t *testing.T) {
 		projectPath := writeProjectFixture(t, map[string]string{
-			"libredash.yaml":         strings.Replace(projectYAML(), "connections/*.yaml", "../*.yaml", 1),
+			"leapview.yaml":         strings.Replace(projectYAML(), "connections/*.yaml", "../*.yaml", 1),
 			"connections/olist.yaml": connectionYAML("olist"),
 		})
 
@@ -1119,7 +1119,7 @@ func TestCompileProjectRejectsHiddenImportsAndUnsafeIncludes(t *testing.T) {
 
 	t.Run("recursive include", func(t *testing.T) {
 		projectPath := writeProjectFixture(t, map[string]string{
-			"libredash.yaml":         strings.Replace(projectYAML(), "connections/*.yaml", "connections/**/*.yaml", 1),
+			"leapview.yaml":         strings.Replace(projectYAML(), "connections/*.yaml", "connections/**/*.yaml", 1),
 			"connections/olist.yaml": connectionYAML("olist"),
 		})
 
@@ -1131,7 +1131,7 @@ func TestCompileProjectRejectsHiddenImportsAndUnsafeIncludes(t *testing.T) {
 func TestCompileProjectRejectsSQLSourceMismatchAndCycles(t *testing.T) {
 	t.Run("source mismatch", func(t *testing.T) {
 		projectPath := writeProjectFixture(t, map[string]string{
-			"libredash.yaml":                                   projectYAML(),
+			"leapview.yaml":                                   projectYAML(),
 			"connections/olist.yaml":                           connectionYAML("olist"),
 			"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
 			"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -1147,7 +1147,7 @@ func TestCompileProjectRejectsSQLSourceMismatchAndCycles(t *testing.T) {
 
 	t.Run("model table cycle", func(t *testing.T) {
 		projectPath := writeProjectFixture(t, map[string]string{
-			"libredash.yaml":                                   projectYAML(),
+			"leapview.yaml":                                   projectYAML(),
 			"connections/olist.yaml":                           connectionYAML("olist"),
 			"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
 			"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -1173,7 +1173,7 @@ func writeProjectFixture(t *testing.T, files map[string]string) string {
 		}
 		writeCompilerFixture(t, path, content)
 	}
-	return filepath.Join(dir, "libredash.yaml")
+	return filepath.Join(dir, "leapview.yaml")
 }
 
 func assertVisualShowcaseCoverage(t *testing.T, report *reportdef.Dashboard) {
@@ -1224,7 +1224,7 @@ func assertVisualShowcaseCoverage(t *testing.T, report *reportdef.Dashboard) {
 
 func minimalProjectFiles(extra map[string]string) map[string]string {
 	files := map[string]string{
-		"libredash.yaml":                                   projectYAML(),
+		"leapview.yaml":                                   projectYAML(),
 		"connections/olist.yaml":                           connectionYAML("olist"),
 		"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
 		"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -1259,7 +1259,7 @@ func testPlanAssetPayload(t *testing.T, workspaceID workspace.WorkspaceID, servi
 
 func connectionYAML(name string) string {
 	return `
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Connection
 metadata:
   name: ` + name + `
@@ -1270,7 +1270,7 @@ spec:
 
 func projectYAML() string {
 	return `
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Project
 metadata:
   name: test
@@ -1289,7 +1289,7 @@ spec:
 
 func sourceYAML(name, path, key string) string {
 	return `
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Source
 metadata:
   name: ` + name + `
@@ -1306,7 +1306,7 @@ spec:
 
 func workspaceYAML(name string) string {
 	return `
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Workspace
 metadata:
   name: ` + name + `
@@ -1336,7 +1336,7 @@ func workspaceYAMLWithRefreshPipelines(name string) string {
 
 func refreshPipelineYAML(workspaceID, name, semanticModel string, schedules []string) string {
 	content := `
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: RefreshPipeline
 metadata:
   workspace: ` + workspaceID + `
@@ -1372,7 +1372,7 @@ func workspaceYAMLWithAccess(name string) string {
 
 func modelTableYAML(workspace, name, source, key, sql string) string {
 	return `
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: ModelTable
 metadata:
   workspace: ` + workspace + `
@@ -1393,7 +1393,7 @@ spec:
 
 func sqlModelTableYAML(workspace, name, key, sql string) string {
 	return `
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: ModelTable
 metadata:
   workspace: ` + workspace + `
@@ -1416,7 +1416,7 @@ func semanticModelYAML(workspace, table, measure string) string {
 
 func semanticModelNamedYAML(workspace, name, table, measure string) string {
 	return `
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: SemanticModel
 metadata:
   workspace: ` + workspace + `
@@ -1434,7 +1434,7 @@ spec:
 
 func semanticModelYAMLWithTables(workspace string, tables []string, measure string) string {
 	return `
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: SemanticModel
 metadata:
   workspace: ` + workspace + `
@@ -1461,7 +1461,7 @@ func semanticTableListYAML(tables []string) string {
 
 func dashboardYAML(workspace, name, model string) string {
 	return `
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Dashboard
 metadata:
   workspace: ` + workspace + `
@@ -1492,7 +1492,7 @@ spec:
 
 func workspaceGroupYAML(workspace, name, email string) string {
 	return `
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: WorkspaceGroup
 metadata:
   workspace: ` + workspace + `
@@ -1505,7 +1505,7 @@ spec:
 
 func workspaceRoleBindingGroupYAML(workspace, name, role, group string) string {
 	return `
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: WorkspaceRoleBinding
 metadata:
   workspace: ` + workspace + `

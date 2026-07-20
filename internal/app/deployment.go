@@ -3,7 +3,7 @@ package app
 import (
 	"net/http"
 
-	deploymenthttp "github.com/Yacobolo/libredash/internal/deployment/http"
+	deploymenthttp "github.com/Yacobolo/leapview/internal/deployment/http"
 )
 
 func (s *Server) deploymentHTTPHandler() *deploymenthttp.Handler {

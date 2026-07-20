@@ -48,8 +48,8 @@ test('filter menu renders backend-owned options and emits search/toggle/clear co
   const page = await browser.newPage({ viewport: { width: 640, height: 520 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-filter-menu'))
-    const state = await page.locator('ld-filter-menu').evaluate(async (element: any) => {
+    await page.waitForFunction(() => customElements.get('lv-filter-menu'))
+    const state = await page.locator('lv-filter-menu').evaluate(async (element: any) => {
       element.menu = {
         id: 'principal',
         label: 'User',
@@ -67,7 +67,7 @@ test('filter menu renders backend-owned options and emits search/toggle/clear co
         ],
       }
       const commands: unknown[] = []
-      element.addEventListener('ld-filter-menu-command', (event: CustomEvent) => commands.push(event.detail))
+      element.addEventListener('lv-filter-menu-command', (event: CustomEvent) => commands.push(event.detail))
       await element.updateComplete
       const root = element.shadowRoot
       const trigger = root.querySelector<HTMLButtonElement>('.trigger')!
@@ -126,11 +126,11 @@ function testDocument(): string {
     <html>
       <head>
         <style>
-          body { --fontStack-system: system-ui; --ld-bg-panel: #fff; --ld-bg-app: #fff; --ld-bg-input: #fff; --ld-bg-panel-muted: #f6f8fa; --ld-bg-control-hover: #f3f4f6; --ld-fg-default: #24292f; --ld-fg-muted: #57606a; --ld-fg-danger: #d1242f; --ld-line-muted: #d8dee4; --ld-line-accent: #0969da; --ld-border-muted: 1px solid #d8dee4; --ld-border-accent: #0969da; --ld-radius-default: 6px; --ld-radius-small: 6px; --base-size-4: 4px; --base-size-6: 6px; --base-size-7: 7px; --base-size-8: 8px; --base-size-10: 10px; --base-size-12: 12px; --base-size-16: 16px; --base-size-24: 24px; --base-size-32: 32px; --control-medium-size: 32px; --control-small-size: 28px; --ld-font-size-caption: 12px; --ld-font-size-body-sm: 14px; --ld-line-height-compact: 1.3; }
+          body { --fontStack-system: system-ui; --lv-bg-panel: #fff; --lv-bg-app: #fff; --lv-bg-input: #fff; --lv-bg-panel-muted: #f6f8fa; --lv-bg-control-hover: #f3f4f6; --lv-fg-default: #24292f; --lv-fg-muted: #57606a; --lv-fg-danger: #d1242f; --lv-line-muted: #d8dee4; --lv-line-accent: #0969da; --lv-border-muted: 1px solid #d8dee4; --lv-border-accent: #0969da; --lv-radius-default: 6px; --lv-radius-small: 6px; --base-size-4: 4px; --base-size-6: 6px; --base-size-7: 7px; --base-size-8: 8px; --base-size-10: 10px; --base-size-12: 12px; --base-size-16: 16px; --base-size-24: 24px; --base-size-32: 32px; --control-medium-size: 32px; --control-small-size: 28px; --lv-font-size-caption: 12px; --lv-font-size-body-sm: 14px; --lv-line-height-compact: 1.3; }
         </style>
       </head>
       <body>
-        <ld-filter-menu></ld-filter-menu>
+        <lv-filter-menu></lv-filter-menu>
         <script type="module" src="/filter-menu-under-test.js"></script>
       </body>
     </html>

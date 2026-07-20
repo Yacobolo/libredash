@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/workspace"
+	"github.com/Yacobolo/leapview/internal/workspace"
 )
 
 var ErrSnapshotLeaseLost = errors.New("snapshot lease is no longer active")

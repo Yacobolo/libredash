@@ -4,10 +4,10 @@ import (
 	"strings"
 	"testing"
 
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	manageddataruntimebinding "github.com/Yacobolo/libredash/internal/manageddata/runtimebinding"
-	"github.com/Yacobolo/libredash/internal/runtimehost"
-	"github.com/Yacobolo/libredash/internal/workspace"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	manageddataruntimebinding "github.com/Yacobolo/leapview/internal/manageddata/runtimebinding"
+	"github.com/Yacobolo/leapview/internal/runtimehost"
+	"github.com/Yacobolo/leapview/internal/workspace"
 )
 
 func TestBindManagedDataRootsUsesTrustedRuntimeResolution(t *testing.T) {

@@ -8,13 +8,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/securefs"
-	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
+	"github.com/Yacobolo/leapview/internal/securefs"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
 )
 
 const (
 	BundleFormat        = "tar.gz"
-	ProjectFile         = "libredash.yaml"
+	ProjectFile         = "leapview.yaml"
 	CompiledProjectFile = "compiled/workspace.json"
 	MaxUploadBytes      = 128 << 20
 )

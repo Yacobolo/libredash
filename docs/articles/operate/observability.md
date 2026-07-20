@@ -1,14 +1,14 @@
 # Health and observability
 
-Observe LibreDash at the process, dependency, delivery, data, and query layers. A single “up” signal cannot distinguish a healthy process with a broken active project from a slow query caused by an invalid model grain.
+Observe LeapView at the process, dependency, delivery, data, and query layers. A single “up” signal cannot distinguish a healthy process with a broken active project from a slow query caused by an invalid model grain.
 
 ## Liveness and readiness
 
 `/healthz` is the lightweight liveness endpoint. `/readyz` represents readiness for serving. The generated command checks readiness:
 
 ```sh
-libredash healthcheck \
-  --url https://libredash.example.com/readyz \
+leapview healthcheck \
+  --url https://leapview.example.com/readyz \
   --timeout 5s
 ```
 
@@ -16,7 +16,7 @@ Use liveness for process restart decisions and readiness for traffic admission. 
 
 ## Metrics
 
-LibreDash exposes Prometheus metrics behind `LIBREDASH_METRICS_BEARER_TOKEN`. Production validation requires a strong token. Restrict the endpoint by network policy as well, inject the token into the scraper securely, and avoid logging it.
+LeapView exposes Prometheus metrics behind `LEAPVIEW_METRICS_BEARER_TOKEN`. Production validation requires a strong token. Restrict the endpoint by network policy as well, inject the token into the scraper securely, and avoid logging it.
 
 Monitor at least process resource use, request rate and latency, error status, read/write executor saturation, queue depth and timeouts, refresh activity, storage capacity, and managed upload failures. Alert on sustained conditions and user-visible symptoms rather than every transient supersession.
 
@@ -44,7 +44,7 @@ An expected superseded refresh is not necessarily an incident. Repeated failures
 
 Query events help identify slow or failing workloads by operation, workspace, duration, and diagnostic metadata. Audit events answer who changed security or administrative state. They serve different purposes and have separate retention controls.
 
-Use `libredash admin maintenance` in dry-run mode to review bounded retention before applying deletion. Preserve relevant events externally when organizational policy requires longer history.
+Use `leapview admin maintenance` in dry-run mode to review bounded retention before applying deletion. Preserve relevant events externally when organizational policy requires longer history.
 
 ## Synthetic verification
 

@@ -14,21 +14,21 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/access"
-	"github.com/Yacobolo/libredash/internal/access/http/mcpoauth"
-	accesssqlite "github.com/Yacobolo/libredash/internal/access/sqlite"
-	"github.com/Yacobolo/libredash/internal/platform"
+	"github.com/Yacobolo/leapview/internal/access"
+	"github.com/Yacobolo/leapview/internal/access/http/mcpoauth"
+	accesssqlite "github.com/Yacobolo/leapview/internal/access/sqlite"
+	"github.com/Yacobolo/leapview/internal/platform"
 )
 
 const (
-	testIssuer   = "https://libredash.example"
-	testResource = "https://libredash.example/mcp"
+	testIssuer   = "https://leapview.example"
+	testResource = "https://leapview.example/mcp"
 	testRedirect = "https://client.example/callback"
 )
 
 func TestAuthorizationCodePKCERefreshAndRevocation(t *testing.T) {
 	ctx := context.Background()
-	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "libredash.db"))
+	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "leapview.db"))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestRejectsMissingPKCEAndWrongResource(t *testing.T) {
 func TestClientIDMetadataDocumentRegistration(t *testing.T) {
 	const clientID = "https://client.example/oauth/client-metadata.json"
 	ctx := context.Background()
-	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "libredash.db"))
+	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "leapview.db"))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
@@ -188,7 +188,7 @@ func TestClientIDMetadataDocumentRegistration(t *testing.T) {
 
 func TestServicePrincipalClientCredentials(t *testing.T) {
 	ctx := context.Background()
-	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "libredash.db"))
+	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "leapview.db"))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
@@ -320,7 +320,7 @@ func assertOAuthError(t *testing.T, status int, run func(*httptest.ResponseRecor
 func testService(t *testing.T) *mcpoauth.Service {
 	t.Helper()
 	ctx := context.Background()
-	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "libredash.db"))
+	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "leapview.db"))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}

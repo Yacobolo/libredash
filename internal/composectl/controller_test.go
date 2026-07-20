@@ -15,7 +15,7 @@ func TestControllerLockRejectsConcurrentOperationAndRecoversAfterRelease(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := acquireControllerLock(path); err == nil || !strings.Contains(err.Error(), "another LibreDash operation") {
+	if _, err := acquireControllerLock(path); err == nil || !strings.Contains(err.Error(), "another LeapView operation") {
 		t.Fatalf("concurrent lock error = %v", err)
 	}
 	if err := first.Release(); err != nil {
@@ -64,14 +64,14 @@ func TestFirstLoginRetainsCredentialsUntilOutputSucceeds(t *testing.T) {
 
 func TestUpdateEnvFileIsPrivateAndRejectsMissingContractKeys(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "deployment.env")
-	if err := os.WriteFile(path, []byte("LIBREDASH_IMAGE=old\nCOMPOSE_HTTPS=1\n"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("LEAPVIEW_IMAGE=old\nCOMPOSE_HTTPS=1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := updateEnvFile(path, map[string]string{"LIBREDASH_IMAGE": "new"}); err != nil {
+	if err := updateEnvFile(path, map[string]string{"LEAPVIEW_IMAGE": "new"}); err != nil {
 		t.Fatal(err)
 	}
 	contents, err := os.ReadFile(path)
-	if err != nil || string(contents) != "LIBREDASH_IMAGE=new\nCOMPOSE_HTTPS=1\n" {
+	if err != nil || string(contents) != "LEAPVIEW_IMAGE=new\nCOMPOSE_HTTPS=1\n" {
 		t.Fatalf("updated environment = %q, %v", contents, err)
 	}
 	info, err := os.Stat(path)
@@ -87,7 +87,7 @@ func TestUpdateEnvFileIsPrivateAndRejectsMissingContractKeys(t *testing.T) {
 }
 
 func TestEnvironmentLineValuesRejectConfigurationInjection(t *testing.T) {
-	for _, value := range []string{"prod\nLIBREDASH_CSRF_KEY=forged", "dash.example.com\rCOMPOSE_HTTPS=0", "admin@example.com\x00suffix"} {
+	for _, value := range []string{"prod\nLEAPVIEW_CSRF_KEY=forged", "dash.example.com\rCOMPOSE_HTTPS=0", "admin@example.com\x00suffix"} {
 		if err := validateEnvLineValue("test value", value); err == nil {
 			t.Fatalf("configuration injection value %q was accepted", value)
 		}

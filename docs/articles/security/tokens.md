@@ -29,8 +29,8 @@ Creation responses return new secret material once. Send it directly into the CI
 CLI automation can inject the target and token at runtime:
 
 ```sh
-LIBREDASH_TARGET=https://dash.example.com
-LIBREDASH_API_TOKEN=<secret>
+LEAPVIEW_TARGET=https://dash.example.com
+LEAPVIEW_API_TOKEN=<secret>
 ```
 
 Avoid command-line token flags where process listings or shell history may expose them. The CLI reference documents flags, but environment injection or protected CLI configuration is generally safer for automation.

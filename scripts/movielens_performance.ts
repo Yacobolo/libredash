@@ -50,8 +50,8 @@ type RefreshSummary = {
 }
 
 const projectRoot = process.cwd()
-const logPath = Bun.env.LIBREDASH_PERF_LOG ?? join(projectRoot, '.tmp/dev-server.log')
-const iterations = positiveInteger(Bun.env.LIBREDASH_PERF_ITERATIONS, 5)
+const logPath = Bun.env.LEAPVIEW_PERF_LOG ?? join(projectRoot, '.tmp/dev-server.log')
+const iterations = positiveInteger(Bun.env.LEAPVIEW_PERF_ITERATIONS, 5)
 
 type PerformanceSuite = {
 	name: string
@@ -252,7 +252,7 @@ export function classifyRapidSupersessionNetworkFailures(
 export async function runPerformanceSuite(): Promise<void> {
 	const suite = await loadPerformanceSuite()
 	const scenarios = suite.scenarios
-	const outputPath = Bun.env.LIBREDASH_PERF_OUTPUT ?? join(projectRoot, `.tmp/${suite.name}-performance.json`)
+	const outputPath = Bun.env.LEAPVIEW_PERF_OUTPUT ?? join(projectRoot, `.tmp/${suite.name}-performance.json`)
 	const baseURL = await resolveBaseURL()
 	const logCursor = await refreshLogCursor()
 	const dashboardURL = new URL(suite.dashboardPath, baseURL).toString()
@@ -335,10 +335,10 @@ export async function runPerformanceSuite(): Promise<void> {
   correctnessFailures.push(...browserHealth.consoleErrors.map((message) => `browser console: ${message}`))
   correctnessFailures.push(...browserHealth.failedNetworkResponses.map((message) => `network: ${message}`))
 
-  const thresholdMode = booleanEnvironment(Bun.env.LIBREDASH_PERF_ENFORCE_THRESHOLDS)
+  const thresholdMode = booleanEnvironment(Bun.env.LEAPVIEW_PERF_ENFORCE_THRESHOLDS)
   const thresholdLimits = performanceThresholdsFromEnvironment()
   const thresholdFailures = thresholdMode ? evaluateThresholds(overall, thresholdLimits) : []
-  const maxQueries = positiveInteger(Bun.env.LIBREDASH_PERF_MAX_QUERIES, 4)
+  const maxQueries = positiveInteger(Bun.env.LEAPVIEW_PERF_MAX_QUERIES, 4)
   if (thresholdMode) {
     for (const summary of summaries) {
       if (summary.queryCount !== null && summary.queryCount > maxQueries) {
@@ -376,8 +376,8 @@ async function runInteraction(page: Page, visualId: string, datumOffset: number)
   const before = await dashboardStatus(page)
   const input = await interactionInput(page, visualId, datumOffset)
   await beginPerformanceTrace(page, input)
-  await page.locator('ld-dashboard-page').evaluate((element: any, command) => {
-    element.dispatchEvent(new CustomEvent('ld-interaction-select', {
+  await page.locator('lv-dashboard-page').evaluate((element: any, command) => {
+    element.dispatchEvent(new CustomEvent('lv-interaction-select', {
       bubbles: true,
       composed: true,
       detail: command,
@@ -441,8 +441,8 @@ type RapidToggleResult = PerformanceTraceResult & {
 }
 
 async function interactionInput(page: Page, visualId: string, datumOffset: number): Promise<InteractionInput> {
-  return page.locator('ld-dashboard-page').evaluate((element: any, input) => {
-    const chart = element.shadowRoot?.querySelector(`ld-echart[visual-id="${input.visualId}"]`) as any
+  return page.locator('lv-dashboard-page').evaluate((element: any, input) => {
+    const chart = element.shadowRoot?.querySelector(`lv-echart[visual-id="${input.visualId}"]`) as any
     const payload = chart?.chart
     const rows = payload?.data ?? []
     if (rows.length === 0) throw new Error(`visual ${input.visualId} has no data`)
@@ -475,7 +475,7 @@ async function interactionInput(page: Page, visualId: string, datumOffset: numbe
 }
 
 async function installPerformanceObserver(page: Page): Promise<void> {
-  await page.locator('ld-dashboard-page').evaluate((element: any) => {
+  await page.locator('lv-dashboard-page').evaluate((element: any) => {
     if ((window as any).__ldPerfObserver) return
     const observer: any = {
       active: null,
@@ -538,7 +538,7 @@ async function installPerformanceObserver(page: Page): Promise<void> {
         }
         active.initialized = true
 
-        const source = element.shadowRoot?.querySelector(`ld-echart[visual-id="${active.visualId}"]`) as any
+        const source = element.shadowRoot?.querySelector(`lv-echart[visual-id="${active.visualId}"]`) as any
         const selected = (source?.chart?.selection ?? []).flatMap((entry: any) => entry.mappings ?? [])
         const matches = active.expectedMappings.every((expected: any) => selected.some((actual: any) =>
           actual.field === expected.field
@@ -639,15 +639,15 @@ async function runRapidToggle(page: Page, visualId: string): Promise<RapidToggle
   }
   page.on('request', onRequest)
   try {
-    await page.locator('ld-dashboard-page').evaluate((element: any, commands) => {
+    await page.locator('lv-dashboard-page').evaluate((element: any, commands) => {
       for (const command of commands) {
-        element.dispatchEvent(new CustomEvent('ld-interaction-select', { bubbles: true, composed: true, detail: command }))
+        element.dispatchEvent(new CustomEvent('lv-interaction-select', { bubbles: true, composed: true, detail: command }))
       }
     }, [first.command, second.command])
     const settled = await waitForStatus(page, (status) => status.generation >= before.generation + 2 && !status.loading, 600_000)
     const trace = await finishPerformanceTrace(page)
-    const finalSelectionMatchesB = await page.locator('ld-dashboard-page').evaluate((element: any, expected) => {
-      const chart = element.shadowRoot?.querySelector(`ld-echart[visual-id="${expected.visualId}"]`) as any
+    const finalSelectionMatchesB = await page.locator('lv-dashboard-page').evaluate((element: any, expected) => {
+      const chart = element.shadowRoot?.querySelector(`lv-echart[visual-id="${expected.visualId}"]`) as any
       const selected = (chart?.chart?.selection ?? []).flatMap((entry: any) => entry.mappings ?? [])
       return expected.command.mappings.every((mapping: any) => selected.some((candidate: any) =>
         candidate.field === mapping.field
@@ -674,14 +674,14 @@ async function runRapidToggle(page: Page, visualId: string): Promise<RapidToggle
 
 async function clearSelections(page: Page): Promise<void> {
   const status = await dashboardStatus(page)
-  await page.locator('ld-dashboard-page').evaluate((element: Element) => {
-    element.dispatchEvent(new CustomEvent('ld-selection-clear', { bubbles: true, composed: true }))
+  await page.locator('lv-dashboard-page').evaluate((element: Element) => {
+    element.dispatchEvent(new CustomEvent('lv-selection-clear', { bubbles: true, composed: true }))
   })
   await waitForStatus(page, (next) => next.generation > status.generation && !next.loading, 600_000)
 }
 
 async function waitForDashboardIdle(page: Page, timeoutMs: number): Promise<void> {
-  await page.waitForSelector('ld-dashboard-page')
+  await page.waitForSelector('lv-dashboard-page')
   await waitForStatus(page, (status) => status.generation > 0 && !status.loading, timeoutMs)
 }
 
@@ -692,7 +692,7 @@ export function refreshWasAccepted(beforeGeneration: number, status: DashboardSt
 }
 
 async function dashboardStatus(page: Page): Promise<DashboardStatusSnapshot> {
-  return page.locator('ld-dashboard-page').evaluate((element: any) => ({
+  return page.locator('lv-dashboard-page').evaluate((element: any) => ({
     refreshId: String(element.status?.refreshId ?? ''),
     generation: Number(element.status?.generation ?? 0),
     loading: Boolean(element.status?.loading),
@@ -716,7 +716,7 @@ function collectBrowserHealth(page: Page): { consoleErrors: string[]; failedNetw
     expectedRapidSupersessionAborts: [] as string[],
   }
   page.on('console', (message) => {
-    if (message.type() === 'error' || (message.type() === 'warning' && message.text().includes('[LibreDash]'))) {
+    if (message.type() === 'error' || (message.type() === 'warning' && message.text().includes('[LeapView]'))) {
       health.consoleErrors.push(`${message.type()}: ${message.text()}`)
     }
   })
@@ -731,7 +731,7 @@ function collectBrowserHealth(page: Page): { consoleErrors: string[]; failedNetw
 }
 
 async function resolveBaseURL(): Promise<string> {
-  if (Bun.env.LIBREDASH_BASE_URL) return Bun.env.LIBREDASH_BASE_URL
+  if (Bun.env.LEAPVIEW_BASE_URL) return Bun.env.LEAPVIEW_BASE_URL
   try {
     const port = (await readFile(join(projectRoot, '.tmp/dev-server.port'), 'utf8')).trim()
     if (/^\d+$/.test(port)) return `http://localhost:${port}`
@@ -740,7 +740,7 @@ async function resolveBaseURL(): Promise<string> {
 }
 
 async function loadPerformanceSuite(): Promise<PerformanceSuite> {
-	const path = Bun.env.LIBREDASH_PERF_SCENARIO ?? join(projectRoot, 'scripts/performance/movielens.json')
+	const path = Bun.env.LEAPVIEW_PERF_SCENARIO ?? join(projectRoot, 'scripts/performance/movielens.json')
 	const value = JSON.parse(await readFile(path, 'utf8')) as Partial<PerformanceSuite>
 	if (!value.name || !value.dashboardPath || !Array.isArray(value.scenarios) || value.scenarios.length === 0) {
 		throw new Error(`invalid dashboard performance scenario ${path}`)
@@ -793,10 +793,10 @@ function booleanEnvironment(raw: string | undefined): boolean {
 
 function performanceThresholdsFromEnvironment(): PerformanceThresholds {
   return {
-    optimisticFeedbackP95Ms: positiveNumber(Bun.env.LIBREDASH_PERF_MAX_OPTIMISTIC_FEEDBACK_P95_MS, 16),
-    firstTargetPaintP95Ms: positiveNumber(Bun.env.LIBREDASH_PERF_MAX_FIRST_TARGET_PAINT_P95_MS, 500),
-    criticalKPISettlementP95Ms: positiveNumber(Bun.env.LIBREDASH_PERF_MAX_CRITICAL_KPI_P95_MS, 1_000),
-    allTargetSettlementP95Ms: positiveNumber(Bun.env.LIBREDASH_PERF_MAX_ALL_TARGET_P95_MS, 1_000),
+    optimisticFeedbackP95Ms: positiveNumber(Bun.env.LEAPVIEW_PERF_MAX_OPTIMISTIC_FEEDBACK_P95_MS, 16),
+    firstTargetPaintP95Ms: positiveNumber(Bun.env.LEAPVIEW_PERF_MAX_FIRST_TARGET_PAINT_P95_MS, 500),
+    criticalKPISettlementP95Ms: positiveNumber(Bun.env.LEAPVIEW_PERF_MAX_CRITICAL_KPI_P95_MS, 1_000),
+    allTargetSettlementP95Ms: positiveNumber(Bun.env.LEAPVIEW_PERF_MAX_ALL_TARGET_P95_MS, 1_000),
   }
 }
 

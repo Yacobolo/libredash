@@ -8,8 +8,8 @@ import (
 
 func Command(ctx context.Context, controller *Controller) *cobra.Command {
 	root := &cobra.Command{
-		Use:           "libredashctl",
-		Short:         "Operate one Docker Compose LibreDash instance",
+		Use:           "leapviewctl",
+		Short:         "Operate one Docker Compose LeapView instance",
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(command *cobra.Command, _ []string) error {
@@ -32,7 +32,7 @@ func Command(ctx context.Context, controller *Controller) *cobra.Command {
 	initialize.Flags().StringVar(&initOptions.AdminEmail, "admin-email", "", "initial platform administrator email")
 	initialize.Flags().StringVar(&initOptions.Domain, "domain", "", "public application host")
 	initialize.Flags().StringVar(&initOptions.Environment, "environment", defaultEnvironment, "instance environment")
-	initialize.Flags().StringVar(&initOptions.Image, "image", "", "immutable LibreDash image reference")
+	initialize.Flags().StringVar(&initOptions.Image, "image", "", "immutable LeapView image reference")
 	initialize.Flags().BoolVar(&initOptions.NoHTTPS, "no-https", false, "disable the Caddy HTTPS overlay")
 
 	start := &cobra.Command{

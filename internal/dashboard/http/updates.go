@@ -7,12 +7,12 @@ import (
 	nethttp "net/http"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	"github.com/Yacobolo/libredash/internal/dashboard/command"
-	lddatastar "github.com/Yacobolo/libredash/internal/dashboard/datastar"
-	dashboardstream "github.com/Yacobolo/libredash/internal/dashboard/stream"
-	reportui "github.com/Yacobolo/libredash/internal/dashboard/ui"
-	"github.com/Yacobolo/libredash/pkg/pagestream"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	"github.com/Yacobolo/leapview/internal/dashboard/command"
+	lddatastar "github.com/Yacobolo/leapview/internal/dashboard/datastar"
+	dashboardstream "github.com/Yacobolo/leapview/internal/dashboard/stream"
+	reportui "github.com/Yacobolo/leapview/internal/dashboard/ui"
+	"github.com/Yacobolo/leapview/pkg/pagestream"
 )
 
 func (h Handler) Updates(w nethttp.ResponseWriter, r *nethttp.Request) {

@@ -1,10 +1,10 @@
 # Core concepts
 
-LibreDash separates physical data access, reusable business meaning, and dashboard presentation. The three layers are delivered together, but each layer has a clear responsibility and can be reviewed without understanding every implementation detail below it.
+LeapView separates physical data access, reusable business meaning, and dashboard presentation. The three layers are delivered together, but each layer has a clear responsibility and can be reviewed without understanding every implementation detail below it.
 
 ## Data resources
 
-A **connection** describes how LibreDash reaches data. A **source** gives a stable project-level identity to a file, table, object, or other input exposed through that connection. A workspace must explicitly list the project sources it is permitted to use.
+A **connection** describes how LeapView reaches data. A **source** gives a stable project-level identity to a file, table, object, or other input exposed through that connection. A workspace must explicitly list the project sources it is permitted to use.
 
 A **model table** turns one or more permitted sources into a stable analytical table. Its primary key, grain, fields, and SQL transformation make source cleanup and expensive reusable work explicit. Model tables are materialized so dashboards do not repeat raw-source logic on every interaction.
 
@@ -18,7 +18,7 @@ This layer is where business meaning belongs. A measure defines its aggregation,
 
 A **dashboard** chooses one semantic model and defines filters, visual queries, tabular queries, pages, and layout. Page components reference reusable filter, visual, or table definitions by stable ID. A layout change therefore does not need to rewrite query logic, and the same semantic field behaves consistently across several report surfaces.
 
-Charts are renderer-neutral at the dashboard contract. LibreDash maps visual shapes to renderer plugins—ECharts is the first built-in chart renderer—while keeping the signal and query contracts owned by LibreDash.
+Charts are renderer-neutral at the dashboard contract. LeapView maps visual shapes to renderer plugins—ECharts is the first built-in chart renderer—while keeping the signal and query contracts owned by LeapView.
 
 ## Delivery and ownership
 

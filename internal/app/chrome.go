@@ -3,10 +3,10 @@ package app
 import (
 	"net/http"
 
-	"github.com/Yacobolo/libredash/internal/agent"
-	dashboardui "github.com/Yacobolo/libredash/internal/dashboard/ui"
-	"github.com/Yacobolo/libredash/internal/ui"
-	uisignals "github.com/Yacobolo/libredash/internal/ui/signals"
+	"github.com/Yacobolo/leapview/internal/agent"
+	dashboardui "github.com/Yacobolo/leapview/internal/dashboard/ui"
+	"github.com/Yacobolo/leapview/internal/ui"
+	uisignals "github.com/Yacobolo/leapview/internal/ui/signals"
 )
 
 func (s *Server) chatChromeSignal(r *http.Request) ui.ChatSignal {

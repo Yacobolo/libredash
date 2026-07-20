@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
-	apiidempotencysqlite "github.com/Yacobolo/libredash/internal/apiidempotency/sqlite"
-	"github.com/Yacobolo/libredash/internal/cursorsigning"
-	"github.com/Yacobolo/libredash/internal/workspace"
+	apigenapi "github.com/Yacobolo/leapview/internal/api/gen"
+	apiidempotencysqlite "github.com/Yacobolo/leapview/internal/apiidempotency/sqlite"
+	"github.com/Yacobolo/leapview/internal/cursorsigning"
+	"github.com/Yacobolo/leapview/internal/workspace"
 )
 
 func TestAPIGenResponseBufferNormalizesLegacyErrorsAsProblemDetails(t *testing.T) {
@@ -59,7 +59,7 @@ func TestAPIGenResponseBufferCompletesProblemDetailsIdentifiers(t *testing.T) {
 	buffer := newAPIGenResponseBuffer(recorder, req)
 	buffer.Header().Set("Content-Type", "application/problem+json")
 	buffer.WriteHeader(http.StatusBadRequest)
-	_, _ = buffer.Write([]byte(`{"type":"https://libredash.dev/problems/invalid","title":"Bad Request","status":400,"detail":"invalid limit","instance":"","code":"INVALID_LIMIT","requestId":"","errors":null}`))
+	_, _ = buffer.Write([]byte(`{"type":"https://leapview.dev/problems/invalid","title":"Bad Request","status":400,"detail":"invalid limit","instance":"","code":"INVALID_LIMIT","requestId":"","errors":null}`))
 	buffer.flush()
 
 	var problem apigenapi.ProblemDetails

@@ -1,4 +1,4 @@
-const storageKey = 'libredash-color-mode';
+const storageKey = 'leapview-color-mode';
 const root = document.documentElement;
 const media = window.matchMedia?.('(prefers-color-scheme: dark)');
 const nextModes = { system: 'light', light: 'dark', dark: 'system' };
@@ -51,7 +51,7 @@ function setMode(mode, options = {}) {
     const eventID = ++lastAppliedEvent;
     requestAnimationFrame(() => {
       if (eventID !== lastAppliedEvent) return;
-      document.dispatchEvent(new CustomEvent('libredash-theme-applied', { detail: { mode: next, resolvedMode: resolved } }));
+      document.dispatchEvent(new CustomEvent('leapview-theme-applied', { detail: { mode: next, resolvedMode: resolved } }));
     });
   }
 }
@@ -67,7 +67,7 @@ document.addEventListener('click', (event) => {
   if (toggle) setMode(nextModes[storedMode()] || 'system');
 });
 
-document.addEventListener('libredash-theme-change', (event) => {
+document.addEventListener('leapview-theme-change', (event) => {
   setMode(event.detail?.mode);
 });
 

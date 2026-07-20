@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/ui"
+	"github.com/Yacobolo/leapview/internal/ui"
 	_ "github.com/duckdb/duckdb-go/v2"
 )
 

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/Yacobolo/libredash/internal/configschema"
+	"github.com/Yacobolo/leapview/internal/configschema"
 )
 
 type ResourceError struct {

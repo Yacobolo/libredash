@@ -205,7 +205,7 @@ func semanticBodyCommand(ctx context.Context, opts *rootOptions, use, short, ope
 }
 
 func addTargetTokenFlags(cmd *cobra.Command, opts *rootOptions) {
-	cmd.Flags().StringVar(&opts.target, "target", "", "LibreDash server URL")
+	cmd.Flags().StringVar(&opts.target, "target", "", "LeapView server URL")
 	cmd.Flags().StringVar(&opts.token, "token", "", "API token")
 }
 

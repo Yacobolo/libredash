@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/platform/db"
-	"github.com/Yacobolo/libredash/internal/queryaudit"
+	"github.com/Yacobolo/leapview/internal/platform/db"
+	"github.com/Yacobolo/leapview/internal/queryaudit"
 )
 
 type Repository struct {

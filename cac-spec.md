@@ -1,18 +1,18 @@
-# LibreDash Configuration-as-Code North Star
+# LeapView Configuration-as-Code North Star
 
-This spec defines the target configuration-as-code model for LibreDash. It is not
+This spec defines the target configuration-as-code model for LeapView. It is not
 bound by the current implementation. Prefer quality, simplicity, robustness,
 scalability, and long-term maintainability over development cost.
 
 ## Goal
 
-LibreDash configuration is a typed, versioned resource graph. Global data access
+LeapView configuration is a typed, versioned resource graph. Global data access
 resources are defined once. Workspaces reuse those resources and own their BI
 layer.
 
 The model must answer:
 
-- What data can LibreDash access?
+- What data can LeapView access?
 - What stable source contracts exist?
 - Which workspaces may use each source?
 - Which BI assets belong to each workspace?
@@ -34,7 +34,7 @@ The model must answer:
 
 ### Platform
 
-Platform resources are global to one LibreDash installation.
+Platform resources are global to one LeapView installation.
 
 Platform resources:
 
@@ -57,7 +57,7 @@ Workspace resources:
 
 - `Workspace`
 - Workspace role bindings
-- Workspace-local groups, if LibreDash manages groups directly
+- Workspace-local groups, if LeapView manages groups directly
 - `ModelTable`
 - `SemanticModel`
 - `Dashboard`
@@ -89,7 +89,7 @@ Activation changes only the active deployment pointer.
 Every authored resource uses the same envelope:
 
 ```yaml
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Source
 metadata:
   name: olist.orders
@@ -124,7 +124,7 @@ changes unless declared as migrations.
 Use many focused files, not one mega-file.
 
 ```text
-libredash.yaml
+leapview.yaml
 connections/
   olist.yaml
 sources/
@@ -148,7 +148,7 @@ workspaces/
 Top-level project file:
 
 ```yaml
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Project
 metadata:
   name: company-bi
@@ -169,11 +169,11 @@ ambiguous ownership, and hidden imports.
 
 ## Connections
 
-Connections define how LibreDash reaches data systems. They are global because
+Connections define how LeapView reaches data systems. They are global because
 many workspaces may use the same data system.
 
 ```yaml
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Connection
 metadata:
   name: olist
@@ -186,7 +186,7 @@ spec:
 Production credentials are references:
 
 ```yaml
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Connection
 metadata:
   name: warehouse
@@ -196,7 +196,7 @@ spec:
   database: warehouse
   credentials:
     provider: env
-    secret: LIBREDASH_WAREHOUSE_DSN
+    secret: LEAPVIEW_WAREHOUSE_DSN
 ```
 
 Connection validation must check required fields, supported options, credential
@@ -208,7 +208,7 @@ Sources are global contracts over physical data. They describe data access, not
 business meaning.
 
 ```yaml
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Source
 metadata:
   name: olist.orders
@@ -248,7 +248,7 @@ Workspaces own BI assets and access policy. They read only allowed global
 sources.
 
 ```yaml
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Workspace
 metadata:
   name: sales
@@ -281,7 +281,7 @@ Model tables are workspace-scoped transformations over allowed sources or other
 model tables in the same workspace.
 
 ```yaml
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: ModelTable
 metadata:
   workspace: sales
@@ -309,7 +309,7 @@ Semantic models are workspace-scoped business query contracts over model tables.
 They do not read connections or sources directly.
 
 ```yaml
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: SemanticModel
 metadata:
   workspace: sales
@@ -333,7 +333,7 @@ from atomic measure ownership.
 Dashboards are workspace-scoped presentation contracts over semantic models.
 
 ```yaml
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Dashboard
 metadata:
   workspace: sales
@@ -353,7 +353,7 @@ Principals are global. Workspace permissions are scoped.
 Workspace access is authored with workspace-local resources.
 
 ```yaml
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: WorkspaceGroup
 metadata:
   workspace: sales
@@ -364,7 +364,7 @@ spec:
 ```
 
 ```yaml
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: WorkspaceRoleBinding
 metadata:
   workspace: sales
@@ -380,7 +380,7 @@ Rules:
 
 - Users and service accounts are global principals.
 - External identity-provider groups are global.
-- LibreDash-managed groups are workspace-local unless declared platform-wide.
+- LeapView-managed groups are workspace-local unless declared platform-wide.
 - Role bindings grant a principal or group a role in one workspace.
 - Platform roles are only for installation administration.
 
@@ -433,7 +433,7 @@ Diagnostics must include resource ID, file path, and field path.
 
 ## Plan
 
-Before deployment, LibreDash must show a plan against the active deployment and
+Before deployment, LeapView must show a plan against the active deployment and
 require explicit approval before activation.
 
 The plan must report:
@@ -527,7 +527,7 @@ Configuration-as-code is not:
 
 ## Summary
 
-LibreDash should define global data access once, let workspaces reference allowed
+LeapView should define global data access once, let workspaces reference allowed
 sources, and compile each workspace into immutable deployment snapshots. The
 essential contract is scope, identity, deterministic input, validation, plan, and
 reproducible deployment.

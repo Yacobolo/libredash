@@ -3,8 +3,8 @@ package app
 import (
 	"net/http"
 
-	uisignals "github.com/Yacobolo/libredash/internal/ui/signals"
-	workspacehttp "github.com/Yacobolo/libredash/internal/workspace/http"
+	uisignals "github.com/Yacobolo/leapview/internal/ui/signals"
+	workspacehttp "github.com/Yacobolo/leapview/internal/workspace/http"
 )
 
 const (

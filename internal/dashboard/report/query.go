@@ -3,7 +3,7 @@ package report
 import (
 	"context"
 
-	semanticquery "github.com/Yacobolo/libredash/internal/analytics/query"
+	semanticquery "github.com/Yacobolo/leapview/internal/analytics/query"
 )
 
 type QueryField struct {

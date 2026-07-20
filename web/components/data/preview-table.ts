@@ -45,7 +45,7 @@ class DataPreviewTable extends LitElement {
       overflow: hidden;
     }
 
-    ld-windowed-table {
+    lv-windowed-table {
       min-width: 0;
       min-height: 0;
     }
@@ -53,12 +53,12 @@ class DataPreviewTable extends LitElement {
 
   render() {
     return html`
-      <ld-windowed-table
+      <lv-windowed-table
         .table=${this.tablePayload()}
-        @ld-windowed-table-request=${this.forwardWindowCommand}
-        @ld-windowed-table-columns=${this.forwardColumnCommand}
-        @ld-windowed-table-column-widths=${this.forwardColumnWidthsCommand}
-      ></ld-windowed-table>
+        @lv-windowed-table-request=${this.forwardWindowCommand}
+        @lv-windowed-table-columns=${this.forwardColumnCommand}
+        @lv-windowed-table-column-widths=${this.forwardColumnWidthsCommand}
+      ></lv-windowed-table>
     `
   }
 
@@ -98,7 +98,7 @@ class DataPreviewTable extends LitElement {
     event.stopPropagation()
     const current = this.command ?? emptyCommand
     const request = event.detail
-    this.dispatchEvent(new CustomEvent('ld-data-preview-table-command', {
+    this.dispatchEvent(new CustomEvent('lv-data-preview-table-command', {
       bubbles: true,
       composed: true,
       detail: {
@@ -121,7 +121,7 @@ class DataPreviewTable extends LitElement {
   private forwardColumnCommand = (event: CustomEvent): void => {
     event.stopPropagation()
     const current = this.command ?? emptyCommand
-    this.dispatchEvent(new CustomEvent('ld-data-preview-table-command', {
+    this.dispatchEvent(new CustomEvent('lv-data-preview-table-command', {
       bubbles: true,
       composed: true,
       detail: {
@@ -144,7 +144,7 @@ class DataPreviewTable extends LitElement {
   private forwardColumnWidthsCommand = (event: CustomEvent): void => {
     event.stopPropagation()
     const current = this.command ?? emptyCommand
-    this.dispatchEvent(new CustomEvent('ld-data-preview-table-command', {
+    this.dispatchEvent(new CustomEvent('lv-data-preview-table-command', {
       bubbles: true,
       composed: true,
       detail: {
@@ -180,10 +180,10 @@ function isNumericType(type: string | undefined): boolean {
   return /int|decimal|double|float|number|numeric|real|bigint|smallint/i.test(type ?? '')
 }
 
-if (!customElements.get('ld-data-preview-table')) customElements.define('ld-data-preview-table', DataPreviewTable)
+if (!customElements.get('lv-data-preview-table')) customElements.define('lv-data-preview-table', DataPreviewTable)
 
 declare global {
   interface HTMLElementTagNameMap {
-    'ld-data-preview-table': DataPreviewTable
+    'lv-data-preview-table': DataPreviewTable
   }
 }

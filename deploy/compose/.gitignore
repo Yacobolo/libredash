@@ -1,7 +1,7 @@
 deployment.env
-libredash.env
+leapview.env
 initial-credentials.json
 rollback.env
-.libredashctl.lock/
+.leapviewctl.lock/
 backups/*
 !backups/.gitkeep

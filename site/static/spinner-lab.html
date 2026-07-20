@@ -1,0 +1,976 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <title>LeapView Spinner Lab</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --canvas: #f6f8fa;
+        --surface: #ffffff;
+        --surface-raised: #ffffff;
+        --surface-subtle: #eef1f4;
+        --ink: #1f2328;
+        --muted: #59636e;
+        --faint: #818b98;
+        --line: #d1d9e0;
+        --line-soft: #eaeef2;
+        --accent: #0969da;
+        --accent-soft: #ddf4ff;
+        --success: #1a7f37;
+        --shadow: 0 18px 50px rgb(31 35 40 / 8%);
+        --radius: 18px;
+        font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-synthesis: none;
+      }
+
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+        --canvas: #0d1117;
+        --surface: #151b23;
+        --surface-raised: #1c232d;
+        --surface-subtle: #212830;
+        --ink: #f0f6fc;
+        --muted: #9198a1;
+        --faint: #6e7681;
+        --line: #3d444d;
+        --line-soft: #262c36;
+        --accent: #4493f8;
+        --accent-soft: #102a43;
+        --success: #3fb950;
+        --shadow: 0 22px 60px rgb(0 0 0 / 25%);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        min-width: 320px;
+        margin: 0;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at 10% 0%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 30rem),
+          var(--canvas);
+      }
+
+      button,
+      select {
+        font: inherit;
+      }
+
+      button {
+        color: inherit;
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      .page {
+        width: min(1180px, calc(100% - 40px));
+        margin: 0 auto;
+        padding: 28px 0 72px;
+      }
+
+      .topbar,
+      .brand,
+      .tools,
+      .tool,
+      .context-title,
+      .button-example,
+      .table-message,
+      .recommendation {
+        display: flex;
+        align-items: center;
+      }
+
+      .topbar {
+        justify-content: space-between;
+        gap: 18px;
+      }
+
+      .brand {
+        gap: 10px;
+        font-size: 15px;
+        font-weight: 720;
+        letter-spacing: -0.02em;
+      }
+
+      .brand-mark {
+        width: 26px;
+        height: 26px;
+      }
+
+      .tools {
+        gap: 8px;
+      }
+
+      .tool {
+        min-height: 34px;
+        gap: 7px;
+        padding: 0 11px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        font-size: 12px;
+        font-weight: 650;
+        cursor: pointer;
+      }
+
+      .tool:hover {
+        border-color: var(--muted);
+      }
+
+      .tool-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--success);
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(280px, 0.68fr);
+        gap: 72px;
+        align-items: end;
+        padding: 92px 0 54px;
+      }
+
+      .eyebrow,
+      .variant-kicker,
+      .section-kicker,
+      .size-label {
+        color: var(--accent);
+        font-size: 11px;
+        font-weight: 750;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .eyebrow {
+        margin: 0 0 16px;
+      }
+
+      h1 {
+        max-width: 720px;
+        margin: 0;
+        font-size: clamp(44px, 6vw, 72px);
+        line-height: 0.96;
+        letter-spacing: -0.06em;
+      }
+
+      .lede {
+        max-width: 640px;
+        margin: 22px 0 0;
+        color: var(--muted);
+        font-size: 18px;
+        line-height: 1.6;
+      }
+
+      .recommendation {
+        align-items: flex-start;
+        gap: 14px;
+        padding: 18px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: color-mix(in srgb, var(--surface) 88%, transparent);
+      }
+
+      .recommendation-icon {
+        width: 42px;
+        height: 42px;
+        flex: none;
+        padding: 8px;
+        border-radius: 11px;
+        color: var(--accent);
+        background: var(--accent-soft);
+      }
+
+      .recommendation strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 14px;
+      }
+
+      .recommendation p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .variants {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 18px;
+      }
+
+      .variant {
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--surface);
+        box-shadow: var(--shadow);
+      }
+
+      .variant[data-recommended="true"] {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 1px var(--accent), var(--shadow);
+      }
+
+      .variant-stage {
+        position: relative;
+        display: grid;
+        min-height: 230px;
+        place-items: center;
+        border-bottom: 1px solid var(--line-soft);
+        background:
+          linear-gradient(90deg, color-mix(in srgb, var(--line) 28%, transparent) 1px, transparent 1px),
+          linear-gradient(color-mix(in srgb, var(--line) 28%, transparent) 1px, transparent 1px),
+          color-mix(in srgb, var(--surface) 90%, var(--canvas));
+        background-size: 24px 24px;
+      }
+
+      .recommended-tag {
+        position: absolute;
+        top: 14px;
+        right: 14px;
+        padding: 5px 8px;
+        border-radius: 999px;
+        color: #ffffff;
+        background: var(--accent);
+        font-size: 9px;
+        font-weight: 780;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .variant-body {
+        padding: 18px 18px 20px;
+      }
+
+      .variant-kicker {
+        margin: 0 0 8px;
+      }
+
+      .variant h2 {
+        margin: 0;
+        font-size: 20px;
+        letter-spacing: -0.03em;
+      }
+
+      .variant-copy {
+        min-height: 58px;
+        margin: 9px 0 16px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .size-row {
+        display: flex;
+        gap: 12px;
+        align-items: end;
+        min-height: 44px;
+      }
+
+      .size-sample {
+        display: grid;
+        gap: 5px;
+        place-items: center;
+      }
+
+      .size-label {
+        color: var(--faint);
+        font-size: 8px;
+      }
+
+      .aperture {
+        display: block;
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .spinner {
+        position: relative;
+        display: inline-grid;
+        width: 54px;
+        height: 54px;
+        color: var(--accent);
+        place-items: center;
+      }
+
+      .spinner[data-size="xs"] {
+        width: 16px;
+        height: 16px;
+      }
+
+      .spinner[data-size="sm"] {
+        width: 24px;
+        height: 24px;
+      }
+
+      .spinner[data-size="md"] {
+        width: 36px;
+        height: 36px;
+      }
+
+      .spinner[data-size="lg"] {
+        width: 64px;
+        height: 64px;
+      }
+
+      .spinner .aperture {
+        stroke-width: 1.8;
+      }
+
+      .spinner--iris .ring {
+        opacity: 0.34;
+      }
+
+      .spinner--iris .blade {
+        animation: iris-blade 1.08s ease-in-out infinite;
+      }
+
+      .spinner--iris .blade:nth-of-type(2) { animation-delay: -0.9s; }
+      .spinner--iris .blade:nth-of-type(3) { animation-delay: -0.72s; }
+      .spinner--iris .blade:nth-of-type(4) { animation-delay: -0.54s; }
+      .spinner--iris .blade:nth-of-type(5) { animation-delay: -0.36s; }
+      .spinner--iris .blade:nth-of-type(6) { animation-delay: -0.18s; }
+
+      .spinner--trace .ring {
+        opacity: 0.18;
+      }
+
+      .spinner--trace .trace {
+        stroke-dasharray: 18 45;
+        transform-origin: 12px 12px;
+        animation: spin 1s linear infinite;
+      }
+
+      .spinner--trace .blade {
+        opacity: 0.72;
+      }
+
+      .spinner--orbit .aperture {
+        transform-origin: center;
+        animation: spin 1.45s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+      }
+
+      .spinner--orbit::after {
+        position: absolute;
+        top: -2px;
+        left: 50%;
+        width: 5px;
+        height: 5px;
+        border: 2px solid var(--surface);
+        border-radius: 50%;
+        background: currentColor;
+        content: "";
+        transform: translateX(-50%);
+      }
+
+      .spinner--continuous .aperture {
+        transform-origin: center;
+        animation: spin 1.8s linear infinite;
+      }
+
+      .spinner--pulse .aperture {
+        transform-origin: center;
+        animation: pulse 1.35s ease-in-out infinite;
+      }
+
+      .spinner--halo {
+        border: 2px solid color-mix(in srgb, var(--accent) 18%, transparent);
+        border-top-color: currentColor;
+        border-radius: 50%;
+        animation: spin 0.95s linear infinite;
+      }
+
+      .spinner--halo .aperture {
+        width: 66%;
+        height: 66%;
+        animation: counter-spin 0.95s linear infinite;
+      }
+
+      .spinner--progress .progress-track {
+        opacity: 0.16;
+      }
+
+      .spinner--progress .progress-value {
+        stroke-dasharray: 62.84;
+        stroke-dashoffset: 17.6;
+        transform: rotate(-90deg);
+        transform-origin: 12px 12px;
+      }
+
+      .spinner--progress .blade {
+        opacity: 0.78;
+      }
+
+      .spinner--progress::after {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        color: var(--muted);
+        content: "72";
+        font-size: 9px;
+        font-weight: 750;
+        transform: translate(-50%, -50%);
+      }
+
+      .spinner--progress .blade {
+        display: none;
+      }
+
+      .spinner--progress[data-size="xs"]::after,
+      .spinner--progress[data-size="sm"]::after {
+        content: "";
+      }
+
+      .fill-studies {
+        padding-top: 76px;
+      }
+
+      .fill-aperture .fill-ring {
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.35;
+        opacity: 0.3;
+      }
+
+      .fill-aperture .fill-blade {
+        fill: currentColor;
+        stroke: none;
+      }
+
+      .fill-aperture .fill-core {
+        fill: var(--surface);
+        stroke: currentColor;
+        stroke-width: 0.8;
+        opacity: 0.94;
+      }
+
+      .spinner--fill-chase .fill-blade {
+        opacity: 0.1;
+        animation: fill-chase 1.8s ease-in-out infinite;
+      }
+
+      .spinner--fill-chase .fill-blade:nth-child(2) { animation-delay: -1.5s; }
+      .spinner--fill-chase .fill-blade:nth-child(3) { animation-delay: -1.2s; }
+      .spinner--fill-chase .fill-blade:nth-child(4) { animation-delay: -0.9s; }
+      .spinner--fill-chase .fill-blade:nth-child(5) { animation-delay: -0.6s; }
+      .spinner--fill-chase .fill-blade:nth-child(6) { animation-delay: -0.3s; }
+
+      .spinner--fill-rotor .fill-blades {
+        transform-origin: 12px 12px;
+        animation: spin 2.4s linear infinite;
+      }
+
+      .spinner--fill-rotor .fill-blade:nth-child(1) { opacity: 1; }
+      .spinner--fill-rotor .fill-blade:nth-child(2) { opacity: 0.78; }
+      .spinner--fill-rotor .fill-blade:nth-child(3) { opacity: 0.56; }
+      .spinner--fill-rotor .fill-blade:nth-child(4) { opacity: 0.38; }
+      .spinner--fill-rotor .fill-blade:nth-child(5) { opacity: 0.24; }
+      .spinner--fill-rotor .fill-blade:nth-child(6) { opacity: 0.12; }
+
+      .spinner--fill-twin .fill-blade {
+        opacity: 0.12;
+        animation: fill-twin 1.8s ease-in-out infinite;
+      }
+
+      .spinner--fill-twin .fill-blade:nth-child(1),
+      .spinner--fill-twin .fill-blade:nth-child(4) { animation-delay: -1.2s; }
+      .spinner--fill-twin .fill-blade:nth-child(2),
+      .spinner--fill-twin .fill-blade:nth-child(5) { animation-delay: -0.6s; }
+
+      .fill-caption {
+        display: flex;
+        min-height: 44px;
+        align-items: center;
+        color: var(--faint);
+        font-size: 10px;
+        font-weight: 650;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .paused .spinner *,
+      .paused .spinner,
+      .paused .spinner::before,
+      .paused .spinner::after {
+        animation-play-state: paused !important;
+      }
+
+      .contexts {
+        padding-top: 76px;
+      }
+
+      .section-heading {
+        display: grid;
+        grid-template-columns: 0.7fr 1fr;
+        gap: 40px;
+        align-items: end;
+        margin-bottom: 24px;
+      }
+
+      .section-kicker {
+        margin: 0 0 10px;
+      }
+
+      .section-heading h2 {
+        margin: 0;
+        font-size: clamp(30px, 4vw, 46px);
+        line-height: 1;
+        letter-spacing: -0.05em;
+      }
+
+      .section-heading > p {
+        max-width: 560px;
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
+      .context-grid {
+        display: grid;
+        grid-template-columns: 0.8fr 1.2fr 1fr;
+        gap: 18px;
+      }
+
+      .context-card {
+        min-height: 240px;
+        padding: 22px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+
+      .context-title {
+        justify-content: space-between;
+        margin-bottom: 32px;
+      }
+
+      .context-title strong {
+        font-size: 13px;
+      }
+
+      .context-title span {
+        color: var(--faint);
+        font-size: 11px;
+      }
+
+      .button-example {
+        justify-content: center;
+        min-height: 130px;
+      }
+
+      .loading-button {
+        display: inline-flex;
+        min-height: 38px;
+        gap: 9px;
+        align-items: center;
+        padding: 0 15px;
+        border: 1px solid var(--accent);
+        border-radius: 7px;
+        color: #ffffff;
+        background: var(--accent);
+        font-size: 13px;
+        font-weight: 650;
+      }
+
+      .loading-button .spinner {
+        color: currentColor;
+      }
+
+      .table-shell {
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+      }
+
+      .table-head,
+      .table-row {
+        display: grid;
+        grid-template-columns: 1.4fr 1fr 0.7fr;
+      }
+
+      .table-head {
+        color: var(--muted);
+        background: var(--surface-subtle);
+        font-size: 10px;
+        font-weight: 720;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+
+      .table-head span,
+      .table-row span {
+        padding: 9px 11px;
+        border-right: 1px solid var(--line-soft);
+      }
+
+      .table-head span:last-child,
+      .table-row span:last-child {
+        border-right: 0;
+      }
+
+      .table-message {
+        min-height: 84px;
+        gap: 11px;
+        justify-content: center;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .overlay-demo {
+        position: relative;
+        display: grid;
+        min-height: 142px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 11px;
+        place-items: center;
+        background:
+          linear-gradient(140deg, color-mix(in srgb, var(--accent) 14%, transparent), transparent 58%),
+          var(--surface-subtle);
+      }
+
+      .chart-ghost {
+        position: absolute;
+        inset: 26px 22px 20px;
+        border-bottom: 1px solid var(--line);
+        opacity: 0.52;
+      }
+
+      .chart-ghost::before {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        height: 70%;
+        background: linear-gradient(155deg, transparent 0 28%, var(--line) 29% 31%, transparent 32% 46%, var(--line) 47% 49%, transparent 50%);
+        content: "";
+      }
+
+      .overlay-loader {
+        position: relative;
+        display: grid;
+        width: 76px;
+        height: 76px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: color-mix(in srgb, var(--surface-raised) 90%, transparent);
+        box-shadow: var(--shadow);
+        place-items: center;
+      }
+
+      .notes {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 18px;
+        padding-top: 28px;
+      }
+
+      .note {
+        padding: 18px;
+        border-top: 1px solid var(--line);
+      }
+
+      .note strong {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 13px;
+      }
+
+      .note p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.55;
+      }
+
+      @keyframes iris-blade {
+        0%, 42%, 100% { opacity: 0.24; }
+        18% { opacity: 1; }
+      }
+
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+
+      @keyframes counter-spin {
+        to { transform: rotate(-360deg); }
+      }
+
+      @keyframes pulse {
+        0%, 100% { opacity: 0.42; transform: scale(0.88); }
+        50% { opacity: 1; transform: scale(1); }
+      }
+
+      @keyframes fill-chase {
+        0%, 40%, 100% { opacity: 0.1; }
+        16% { opacity: 1; }
+      }
+
+      @keyframes fill-twin {
+        0%, 52%, 100% { opacity: 0.12; }
+        22% { opacity: 1; }
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) {
+          color-scheme: dark;
+          --canvas: #0d1117;
+          --surface: #151b23;
+          --surface-raised: #1c232d;
+          --surface-subtle: #212830;
+          --ink: #f0f6fc;
+          --muted: #9198a1;
+          --faint: #6e7681;
+          --line: #3d444d;
+          --line-soft: #262c36;
+          --accent: #4493f8;
+          --accent-soft: #102a43;
+          --success: #3fb950;
+          --shadow: 0 22px 60px rgb(0 0 0 / 25%);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .spinner *,
+        .spinner,
+        .spinner::before,
+        .spinner::after {
+          animation: none !important;
+        }
+
+        .spinner--iris .blade:nth-of-type(3),
+        .spinner--trace .trace {
+          opacity: 1;
+        }
+      }
+
+      @media (max-width: 900px) {
+        .hero,
+        .section-heading {
+          grid-template-columns: 1fr;
+          gap: 28px;
+        }
+
+        .variants,
+        .context-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .context-card:last-child {
+          grid-column: 1 / -1;
+        }
+      }
+
+      @media (max-width: 620px) {
+        .page {
+          width: min(100% - 24px, 1180px);
+          padding-top: 18px;
+        }
+
+        .topbar {
+          align-items: flex-start;
+        }
+
+        .tools {
+          flex-wrap: wrap;
+          justify-content: flex-end;
+        }
+
+        .tool-label-wide {
+          display: none;
+        }
+
+        .hero {
+          padding: 66px 0 38px;
+        }
+
+        .variants,
+        .context-grid,
+        .notes {
+          grid-template-columns: 1fr;
+        }
+
+        .context-card:last-child {
+          grid-column: auto;
+        }
+
+        .variant-stage {
+          min-height: 200px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header class="topbar">
+        <a class="brand" href="logo-lab.html" aria-label="LeapView logo lab">
+          <span class="brand-mark" aria-hidden="true">
+            <svg class="aperture" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="m14.31 8 5.74 9.94"></path><path d="M9.69 8h11.48"></path><path d="m7.38 12 5.74-9.94"></path>
+              <path d="M9.69 16 3.95 6.06"></path><path d="M14.31 16H2.83"></path><path d="m16.62 12-5.74 9.94"></path>
+            </svg>
+          </span>
+          LeapView <span style="color: var(--faint); font-weight: 560;">Spinner Lab</span>
+        </a>
+        <div class="tools" aria-label="Preview controls">
+          <button class="tool" id="motion-toggle" type="button" aria-pressed="false">
+            <span class="tool-dot"></span>
+            <span class="tool-label-wide">Pause motion</span>
+          </button>
+          <button class="tool" id="theme-toggle" type="button" aria-label="Switch color theme">Theme</button>
+        </div>
+      </header>
+
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Loading states · brand study</p>
+          <h1>Loading, with a point of view.</h1>
+          <p class="lede">Ten ways to turn the Aperture ring into a loading signal—from quiet inline feedback to a branded full-surface moment.</p>
+        </div>
+        <aside class="recommendation">
+          <span class="recommendation-icon" aria-hidden="true">
+            <svg class="aperture" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="m14.31 8 5.74 9.94"></path><path d="M9.69 8h11.48"></path><path d="m7.38 12 5.74-9.94"></path><path d="M9.69 16 3.95 6.06"></path><path d="M14.31 16H2.83"></path><path d="m16.62 12-5.74 9.94"></path></svg>
+          </span>
+          <div><strong>Start with Iris sequence</strong><p>It remains legible at 16 px, feels native to the mark, and avoids the generic “spinning wheel” look.</p></div>
+        </aside>
+      </section>
+
+      <section class="variants" aria-label="Spinner variants">
+        <article class="variant" data-variant="iris" data-recommended="true">
+          <div class="variant-stage">
+            <span class="recommended-tag">Recommended</span>
+            <span class="spinner spinner--iris" role="status" aria-label="Loading">
+              <svg class="aperture" viewBox="0 0 24 24" aria-hidden="true"><circle class="ring" cx="12" cy="12" r="10"></circle><path class="blade" d="m14.31 8 5.74 9.94"></path><path class="blade" d="M9.69 8h11.48"></path><path class="blade" d="m7.38 12 5.74-9.94"></path><path class="blade" d="M9.69 16 3.95 6.06"></path><path class="blade" d="M14.31 16H2.83"></path><path class="blade" d="m16.62 12-5.74 9.94"></path></svg>
+            </span>
+          </div>
+          <div class="variant-body"><p class="variant-kicker">01 · Default</p><h2>Iris sequence</h2><p class="variant-copy">Light walks around the six blades. Distinctive, calm, and still clearly the LeapView mark.</p><div class="size-row" data-sizes="iris"></div></div>
+        </article>
+
+        <article class="variant" data-variant="trace">
+          <div class="variant-stage">
+            <span class="spinner spinner--trace" role="status" aria-label="Loading">
+              <svg class="aperture" viewBox="0 0 24 24" aria-hidden="true"><circle class="ring" cx="12" cy="12" r="10"></circle><circle class="trace" cx="12" cy="12" r="10"></circle><path class="blade" d="m14.31 8 5.74 9.94"></path><path class="blade" d="M9.69 8h11.48"></path><path class="blade" d="m7.38 12 5.74-9.94"></path><path class="blade" d="M9.69 16 3.95 6.06"></path><path class="blade" d="M14.31 16H2.83"></path><path class="blade" d="m16.62 12-5.74 9.94"></path></svg>
+            </span>
+          </div>
+          <div class="variant-body"><p class="variant-kicker">02 · Familiar</p><h2>Ring trace</h2><p class="variant-copy">A moving perimeter keeps the aperture still. Familiar spinner behavior with a branded center.</p><div class="size-row" data-sizes="trace"></div></div>
+        </article>
+
+        <article class="variant" data-variant="orbit">
+          <div class="variant-stage">
+            <span class="spinner spinner--orbit" role="status" aria-label="Loading">
+              <svg class="aperture" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m14.31 8 5.74 9.94"></path><path d="M9.69 8h11.48"></path><path d="m7.38 12 5.74-9.94"></path><path d="M9.69 16 3.95 6.06"></path><path d="M14.31 16H2.83"></path><path d="m16.62 12-5.74 9.94"></path></svg>
+            </span>
+          </div>
+          <div class="variant-body"><p class="variant-kicker">03 · Energetic</p><h2>Orbit</h2><p class="variant-copy">The full aperture turns beneath a small tracking point. Best for short, energetic transitions.</p><div class="size-row" data-sizes="orbit"></div></div>
+        </article>
+
+        <article class="variant" data-variant="continuous">
+          <div class="variant-stage">
+            <span class="spinner spinner--continuous" role="status" aria-label="Loading">
+              <svg class="aperture" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m14.31 8 5.74 9.94"></path><path d="M9.69 8h11.48"></path><path d="m7.38 12 5.74-9.94"></path><path d="M9.69 16 3.95 6.06"></path><path d="M14.31 16H2.83"></path><path d="m16.62 12-5.74 9.94"></path></svg>
+            </span>
+          </div>
+          <div class="variant-body"><p class="variant-kicker">04 · Steady</p><h2>Continuous spin</h2><p class="variant-copy">A constant linear rotation with no easing or pause. Simple, predictable, and visibly different from Orbit.</p><div class="size-row" data-sizes="continuous"></div></div>
+        </article>
+
+        <article class="variant" data-variant="pulse">
+          <div class="variant-stage">
+            <span class="spinner spinner--pulse" role="status" aria-label="Loading">
+              <svg class="aperture" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m14.31 8 5.74 9.94"></path><path d="M9.69 8h11.48"></path><path d="m7.38 12 5.74-9.94"></path><path d="M9.69 16 3.95 6.06"></path><path d="M14.31 16H2.83"></path><path d="m16.62 12-5.74 9.94"></path></svg>
+            </span>
+          </div>
+          <div class="variant-body"><p class="variant-kicker">05 · Quiet</p><h2>Breathing mark</h2><p class="variant-copy">A soft scale and opacity rhythm for background refreshes where rotation would feel too loud.</p><div class="size-row" data-sizes="pulse"></div></div>
+        </article>
+
+        <article class="variant" data-variant="halo">
+          <div class="variant-stage">
+            <span class="spinner spinner--halo" role="status" aria-label="Loading">
+              <svg class="aperture" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m14.31 8 5.74 9.94"></path><path d="M9.69 8h11.48"></path><path d="m7.38 12 5.74-9.94"></path><path d="M9.69 16 3.95 6.06"></path><path d="M14.31 16H2.83"></path><path d="m16.62 12-5.74 9.94"></path></svg>
+            </span>
+          </div>
+          <div class="variant-body"><p class="variant-kicker">06 · Surface</p><h2>Counter halo</h2><p class="variant-copy">The outer halo rotates while the mark holds position. Strong for cards, charts, and page-level loading.</p><div class="size-row" data-sizes="halo"></div></div>
+        </article>
+
+        <article class="variant" data-variant="progress">
+          <div class="variant-stage">
+            <span class="spinner spinner--progress" role="status" aria-label="Loading">
+              <svg class="aperture" viewBox="0 0 24 24" aria-hidden="true"><circle class="progress-track" cx="12" cy="12" r="10"></circle><circle class="progress-value" cx="12" cy="12" r="10"></circle><path class="blade" d="m14.31 8 5.74 9.94"></path></svg>
+            </span>
+          </div>
+          <div class="variant-body"><p class="variant-kicker">07 · Determinate</p><h2>Progress aperture</h2><p class="variant-copy">Use the ring as real progress—not decorative motion—when the backend can report a percentage.</p><div class="size-row" data-sizes="progress"></div></div>
+        </article>
+      </section>
+
+      <section class="fill-studies">
+        <div class="section-heading">
+          <div><p class="section-kicker">Fill experiments</p><h2>Let the shutter carry the motion.</h2></div>
+          <p>Solid blades make the movement feel more optical and more ownable. The thin perimeter keeps every treatment connected to the LeapView mark.</p>
+        </div>
+        <div class="variants" aria-label="Filled spinner variants">
+          <article class="variant" data-variant="fill-chase">
+            <div class="variant-stage">
+              <span class="spinner spinner--fill-chase" role="status" aria-label="Loading">
+                <svg class="aperture fill-aperture" viewBox="0 0 24 24" aria-hidden="true"><circle class="fill-ring" cx="12" cy="12" r="10"></circle><g class="fill-blades"><polygon class="fill-blade" points="12,2 20.66,7 15.46,10 12,8"></polygon><polygon class="fill-blade" points="20.66,7 20.66,17 15.46,14 15.46,10"></polygon><polygon class="fill-blade" points="20.66,17 12,22 12,16 15.46,14"></polygon><polygon class="fill-blade" points="12,22 3.34,17 8.54,14 12,16"></polygon><polygon class="fill-blade" points="3.34,17 3.34,7 8.54,10 8.54,14"></polygon><polygon class="fill-blade" points="3.34,7 12,2 12,8 8.54,10"></polygon></g><path class="fill-core" d="M12 8 15.46 10 15.46 14 12 16 8.54 14 8.54 10Z"></path></svg>
+              </span>
+            </div>
+            <div class="variant-body"><p class="variant-kicker">08 · Sequential</p><h2>Blade chase</h2><p class="variant-copy">Each shutter segment fills in turn, creating motion without rotating the logo itself.</p><div class="fill-caption">Best all-round fill option · 24 px+</div></div>
+          </article>
+
+          <article class="variant" data-variant="fill-rotor">
+            <div class="variant-stage">
+              <span class="spinner spinner--fill-rotor" role="status" aria-label="Loading">
+                <svg class="aperture fill-aperture" viewBox="0 0 24 24" aria-hidden="true"><circle class="fill-ring" cx="12" cy="12" r="10"></circle><g class="fill-blades"><polygon class="fill-blade" points="12,2 20.66,7 15.46,10 12,8"></polygon><polygon class="fill-blade" points="20.66,7 20.66,17 15.46,14 15.46,10"></polygon><polygon class="fill-blade" points="20.66,17 12,22 12,16 15.46,14"></polygon><polygon class="fill-blade" points="12,22 3.34,17 8.54,14 12,16"></polygon><polygon class="fill-blade" points="3.34,17 3.34,7 8.54,10 8.54,14"></polygon><polygon class="fill-blade" points="3.34,7 12,2 12,8 8.54,10"></polygon></g><path class="fill-core" d="M12 8 15.46 10 15.46 14 12 16 8.54 14 8.54 10Z"></path></svg>
+              </span>
+            </div>
+            <div class="variant-body"><p class="variant-kicker">09 · Fluid</p><h2>Tonal rotor</h2><p class="variant-copy">A soft opacity gradient turns through the shutter like light travelling around a lens.</p><div class="fill-caption">Smoothest motion · 24 px+</div></div>
+          </article>
+
+          <article class="variant" data-variant="fill-twin">
+            <div class="variant-stage">
+              <span class="spinner spinner--fill-twin" role="status" aria-label="Loading">
+                <svg class="aperture fill-aperture" viewBox="0 0 24 24" aria-hidden="true"><circle class="fill-ring" cx="12" cy="12" r="10"></circle><g class="fill-blades"><polygon class="fill-blade" points="12,2 20.66,7 15.46,10 12,8"></polygon><polygon class="fill-blade" points="20.66,7 20.66,17 15.46,14 15.46,10"></polygon><polygon class="fill-blade" points="20.66,17 12,22 12,16 15.46,14"></polygon><polygon class="fill-blade" points="12,22 3.34,17 8.54,14 12,16"></polygon><polygon class="fill-blade" points="3.34,17 3.34,7 8.54,10 8.54,14"></polygon><polygon class="fill-blade" points="3.34,7 12,2 12,8 8.54,10"></polygon></g><path class="fill-core" d="M12 8 15.46 10 15.46 14 12 16 8.54 14 8.54 10Z"></path></svg>
+              </span>
+            </div>
+            <div class="variant-body"><p class="variant-kicker">10 · Rhythmic</p><h2>Twin pulse</h2><p class="variant-copy">Opposing blade pairs light together, giving the aperture a measured mechanical rhythm.</p><div class="fill-caption">Quietest fill treatment · 24 px+</div></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="contexts">
+        <div class="section-heading">
+          <div><p class="section-kicker">In the product</p><h2>Use motion in context.</h2></div>
+          <p>The branded loader should be smallest at the most common touchpoints. Larger treatments belong only to empty surfaces where the user is already waiting.</p>
+        </div>
+        <div class="context-grid">
+          <article class="context-card"><div class="context-title"><strong>Button action</strong><span>16 px</span></div><div class="button-example"><span class="loading-button"><span class="spinner spinner--continuous" data-size="xs" data-context-spinner="continuous" role="status" aria-label="Loading"><svg class="aperture" viewBox="0 0 24 24" aria-hidden="true"><circle class="ring" cx="12" cy="12" r="10"></circle><path class="blade" d="m14.31 8 5.74 9.94"></path><path class="blade" d="M9.69 8h11.48"></path><path class="blade" d="m7.38 12 5.74-9.94"></path><path class="blade" d="M9.69 16 3.95 6.06"></path><path class="blade" d="M14.31 16H2.83"></path><path class="blade" d="m16.62 12-5.74 9.94"></path></svg></span>Running query</span></div></article>
+          <article class="context-card"><div class="context-title"><strong>Table refresh</strong><span>24 px</span></div><div class="table-shell"><div class="table-head"><span>Customer</span><span>Revenue</span><span>State</span></div><div class="table-message"><span class="spinner spinner--continuous" data-size="sm" data-context-spinner="continuous" role="status" aria-label="Loading"><svg class="aperture" viewBox="0 0 24 24" aria-hidden="true"><circle class="ring" cx="12" cy="12" r="10"></circle><path class="blade" d="m14.31 8 5.74 9.94"></path><path class="blade" d="M9.69 8h11.48"></path><path class="blade" d="m7.38 12 5.74-9.94"></path><path class="blade" d="M9.69 16 3.95 6.06"></path><path class="blade" d="M14.31 16H2.83"></path><path class="blade" d="m16.62 12-5.74 9.94"></path></svg></span>Refreshing 12,840 rows…</div></div></article>
+          <article class="context-card"><div class="context-title"><strong>Visual surface</strong><span>36 px</span></div><div class="overlay-demo"><div class="chart-ghost"></div><div class="overlay-loader"><span class="spinner spinner--continuous" data-size="md" data-context-spinner="continuous" role="status" aria-label="Loading"><svg class="aperture" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m14.31 8 5.74 9.94"></path><path d="M9.69 8h11.48"></path><path d="m7.38 12 5.74-9.94"></path><path d="M9.69 16 3.95 6.06"></path><path d="M14.31 16H2.83"></path><path d="m16.62 12-5.74 9.94"></path></svg></span></div></div></article>
+        </div>
+        <div class="notes">
+          <div class="note"><strong>Keep it thin</strong><p>Use the logo’s 1.8 stroke throughout. A heavier loader feels like a different identity.</p></div>
+          <div class="note"><strong>Delay before showing</strong><p>Wait roughly 200–300 ms before revealing a spinner so fast actions do not flicker.</p></div>
+          <div class="note"><strong>Always name the wait</strong><p>The visual is decorative. Pair it with a status label for assistive technology and longer operations.</p></div>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="/static/spinner-lab.mjs"></script>
+  </body>
+</html>

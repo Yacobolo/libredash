@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	manageddataruntimebinding "github.com/Yacobolo/libredash/internal/manageddata/runtimebinding"
-	"github.com/Yacobolo/libredash/internal/runtimehost"
-	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
-	"github.com/Yacobolo/libredash/internal/workspace/refresh"
+	manageddataruntimebinding "github.com/Yacobolo/leapview/internal/manageddata/runtimebinding"
+	"github.com/Yacobolo/leapview/internal/runtimehost"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
+	"github.com/Yacobolo/leapview/internal/workspace/refresh"
 )
 
 type WorkspaceRefreshMaterializer struct {
@@ -39,7 +39,7 @@ func (m WorkspaceRefreshMaterializer) Materialize(ctx context.Context, input ref
 	}
 	dbDir := m.DuckDBDir
 	if strings.TrimSpace(dbDir) == "" {
-		dbDir = filepath.Join(".libredash", "duckdb")
+		dbDir = filepath.Join(".leapview", "duckdb")
 	}
 	dbDir = filepath.Join(dbDir, string(servingstate.NormalizeEnvironment(input.Environment)))
 	runtime, err := OpenWorkspaceMaterializeRuntime(ctx, WorkspaceRuntimeConfig{

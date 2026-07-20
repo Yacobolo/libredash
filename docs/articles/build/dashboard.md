@@ -21,7 +21,7 @@ Use this sequence:
 Create `dashboards/workspaces/sales/dashboards/executive-sales.yaml`:
 
 ```yaml
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Dashboard
 metadata:
   workspace: sales
@@ -97,8 +97,8 @@ Define filters against semantic fields and place filter-card components on the p
 Ensure the workspace manifest includes dashboard files, then run:
 
 ```sh
-libredash validate --project dashboards/libredash.yaml
-libredash plan --project dashboards/libredash.yaml
+leapview validate --project dashboards/leapview.yaml
+leapview plan --project dashboards/leapview.yaml
 ```
 
 Validation checks contract shape and references. The plan shows the resource-level candidate. Neither proves that a visual communicates the right result, so deploy to development and verify the rendered page with representative data.

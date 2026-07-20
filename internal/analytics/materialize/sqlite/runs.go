@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/analytics/materialize"
-	platformdb "github.com/Yacobolo/libredash/internal/platform/db"
-	"github.com/Yacobolo/libredash/internal/refreshpipeline"
-	"github.com/Yacobolo/libredash/internal/servingstate"
+	"github.com/Yacobolo/leapview/internal/analytics/materialize"
+	platformdb "github.com/Yacobolo/leapview/internal/platform/db"
+	"github.com/Yacobolo/leapview/internal/refreshpipeline"
+	"github.com/Yacobolo/leapview/internal/servingstate"
 )
 
 type SQLRunRepository struct {

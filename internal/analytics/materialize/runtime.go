@@ -12,11 +12,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	semanticquery "github.com/Yacobolo/libredash/internal/analytics/query"
-	"github.com/Yacobolo/libredash/internal/configspec"
-	"github.com/Yacobolo/libredash/internal/dataquery"
-	"github.com/Yacobolo/libredash/internal/execution"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	semanticquery "github.com/Yacobolo/leapview/internal/analytics/query"
+	"github.com/Yacobolo/leapview/internal/configspec"
+	"github.com/Yacobolo/leapview/internal/dataquery"
+	"github.com/Yacobolo/leapview/internal/execution"
 )
 
 type RuntimeConfig struct {
@@ -123,14 +123,14 @@ func queryCacheLimits(config RuntimeConfig) (int, int64) {
 	entries := config.QueryCacheMaxEntries
 	if entries <= 0 {
 		entries = 256
-		if value, err := strconv.Atoi(strings.TrimSpace(os.Getenv(configspec.EnvLIBREDASH_QUERY_CACHE_MAX_ENTRIES))); err == nil && value > 0 {
+		if value, err := strconv.Atoi(strings.TrimSpace(os.Getenv(configspec.EnvLEAPVIEW_QUERY_CACHE_MAX_ENTRIES))); err == nil && value > 0 {
 			entries = value
 		}
 	}
 	bytes := config.QueryCacheMaxBytes
 	if bytes <= 0 {
 		bytes = 64 << 20
-		if value, err := strconv.ParseInt(strings.TrimSpace(os.Getenv(configspec.EnvLIBREDASH_QUERY_CACHE_MAX_BYTES)), 10, 64); err == nil && value > 0 {
+		if value, err := strconv.ParseInt(strings.TrimSpace(os.Getenv(configspec.EnvLEAPVIEW_QUERY_CACHE_MAX_BYTES)), 10, 64); err == nil && value > 0 {
 			bytes = value
 		}
 	}
@@ -138,7 +138,7 @@ func queryCacheLimits(config RuntimeConfig) (int, int64) {
 }
 
 func DatabasePath(dbDir, modelID string) string {
-	return filepath.Join(dbDir, "libredash-"+modelID+".duckdb")
+	return filepath.Join(dbDir, "leapview-"+modelID+".duckdb")
 }
 
 func (r *Runtime) Close() error {
@@ -653,7 +653,7 @@ func (r *Runtime) executeSemanticRows(ctx context.Context, request dataquery.Que
 	return result, nil
 }
 
-const totalRowsColumn = "__libredash_total_rows"
+const totalRowsColumn = "__leapview_total_rows"
 
 func rowPlanWithTotal(plan semanticquery.Plan) (semanticquery.Plan, error) {
 	from := strings.Index(plan.SQL, "\nFROM ")

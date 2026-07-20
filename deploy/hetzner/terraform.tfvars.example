@@ -2,11 +2,11 @@
 
 admin_email = "admin@example.com"
 
-# Release image from the LibreDash release notes. Immutable digests are required.
-libredash_image = "ghcr.io/yacobolo/libredash@sha256:<digest-from-release>"
+# Release image from the LeapView release notes. Immutable digests are required.
+leapview_image = "ghcr.io/yacobolo/leapview@sha256:<digest-from-release>"
 
 # Optional. If omitted, the module uses <reserved-ip>.sslip.io.
-# domain = "libredash.example.com"
+# domain = "leapview.example.com"
 
 # Required: replace with your public IP range.
 ssh_allowed_cidrs = ["203.0.113.10/32"]

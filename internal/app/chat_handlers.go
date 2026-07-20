@@ -3,10 +3,10 @@ package app
 import (
 	"context"
 
-	"github.com/Yacobolo/libredash/internal/agent"
-	agenthttp "github.com/Yacobolo/libredash/internal/agent/http"
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	"github.com/Yacobolo/libredash/internal/ui"
+	"github.com/Yacobolo/leapview/internal/agent"
+	agenthttp "github.com/Yacobolo/leapview/internal/agent/http"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	"github.com/Yacobolo/leapview/internal/ui"
 )
 
 func (s *Server) executeStartedChatTurn(ctx context.Context, service *agent.Service, scope agent.Scope, started *agent.StartedPrompt, execution agenthttp.ChatTurnExecution) (agent.PromptResult, error) {

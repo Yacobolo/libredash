@@ -4,7 +4,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/workspace"
+	"github.com/Yacobolo/leapview/internal/workspace"
 )
 
 func ConnectionsHref(query string) string {

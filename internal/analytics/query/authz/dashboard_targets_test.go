@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/dashboard/consumer"
-	"github.com/Yacobolo/libredash/internal/dataquery"
-	"github.com/Yacobolo/libredash/internal/queryruntime"
+	"github.com/Yacobolo/leapview/internal/dashboard/consumer"
+	"github.com/Yacobolo/leapview/internal/dataquery"
+	"github.com/Yacobolo/leapview/internal/queryruntime"
 )
 
 type targetMetrics struct {

@@ -6,7 +6,7 @@ Every preview on this page is generated from the YAML shown below it using a fix
 
 ## Basic distribution
 
-Set `query.table` and one numeric measure so LibreDash can bin raw delivery values and count observations in each interval.
+Set `query.table` and one numeric measure so LeapView can bin raw delivery values and count observations in each interval.
 
 {{< visual id="delivery_histogram" >}}
 

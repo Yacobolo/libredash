@@ -1,6 +1,6 @@
 # Visual plugin architecture
 
-LibreDash separates visual meaning, query shape, payload normalization, and rendering-library adaptation. A dashboard targets a LibreDash visual type and shape; a renderer plugin turns the normalized payload into a concrete canvas or DOM implementation.
+LeapView separates visual meaning, query shape, payload normalization, and rendering-library adaptation. A dashboard targets a LeapView visual type and shape; a renderer plugin turns the normalized payload into a concrete canvas or DOM implementation.
 
 ## Product contract
 
@@ -12,7 +12,7 @@ The product contract must be understandable without knowing an ECharts option na
 
 ## Browser host
 
-The `ld-echart` host reads the chart payload from its signal, resolves the requested renderer (defaulting to `echarts`), mounts it into the canvas container, and forwards update, resize, clear, and dispose lifecycle.
+The `lv-echart` host reads the chart payload from its signal, resolves the requested renderer (defaulting to `echarts`), mounts it into the canvas container, and forwards update, resize, clear, and dispose lifecycle.
 
 It also owns product-level actions such as focus, show/copy data, CSV export, and clear selection. A renderer reports datum selection through the provided context rather than dispatching an unrelated library event as public API.
 
@@ -30,7 +30,7 @@ It also owns product-level actions such as focus, show/copy data, CSV export, an
 
 ## Adapter layer
 
-ECharts adapters convert LibreDash types/shapes and rows into library options. The renderer supplies theme tokens, container lifecycle, selection-event translation, and a bounded renderer-options escape hatch.
+ECharts adapters convert LeapView types/shapes and rows into library options. The renderer supplies theme tokens, container lifecycle, selection-event translation, and a bounded renderer-options escape hatch.
 
 Keep type/shape interpretation in adapters rather than scattering it through the custom element. Shared utilities should normalize values, labels, palettes, and interaction datum lookup consistently.
 

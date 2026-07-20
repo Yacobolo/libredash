@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
-	agentcore "github.com/Yacobolo/libredash/pkg/agent"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	agentcore "github.com/Yacobolo/leapview/pkg/agent"
 )
 
 func toolNames(tools []agentcore.ToolDefinition) []string {

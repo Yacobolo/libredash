@@ -11,14 +11,14 @@ import (
 	"strings"
 	"testing"
 
-	materializeruntime "github.com/Yacobolo/libredash/internal/analytics/materialize"
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	"github.com/Yacobolo/libredash/internal/dashboard/consumer"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
-	"github.com/Yacobolo/libredash/internal/dataquery"
-	"github.com/Yacobolo/libredash/internal/workspace"
-	workspacecompiler "github.com/Yacobolo/libredash/internal/workspace/compiler"
+	materializeruntime "github.com/Yacobolo/leapview/internal/analytics/materialize"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	"github.com/Yacobolo/leapview/internal/dashboard/consumer"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	"github.com/Yacobolo/leapview/internal/dataquery"
+	"github.com/Yacobolo/leapview/internal/workspace"
+	workspacecompiler "github.com/Yacobolo/leapview/internal/workspace/compiler"
 )
 
 type runtimeAuditRecorder struct {
@@ -43,7 +43,7 @@ func newOperationsRuntime(t *testing.T, dataDir string) (*Service, error) {
 }
 
 func newManagedFixtureRuntime(dataDir, workspaceID string) (*Service, error) {
-	projectPath := filepath.Join("..", "..", "..", "dashboards", "libredash.yaml")
+	projectPath := filepath.Join("..", "..", "..", "dashboards", "leapview.yaml")
 	compiled, err := workspacecompiler.CompileProject(projectPath, workspacecompiler.Options{})
 	if err != nil {
 		return nil, err
@@ -625,7 +625,7 @@ relogios_presentes,watches_gifts
 	// These legacy showcase assertions require the full Olist fixture rather
 	// than the compact service fixture used above. Keep them opt-in until they
 	// are migrated to the dedicated integration harness.
-	if os.Getenv("LIBREDASH_EXTENDED_FIXTURE_ASSERTIONS") == "" {
+	if os.Getenv("LEAPVIEW_EXTENDED_FIXTURE_ASSERTIONS") == "" {
 		return
 	}
 

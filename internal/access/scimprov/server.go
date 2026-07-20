@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/access"
-	"github.com/Yacobolo/libredash/internal/secret"
+	"github.com/Yacobolo/leapview/internal/access"
+	"github.com/Yacobolo/leapview/internal/secret"
 	scimpkg "github.com/elimity-com/scim"
 	scimerrors "github.com/elimity-com/scim/errors"
 	"github.com/elimity-com/scim/optional"
@@ -66,7 +66,7 @@ func NewHandler(options Options) (http.Handler, error) {
 			{
 				ID:          optional.NewString("User"),
 				Name:        "User",
-				Description: optional.NewString("LibreDash principal"),
+				Description: optional.NewString("LeapView principal"),
 				Endpoint:    "/Users",
 				Schema:      schema.CoreUserSchema(),
 				Handler:     users,
@@ -74,7 +74,7 @@ func NewHandler(options Options) (http.Handler, error) {
 			{
 				ID:          optional.NewString("Group"),
 				Name:        "Group",
-				Description: optional.NewString("LibreDash directory group"),
+				Description: optional.NewString("LeapView directory group"),
 				Endpoint:    "/Groups",
 				Schema:      schema.CoreGroupSchema(),
 				Handler:     groups,

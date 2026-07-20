@@ -15,7 +15,7 @@ const chartStyles = css`
     display: block;
     height: 100%;
     min-height: 0;
-    color: var(--ld-fg-default);
+    color: var(--lv-fg-default);
     font-family: var(--fontStack-system);
   }
 
@@ -24,7 +24,7 @@ const chartStyles = css`
     height: 100%;
     min-height: 0;
     grid-template-rows: auto minmax(0, 1fr);
-    background: var(--ld-chart-surface);
+    background: var(--lv-chart-surface);
   }
 
   header {
@@ -42,17 +42,17 @@ const chartStyles = css`
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: var(--ld-font-size-body-md);
-    font-weight: var(--ld-font-weight-strong);
+    font-size: var(--lv-font-size-body-md);
+    font-weight: var(--lv-font-weight-strong);
     letter-spacing: 0;
-    line-height: var(--ld-line-height-compact);
+    line-height: var(--lv-line-height-compact);
   }
 
   .unit {
     flex: 0 0 auto;
-    color: var(--ld-fg-muted);
-    font-size: var(--ld-font-size-caption);
-    font-weight: var(--ld-font-weight-strong);
+    color: var(--lv-fg-muted);
+    font-size: var(--lv-font-size-caption);
+    font-weight: var(--lv-font-weight-strong);
     text-transform: uppercase;
   }
 
@@ -70,17 +70,17 @@ const chartStyles = css`
 
   .options summary {
     display: grid;
-    width: var(--ld-button-height-xs, var(--control-xsmall-size));
-    height: var(--ld-button-height-xs, var(--control-xsmall-size));
+    width: var(--lv-button-height-xs, var(--control-xsmall-size));
+    height: var(--lv-button-height-xs, var(--control-xsmall-size));
     place-items: center;
-    border: var(--borderWidth-default, var(--ld-border-width)) solid var(--ld-button-invisible-border-rest, var(--control-transparent-borderColor-rest, var(--ld-line-muted)));
-    border-radius: var(--ld-radius-tight);
-    background: var(--ld-button-invisible-bg-rest, var(--control-transparent-bgColor-rest, var(--ld-bg-panel)));
-    color: var(--ld-button-invisible-icon-rest, var(--ld-icon-muted));
+    border: var(--borderWidth-default, var(--lv-border-width)) solid var(--lv-button-invisible-border-rest, var(--control-transparent-borderColor-rest, var(--lv-line-muted)));
+    border-radius: var(--lv-radius-tight);
+    background: var(--lv-button-invisible-bg-rest, var(--control-transparent-bgColor-rest, var(--lv-bg-panel)));
+    color: var(--lv-button-invisible-icon-rest, var(--lv-icon-muted));
     cursor: pointer;
-    font-size: var(--ld-font-size-body-lg);
-    font-weight: var(--ld-font-weight-strong);
-    line-height: var(--ld-line-height-none);
+    font-size: var(--lv-font-size-body-lg);
+    font-weight: var(--lv-font-weight-strong);
+    line-height: var(--lv-line-height-none);
     list-style: none;
   }
 
@@ -96,11 +96,11 @@ const chartStyles = css`
   .options summary:hover,
   .options summary:focus-visible,
   .options[open] summary {
-    border-color: var(--ld-button-invisible-border-hover, var(--control-transparent-borderColor-hover, var(--ld-line-default)));
-    background: var(--ld-button-invisible-bg-hover, var(--control-transparent-bgColor-hover, var(--ld-bg-panel-muted)));
-    color: var(--ld-icon-default);
-    outline: var(--focus-outline, var(--ld-border-default));
-    outline-color: var(--borderColor-accent-emphasis, var(--ld-line-accent));
+    border-color: var(--lv-button-invisible-border-hover, var(--control-transparent-borderColor-hover, var(--lv-line-default)));
+    background: var(--lv-button-invisible-bg-hover, var(--control-transparent-bgColor-hover, var(--lv-bg-panel-muted)));
+    color: var(--lv-icon-default);
+    outline: var(--focus-outline, var(--lv-border-default));
+    outline-color: var(--borderColor-accent-emphasis, var(--lv-line-accent));
     outline-offset: var(--focus-outline-offset, var(--base-size-2));
   }
 
@@ -111,9 +111,9 @@ const chartStyles = css`
     z-index: var(--zIndex-dropdown);
     display: grid;
     width: calc(var(--overlay-width-xsmall) - var(--base-size-16));
-    border: var(--ld-border-default);
-    border-radius: var(--ld-radius-default);
-    background: var(--ld-bg-overlay);
+    border: var(--lv-border-default);
+    border-radius: var(--lv-radius-default);
+    background: var(--lv-bg-overlay);
     box-shadow: var(--shadow-floating-small);
     padding: var(--base-size-4);
   }
@@ -122,16 +122,16 @@ const chartStyles = css`
     display: flex;
     align-items: center;
     gap: var(--base-size-8);
-    min-height: var(--ld-button-height-sm, var(--control-small-size));
-    border: var(--borderWidth-default, var(--ld-border-width)) solid var(--ld-button-invisible-border-rest, var(--control-transparent-borderColor-rest, var(--ld-line-muted)));
-    border-radius: var(--ld-radius-tight);
-    background: var(--ld-button-invisible-bg-rest, var(--control-transparent-bgColor-rest, var(--ld-bg-panel)));
-    color: var(--ld-button-invisible-fg-rest, var(--ld-fg-default));
+    min-height: var(--lv-button-height-sm, var(--control-small-size));
+    border: var(--borderWidth-default, var(--lv-border-width)) solid var(--lv-button-invisible-border-rest, var(--control-transparent-borderColor-rest, var(--lv-line-muted)));
+    border-radius: var(--lv-radius-tight);
+    background: var(--lv-button-invisible-bg-rest, var(--control-transparent-bgColor-rest, var(--lv-bg-panel)));
+    color: var(--lv-button-invisible-fg-rest, var(--lv-fg-default));
     cursor: pointer;
-    padding: 0 var(--ld-button-padding-inline-xs, var(--control-xsmall-paddingInline-normal));
+    padding: 0 var(--lv-button-padding-inline-xs, var(--control-xsmall-paddingInline-normal));
     font: inherit;
-    font-size: var(--ld-font-size-caption);
-    font-weight: var(--ld-font-weight-medium);
+    font-size: var(--lv-font-size-caption);
+    font-weight: var(--lv-font-weight-medium);
     text-align: left;
   }
 
@@ -148,10 +148,10 @@ const chartStyles = css`
 
   .menu button:hover,
   .menu button:focus-visible {
-    border-color: var(--ld-button-invisible-border-hover, var(--control-transparent-borderColor-hover, var(--ld-line-default)));
-    background: var(--ld-button-invisible-bg-hover, var(--control-transparent-bgColor-hover, var(--ld-bg-panel-muted)));
-    outline: var(--focus-outline, var(--ld-border-default));
-    outline-color: var(--borderColor-accent-emphasis, var(--ld-line-accent));
+    border-color: var(--lv-button-invisible-border-hover, var(--control-transparent-borderColor-hover, var(--lv-line-default)));
+    background: var(--lv-button-invisible-bg-hover, var(--control-transparent-bgColor-hover, var(--lv-bg-panel-muted)));
+    outline: var(--focus-outline, var(--lv-border-default));
+    outline-color: var(--borderColor-accent-emphasis, var(--lv-line-accent));
     outline-offset: var(--focus-outline-offset, var(--base-size-2));
   }
 
@@ -161,7 +161,7 @@ const chartStyles = css`
   }
 
   .menu button:disabled:hover {
-    background: var(--ld-button-invisible-bg-rest, var(--control-transparent-bgColor-rest, var(--ld-bg-panel)));
+    background: var(--lv-button-invisible-bg-rest, var(--control-transparent-bgColor-rest, var(--lv-bg-panel)));
   }
 
   .canvas {
@@ -181,10 +181,10 @@ const chartStyles = css`
     min-height: 0;
     place-items: center;
     margin: 12px;
-    border: 1px dashed var(--ld-line-default);
-    background: var(--ld-bg-panel-muted);
-    color: var(--ld-fg-muted);
-    font-weight: var(--ld-font-weight-medium);
+    border: 1px dashed var(--lv-line-default);
+    background: var(--lv-bg-panel-muted);
+    color: var(--lv-fg-muted);
+    font-weight: var(--lv-font-weight-medium);
   }
 `
 
@@ -339,7 +339,7 @@ class ChartVisual extends LitElement {
     const detail = chartInteractionDetailForDatum(payload, datum)
     if (!detail) return
     this.dispatchEvent(
-      new CustomEvent('ld-interaction-select', {
+      new CustomEvent('lv-interaction-select', {
         bubbles: true,
         composed: true,
         detail,
@@ -351,7 +351,7 @@ class ChartVisual extends LitElement {
     const payload = this.payload
     this.renderRoot.querySelector<HTMLDetailsElement>('.options')?.removeAttribute('open')
     this.dispatchEvent(
-      new CustomEvent('ld-visual-action', {
+      new CustomEvent('lv-visual-action', {
         bubbles: true,
         composed: true,
         detail: {
@@ -368,7 +368,7 @@ class ChartVisual extends LitElement {
     )
     if (action === 'clear-selection') {
       this.dispatchEvent(
-        new CustomEvent('ld-interaction-select', {
+        new CustomEvent('lv-interaction-select', {
           bubbles: true,
           composed: true,
           detail: {
@@ -406,9 +406,9 @@ class KPICard extends LitElement {
       min-height: 0;
       position: relative;
       min-height: 104px;
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-chart-surface);
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-chart-surface);
       box-shadow: var(--shadow-resting-small);
       padding: 12px 14px 12px 16px;
       overflow: hidden;
@@ -421,47 +421,47 @@ class KPICard extends LitElement {
       inset-block: 0;
       left: 0;
       width: 5px;
-      background: var(--ld-line-muted);
+      background: var(--lv-line-muted);
     }
 
     .label {
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-strong);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-strong);
       text-transform: uppercase;
     }
 
     .value {
       margin: 8px 0 4px;
-      font-size: clamp(1.75rem, 7cqi, var(--ld-font-size-display));
-      font-weight: var(--ld-font-weight-strong);
-      line-height: var(--ld-line-height-none);
+      font-size: clamp(1.75rem, 7cqi, var(--lv-font-size-display));
+      font-weight: var(--lv-font-weight-strong);
+      line-height: var(--lv-line-height-none);
       letter-spacing: 0;
       white-space: nowrap;
     }
 
     .note {
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-body-md);
-      font-weight: var(--ld-font-weight-medium);
-      line-height: var(--ld-line-height-compact);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-body-md);
+      font-weight: var(--lv-font-weight-medium);
+      line-height: var(--lv-line-height-compact);
       overflow-wrap: anywhere;
     }
 
     .green::before {
-      background: var(--ld-data-2);
+      background: var(--lv-data-2);
     }
     .amber::before {
-      background: var(--ld-accent);
+      background: var(--lv-accent);
     }
     .coral::before {
-      background: var(--ld-data-4);
+      background: var(--lv-data-4);
     }
     .ink::before {
-      background: var(--ld-data-1);
+      background: var(--lv-data-1);
     }
     .neutral::before {
-      background: var(--ld-line-muted);
+      background: var(--lv-line-muted);
     }
 
     @container (max-width: 220px) {
@@ -475,7 +475,7 @@ class KPICard extends LitElement {
       }
 
       .note {
-        font-size: var(--ld-font-size-body-sm);
+        font-size: var(--lv-font-size-body-sm);
       }
     }
 
@@ -522,7 +522,7 @@ function formatKPIValue(value: number, format?: string, unit?: string): string {
 class LegacyLineChart extends ChartVisual {}
 class LegacyBarChart extends ChartVisual {}
 
-if (!customElements.get('ld-echart')) customElements.define('ld-echart', ChartVisual)
-if (!customElements.get('ld-line-chart')) customElements.define('ld-line-chart', LegacyLineChart)
-if (!customElements.get('ld-bar-chart')) customElements.define('ld-bar-chart', LegacyBarChart)
-if (!customElements.get('ld-kpi-card')) customElements.define('ld-kpi-card', KPICard)
+if (!customElements.get('lv-echart')) customElements.define('lv-echart', ChartVisual)
+if (!customElements.get('lv-line-chart')) customElements.define('lv-line-chart', LegacyLineChart)
+if (!customElements.get('lv-bar-chart')) customElements.define('lv-bar-chart', LegacyBarChart)
+if (!customElements.get('lv-kpi-card')) customElements.define('lv-kpi-card', KPICard)

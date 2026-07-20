@@ -27,18 +27,18 @@ func TestAssetViewFromCatalogRecordKeepsPayloadContract(t *testing.T) {
 	view := AssetViewFromCatalogRecord(AssetRecord{
 		ID:             "connection:olist.olist",
 		SnapshotID:     "asset_snapshot_123",
-		WorkspaceID:    "libredash",
+		WorkspaceID:    "leapview",
 		ServingStateID: "deploy_a",
 		Type:           AssetTypeConnection,
 		Key:            "olist.olist",
-		ParentID:       "catalog:libredash",
+		ParentID:       "catalog:leapview",
 		Title:          "Olist connection",
 		Description:    "Local files",
 		PayloadSchema:  "connection.v1",
 		Payload:        payload,
 		ContentHash:    "hash",
 	})
-	if view.ID != "connection:olist.olist" || view.SnapshotID != "asset_snapshot_123" || view.ParentID != "catalog:libredash" {
+	if view.ID != "connection:olist.olist" || view.SnapshotID != "asset_snapshot_123" || view.ParentID != "catalog:leapview" {
 		t.Fatalf("asset view identity = %#v", view)
 	}
 	if view.PayloadSchema != "connection.v1" || view.Payload["credentials_configured"] != true || view.ContentHash != "hash" {

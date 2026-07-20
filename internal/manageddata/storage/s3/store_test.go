@@ -17,9 +17,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/manageddata/storage"
-	manageds3 "github.com/Yacobolo/libredash/internal/manageddata/storage/s3"
-	"github.com/Yacobolo/libredash/internal/manageddata/storage/storagetest"
+	"github.com/Yacobolo/leapview/internal/manageddata/storage"
+	manageds3 "github.com/Yacobolo/leapview/internal/manageddata/storage/s3"
+	"github.com/Yacobolo/leapview/internal/manageddata/storage/storagetest"
 	awsv4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"

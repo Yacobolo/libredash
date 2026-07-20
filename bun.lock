@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "libredash",
+      "name": "leapview",
       "dependencies": {
         "@shikijs/monaco": "^4.3.0",
         "dompurify": "^3.4.11",

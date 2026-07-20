@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
-	"github.com/Yacobolo/libredash/internal/dashboard/reportmodel"
-	"github.com/Yacobolo/libredash/internal/dataquery"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	"github.com/Yacobolo/leapview/internal/dashboard/reportmodel"
+	"github.com/Yacobolo/leapview/internal/dataquery"
 )
 
 type FilterService struct{}

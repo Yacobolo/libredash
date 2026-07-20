@@ -39,7 +39,7 @@ The browser renderer receives a presentation-shaped payload; it does not parse s
 
 ## Tables, matrices, and pivots
 
-Tabular definitions have their own query and interaction contract. A data table typically selects row-level fields from a model table. Matrices and pivots organize dimensions and values for analytical comparison. LibreDash keeps the server query and signal contract while TanStack supplies internal browser interaction behavior such as windowing and column state.
+Tabular definitions have their own query and interaction contract. A data table typically selects row-level fields from a model table. Matrices and pivots organize dimensions and values for analytical comparison. LeapView keeps the server query and signal contract while TanStack supplies internal browser interaction behavior such as windowing and column state.
 
 Always bound tabular results. Large exports and analytical exploration require an explicit headless or windowed workflow; a report page should not render an unbounded table.
 

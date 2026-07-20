@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/manageddata"
-	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
+	"github.com/Yacobolo/leapview/internal/manageddata"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
 )
 
 const (

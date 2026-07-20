@@ -3,8 +3,8 @@ package app
 import (
 	"strings"
 
-	agentcap "github.com/Yacobolo/libredash/internal/agent"
-	agentcore "github.com/Yacobolo/libredash/pkg/agent"
+	agentcap "github.com/Yacobolo/leapview/internal/agent"
+	agentcore "github.com/Yacobolo/leapview/pkg/agent"
 )
 
 func appendServerUserTranscript(transcript []agentcap.ChatTranscriptItem, conversationID, input string) []agentcap.ChatTranscriptItem {

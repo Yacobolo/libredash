@@ -45,7 +45,7 @@ for (const log of result.logs) {
   console.error(log)
 }
 if (!result.success) {
-  throw new Error('failed to build LibreDash site assets')
+  throw new Error('failed to build LeapView site assets')
 }
 
 const entry = Bun.file('site/static/site-page.js')

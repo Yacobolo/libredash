@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/agent"
-	"github.com/Yacobolo/libredash/internal/asyncjob"
-	"github.com/Yacobolo/libredash/internal/deployment/apiadapter"
-	"github.com/Yacobolo/libredash/internal/manageddata/control"
+	"github.com/Yacobolo/leapview/internal/agent"
+	"github.com/Yacobolo/leapview/internal/asyncjob"
+	"github.com/Yacobolo/leapview/internal/deployment/apiadapter"
+	"github.com/Yacobolo/leapview/internal/manageddata/control"
 )
 
 const (
@@ -104,7 +104,7 @@ func (s *Server) runAsyncJobDispatcher(ctx context.Context) {
 	if err != nil {
 		return
 	}
-	owner := fmt.Sprintf("libredash-api-%d", time.Now().UnixNano())
+	owner := fmt.Sprintf("leapview-api-%d", time.Now().UnixNano())
 	poll := time.NewTicker(250 * time.Millisecond)
 	defer poll.Stop()
 	for {

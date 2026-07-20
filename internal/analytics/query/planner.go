@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 )
 
 func (p *Planner) Plan(request Request) (Plan, error) {

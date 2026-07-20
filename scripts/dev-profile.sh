@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PROFILE_ROOT="/Users/yacobolo/.config/libredash/profiles"
+PROFILE_ROOT="/Users/yacobolo/.config/leapview/profiles"
 
 usage() {
   echo "Usage: $0 quack start|stop|status|logs" >&2
@@ -19,7 +19,7 @@ fi
 case "$profile" in
   quack) ;;
   *)
-    echo "Unsupported LibreDash dev profile: $profile" >&2
+    echo "Unsupported LeapView dev profile: $profile" >&2
     usage
     exit 2
     ;;
@@ -28,7 +28,7 @@ esac
 case "$action" in
   start|stop|status|logs) ;;
   *)
-    echo "Unsupported LibreDash dev profile action: $action" >&2
+    echo "Unsupported LeapView dev profile action: $action" >&2
     usage
     exit 2
     ;;
@@ -39,14 +39,14 @@ env_file="$profile_dir/env"
 secrets_file="$profile_dir/secrets.env"
 
 if [[ ! -f "$env_file" ]]; then
-  echo "Missing LibreDash dev profile env: $env_file" >&2
+  echo "Missing LeapView dev profile env: $env_file" >&2
   exit 1
 fi
 
-existing_quack_token="${LIBREDASH_QUACK_TOKEN:-}"
-existing_agent_api_key="${LIBREDASH_AGENT_API_KEY:-}"
-existing_home="${LIBREDASH_HOME:-}"
-existing_duckdb_dir="${LIBREDASH_DUCKDB_DIR:-}"
+existing_quack_token="${LEAPVIEW_QUACK_TOKEN:-}"
+existing_agent_api_key="${LEAPVIEW_AGENT_API_KEY:-}"
+existing_home="${LEAPVIEW_HOME:-}"
+existing_duckdb_dir="${LEAPVIEW_DUCKDB_DIR:-}"
 
 set -a
 # shellcheck source=/dev/null
@@ -57,16 +57,16 @@ if [[ -f "$secrets_file" ]]; then
 fi
 set +a
 
-if [[ -z "${LIBREDASH_QUACK_TOKEN:-}" && -n "$existing_quack_token" ]]; then
-  export LIBREDASH_QUACK_TOKEN="$existing_quack_token"
+if [[ -z "${LEAPVIEW_QUACK_TOKEN:-}" && -n "$existing_quack_token" ]]; then
+  export LEAPVIEW_QUACK_TOKEN="$existing_quack_token"
 fi
-if [[ -z "${LIBREDASH_AGENT_API_KEY:-}" && -n "$existing_agent_api_key" ]]; then
-  export LIBREDASH_AGENT_API_KEY="$existing_agent_api_key"
+if [[ -z "${LEAPVIEW_AGENT_API_KEY:-}" && -n "$existing_agent_api_key" ]]; then
+  export LEAPVIEW_AGENT_API_KEY="$existing_agent_api_key"
 fi
-export LIBREDASH_HOME="${existing_home:-$ROOT/.tmp/profiles/$profile/home}"
-export LIBREDASH_DUCKDB_DIR="${existing_duckdb_dir:-$ROOT/.tmp/profiles/$profile/duckdb}"
+export LEAPVIEW_HOME="${existing_home:-$ROOT/.tmp/profiles/$profile/home}"
+export LEAPVIEW_DUCKDB_DIR="${existing_duckdb_dir:-$ROOT/.tmp/profiles/$profile/duckdb}"
 
-for dir in "${LIBREDASH_HOME:-}" "${LIBREDASH_DUCKDB_DIR:-}"; do
+for dir in "${LEAPVIEW_HOME:-}" "${LEAPVIEW_DUCKDB_DIR:-}"; do
   if [[ -n "$dir" ]]; then
     mkdir -p "$dir"
   fi
@@ -101,14 +101,14 @@ stop_pid() {
 }
 
 stop_profile_duckdb_locks() {
-  if [[ -z "${LIBREDASH_DUCKDB_DIR:-}" ]]; then
+  if [[ -z "${LEAPVIEW_DUCKDB_DIR:-}" ]]; then
     return 0
   fi
   if ! command -v lsof >/dev/null 2>&1; then
     return 0
   fi
 
-  local db_file="$LIBREDASH_DUCKDB_DIR/libredash-$profile.duckdb"
+  local db_file="$LEAPVIEW_DUCKDB_DIR/leapview-$profile.duckdb"
   [[ -e "$db_file" ]] || return 0
 
   local pids
@@ -118,26 +118,26 @@ stop_profile_duckdb_locks() {
   while read -r pid; do
     [[ -n "$pid" ]] || continue
     if [[ "$(pid_cwd "$pid")" == "$ROOT" ]]; then
-      stop_pid "$pid" "stale LibreDash $profile DuckDB lock holder"
+      stop_pid "$pid" "stale LeapView $profile DuckDB lock holder"
     fi
   done <<< "$pids"
 
   local remaining
   remaining="$(lsof -t "$db_file" 2>/dev/null | sort -u || true)"
   if [[ -n "$remaining" ]]; then
-    echo "LibreDash profile '$profile' DuckDB is still locked by another process: $remaining" >&2
+    echo "LeapView profile '$profile' DuckDB is still locked by another process: $remaining" >&2
     echo "DuckDB file: $db_file" >&2
     exit 1
   fi
 }
 
 if [[ "$profile" == "quack" && "$action" == "start" ]]; then
-  if [[ -z "${LIBREDASH_QUACK_TOKEN:-}" ]]; then
-    echo "Missing LIBREDASH_QUACK_TOKEN. Add it to $secrets_file before running task dev:quack." >&2
+  if [[ -z "${LEAPVIEW_QUACK_TOKEN:-}" ]]; then
+    echo "Missing LEAPVIEW_QUACK_TOKEN. Add it to $secrets_file before running task dev:quack." >&2
     exit 1
   fi
-  if [[ -z "${LIBREDASH_AGENT_API_KEY:-}" ]]; then
-    echo "Missing LIBREDASH_AGENT_API_KEY. Add it to $secrets_file before running task dev:quack." >&2
+  if [[ -z "${LEAPVIEW_AGENT_API_KEY:-}" ]]; then
+    echo "Missing LEAPVIEW_AGENT_API_KEY. Add it to $secrets_file before running task dev:quack." >&2
     exit 1
   fi
   if grep -q "replace-with-quack-host" "$profile_dir/model.yaml"; then

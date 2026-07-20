@@ -15,9 +15,9 @@ Do not copy generated SQL out of an explain response and turn it into a second i
 For dashboards, discover in this order:
 
 ```sh
-libredash dashboards list --workspace sales
-libredash dashboards describe executive-sales --workspace sales
-libredash dashboards components executive-sales overview --workspace sales
+leapview dashboards list --workspace sales
+leapview dashboards describe executive-sales --workspace sales
+leapview dashboards components executive-sales overview --workspace sales
 ```
 
 Add `--target` and `--token`, or configure the corresponding environment values. Discovery returns stable IDs and supported components from the active deployment.
@@ -25,10 +25,10 @@ Add `--target` and `--token`, or configure the corresponding environment values.
 For semantic models:
 
 ```sh
-libredash semantic-models list --workspace sales
-libredash semantic-models describe sales --workspace sales
-libredash semantic-models datasets sales --workspace sales
-libredash semantic-models fields sales orders --workspace sales
+leapview semantic-models list --workspace sales
+leapview semantic-models describe sales --workspace sales
+leapview semantic-models datasets sales --workspace sales
+leapview semantic-models fields sales orders --workspace sales
 ```
 
 Cache catalog metadata for a bounded interval, but rediscover after project deployment. A removed or renamed field should fail explicitly rather than being silently substituted by title.
@@ -38,7 +38,7 @@ Cache catalog metadata for a bounded interval, but rediscover after project depl
 Use a coordinated page query when several components should share one canonical filter state:
 
 ```sh
-libredash dashboards query-page executive-sales overview \
+leapview dashboards query-page executive-sales overview \
   --workspace sales \
   --filters-json '{"state":["SP"]}'
 ```
@@ -52,11 +52,11 @@ Use visual or table data commands for focused refreshes. Table requests support 
 Preview row-level data to understand fields, then send an aggregate query for dimensions and measures. Use a body file for non-trivial JSON:
 
 ```sh
-libredash semantic-models preview sales orders \
+leapview semantic-models preview sales orders \
   --workspace sales \
   --body-json '{"limit":10}'
 
-libredash semantic-models query sales orders \
+leapview semantic-models query sales orders \
   --workspace sales \
   --body-file ./query.json
 ```

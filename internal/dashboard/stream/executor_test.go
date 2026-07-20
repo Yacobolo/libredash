@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	"github.com/Yacobolo/libredash/internal/dashboard/command"
-	"github.com/Yacobolo/libredash/internal/dashboard/consumer"
-	"github.com/Yacobolo/libredash/internal/dataquery"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	"github.com/Yacobolo/leapview/internal/dashboard/command"
+	"github.com/Yacobolo/leapview/internal/dashboard/consumer"
+	"github.com/Yacobolo/leapview/internal/dataquery"
 )
 
 type consumerExecutorStub struct {

@@ -1,7 +1,7 @@
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Project
 metadata:
-  name: libredash-showcase
+  name: leapview-showcase
 spec:
   connections:
     include:

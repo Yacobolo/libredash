@@ -7,8 +7,8 @@ Managed data is stored as immutable, content-addressed revisions. A revision dig
 Plan before uploading:
 
 ```sh
-libredash data plan \
-  --project dashboards/libredash.yaml \
+leapview data plan \
+  --project dashboards/leapview.yaml \
   --connection olist \
   --from /srv/olist
 ```
@@ -22,12 +22,12 @@ Use `--previous-manifest` when reviewing a later revision and you want files cla
 Upload missing objects and stage the revision:
 
 ```sh
-libredash data sync \
-  --project dashboards/libredash.yaml \
+leapview data sync \
+  --project dashboards/leapview.yaml \
   --connection olist \
   --from /srv/olist \
-  --target "$LIBREDASH_TARGET" \
-  --token "$LIBREDASH_API_TOKEN"
+  --target "$LEAPVIEW_TARGET" \
+  --token "$LEAPVIEW_API_TOKEN"
 ```
 
 The server deduplicates already available content and returns a lowercase `sha256:` revision digest. Staging is intentionally non-serving: dashboards continue querying the active revision until a project deployment activates the new digest.
@@ -39,12 +39,12 @@ Do not modify the source tree during transfer. If content changes, let the opera
 Pass exactly one pin for every managed connection in the project:
 
 ```sh
-libredash deploy \
-  --project dashboards/libredash.yaml \
+leapview deploy \
+  --project dashboards/leapview.yaml \
   --revision "olist=sha256:<64-lowercase-hex>" \
   --environment prod \
-  --target "$LIBREDASH_TARGET" \
-  --token "$LIBREDASH_API_TOKEN"
+  --target "$LEAPVIEW_TARGET" \
+  --token "$LEAPVIEW_API_TOKEN"
 ```
 
 The deployment validates configuration candidates and all revision pins before activation. Missing, duplicate, unknown, or malformed pins are rejected. Successful activation moves project configuration, workspace serving state, and managed revision pointers as one reviewed rollout.
@@ -56,18 +56,18 @@ This coupling matters when model SQL changes alongside input data. Activating on
 Server revision commands use the project resource ID, not the local manifest path:
 
 ```sh
-libredash data revisions list \
-  --project libredash-showcase \
+leapview data revisions list \
+  --project leapview-showcase \
   --connection olist \
-  --target "$LIBREDASH_TARGET" \
-  --token "$LIBREDASH_API_TOKEN"
+  --target "$LEAPVIEW_TARGET" \
+  --token "$LEAPVIEW_API_TOKEN"
 
-libredash data revisions current \
-  --project libredash-showcase \
+leapview data revisions current \
+  --project leapview-showcase \
   --connection olist \
   --environment prod \
-  --target "$LIBREDASH_TARGET" \
-  --token "$LIBREDASH_API_TOKEN"
+  --target "$LEAPVIEW_TARGET" \
+  --token "$LEAPVIEW_API_TOKEN"
 ```
 
 Listing shows staged revisions with pagination controls. `current` reports the environment's active digest or `none`. Record the reviewed digest in deployment logs so an operator can distinguish the intended rollout from another staged candidate.

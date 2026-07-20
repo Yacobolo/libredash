@@ -53,15 +53,15 @@ type docsReadOutput struct {
 
 func newDocumentationMCPHandler() stdhttp.Handler {
 	server := mcp.NewServer(
-		&mcp.Implementation{Name: "libredash-docs", Title: "LibreDash documentation", Version: "1.0.0"},
-		&mcp.ServerOptions{Instructions: "Read-only generated LibreDash documentation. Search before reading a focused document, command, or API operation. This server cannot execute LibreDash commands or API operations."},
+		&mcp.Implementation{Name: "leapview-docs", Title: "LeapView documentation", Version: "1.0.0"},
+		&mcp.ServerOptions{Instructions: "Read-only generated LeapView documentation. Search before reading a focused document, command, or API operation. This server cannot execute LeapView commands or API operations."},
 	)
 	annotations := &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true, DestructiveHint: boolPointer(false), OpenWorldHint: boolPointer(false)}
 	mcp.AddTool(server, &mcp.Tool{
-		Name: "docs_catalog", Title: "List documentation", Description: "List compact stable references for LibreDash documentation, CLI commands, and API operations. Use filters and a bounded limit instead of loading full references.", Annotations: annotations,
+		Name: "docs_catalog", Title: "List documentation", Description: "List compact stable references for LeapView documentation, CLI commands, and API operations. Use filters and a bounded limit instead of loading full references.", Annotations: annotations,
 	}, docsCatalogTool)
 	mcp.AddTool(server, &mcp.Tool{
-		Name: "docs_search", Title: "Search documentation", Description: "Search generated LibreDash documentation and return compact references. Searches human guides, exact CLI command IDs, and API operation IDs without executing anything.", Annotations: annotations,
+		Name: "docs_search", Title: "Search documentation", Description: "Search generated LeapView documentation and return compact references. Searches human guides, exact CLI command IDs, and API operation IDs without executing anything.", Annotations: annotations,
 	}, docsSearchTool)
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "docs_read", Title: "Read documentation", Description: "Read one focused document, CLI command, or API operation by its stable ID in Markdown or JSON. Use an ID returned by docs_catalog or docs_search.", Annotations: annotations,

@@ -11,11 +11,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/access"
-	agentconfig "github.com/Yacobolo/libredash/internal/agent/config"
-	"github.com/Yacobolo/libredash/internal/configspec"
-	"github.com/Yacobolo/libredash/internal/platform/db"
-	"github.com/Yacobolo/libredash/internal/securefs"
+	"github.com/Yacobolo/leapview/internal/access"
+	agentconfig "github.com/Yacobolo/leapview/internal/agent/config"
+	"github.com/Yacobolo/leapview/internal/configspec"
+	"github.com/Yacobolo/leapview/internal/platform/db"
+	"github.com/Yacobolo/leapview/internal/securefs"
 	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite"
 )
@@ -24,7 +24,7 @@ import (
 var migrationsFS embed.FS
 
 const (
-	DefaultWorkspaceID = "libredash"
+	DefaultWorkspaceID = "leapview"
 	databaseFileMode   = securefs.PrivateFileMode
 )
 
@@ -36,13 +36,13 @@ type Paths struct {
 }
 
 func DefaultPaths() Paths {
-	home := os.Getenv(configspec.EnvLIBREDASH_HOME)
+	home := os.Getenv(configspec.EnvLEAPVIEW_HOME)
 	if home == "" {
-		home = ".libredash"
+		home = ".leapview"
 	}
 	return Paths{
 		HomeDir:     home,
-		DBPath:      filepath.Join(home, "libredash.db"),
+		DBPath:      filepath.Join(home, "leapview.db"),
 		ArtifactDir: filepath.Join(home, "artifacts"),
 		DuckDBDir:   filepath.Join(home, "duckdb"),
 	}
@@ -194,7 +194,7 @@ func Restore(ctx context.Context, targetPath, backupPath, currentBackupPath stri
 	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(targetPath), ".libredash-restore-*.db")
+	tmp, err := os.CreateTemp(filepath.Dir(targetPath), ".leapview-restore-*.db")
 	if err != nil {
 		return err
 	}
@@ -282,7 +282,7 @@ WHERE type = 'table'
 	}
 	for _, name := range []string{"platform_settings", "workspaces", "serving_states", "roles"} {
 		if !seen[name] {
-			return fmt.Errorf("backup is not a LibreDash platform database: missing table %s", name)
+			return fmt.Errorf("backup is not a LeapView platform database: missing table %s", name)
 		}
 	}
 	return nil

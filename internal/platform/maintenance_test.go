@@ -128,7 +128,7 @@ func TestPruneOperationalHistoryDeletesRFC3339StaleAuthState(t *testing.T) {
 
 func testMaintenanceStore(t *testing.T, ctx context.Context) *Store {
 	t.Helper()
-	store, err := Open(ctx, filepath.Join(t.TempDir(), "libredash.db"))
+	store, err := Open(ctx, filepath.Join(t.TempDir(), "leapview.db"))
 	if err != nil {
 		t.Fatalf("open platform store: %v", err)
 	}

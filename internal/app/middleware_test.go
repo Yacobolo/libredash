@@ -15,11 +15,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/access"
-	oidcauth "github.com/Yacobolo/libredash/internal/access/oidc"
-	accesssqlite "github.com/Yacobolo/libredash/internal/access/sqlite"
-	"github.com/Yacobolo/libredash/internal/config"
-	"github.com/Yacobolo/libredash/internal/workspace"
+	"github.com/Yacobolo/leapview/internal/access"
+	oidcauth "github.com/Yacobolo/leapview/internal/access/oidc"
+	accesssqlite "github.com/Yacobolo/leapview/internal/access/sqlite"
+	"github.com/Yacobolo/leapview/internal/config"
+	"github.com/Yacobolo/leapview/internal/workspace"
 )
 
 func TestAuthRouteRateLimit(t *testing.T) {
@@ -247,7 +247,7 @@ func TestLogoutSurfacesRevocationAuditFailure(t *testing.T) {
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
-	req.AddCookie(&http.Cookie{Name: "ld_session", Value: token})
+	req.AddCookie(&http.Cookie{Name: "lv_session", Value: token})
 	rec := httptest.NewRecorder()
 	NewAuth(repo, "test", AuthConfig{}).Logout(rec, req)
 
@@ -314,7 +314,7 @@ func TestMetricsRouteExportsHTTPMetrics(t *testing.T) {
 	}
 	body := rec.Body.String()
 	for _, want := range []string{
-		"libredash_http_requests_total",
+		"leapview_http_requests_total",
 		`method="GET"`,
 		`route="/healthz"`,
 		`status="200"`,
@@ -357,8 +357,8 @@ func TestMetricsRouteRequiresConfiguredBearerToken(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("metrics status with valid token = %d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
 	}
-	if body := rec.Body.String(); !strings.Contains(body, "libredash_http_requests_total") {
-		t.Fatalf("metrics output missing LibreDash metrics:\n%s", body)
+	if body := rec.Body.String(); !strings.Contains(body, "leapview_http_requests_total") {
+		t.Fatalf("metrics output missing LeapView metrics:\n%s", body)
 	}
 
 	for _, header := range []string{
@@ -634,7 +634,7 @@ func TestRequestLoggerDoesNotLogSensitiveHeaders(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer secret-token")
 	req.Header.Set("X-Request-ID", "req_123")
 	req.Header.Set("X-Correlation-ID", "corr_456")
-	req.AddCookie(&http.Cookie{Name: "ld_session", Value: "secret-session"})
+	req.AddCookie(&http.Cookie{Name: "lv_session", Value: "secret-session"})
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
 
@@ -783,7 +783,7 @@ func TestAuthCallbackCreatesSessionAndAuditEvents(t *testing.T) {
 	})
 	auth.configured = true
 	auth.oidcOverride = map[string]oidcClient{"azureadv2": fakeOIDCClient{claims: oidcauth.Claims{Issuer: "https://issuer.example", Subject: "subject-1", Email: "user@example.com", Name: "User Example"}}}
-	target := "/oauth/authorize?client_id=claude&resource=https%3A%2F%2Flibredash.example%2Fmcp&response_type=code"
+	target := "/oauth/authorize?client_id=claude&resource=https%3A%2F%2Fleapview.example%2Fmcp&response_type=code"
 	req := httptest.NewRequest(http.MethodGet, "/auth/azureadv2/callback?state=state&code=code", nil)
 	req.AddCookie(auth.oidcStateCookie("state", "nonce"))
 	req.AddCookie(auth.authReturnCookie(target))
@@ -799,7 +799,7 @@ func TestAuthCallbackCreatesSessionAndAuditEvents(t *testing.T) {
 	}
 	var sessionCookie *http.Cookie
 	for _, cookie := range rec.Result().Cookies() {
-		if cookie.Name == "ld_session" && cookie.Value != "" {
+		if cookie.Name == "lv_session" && cookie.Value != "" {
 			sessionCookie = cookie
 		}
 	}
@@ -890,7 +890,7 @@ func TestLocalLoginResumesProtectedOAuthAuthorizationRequest(t *testing.T) {
 		LocalAuth: true,
 		CSRFKey:   "0123456789abcdef0123456789abcdef",
 	})
-	target := "/oauth/authorize?client_id=claude&code_challenge=challenge&resource=https%3A%2F%2Flibredash.example%2Fmcp&response_type=code"
+	target := "/oauth/authorize?client_id=claude&code_challenge=challenge&resource=https%3A%2F%2Fleapview.example%2Fmcp&response_type=code"
 	request := httptest.NewRequest(http.MethodGet, target, nil)
 	redirect := httptest.NewRecorder()
 	auth.Middleware("", http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
@@ -901,7 +901,7 @@ func TestLocalLoginResumesProtectedOAuthAuthorizationRequest(t *testing.T) {
 	}
 	var returnCookie *http.Cookie
 	for _, cookie := range redirect.Result().Cookies() {
-		if cookie.Name == "ld_auth_return" {
+		if cookie.Name == "lv_auth_return" {
 			returnCookie = cookie
 			break
 		}
@@ -1076,7 +1076,7 @@ func TestAuthAuditsDisabledPrincipalCredentialFailures(t *testing.T) {
 		t.Fatal("disabled API token authenticated")
 	}
 	sessionReq := httptest.NewRequest(http.MethodGet, "/workspaces/test", nil)
-	sessionReq.AddCookie(&http.Cookie{Name: "ld_session", Value: sessionSecret})
+	sessionReq.AddCookie(&http.Cookie{Name: "lv_session", Value: sessionSecret})
 	sessionReq.Header.Set("X-Request-ID", "disabled_session_req")
 	if _, _, ok := auth.authenticate(sessionReq); ok {
 		t.Fatal("disabled session authenticated")
@@ -1127,7 +1127,7 @@ func TestInvalidBearerDoesNotFallBackToSession(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test", nil)
 	req.Header.Set("Authorization", "Bearer invalid-token")
-	req.AddCookie(&http.Cookie{Name: "ld_session", Value: sessionSecret})
+	req.AddCookie(&http.Cookie{Name: "lv_session", Value: sessionSecret})
 	if _, _, ok := auth.authenticate(req); ok {
 		t.Fatal("invalid bearer authenticated by falling back to the session cookie")
 	}
@@ -1183,7 +1183,7 @@ func TestCSRFBearerBypassDoesNotApplyWhenSessionCookiePresent(t *testing.T) {
 
 	sessionReq := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/test/mutate", nil)
 	sessionReq.Header.Set("Authorization", "Bearer invalid-token")
-	sessionReq.AddCookie(&http.Cookie{Name: "ld_session", Value: sessionSecret})
+	sessionReq.AddCookie(&http.Cookie{Name: "lv_session", Value: sessionSecret})
 	sessionRec := httptest.NewRecorder()
 	handler.ServeHTTP(sessionRec, sessionReq)
 	if sessionRec.Code != http.StatusForbidden {
@@ -1234,7 +1234,7 @@ func oidcStateCookieForTest(cookies []*http.Cookie) *http.Cookie {
 func principalFromSessionCookie(t *testing.T, repo *accesssqlite.Repository, cookies []*http.Cookie) access.Principal {
 	t.Helper()
 	for _, cookie := range cookies {
-		if cookie.Name == "ld_session" && cookie.Value != "" {
+		if cookie.Name == "lv_session" && cookie.Value != "" {
 			principal, err := repo.PrincipalForToken(context.Background(), cookie.Value)
 			if err != nil {
 				t.Fatalf("resolve session: %v", err)

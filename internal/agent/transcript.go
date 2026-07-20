@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	agentcore "github.com/Yacobolo/libredash/pkg/agent"
+	agentcore "github.com/Yacobolo/leapview/pkg/agent"
 )
 
 func transcriptFromMessages(conversationID string, messages []Message) []ChatTranscriptItem {

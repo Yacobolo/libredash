@@ -1,4 +1,4 @@
-// Package siteassets owns the browser assets for the public LibreDash site.
+// Package siteassets owns the browser assets for the public LeapView site.
 package siteassets
 
 import (

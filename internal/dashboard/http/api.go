@@ -6,11 +6,11 @@ import (
 	"fmt"
 	nethttp "net/http"
 
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	"github.com/Yacobolo/libredash/internal/api"
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
-	"github.com/Yacobolo/libredash/internal/dataquery"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	"github.com/Yacobolo/leapview/internal/api"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	"github.com/Yacobolo/leapview/internal/dataquery"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -347,7 +347,7 @@ func (h Handler) dashboardReportPage(w nethttp.ResponseWriter, r *nethttp.Reques
 }
 
 func (h Handler) requestQueryMetadata(r *nethttp.Request, surface, operation, objectType, objectID string) dataquery.Metadata {
-	if surface == dataquery.SurfaceAPI && r.Header.Get("X-LibreDash-Client") == dataquery.SurfaceCLI {
+	if surface == dataquery.SurfaceAPI && r.Header.Get("X-LeapView-Client") == dataquery.SurfaceCLI {
 		surface = dataquery.SurfaceCLI
 	}
 	metadata := dataquery.Metadata{
@@ -442,7 +442,7 @@ func publicDashboardPatch(patch dashboard.Patch) map[string]any {
 func publicDashboardVisual(visual dashboard.Visual) map[string]any {
 	extensions := map[string]map[string]any{}
 	if len(visual.Options) > 0 {
-		extensions["libredash"] = visual.Options
+		extensions["leapview"] = visual.Options
 	}
 	for namespace, options := range visual.RendererOptions {
 		extensions[namespace] = options
@@ -549,7 +549,7 @@ func dashboardVisualDTO(visualID string, visual reportdef.Visual, component dash
 	if len(visual.Options) > 0 || len(visual.RendererOptions) > 0 {
 		out.Extensions = map[string]map[string]any{}
 		if len(visual.Options) > 0 {
-			out.Extensions["libredash"] = visual.Options
+			out.Extensions["leapview"] = visual.Options
 		}
 		if len(visual.RendererOptions) > 0 {
 			out.Extensions[firstNonEmpty(visual.Renderer, "plugin")] = visual.RendererOptions

@@ -3,8 +3,8 @@ package app
 import (
 	"context"
 
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
-	"github.com/Yacobolo/libredash/internal/dataquery"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	"github.com/Yacobolo/leapview/internal/dataquery"
 )
 
 func executeAggregateRows(ctx context.Context, metrics QueryMetrics, modelID string, request reportdef.AggregateQuery) (reportdef.QueryRows, error) {

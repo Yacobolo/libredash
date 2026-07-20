@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Yacobolo/libredash/internal/securefs"
+	"github.com/Yacobolo/leapview/internal/securefs"
 )
 
 const FileName = ".instance.lock"
@@ -44,7 +44,7 @@ func Acquire(home string) (*Lock, error) {
 	}
 	if !acquired {
 		_ = file.Close()
-		return nil, fmt.Errorf("another LibreDash process is already using LIBREDASH_HOME %q", home)
+		return nil, fmt.Errorf("another LeapView process is already using LEAPVIEW_HOME %q", home)
 	}
 	return &Lock{file: file}, nil
 }

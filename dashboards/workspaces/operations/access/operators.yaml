@@ -1,4 +1,4 @@
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: WorkspaceGroup
 metadata:
   workspace: operations

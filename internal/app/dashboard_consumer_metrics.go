@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/Yacobolo/libredash/internal/dashboard/consumer"
+	"github.com/Yacobolo/leapview/internal/dashboard/consumer"
 )
 
 func (m runtimeMetrics) ExecuteConsumersPage(ctx context.Context, request consumer.Request, publish consumer.Publisher) error {

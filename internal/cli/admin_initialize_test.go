@@ -11,17 +11,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/access"
-	accesssqlite "github.com/Yacobolo/libredash/internal/access/sqlite"
-	"github.com/Yacobolo/libredash/internal/platform"
+	"github.com/Yacobolo/leapview/internal/access"
+	accesssqlite "github.com/Yacobolo/leapview/internal/access/sqlite"
+	"github.com/Yacobolo/leapview/internal/platform"
 )
 
 func TestAdminInitializeCreatesOneTimeCredentialBundle(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("LIBREDASH_HOME", home)
-	t.Setenv("LIBREDASH_PRODUCTION", "1")
-	t.Setenv("LIBREDASH_ENVIRONMENT", "prod")
-	t.Setenv("LIBREDASH_BOOTSTRAP_ADMIN_EMAIL", "owner@example.com")
+	t.Setenv("LEAPVIEW_HOME", home)
+	t.Setenv("LEAPVIEW_PRODUCTION", "1")
+	t.Setenv("LEAPVIEW_ENVIRONMENT", "prod")
+	t.Setenv("LEAPVIEW_BOOTSTRAP_ADMIN_EMAIL", "owner@example.com")
 	var out bytes.Buffer
 	if err := runAdminInitialize(context.Background(), "json", &out); err != nil {
 		t.Fatal(err)
@@ -37,7 +37,7 @@ func TestAdminInitializeCreatesOneTimeCredentialBundle(t *testing.T) {
 	if err != nil || time.Until(expires) > 24*time.Hour || time.Until(expires) < 23*time.Hour {
 		t.Fatalf("publisher expiry = %q, %v", credentials.PublisherTokenExpiresAt, err)
 	}
-	store, err := platform.Open(context.Background(), filepath.Join(home, "libredash.db"))
+	store, err := platform.Open(context.Background(), filepath.Join(home, "leapview.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,10 +73,10 @@ func TestAdminInitializeCreatesOneTimeCredentialBundle(t *testing.T) {
 
 func TestAdminInitializeReplaysCredentialsAfterDeliveryFailure(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("LIBREDASH_HOME", home)
-	t.Setenv("LIBREDASH_PRODUCTION", "1")
-	t.Setenv("LIBREDASH_ENVIRONMENT", "prod")
-	t.Setenv("LIBREDASH_BOOTSTRAP_ADMIN_EMAIL", "owner@example.com")
+	t.Setenv("LEAPVIEW_HOME", home)
+	t.Setenv("LEAPVIEW_PRODUCTION", "1")
+	t.Setenv("LEAPVIEW_ENVIRONMENT", "prod")
+	t.Setenv("LEAPVIEW_BOOTSTRAP_ADMIN_EMAIL", "owner@example.com")
 
 	if err := runAdminInitialize(context.Background(), "json", errorWriter{}); err == nil {
 		t.Fatal("initialize output failure = nil")

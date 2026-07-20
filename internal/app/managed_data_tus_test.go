@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/manageddata/control"
+	"github.com/Yacobolo/leapview/internal/manageddata/control"
 )
 
 func TestManagedDataTusRouteRejectsClientCreatedUploads(t *testing.T) {

@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/deployment"
-	refreshpipelinesqlite "github.com/Yacobolo/libredash/internal/refreshpipeline/sqlite"
-	"github.com/Yacobolo/libredash/internal/workspace"
+	"github.com/Yacobolo/leapview/internal/deployment"
+	refreshpipelinesqlite "github.com/Yacobolo/leapview/internal/refreshpipeline/sqlite"
+	"github.com/Yacobolo/leapview/internal/workspace"
 	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite"
 )
@@ -352,7 +352,7 @@ func TestCreateDeploymentRejectsServingStateFromAnotherProject(t *testing.T) {
 func testRepository(t *testing.T) (context.Context, *sql.DB, *Repository) {
 	t.Helper()
 	ctx := context.Background()
-	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "libredash.db")+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
+	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "leapview.db")+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
 	if err != nil {
 		t.Fatal(err)
 	}

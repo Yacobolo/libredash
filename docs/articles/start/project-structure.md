@@ -1,10 +1,10 @@
 # Project structure
 
-A LibreDash project separates project-global data inputs from workspace-owned analytical and presentation resources. The boundary is deliberate: connections and sources describe shared inputs, while each workspace owns the models and user experiences built from the inputs it is allowed to use.
+A LeapView project separates project-global data inputs from workspace-owned analytical and presentation resources. The boundary is deliberate: connections and sources describe shared inputs, while each workspace owns the models and user experiences built from the inputs it is allowed to use.
 
 ```text
 dashboards/
-  libredash.yaml
+  leapview.yaml
   connections/
     warehouse.yaml
   sources/
@@ -29,7 +29,7 @@ The names are conventions rather than hard-coded discovery paths. Include lists 
 The project manifest is the root of configuration discovery:
 
 ```yaml
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Project
 metadata:
   name: commerce
@@ -46,7 +46,7 @@ Paths are resolved relative to the containing resource. Keep include patterns na
 
 ## Project-global resources
 
-Connections define how LibreDash reaches physical data. Sources use a connection and provide stable logical names, paths, and field definitions. They are project-global because several workspaces may safely reuse the same governed input without copying credentials or physical location details.
+Connections define how LeapView reaches physical data. Sources use a connection and provide stable logical names, paths, and field definitions. They are project-global because several workspaces may safely reuse the same governed input without copying credentials or physical location details.
 
 Managed-data planning and revision activation also operate at project scope. A deployment can therefore pin a consistent set of shared input revisions while changing several workspaces atomically.
 
@@ -72,7 +72,7 @@ Use lower-case, stable names and avoid encoding environment names in resource ID
 Validate from the project root after moving files or changing include patterns:
 
 ```sh
-go run ./cmd/libredash validate --project dashboards/libredash.yaml
+go run ./cmd/leapview validate --project dashboards/leapview.yaml
 ```
 
 Validation catches duplicate resources, missing includes, invalid references, unsupported fields, and other contract failures before deployment. The generated [Project configuration](/docs/config/project) and [Workspace configuration](/docs/config/workspace) pages remain the source of truth for exact fields.

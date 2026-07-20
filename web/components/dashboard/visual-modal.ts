@@ -39,7 +39,7 @@ class VisualModal extends LitElement {
 
   static styles = css`
     :host {
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
       font-family: var(--fontStack-system);
     }
 
@@ -49,7 +49,7 @@ class VisualModal extends LitElement {
       z-index: var(--zIndex-modal);
       display: grid;
       place-items: center;
-      background: var(--ld-modal-backdrop);
+      background: var(--lv-modal-backdrop);
       padding: var(--base-size-28);
     }
 
@@ -59,9 +59,9 @@ class VisualModal extends LitElement {
       max-height: min(760px, calc(100vh - 56px));
       min-height: 420px;
       grid-template-rows: auto minmax(0, 1fr);
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-panel);
-      background: var(--ld-bg-overlay);
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-panel);
+      background: var(--lv-bg-overlay);
       box-shadow: var(--shadow-floating-large);
       overflow: hidden;
     }
@@ -73,7 +73,7 @@ class VisualModal extends LitElement {
       max-height: calc(100vh - 56px);
       min-height: min(520px, calc(100vh - 56px));
       grid-template-rows: minmax(0, 1fr);
-      background: var(--ld-chart-surface);
+      background: var(--lv-chart-surface);
     }
 
     header {
@@ -81,9 +81,9 @@ class VisualModal extends LitElement {
       min-width: 0;
       align-items: center;
       justify-content: space-between;
-      gap: var(--ld-space-lg);
-      border-bottom: var(--ld-border-default);
-      padding: var(--ld-space-md) var(--ld-space-lg);
+      gap: var(--lv-space-lg);
+      border-bottom: var(--lv-border-default);
+      padding: var(--lv-space-md) var(--lv-space-lg);
     }
 
     .title {
@@ -92,10 +92,10 @@ class VisualModal extends LitElement {
 
     .eyebrow {
       margin: 0 0 var(--borderRadius-small);
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-strong);
-      line-height: var(--ld-line-height-none);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-strong);
+      line-height: var(--lv-line-height-none);
       text-transform: uppercase;
     }
 
@@ -104,29 +104,29 @@ class VisualModal extends LitElement {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: var(--ld-font-size-body-lg);
-      font-weight: var(--ld-font-weight-strong);
-      line-height: var(--ld-line-height-compact);
+      font-size: var(--lv-font-size-body-lg);
+      font-weight: var(--lv-font-weight-strong);
+      line-height: var(--lv-line-height-compact);
     }
 
     .actions {
       display: flex;
       flex: 0 0 auto;
       align-items: center;
-      gap: var(--ld-space-sm);
+      gap: var(--lv-space-sm);
     }
 
     button {
-      min-height: var(--ld-control-small);
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-control);
-      color: var(--ld-fg-default);
+      min-height: var(--lv-control-small);
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-control);
+      color: var(--lv-fg-default);
       cursor: pointer;
-      padding: 0 var(--ld-space-md);
+      padding: 0 var(--lv-space-md);
       font: inherit;
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
     }
 
     button:hover,
@@ -136,18 +136,18 @@ class VisualModal extends LitElement {
     }
 
     .close {
-      width: calc(var(--ld-control-small) + var(--base-size-2));
+      width: calc(var(--lv-control-small) + var(--base-size-2));
       padding: 0;
     }
 
     .focus-close {
       position: absolute;
-      top: var(--ld-space-md);
-      right: var(--ld-space-md);
+      top: var(--lv-space-md);
+      right: var(--lv-space-md);
       z-index: var(--zIndex-popover);
       display: grid;
       place-items: center;
-      background: var(--ld-bg-overlay);
+      background: var(--lv-bg-overlay);
       box-shadow: var(--shadow-floating-small);
     }
 
@@ -159,7 +159,7 @@ class VisualModal extends LitElement {
     .body {
       min-height: 0;
       overflow: hidden;
-      background: var(--ld-chart-surface);
+      background: var(--lv-chart-surface);
     }
 
     .focus-slot {
@@ -168,7 +168,7 @@ class VisualModal extends LitElement {
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background: var(--ld-chart-surface);
+      background: var(--lv-chart-surface);
     }
 
     .focus-slot > * {
@@ -199,11 +199,11 @@ class VisualModal extends LitElement {
     }
 
     .data-summary {
-      border-bottom: var(--ld-border-default);
-      color: var(--ld-fg-muted);
-      padding: var(--ld-space-md) var(--ld-space-lg);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
+      border-bottom: var(--lv-border-default);
+      color: var(--lv-fg-muted);
+      padding: var(--lv-space-md) var(--lv-space-lg);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
     }
 
     .data-scroll {
@@ -215,8 +215,8 @@ class VisualModal extends LitElement {
       display: grid;
       height: 100%;
       place-items: center;
-      color: var(--ld-fg-muted);
-      font-weight: var(--ld-font-weight-strong);
+      color: var(--lv-fg-muted);
+      font-weight: var(--lv-font-weight-strong);
     }
 
     .notice {
@@ -224,25 +224,25 @@ class VisualModal extends LitElement {
       right: calc(var(--base-size-16) + var(--base-size-2));
       bottom: calc(var(--base-size-48) + var(--base-size-2));
       z-index: var(--zIndex-popover);
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-full);
-      background: var(--ld-bg-overlay);
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-full);
+      background: var(--lv-bg-overlay);
       box-shadow: var(--shadow-floating-small);
-      color: var(--ld-fg-default);
-      padding: var(--ld-space-md) var(--ld-space-lg);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-strong);
+      color: var(--lv-fg-default);
+      padding: var(--lv-space-md) var(--lv-space-lg);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-strong);
     }
   `
 
   connectedCallback(): void {
     super.connectedCallback()
-    window.addEventListener('ld-visual-action', this.handleVisualAction as EventListener)
+    window.addEventListener('lv-visual-action', this.handleVisualAction as EventListener)
     window.addEventListener('keydown', this.handleKeydown)
   }
 
   disconnectedCallback(): void {
-    window.removeEventListener('ld-visual-action', this.handleVisualAction as EventListener)
+    window.removeEventListener('lv-visual-action', this.handleVisualAction as EventListener)
     window.removeEventListener('keydown', this.handleKeydown)
     this.restoreFocusedVisual(false)
     super.disconnectedCallback()
@@ -298,7 +298,7 @@ class VisualModal extends LitElement {
       <div class="data-shell">
         <div class="data-summary">${rows.length.toLocaleString()} row${rows.length === 1 ? '' : 's'} from current visual data</div>
         <div class="data-scroll">
-          <ld-record-table
+          <lv-record-table
             .table=${{
               columns: columns.map((column) => ({
                 id: column.key,
@@ -309,7 +309,7 @@ class VisualModal extends LitElement {
               empty: 'No visual data',
               minWidth: `${Math.max(columns.length * 160, 520)}px`,
             }}
-          ></ld-record-table>
+          ></lv-record-table>
         </div>
       </div>
     `
@@ -521,4 +521,4 @@ function slug(value: string): string {
   return normalized || 'visual'
 }
 
-customElements.define('ld-visual-modal', VisualModal)
+customElements.define('lv-visual-modal', VisualModal)

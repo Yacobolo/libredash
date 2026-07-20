@@ -3,9 +3,9 @@ package app
 import (
 	"net/http"
 
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	"github.com/Yacobolo/libredash/internal/ui"
-	workspacehttp "github.com/Yacobolo/libredash/internal/workspace/http"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	"github.com/Yacobolo/leapview/internal/ui"
+	workspacehttp "github.com/Yacobolo/leapview/internal/workspace/http"
 )
 
 func (s *Server) workspaceHTTPHandler() workspacehttp.Handler {

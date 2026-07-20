@@ -44,7 +44,7 @@ func TestPublicDocsAndScriptsDoNotAdvertiseRemovedCaCSurfaces(t *testing.T) {
 	script := readRepoFile(t, root, filepath.Join("scripts", "agent_e2e.sh"))
 	for _, want := range []string{
 		"sales workspace",
-		"--project dashboards/libredash.yaml",
+		"--project dashboards/leapview.yaml",
 		"--auto-approve",
 	} {
 		if !strings.Contains(script, want) {
@@ -66,24 +66,24 @@ func TestPublicDocsAdvertiseOnlyProjectDeploy(t *testing.T) {
 	for _, name := range files {
 		body := readRepoFile(t, root, name)
 		for _, forbidden := range []string{
-			"libredash publish",
-			"libredash publishes",
-			"libredash data deploy",
+			"leapview publish",
+			"leapview publishes",
+			"leapview data deploy",
 			"`data deploy`",
 		} {
 			if strings.Contains(body, forbidden) {
 				t.Fatalf("%s still advertises removed command %q", name, forbidden)
 			}
 		}
-		if !strings.Contains(body, "libredash deploy") {
+		if !strings.Contains(body, "leapview deploy") {
 			t.Fatalf("%s does not document the project deploy command", name)
 		}
 	}
 
 	ingestion := readRepoFile(t, root, filepath.Join("docs", "data-ingestion.md"))
 	for _, want := range []string{
-		"libredash data plan",
-		"libredash data sync",
+		"leapview data plan",
+		"leapview data sync",
 		"--revision",
 	} {
 		if !strings.Contains(ingestion, want) {
@@ -95,13 +95,13 @@ func TestPublicDocsAdvertiseOnlyProjectDeploy(t *testing.T) {
 func TestDeveloperWorkflowsUseProjectDeploy(t *testing.T) {
 	root := filepath.Join("..", "..")
 	files := map[string][]string{
-		"Taskfile.yml": {"go run ./cmd/libredash deploy", `olist=$REVISION`},
-		filepath.Join("scripts", "dev-server.sh"): {"go run ./cmd/libredash deploy", `$connection=$revision`},
+		"Taskfile.yml": {"go run ./cmd/leapview deploy", `olist=$REVISION`},
+		filepath.Join("scripts", "dev-server.sh"): {"go run ./cmd/leapview deploy", `$connection=$revision`},
 		filepath.Join("scripts", "agent_e2e.sh"):  {`"$BIN" deploy`, `olist=$REVISION`},
 	}
 	for name, required := range files {
 		body := readRepoFile(t, root, name)
-		for _, forbidden := range []string{"data deploy", "libredash publish", `"$BIN" publish`} {
+		for _, forbidden := range []string{"data deploy", "leapview publish", `"$BIN" publish`} {
 			if strings.Contains(body, forbidden) {
 				t.Fatalf("%s still invokes removed command surface %q", name, forbidden)
 			}
@@ -117,16 +117,16 @@ func TestDeveloperWorkflowsUseProjectDeploy(t *testing.T) {
 func TestEnvExampleDoesNotEnablePlaceholderIdentityProviders(t *testing.T) {
 	envExample := readRepoFile(t, filepath.Join("..", ".."), ".env.example")
 	for _, name := range []string{
-		"LIBREDASH_AZURE_CLIENT_ID",
-		"LIBREDASH_AZURE_CLIENT_SECRET",
-		"LIBREDASH_AZURE_CALLBACK_URL",
-		"LIBREDASH_AZURE_TENANT",
-		"LIBREDASH_OIDC_PROVIDER_ID",
-		"LIBREDASH_OIDC_ISSUER_URL",
-		"LIBREDASH_OIDC_CLIENT_ID",
-		"LIBREDASH_OIDC_CLIENT_SECRET",
-		"LIBREDASH_OIDC_CALLBACK_URL",
-		"LIBREDASH_OIDC_SCOPES",
+		"LEAPVIEW_AZURE_CLIENT_ID",
+		"LEAPVIEW_AZURE_CLIENT_SECRET",
+		"LEAPVIEW_AZURE_CALLBACK_URL",
+		"LEAPVIEW_AZURE_TENANT",
+		"LEAPVIEW_OIDC_PROVIDER_ID",
+		"LEAPVIEW_OIDC_ISSUER_URL",
+		"LEAPVIEW_OIDC_CLIENT_ID",
+		"LEAPVIEW_OIDC_CLIENT_SECRET",
+		"LEAPVIEW_OIDC_CALLBACK_URL",
+		"LEAPVIEW_OIDC_SCOPES",
 	} {
 		if regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(name) + `=`).MatchString(envExample) {
 			t.Fatalf(".env.example enables optional provider variable %s by default", name)

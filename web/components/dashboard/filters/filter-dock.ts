@@ -7,7 +7,7 @@ import { lucideIcon } from '../../shared/lucide-icons'
 
 const emptyFilters: DashboardFilters = { controls: {}, selections: [] }
 
-class LibreDashFilterDock extends LitElement {
+class LeapViewFilterDock extends LitElement {
   @property({ converter: jsonAttribute<ReportFilterConfig[]>([]) }) config: ReportFilterConfig[] = []
   @property({ converter: jsonAttribute<DashboardFilters>(emptyFilters) }) filters: DashboardFilters = emptyFilters
   @property({ converter: jsonAttribute<Record<string, unknown>>({}) }) options: Record<string, unknown> = {}
@@ -20,29 +20,29 @@ class LibreDashFilterDock extends LitElement {
       display: block;
       min-width: 0;
       min-height: 0;
-      color: var(--ld-fg-default);
-      font-family: var(--ld-font-family-ui, var(--fontStack-system));
+      color: var(--lv-fg-default);
+      font-family: var(--lv-font-family-ui, var(--fontStack-system));
     }
 
     aside {
       display: grid;
-      width: var(--ld-dashboard-filter-width);
+      width: var(--lv-dashboard-filter-width);
       box-sizing: border-box;
       min-width: 0;
       min-height: 0;
       height: 100%;
       overflow: hidden;
-      border-left: var(--ld-border-default);
-      background: var(--ld-bg-panel-muted);
+      border-left: var(--lv-border-default);
+      background: var(--lv-bg-panel-muted);
       transition:
-        width var(--ld-duration-fast) var(--motion-easing-move),
-        background-color var(--ld-duration-fast) var(--motion-easing-move);
+        width var(--lv-duration-fast) var(--motion-easing-move),
+        background-color var(--lv-duration-fast) var(--motion-easing-move);
     }
 
     aside[data-open] {
       grid-template-rows: minmax(0, 1fr);
-      width: var(--ld-dashboard-filter-open-width);
-      background: var(--ld-bg-app);
+      width: var(--lv-dashboard-filter-open-width);
+      background: var(--lv-bg-app);
     }
 
     button {
@@ -64,17 +64,17 @@ class LibreDashFilterDock extends LitElement {
       gap: var(--base-size-8);
       border: 0;
       background: transparent;
-      color: var(--ld-fg-muted);
+      color: var(--lv-fg-muted);
       cursor: pointer;
       padding: var(--base-size-16) 0;
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-strong);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-strong);
       text-transform: uppercase;
     }
 
     .rail:hover,
     .rail:focus-visible {
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
       outline: 0;
     }
 
@@ -84,7 +84,7 @@ class LibreDashFilterDock extends LitElement {
 
     .rail span {
       writing-mode: vertical-rl;
-      line-height: var(--ld-line-height-none, 1);
+      line-height: var(--lv-line-height-none, 1);
     }
 
     .panel {
@@ -109,7 +109,7 @@ class LibreDashFilterDock extends LitElement {
       aside[data-open] {
         width: 100%;
         border-left: 0;
-        border-top: var(--ld-border-default);
+        border-top: var(--lv-border-default);
       }
 
       .rail span,
@@ -128,13 +128,13 @@ class LibreDashFilterDock extends LitElement {
           <span>Filters</span>
         </button>
         <div class="panel">
-          <ld-filter-panel
+          <lv-filter-panel
             .config=${this.config}
             .filters=${this.filters}
             .options=${this.options}
             .loading=${this.loading}
-            @ld-filters-close=${this.close}
-          ></ld-filter-panel>
+            @lv-filters-close=${this.close}
+          ></lv-filter-panel>
         </div>
       </aside>
     `
@@ -151,7 +151,7 @@ class LibreDashFilterDock extends LitElement {
   }
 }
 
-const filterDockStorageKey = 'libredash:filters-open'
+const filterDockStorageKey = 'leapview:filters-open'
 
 function storedFilterDockOpen(): boolean {
   try {
@@ -169,4 +169,4 @@ function storeFilterDockOpen(open: boolean): void {
   }
 }
 
-if (!customElements.get('ld-filter-dock')) customElements.define('ld-filter-dock', LibreDashFilterDock)
+if (!customElements.get('lv-filter-dock')) customElements.define('lv-filter-dock', LeapViewFilterDock)

@@ -17,7 +17,7 @@ func TestValidateMarkdownChecksYAMLSyntaxAndResourceSchemas(t *testing.T) {
 		"```",
 		"",
 		"```yaml",
-		"apiVersion: libredash.dev/v1",
+		"apiVersion: leapview.dev/v1",
 		"kind: Project",
 		"metadata:",
 		"  name: commerce",
@@ -49,7 +49,7 @@ filters:
     type: multi_select
 ~~~
 
-` + "```yaml\n" + `apiVersion: libredash.dev/v1
+` + "```yaml\n" + `apiVersion: leapview.dev/v1
 kind: Project
 metadata:
   name: commerce
@@ -63,7 +63,7 @@ spec:
 ` + "```\n\n```yaml\n" + `apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: libredash
+  name: leapview
 ` + "```\n"
 
 	if issues := ValidateMarkdown("docs/example.md", []byte(markdown)); len(issues) != 0 {
@@ -74,7 +74,7 @@ metadata:
 func TestValidateMarkdownAcceptsRefreshPipelineResources(t *testing.T) {
 	t.Parallel()
 
-	markdown := "```yaml\n" + `apiVersion: libredash.dev/v1
+	markdown := "```yaml\n" + `apiVersion: leapview.dev/v1
 kind: RefreshPipeline
 metadata:
   workspace: sales
@@ -97,7 +97,7 @@ func TestValidateMarkdownRejectsIncompleteResourceEnvelopesAndUnclosedFences(t *
 
 	markdown := `# Examples
 
-` + "```yaml\n" + `apiVersion: libredash.dev/v1
+` + "```yaml\n" + `apiVersion: leapview.dev/v1
 metadata:
   name: commerce
 ` + "```\n\n```yaml\nkey: value\n"

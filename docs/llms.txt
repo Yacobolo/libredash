@@ -1,4 +1,4 @@
-# LibreDash
+# LeapView
 
 > Dashboards-as-code BI with generated, machine-readable CLI, API, configuration, and visual documentation.
 
@@ -15,15 +15,15 @@ Focused slices are available at `/docs/cli/commands/{id}.json|md` and `/docs/api
 
 ### Start here
 
-- [What is LibreDash?](/docs/introduction): Understand the problems LibreDash solves and its code-native model.
+- [What is LeapView?](/docs/introduction): Understand the problems LeapView solves and its code-native model.
 - [Installation](/docs/installation): Pull the public image locally or prepare a durable production instance.
-- [Get started with LibreDash](/docs/getting-started): Bootstrap, edit, and run the included project from a source checkout.
+- [Get started with LeapView](/docs/getting-started): Bootstrap, edit, and run the included project from a source checkout.
 - [Build your first dashboard](/docs/first-dashboard): Change a model and dashboard and deploy it locally.
 - [Project structure](/docs/project-structure): Learn how project-global resources and workspace resources are organized.
 
 ### Core concepts
 
-- [Core concepts](/docs/concepts): A map of the concepts used throughout LibreDash.
+- [Core concepts](/docs/concepts): A map of the concepts used throughout LeapView.
 - [Projects, workspaces, and environments](/docs/concepts/projects-workspaces-environments): Understand ownership, isolation, and deployment scope.
 - [Connections and sources](/docs/concepts/connections-sources): Separate physical data access from reusable logical source definitions.
 - [Model tables](/docs/concepts/model-tables): Materialize reusable analytical tables from source data.
@@ -53,7 +53,7 @@ Focused slices are available at `/docs/cli/commands/{id}.json|md` and `/docs/api
 
 ### Deploy and operate
 
-- [Deploy and operate LibreDash](/docs/guides/operate): Understand the production delivery and operations workflow.
+- [Deploy and operate LeapView](/docs/guides/operate): Understand the production delivery and operations workflow.
 - [Validate, plan, and deploy](/docs/cli/validate-deploy): Use the standard atomic delivery workflow.
 - [Targets and environments](/docs/cli/targets): Keep local, staging, and production changes explicit.
 - [Production configuration](/docs/guides/operate/production-configuration): Configure secrets, storage, auth, and runtime boundaries.
@@ -65,7 +65,7 @@ Focused slices are available at `/docs/cli/commands/{id}.json|md` and `/docs/api
 
 ### Security and administration
 
-- [Authentication and authorization](/docs/enterprise-auth): Understand LibreDash identity and authorization boundaries.
+- [Authentication and authorization](/docs/enterprise-auth): Understand LeapView identity and authorization boundaries.
 - [Local authentication](/docs/security/local-auth): Configure self-hosted and break-glass local users.
 - [OIDC](/docs/security/oidc): Connect an enterprise identity provider for browser login.
 - [SCIM provisioning](/docs/security/scim): Provision users, groups, and memberships from a directory.
@@ -75,14 +75,14 @@ Focused slices are available at `/docs/cli/commands/{id}.json|md` and `/docs/api
 
 ### Integrate
 
-- [Integrate with LibreDash](/docs/integrate): Choose between CLI, API, and agent integration surfaces.
+- [Integrate with LeapView](/docs/integrate): Choose between CLI, API, and agent integration surfaces.
 - [CLI overview](/docs/cli): Install, authenticate, validate, plan, and deploy with the CLI.
 - [Install and authenticate the CLI](/docs/cli/authentication): Configure targets and use API tokens safely.
 - [API quickstart](/docs/guides/integrate/api-quickstart): Authenticate and call the headless API.
 - [API conventions](/docs/guides/integrate/api-conventions): Handle authentication, errors, and pagination consistently.
 - [Headless BI queries](/docs/guides/integrate/headless-bi): Query dashboards and semantic models through stable contracts.
 - [Agent integrations](/docs/guides/integrate/agent): Use global conversations and the shared governed tool catalog.
-- [Connect an MCP host](/docs/guides/integrate/mcp): Connect Claude and other MCP hosts to a LibreDash deployment over OAuth.
+- [Connect an MCP host](/docs/guides/integrate/mcp): Connect Claude and other MCP hosts to a LeapView deployment over OAuth.
 - [Automation and CI](/docs/cli/automation): Run validation and deployments safely in CI.
 
 ### Reference
@@ -110,29 +110,29 @@ Focused slices are available at `/docs/cli/commands/{id}.json|md` and `/docs/api
 
 #### CLI commands
 
-- [CLI command reference](/docs/cli/reference): Browse every generated LibreDash command.
-- [libredash admin](/docs/cli/admin): Administrative utilities
-- [libredash agent](/docs/cli/agent): Use the LibreDash read-only agent
-- [libredash api](/docs/cli/api): Call any generated LibreDash API operation
-- [libredash config](/docs/cli/config): Inspect and validate process-global configuration
-- [libredash dashboards](/docs/cli/dashboards): Inspect dashboards
-- [libredash data](/docs/cli/data): Manage project-global data revisions
-- [libredash deploy](/docs/cli/deploy): Atomically deploy a configuration-as-code project
-- [libredash healthcheck](/docs/cli/healthcheck): Check the local LibreDash readiness endpoint
-- [libredash login](/docs/cli/login): Store a LibreDash API token for a target
-- [libredash plan](/docs/cli/plan): Emit a deterministic configuration-as-code plan
-- [libredash schema](/docs/cli/schema): Inspect LibreDash YAML schemas
-- [libredash search](/docs/cli/search): Search workspace assets
-- [libredash semantic-models](/docs/cli/semantic-models): Inspect semantic models
-- [libredash serve](/docs/cli/serve): Run the LibreDash HTTP server
-- [libredash validate](/docs/cli/validate): Validate a configuration-as-code project
-- [libredash workspaces](/docs/cli/workspaces): Inspect workspaces
+- [CLI command reference](/docs/cli/reference): Browse every generated LeapView command.
+- [leapview admin](/docs/cli/admin): Administrative utilities
+- [leapview agent](/docs/cli/agent): Use the LeapView read-only agent
+- [leapview api](/docs/cli/api): Call any generated LeapView API operation
+- [leapview config](/docs/cli/config): Inspect and validate process-global configuration
+- [leapview dashboards](/docs/cli/dashboards): Inspect dashboards
+- [leapview data](/docs/cli/data): Manage project-global data revisions
+- [leapview deploy](/docs/cli/deploy): Atomically deploy a configuration-as-code project
+- [leapview healthcheck](/docs/cli/healthcheck): Check the local LeapView readiness endpoint
+- [leapview login](/docs/cli/login): Store a LeapView API token for a target
+- [leapview plan](/docs/cli/plan): Emit a deterministic configuration-as-code plan
+- [leapview schema](/docs/cli/schema): Inspect LeapView YAML schemas
+- [leapview search](/docs/cli/search): Search workspace assets
+- [leapview semantic-models](/docs/cli/semantic-models): Inspect semantic models
+- [leapview serve](/docs/cli/serve): Run the LeapView HTTP server
+- [leapview validate](/docs/cli/validate): Validate a configuration-as-code project
+- [leapview workspaces](/docs/cli/workspaces): Inspect workspaces
 
 #### API reference
 
 - [API reference](/docs/api): Browse the generated headless API contract.
 - [System](/docs/api/system): API capabilities and protocol discovery.
-- [Instance](/docs/api/instance): The immutable serving identity of this LibreDash installation.
+- [Instance](/docs/api/instance): The immutable serving identity of this LeapView installation.
 - [Projects](/docs/api/projects): Read-only project registry.
 - [Releases](/docs/api/releases): Immutable project releases and artifacts.
 - [Current User](/docs/api/current-user): Current principal, sessions, tokens, and privileges.
@@ -148,7 +148,7 @@ Focused slices are available at `/docs/cli/commands/{id}.json|md` and `/docs/api
 
 #### Visuals
 
-- [Visual types](/docs/visuals/overview): Choose from every supported LibreDash visual type.
+- [Visual types](/docs/visuals/overview): Choose from every supported LeapView visual type.
 - [Line chart](/docs/visuals/line): Configuration and query shape for the Line chart visual.
 - [Area chart](/docs/visuals/area): Configuration and query shape for the Area chart visual.
 - [Bar chart](/docs/visuals/bar): Configuration and query shape for the Bar chart visual.
@@ -189,7 +189,7 @@ Focused slices are available at `/docs/cli/commands/{id}.json|md` and `/docs/api
 
 #### Contributing
 
-- [Repository and development workflow](/docs/contributing/repository): Work effectively in the LibreDash monorepo.
+- [Repository and development workflow](/docs/contributing/repository): Work effectively in the LeapView monorepo.
 - [Add a visual type](/docs/contributing/visual): Extend contracts, rendering, documentation, and tests together.
 - [Add a configuration resource](/docs/contributing/configuration): Extend schemas, generated references, and validation together.
 - [Write documentation](/docs/contributing/documentation): Author procedural guides and accessible diagrams that remain valid with the product.

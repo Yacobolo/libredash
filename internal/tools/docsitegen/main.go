@@ -13,7 +13,7 @@ import (
 	"regexp"
 	"strings"
 
-	docsearch "github.com/Yacobolo/libredash/internal/site/search/sqlite"
+	docsearch "github.com/Yacobolo/leapview/internal/site/search/sqlite"
 	"gopkg.in/yaml.v3"
 )
 
@@ -196,7 +196,7 @@ func generate(navigationPath, catalogPath, searchPath string) error {
 }
 
 func checkGenerated(navigationPath, catalogPath, searchPath string) error {
-	temporary, err := os.MkdirTemp("", "libredash-docsite-check-*")
+	temporary, err := os.MkdirTemp("", "leapview-docsite-check-*")
 	if err != nil {
 		return fmt.Errorf("create temporary directory: %w", err)
 	}
@@ -232,7 +232,7 @@ func checkGenerated(navigationPath, catalogPath, searchPath string) error {
 
 func renderLLMs(catalog generatedCatalog) string {
 	var out strings.Builder
-	out.WriteString("# LibreDash\n\n")
+	out.WriteString("# LeapView\n\n")
 	out.WriteString("> Dashboards-as-code BI with generated, machine-readable CLI, API, configuration, and visual documentation.\n\n")
 	out.WriteString("## Agent entry points\n\n")
 	out.WriteString("- [Documentation MCP](/mcp): read-only Streamable HTTP MCP with docs_catalog, docs_search, and docs_read tools.\n")

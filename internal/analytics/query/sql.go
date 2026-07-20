@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 )
 
 var identifierPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)

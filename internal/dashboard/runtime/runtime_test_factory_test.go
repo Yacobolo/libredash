@@ -6,10 +6,10 @@ import (
 	"sync"
 	"time"
 
-	analyticsduckdb "github.com/Yacobolo/libredash/internal/analytics/duckdb"
-	materializeruntime "github.com/Yacobolo/libredash/internal/analytics/materialize"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
-	"github.com/Yacobolo/libredash/internal/dataquery"
+	analyticsduckdb "github.com/Yacobolo/leapview/internal/analytics/duckdb"
+	materializeruntime "github.com/Yacobolo/leapview/internal/analytics/materialize"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	"github.com/Yacobolo/leapview/internal/dataquery"
 )
 
 type testDataRuntimeFactory struct{}

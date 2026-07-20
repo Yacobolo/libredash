@@ -88,7 +88,7 @@ class StorageExplorer extends LitElement {
       <style>
         ${storageExplorerStyles}
       </style>
-      <div class="storage-explorer" @ld-record-table-action=${this.handleRecordTableAction}>
+      <div class="storage-explorer" @lv-record-table-action=${this.handleRecordTableAction}>
         <div class="storage-explorer-header">
           <div class="storage-heading">
             <span class="storage-logo" aria-hidden="true">${lucideIcon(Database, { size: 18 })}</span>
@@ -260,7 +260,7 @@ class StorageExplorer extends LitElement {
                   <h3>Active serving states</h3>
                 </div>
                 <div class="storage-column-table-wrap">
-                  <ld-record-table .table=${this.servingStatesTable(storage.servingStates ?? [])}></ld-record-table>
+                  <lv-record-table .table=${this.servingStatesTable(storage.servingStates ?? [])}></lv-record-table>
                 </div>
               </div>
             `
@@ -271,7 +271,7 @@ class StorageExplorer extends LitElement {
                     <h3>Snapshots</h3>
                   </div>
                   <div class="storage-column-table-wrap">
-                    <ld-record-table .table=${this.snapshotsTable(storage.snapshots ?? [])}></ld-record-table>
+                    <lv-record-table .table=${this.snapshotsTable(storage.snapshots ?? [])}></lv-record-table>
                   </div>
                 </div>
               `
@@ -281,7 +281,7 @@ class StorageExplorer extends LitElement {
                     <h3>Schemas</h3>
                   </div>
                   <div class="storage-column-table-wrap">
-                    <ld-record-table .table=${this.databaseSchemasTable(database)}></ld-record-table>
+                    <lv-record-table .table=${this.databaseSchemasTable(database)}></lv-record-table>
                   </div>
                 </div>
               `}
@@ -331,7 +331,7 @@ class StorageExplorer extends LitElement {
           <h3>Tables</h3>
         </div>
         <div class="storage-column-table-wrap">
-          <ld-record-table .table=${this.schemaTablesTable(schema)}></ld-record-table>
+          <lv-record-table .table=${this.schemaTablesTable(schema)}></lv-record-table>
         </div>
       </div>
     `
@@ -406,7 +406,7 @@ class StorageExplorer extends LitElement {
                   <h3>Data files</h3>
                 </div>
                 <div class="storage-column-table-wrap">
-                  <ld-record-table .table=${this.tableFilesTable(table)}></ld-record-table>
+                  <lv-record-table .table=${this.tableFilesTable(table)}></lv-record-table>
                 </div>
               </div>
             `
@@ -417,7 +417,7 @@ class StorageExplorer extends LitElement {
                     <h3>History</h3>
                   </div>
                   <div class="storage-column-table-wrap">
-                    <ld-record-table .table=${this.tableHistoryTable(table)}></ld-record-table>
+                    <lv-record-table .table=${this.tableHistoryTable(table)}></lv-record-table>
                   </div>
                 </div>
               `
@@ -430,7 +430,7 @@ class StorageExplorer extends LitElement {
                     ? html`<p class="storage-empty">No column metadata available.</p>`
                     : html`
                       <div class="storage-column-table-wrap">
-                        <ld-record-table .table=${this.tableColumnsTable(table)}></ld-record-table>
+                        <lv-record-table .table=${this.tableColumnsTable(table)}></lv-record-table>
                       </div>
                     `}
                 </div>
@@ -676,7 +676,7 @@ class StorageExplorer extends LitElement {
     this.selectedSchema = null
     this.localSelectedTable = table
     this.tableDetailTab = 'schema'
-    this.dispatchEvent(new CustomEvent('ld-storage-table-select', {
+    this.dispatchEvent(new CustomEvent('lv-storage-table-select', {
       bubbles: true,
       composed: true,
       detail: {
@@ -867,7 +867,7 @@ const storageExplorerStyles = `
     overflow: hidden;
     border: 0;
     border-radius: 0;
-    background: var(--ld-bg-panel);
+    background: var(--lv-bg-panel);
   }
 
   .storage-explorer-header {
@@ -877,9 +877,9 @@ const storageExplorerStyles = `
     grid-template-columns: minmax(0, 1fr) auto;
     gap: var(--base-size-16, 1rem);
     align-items: center;
-    border-bottom: var(--ld-border-muted);
+    border-bottom: var(--lv-border-muted);
     padding: var(--base-size-12) var(--base-size-16);
-    background: var(--ld-bg-panel);
+    background: var(--lv-bg-panel);
   }
 
   .storage-browser,
@@ -893,8 +893,8 @@ const storageExplorerStyles = `
     display: grid;
     grid-template-rows: auto minmax(0, 1fr);
     gap: 0;
-    border-right: var(--ld-border-muted);
-    background: var(--ld-bg-panel);
+    border-right: var(--lv-border-muted);
+    background: var(--lv-bg-panel);
   }
 
   .storage-heading {
@@ -921,26 +921,26 @@ const storageExplorerStyles = `
   }
 
   h2 {
-    color: var(--ld-fg-default);
-    font-size: var(--ld-font-size-title-sm);
-    line-height: var(--ld-line-height-tight, 1.2);
-    font-weight: var(--ld-font-weight-strong, 600);
+    color: var(--lv-fg-default);
+    font-size: var(--lv-font-size-title-sm);
+    line-height: var(--lv-line-height-tight, 1.2);
+    font-weight: var(--lv-font-weight-strong, 600);
   }
 
   .storage-heading p {
     overflow: hidden;
-    color: var(--ld-fg-muted);
+    color: var(--lv-fg-muted);
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: var(--ld-font-size-caption);
-    font-weight: var(--ld-font-weight-medium, 500);
-    line-height: var(--ld-line-height-tight, 1.2);
+    font-size: var(--lv-font-size-caption);
+    font-weight: var(--lv-font-weight-medium, 500);
+    line-height: var(--lv-line-height-tight, 1.2);
   }
 
   .storage-heading p span {
-    color: var(--ld-fg-default);
+    color: var(--lv-fg-default);
     font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
-    font-weight: var(--ld-font-weight-medium, 500);
+    font-weight: var(--lv-font-weight-medium, 500);
   }
 
   .storage-summary {
@@ -954,12 +954,12 @@ const storageExplorerStyles = `
     display: grid;
     gap: 0.125rem;
     min-width: 0;
-    border-left: var(--ld-border-muted);
+    border-left: var(--lv-border-muted);
     padding-left: var(--base-size-12, 0.75rem);
   }
 
   .storage-summary span {
-    color: var(--ld-fg-muted);
+    color: var(--lv-fg-muted);
     font-size: 0.6875rem;
     font-weight: 650;
     line-height: 1.2;
@@ -968,7 +968,7 @@ const storageExplorerStyles = `
 
   .storage-summary strong {
     overflow: hidden;
-    color: var(--ld-fg-default);
+    color: var(--lv-fg-default);
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 0.8125rem;
@@ -976,7 +976,7 @@ const storageExplorerStyles = `
   }
 
   h3 {
-    color: var(--ld-fg-default);
+    color: var(--lv-fg-default);
     font-size: 0.8125rem;
     line-height: 1.3;
     font-weight: 700;
@@ -987,10 +987,10 @@ const storageExplorerStyles = `
     width: 1.875rem;
     height: 1.875rem;
     place-items: center;
-    border: var(--ld-border-muted);
-    border-radius: var(--ld-radius-small);
-    color: var(--ld-fg-success);
-    background: var(--ld-bg-panel);
+    border: var(--lv-border-muted);
+    border-radius: var(--lv-radius-small);
+    color: var(--lv-fg-success);
+    background: var(--lv-bg-panel);
   }
 
   .storage-search {
@@ -1000,8 +1000,8 @@ const storageExplorerStyles = `
   }
 
   .storage-browser-menu {
-    border-bottom: var(--ld-border-muted);
-    background: var(--ld-bg-panel);
+    border-bottom: var(--lv-border-muted);
+    background: var(--lv-bg-panel);
     padding: var(--base-size-4) var(--base-size-8);
   }
 
@@ -1013,7 +1013,7 @@ const storageExplorerStyles = `
     width: 1rem;
     height: 1rem;
     place-items: center;
-    color: var(--ld-fg-muted);
+    color: var(--lv-fg-muted);
     transform: translateY(-50%);
   }
 
@@ -1024,22 +1024,22 @@ const storageExplorerStyles = `
     border-radius: 0;
     background: transparent;
     padding: 0 0.625rem 0 2rem;
-    color: var(--ld-fg-default);
+    color: var(--lv-fg-default);
     font: inherit;
     font-size: 0.875rem;
     outline: 0;
   }
 
   .storage-search input:focus {
-    background: var(--ld-bg-control-hover);
+    background: var(--lv-bg-control-hover);
   }
 
   .storage-warnings {
     grid-area: warnings;
     display: grid;
     gap: var(--base-size-8);
-    border-bottom: var(--ld-border-muted);
-    background: var(--ld-bg-panel);
+    border-bottom: var(--lv-border-muted);
+    background: var(--lv-bg-panel);
     padding: var(--base-size-8) var(--base-size-12);
   }
 
@@ -1048,13 +1048,13 @@ const storageExplorerStyles = `
   }
 
   .storage-warning {
-    border: var(--ld-border-attention, var(--ld-border-muted));
-    border-radius: var(--ld-radius-default);
-    background: var(--ld-bg-attention-muted, var(--ld-bg-panel-muted));
+    border: var(--lv-border-attention, var(--lv-border-muted));
+    border-radius: var(--lv-radius-default);
+    background: var(--lv-bg-attention-muted, var(--lv-bg-panel-muted));
     padding: var(--base-size-8) var(--base-size-12);
-    color: var(--ld-fg-default);
-    font-size: var(--ld-font-size-body-sm);
-    font-weight: var(--ld-font-weight-medium, 500);
+    color: var(--lv-fg-default);
+    font-size: var(--lv-font-size-body-sm);
+    font-weight: var(--lv-font-weight-medium, 500);
   }
 
   .storage-tree {
@@ -1077,10 +1077,10 @@ const storageExplorerStyles = `
     grid-template-columns: 0.875rem 1rem minmax(0, 1fr) auto;
     align-items: center;
     gap: 0.45rem;
-    border-radius: var(--ld-radius-small);
+    border-radius: var(--lv-radius-small);
     padding: 0 0.5rem;
     cursor: pointer;
-    color: var(--ld-fg-default);
+    color: var(--lv-fg-default);
     font-size: 0.875rem;
     font-weight: 750;
     list-style: none;
@@ -1092,7 +1092,7 @@ const storageExplorerStyles = `
 
   summary:hover,
   summary:focus-visible {
-    background: var(--ld-bg-hover);
+    background: var(--lv-bg-hover);
     outline: 0;
   }
 
@@ -1109,8 +1109,8 @@ const storageExplorerStyles = `
   }
 
   .storage-schema > summary.is-selected-schema {
-    background: var(--ld-bg-accent-muted);
-    color: var(--ld-fg-default);
+    background: var(--lv-bg-accent-muted);
+    color: var(--lv-fg-default);
   }
 
   summary span:not(.storage-chevron):not(.storage-node-icon) {
@@ -1120,10 +1120,10 @@ const storageExplorerStyles = `
   }
 
   summary em {
-    border-radius: var(--ld-radius-small);
-    background: var(--ld-bg-panel-muted);
+    border-radius: var(--lv-radius-small);
+    background: var(--lv-bg-panel-muted);
     padding: 0.125rem 0.375rem;
-    color: var(--ld-fg-muted);
+    color: var(--lv-fg-muted);
     font-size: 0.6875rem;
     font-style: normal;
     font-weight: 750;
@@ -1134,7 +1134,7 @@ const storageExplorerStyles = `
   .storage-node-icon {
     display: grid;
     place-items: center;
-    color: var(--ld-fg-muted);
+    color: var(--lv-fg-muted);
   }
 
   details[open] > summary .storage-chevron {
@@ -1155,17 +1155,17 @@ const storageExplorerStyles = `
 
   .storage-table-button {
     display: grid;
-    min-height: var(--ld-button-height-sm, var(--control-small-size));
+    min-height: var(--lv-button-height-sm, var(--control-small-size));
     width: 100%;
     grid-template-columns: 1rem minmax(0, 1fr) max-content;
     align-items: center;
     gap: 0.45rem;
-    border: var(--borderWidth-default, var(--ld-border-width)) solid var(--ld-button-invisible-border-rest, var(--control-transparent-borderColor-rest, var(--ld-line-muted)));
-    border-left: var(--borderWidth-thick, var(--ld-border-width-focus)) solid var(--ld-button-invisible-border-rest, var(--control-transparent-borderColor-rest, var(--ld-line-muted)));
-    border-radius: var(--ld-radius-small);
-    background: var(--ld-button-invisible-bg-rest, var(--control-transparent-bgColor-rest, var(--ld-bg-panel)));
-    padding: 0 var(--ld-button-padding-inline-xs, var(--control-xsmall-paddingInline-normal));
-    color: var(--ld-button-invisible-fg-rest, var(--ld-fg-default));
+    border: var(--borderWidth-default, var(--lv-border-width)) solid var(--lv-button-invisible-border-rest, var(--control-transparent-borderColor-rest, var(--lv-line-muted)));
+    border-left: var(--borderWidth-thick, var(--lv-border-width-focus)) solid var(--lv-button-invisible-border-rest, var(--control-transparent-borderColor-rest, var(--lv-line-muted)));
+    border-radius: var(--lv-radius-small);
+    background: var(--lv-button-invisible-bg-rest, var(--control-transparent-bgColor-rest, var(--lv-bg-panel)));
+    padding: 0 var(--lv-button-padding-inline-xs, var(--control-xsmall-paddingInline-normal));
+    color: var(--lv-button-invisible-fg-rest, var(--lv-fg-default));
     text-align: left;
     font: inherit;
     cursor: pointer;
@@ -1173,16 +1173,16 @@ const storageExplorerStyles = `
 
   .storage-table-button:hover,
   .storage-table-button:focus-visible {
-    border-color: var(--ld-button-invisible-border-hover, var(--control-transparent-borderColor-hover, var(--ld-line-muted)));
-    background: var(--ld-button-invisible-bg-hover, var(--control-transparent-bgColor-hover, var(--ld-bg-control-hover)));
-    outline: var(--focus-outline, var(--ld-border-default));
-    outline-color: var(--borderColor-accent-emphasis, var(--ld-line-accent));
+    border-color: var(--lv-button-invisible-border-hover, var(--control-transparent-borderColor-hover, var(--lv-line-muted)));
+    background: var(--lv-button-invisible-bg-hover, var(--control-transparent-bgColor-hover, var(--lv-bg-control-hover)));
+    outline: var(--focus-outline, var(--lv-border-default));
+    outline-color: var(--borderColor-accent-emphasis, var(--lv-line-accent));
     outline-offset: var(--focus-outline-offset, var(--base-size-2));
   }
 
   .storage-table-button.is-selected {
-    border-left-color: var(--ld-line-accent);
-    background: var(--ld-bg-accent-muted);
+    border-left-color: var(--lv-line-accent);
+    background: var(--lv-bg-accent-muted);
   }
 
   .storage-table-icon {
@@ -1190,11 +1190,11 @@ const storageExplorerStyles = `
     width: 1rem;
     height: 1rem;
     place-items: center;
-    color: var(--ld-fg-muted);
+    color: var(--lv-fg-muted);
   }
 
   .storage-table-icon-view {
-    color: var(--ld-fg-link);
+    color: var(--lv-fg-link);
   }
 
   .storage-table-button span {
@@ -1222,10 +1222,10 @@ const storageExplorerStyles = `
   .storage-table-size {
     overflow: hidden;
     max-width: 4.75rem;
-    color: var(--ld-fg-muted);
+    color: var(--lv-fg-muted);
     font-size: 0.75rem;
     font-variant-numeric: tabular-nums;
-    font-weight: var(--ld-font-weight-medium, 500);
+    font-weight: var(--lv-font-weight-medium, 500);
     text-align: right;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1237,12 +1237,12 @@ const storageExplorerStyles = `
     grid-template-rows: auto auto minmax(0, 1fr);
     gap: 0;
     overflow: hidden;
-    background: var(--ld-bg-panel);
+    background: var(--lv-bg-panel);
   }
 
   .storage-detail-header {
     min-height: 3rem;
-    border-bottom: var(--ld-border-muted);
+    border-bottom: var(--lv-border-muted);
     padding: 0.5rem 0.75rem;
   }
 
@@ -1251,7 +1251,7 @@ const storageExplorerStyles = `
     min-width: 0;
     align-items: center;
     gap: 0.375rem;
-    color: var(--ld-fg-default);
+    color: var(--lv-fg-default);
     font-size: 1rem;
     font-weight: 750;
   }
@@ -1263,16 +1263,16 @@ const storageExplorerStyles = `
   .storage-detail-header nav > span:not(.storage-breadcrumb-separator):not(.storage-breadcrumb-current),
   .storage-breadcrumb-button {
     overflow: hidden;
-    color: var(--ld-fg-muted);
+    color: var(--lv-fg-muted);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .storage-breadcrumb-button {
     min-width: 0;
-    border: var(--borderWidth-default, var(--ld-border-width)) solid var(--ld-button-invisible-border-rest, var(--control-transparent-borderColor-rest, var(--ld-line-muted)));
-    border-radius: var(--ld-radius-tight);
-    background: var(--ld-button-invisible-bg-rest, var(--control-transparent-bgColor-rest, var(--ld-bg-panel)));
+    border: var(--borderWidth-default, var(--lv-border-width)) solid var(--lv-button-invisible-border-rest, var(--control-transparent-borderColor-rest, var(--lv-line-muted)));
+    border-radius: var(--lv-radius-tight);
+    background: var(--lv-button-invisible-bg-rest, var(--control-transparent-bgColor-rest, var(--lv-bg-panel)));
     padding: 0;
     font: inherit;
     font-weight: inherit;
@@ -1282,11 +1282,11 @@ const storageExplorerStyles = `
 
   .storage-breadcrumb-button:hover,
   .storage-breadcrumb-button:focus-visible {
-    border-color: var(--ld-button-invisible-border-hover, var(--control-transparent-borderColor-hover, var(--ld-line-muted)));
-    background: var(--ld-button-invisible-bg-hover, var(--control-transparent-bgColor-hover, var(--ld-bg-panel-muted)));
-    color: var(--ld-fg-link);
-    outline: var(--focus-outline, var(--ld-border-default));
-    outline-color: var(--borderColor-accent-emphasis, var(--ld-line-accent));
+    border-color: var(--lv-button-invisible-border-hover, var(--control-transparent-borderColor-hover, var(--lv-line-muted)));
+    background: var(--lv-button-invisible-bg-hover, var(--control-transparent-bgColor-hover, var(--lv-bg-panel-muted)));
+    color: var(--lv-fg-link);
+    outline: var(--focus-outline, var(--lv-border-default));
+    outline-color: var(--borderColor-accent-emphasis, var(--lv-line-accent));
     outline-offset: var(--focus-outline-offset, var(--base-size-2));
     text-decoration: underline;
     text-underline-offset: 0.125rem;
@@ -1296,7 +1296,7 @@ const storageExplorerStyles = `
     display: grid;
     flex: none;
     place-items: center;
-    color: var(--ld-fg-muted);
+    color: var(--lv-fg-muted);
   }
 
   .storage-breadcrumb-current {
@@ -1311,7 +1311,7 @@ const storageExplorerStyles = `
     align-items: stretch;
     gap: 0.75rem 1.5rem;
     overflow: hidden;
-    border-bottom: var(--ld-border-muted);
+    border-bottom: var(--lv-border-muted);
     padding: 0.625rem 0.75rem;
   }
 
@@ -1345,7 +1345,7 @@ const storageExplorerStyles = `
     min-width: 0;
     gap: 0.25rem;
     overflow-x: auto;
-    border-bottom: var(--ld-border-muted);
+    border-bottom: var(--lv-border-muted);
     padding: 0.25rem 0.75rem 0;
   }
 
@@ -1359,7 +1359,7 @@ const storageExplorerStyles = `
     border-bottom: 2px solid transparent;
     background: transparent;
     padding: 0 0.5rem;
-    color: var(--ld-fg-muted);
+    color: var(--lv-fg-muted);
     font: inherit;
     font-size: 0.8125rem;
     font-weight: 700;
@@ -1368,20 +1368,20 @@ const storageExplorerStyles = `
 
   .storage-tab:hover,
   .storage-tab:focus-visible {
-    color: var(--ld-fg-default);
+    color: var(--lv-fg-default);
     outline: 0;
   }
 
   .storage-tab.is-active {
-    border-bottom-color: var(--ld-line-accent);
-    color: var(--ld-fg-default);
+    border-bottom-color: var(--lv-line-accent);
+    color: var(--lv-fg-default);
   }
 
   .storage-tab em {
-    border-radius: var(--ld-radius-small);
-    background: var(--ld-bg-panel-muted);
+    border-radius: var(--lv-radius-small);
+    background: var(--lv-bg-panel-muted);
     padding: 0.0625rem 0.3125rem;
-    color: var(--ld-fg-muted);
+    color: var(--lv-fg-muted);
     font-size: 0.6875rem;
     font-style: normal;
     font-weight: 750;
@@ -1395,7 +1395,7 @@ const storageExplorerStyles = `
   }
 
   dt {
-    color: var(--ld-fg-muted);
+    color: var(--lv-fg-muted);
     font-size: 0.6875rem;
     font-weight: 750;
     text-transform: uppercase;
@@ -1404,7 +1404,7 @@ const storageExplorerStyles = `
   dd {
     margin: 0;
     overflow: hidden;
-    color: var(--ld-fg-default);
+    color: var(--lv-fg-default);
     font-size: 0.8125rem;
     font-weight: 700;
     text-overflow: ellipsis;
@@ -1420,7 +1420,7 @@ const storageExplorerStyles = `
 
   .storage-columns-header {
     min-height: 2.125rem;
-    border-bottom: var(--ld-border-muted);
+    border-bottom: var(--lv-border-muted);
     padding: 0 0.75rem;
   }
 
@@ -1442,7 +1442,7 @@ const storageExplorerStyles = `
 
   th,
   td {
-    border-bottom: var(--ld-border-muted);
+    border-bottom: var(--lv-border-muted);
     padding: 0.4375rem 0.75rem;
     text-align: left;
     vertical-align: top;
@@ -1452,22 +1452,22 @@ const storageExplorerStyles = `
     position: sticky;
     top: 0;
     z-index: 1;
-    background: var(--ld-bg-panel);
-    color: var(--ld-fg-muted);
+    background: var(--lv-bg-panel);
+    color: var(--lv-fg-muted);
     font-size: 0.6875rem;
     font-weight: 700;
     text-transform: uppercase;
   }
 
   td {
-    color: var(--ld-fg-default);
+    color: var(--lv-fg-default);
     font-size: 0.8125rem;
   }
 
   th:first-child,
   td:first-child {
     width: 4rem;
-    color: var(--ld-fg-muted);
+    color: var(--lv-fg-muted);
     text-align: right;
   }
 
@@ -1485,11 +1485,11 @@ const storageExplorerStyles = `
     max-width: 100%;
     align-items: center;
     gap: 0.375rem;
-    border: var(--borderWidth-default, var(--ld-border-width)) solid var(--ld-button-invisible-border-rest, var(--control-transparent-borderColor-rest, var(--ld-line-muted)));
-    border-radius: var(--ld-radius-tight);
-    background: var(--ld-button-invisible-bg-rest, var(--control-transparent-bgColor-rest, var(--ld-bg-panel)));
+    border: var(--borderWidth-default, var(--lv-border-width)) solid var(--lv-button-invisible-border-rest, var(--control-transparent-borderColor-rest, var(--lv-line-muted)));
+    border-radius: var(--lv-radius-tight);
+    background: var(--lv-button-invisible-bg-rest, var(--control-transparent-bgColor-rest, var(--lv-bg-panel)));
     padding: 0;
-    color: var(--ld-fg-default);
+    color: var(--lv-fg-default);
     font: inherit;
     font-weight: 650;
     text-align: left;
@@ -1498,11 +1498,11 @@ const storageExplorerStyles = `
 
   .storage-schema-table-link:hover,
   .storage-schema-table-link:focus-visible {
-    border-color: var(--ld-button-invisible-border-hover, var(--control-transparent-borderColor-hover, var(--ld-line-muted)));
-    background: var(--ld-button-invisible-bg-hover, var(--control-transparent-bgColor-hover, var(--ld-bg-panel-muted)));
-    color: var(--ld-fg-link);
-    outline: var(--focus-outline, var(--ld-border-default));
-    outline-color: var(--borderColor-accent-emphasis, var(--ld-line-accent));
+    border-color: var(--lv-button-invisible-border-hover, var(--control-transparent-borderColor-hover, var(--lv-line-muted)));
+    background: var(--lv-button-invisible-bg-hover, var(--control-transparent-bgColor-hover, var(--lv-bg-panel-muted)));
+    color: var(--lv-fg-link);
+    outline: var(--focus-outline, var(--lv-border-default));
+    outline-color: var(--borderColor-accent-emphasis, var(--lv-line-accent));
     outline-offset: var(--focus-outline-offset, var(--base-size-2));
   }
 
@@ -1514,20 +1514,20 @@ const storageExplorerStyles = `
 
   code {
     overflow-wrap: anywhere;
-    color: var(--ld-fg-default);
+    color: var(--lv-fg-default);
     font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
     font-size: 0.8125rem;
   }
 
   .storage-muted,
   .storage-empty {
-    color: var(--ld-fg-muted);
+    color: var(--lv-fg-muted);
   }
 
   .storage-empty {
-    border: var(--ld-border-muted);
-    border-radius: var(--ld-radius-small);
-    background: var(--ld-bg-panel-muted);
+    border: var(--lv-border-muted);
+    border-radius: var(--lv-radius-small);
+    background: var(--lv-bg-panel-muted);
     padding: 0.75rem;
     font-size: 0.8125rem;
   }
@@ -1556,7 +1556,7 @@ const storageExplorerStyles = `
     .storage-browser {
       max-height: 22rem;
       border-right: 0;
-      border-bottom: var(--ld-border-muted);
+      border-bottom: var(--lv-border-muted);
     }
 
     .storage-detail {
@@ -1565,10 +1565,10 @@ const storageExplorerStyles = `
   }
 `
 
-if (!customElements.get('ld-storage-explorer')) customElements.define('ld-storage-explorer', StorageExplorer)
+if (!customElements.get('lv-storage-explorer')) customElements.define('lv-storage-explorer', StorageExplorer)
 
 declare global {
   interface HTMLElementTagNameMap {
-    'ld-storage-explorer': StorageExplorer
+    'lv-storage-explorer': StorageExplorer
   }
 }

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
+	apigenapi "github.com/Yacobolo/leapview/internal/api/gen"
 )
 
 func TestDataRevisionsListAndCurrent(t *testing.T) {

@@ -29,14 +29,14 @@ class VisualArtifact extends LitElement {
       height: 100%;
       min-width: 0;
       overflow: hidden;
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-chart-surface, var(--ld-bg-panel));
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-chart-surface, var(--lv-bg-panel));
       box-shadow: var(--shadow-resting-small);
     }
 
-    ld-echart,
-    ld-report-table {
+    lv-echart,
+    lv-report-table {
       display: block;
       width: 100%;
       height: 100%;
@@ -47,9 +47,9 @@ class VisualArtifact extends LitElement {
       height: 100%;
       min-height: 8rem;
       place-items: center;
-      padding: var(--ld-space-lg);
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-body-sm);
+      padding: var(--lv-space-lg);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-body-sm);
       text-align: center;
     }
   `
@@ -77,14 +77,14 @@ class VisualArtifact extends LitElement {
       return html`
         <div class="artifact chart">
           ${this.type === 'kpi'
-            ? html`<ld-kpi-card visual-id=${this.artifactId} .visual=${this.payload}></ld-kpi-card>`
-            : html`<ld-echart visual-id=${this.artifactId} .chart=${this.payload}></ld-echart>`}
+            ? html`<lv-kpi-card visual-id=${this.artifactId} .visual=${this.payload}></lv-kpi-card>`
+            : html`<lv-echart visual-id=${this.artifactId} .chart=${this.payload}></lv-echart>`}
         </div>
       `
     }
     return html`
       <div class="artifact table">
-        <ld-report-table table-id=${this.artifactId} .table=${this.payload}></ld-report-table>
+        <lv-report-table table-id=${this.artifactId} .table=${this.payload}></lv-report-table>
       </div>
     `
   }
@@ -101,11 +101,11 @@ class VisualArtifact extends LitElement {
     if (!this.payload || !visualType) return
     try {
       if (visualType === 'kpi') {
-        await defineElementOnce('ld-kpi-card', () => import('../dashboard/charts/echart'))
+        await defineElementOnce('lv-kpi-card', () => import('../dashboard/charts/echart'))
       } else if (!isTabularVisualType(visualType)) {
-        await defineElementOnce('ld-echart', () => import('../dashboard/charts/echart'))
+        await defineElementOnce('lv-echart', () => import('../dashboard/charts/echart'))
       } else {
-        await defineElementOnce('ld-report-table', () => import('../dashboard/table/report-table'))
+        await defineElementOnce('lv-report-table', () => import('../dashboard/table/report-table'))
       }
       if (token !== this.loadToken) return
       this.rendererReady = true
@@ -120,4 +120,4 @@ function isTabularVisualType(type: string): boolean {
   return type === 'table' || type === 'matrix' || type === 'pivot'
 }
 
-if (!customElements.get('ld-visual-artifact')) customElements.define('ld-visual-artifact', VisualArtifact)
+if (!customElements.get('lv-visual-artifact')) customElements.define('lv-visual-artifact', VisualArtifact)

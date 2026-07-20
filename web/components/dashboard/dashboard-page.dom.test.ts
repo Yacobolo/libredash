@@ -55,34 +55,34 @@ for (const viewport of [
     try {
       await page.goto(baseURL)
       await page.waitForFunction(() => (
-        customElements.get('ld-dashboard-page')
-          && customElements.get('ld-filter-dock')
-          && customElements.get('ld-filter-panel')
-          && customElements.get('ld-filter-card')
-          && customElements.get('ld-kpi-card')
-          && customElements.get('ld-echart')
-          && customElements.get('ld-report-table')
+        customElements.get('lv-dashboard-page')
+          && customElements.get('lv-filter-dock')
+          && customElements.get('lv-filter-panel')
+          && customElements.get('lv-filter-card')
+          && customElements.get('lv-kpi-card')
+          && customElements.get('lv-echart')
+          && customElements.get('lv-report-table')
       ))
-      await page.waitForFunction(() => (document.querySelector('ld-dashboard-page') as any)?.page?.title === 'Executive Sales Dashboard')
-      await page.locator('ld-dashboard-page').evaluate((element: any) => element.updateComplete)
+      await page.waitForFunction(() => (document.querySelector('lv-dashboard-page') as any)?.page?.title === 'Executive Sales Dashboard')
+      await page.locator('lv-dashboard-page').evaluate((element: any) => element.updateComplete)
 
-      const state = await page.locator('ld-dashboard-page').evaluate((element: any) => {
+      const state = await page.locator('lv-dashboard-page').evaluate((element: any) => {
         const root = element.shadowRoot
         const tags = Array.from(root.querySelectorAll('*')).map((node: Element) => node.localName)
-        const filterDock = root.querySelector('ld-filter-dock')
-        const rect = root.querySelector('ld-report-canvas')?.getBoundingClientRect()
+        const filterDock = root.querySelector('lv-filter-dock')
+        const rect = root.querySelector('lv-report-canvas')?.getBoundingClientRect()
         return {
           title: root.querySelector('h1')?.textContent?.trim(),
-          hasSubSidebar: tags.includes('ld-sub-sidebar'),
-          hasCanvas: tags.includes('ld-report-canvas'),
-          hasFilterCard: tags.includes('ld-filter-card'),
-          hasKpi: tags.includes('ld-kpi-card'),
-          hasChart: tags.includes('ld-echart'),
-          hasTable: tags.includes('ld-report-table'),
-          hasFilterDock: tags.includes('ld-filter-dock'),
-          hasFilterPanel: Boolean(filterDock?.shadowRoot?.querySelector('ld-filter-panel')),
-          hasFooter: tags.includes('ld-report-footer'),
-          hasModal: tags.includes('ld-visual-modal'),
+          hasSubSidebar: tags.includes('lv-sub-sidebar'),
+          hasCanvas: tags.includes('lv-report-canvas'),
+          hasFilterCard: tags.includes('lv-filter-card'),
+          hasKpi: tags.includes('lv-kpi-card'),
+          hasChart: tags.includes('lv-echart'),
+          hasTable: tags.includes('lv-report-table'),
+          hasFilterDock: tags.includes('lv-filter-dock'),
+          hasFilterPanel: Boolean(filterDock?.shadowRoot?.querySelector('lv-filter-panel')),
+          hasFooter: tags.includes('lv-report-footer'),
+          hasModal: tags.includes('lv-visual-modal'),
           canvasVisible: Boolean(rect && rect.width > 40 && rect.height > 40),
         }
       })
@@ -102,17 +102,17 @@ for (const viewport of [
         canvasVisible: true,
       })
 
-      const layout = await page.locator('ld-dashboard-page').evaluate(async (element: any) => {
-        const canvas = element.shadowRoot.querySelector('ld-report-canvas') as any
+      const layout = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
+        const canvas = element.shadowRoot.querySelector('lv-report-canvas') as any
         await canvas.updateComplete
         const root = canvas.shadowRoot
         const surface = root.querySelector('.surface') as HTMLElement
         const viewport = root.querySelector('.viewport') as HTMLElement
         const frame = root.querySelector('.frame') as HTMLElement
         const assigned = (root.querySelector('slot') as HTMLSlotElement).assignedElements() as HTMLElement[]
-        const kpi = assigned.find((item) => item.querySelector('ld-kpi-card'))
-        const chart = assigned.find((item) => item.querySelector('ld-echart'))
-        const table = assigned.find((item) => item.querySelector('ld-report-table'))
+        const kpi = assigned.find((item) => item.querySelector('lv-kpi-card'))
+        const chart = assigned.find((item) => item.querySelector('lv-echart'))
+        const table = assigned.find((item) => item.querySelector('lv-report-table'))
         const rect = (item?: HTMLElement) => item ? item.getBoundingClientRect() : null
         return {
           mode: surface.dataset.presentationMode,
@@ -139,8 +139,8 @@ for (const viewport of [
         expect(layout.viewportScrollable).toBe(true)
       }
 
-      const footerState = await page.locator('ld-dashboard-page').evaluate(async (element: any) => {
-        const footer = element.shadowRoot.querySelector('ld-report-footer') as any
+      const footerState = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
+        const footer = element.shadowRoot.querySelector('lv-report-footer') as any
         await footer.updateComplete
         const initial = footer.shadowRoot.querySelector('.status')?.textContent?.replace(/\s+/g, ' ').trim()
         footer.status = { ...footer.status, loading: true }
@@ -156,8 +156,8 @@ for (const viewport of [
       expect(footerState.loading).toBe(footerState.initial)
       expect(footerState.failed).toBe('Unable to update visuals')
 
-      const tableState = await page.locator('ld-dashboard-page').evaluate(async (element: any) => {
-        const table = element.shadowRoot.querySelector('ld-report-table') as any
+      const tableState = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
+        const table = element.shadowRoot.querySelector('lv-report-table') as any
         await table.updateComplete
         const root = table.shadowRoot
         return {
@@ -173,17 +173,26 @@ for (const viewport of [
       expect(tableState.rows).toBeGreaterThan(0)
       expect(tableState.cells).toBeGreaterThan(0)
 
-      const progressiveState = await page.locator('ld-dashboard-page').evaluate(async (element: any) => {
+      const progressiveState = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
         const root = element.shadowRoot
         const chartFrame = root.querySelector('[data-component-status-key="visual:orders_chart"]') as any
         const tableFrame = root.querySelector('[data-component-status-key="visual:orders"]') as any
         const kpiFrame = root.querySelector('[data-component-status-key="visual:orders_kpi"]') as any
-        const chart = chartFrame?.querySelector('ld-echart') as any
-        const table = tableFrame?.querySelector('ld-report-table') as any
+        const chart = chartFrame?.querySelector('lv-echart') as any
+        const table = tableFrame?.querySelector('lv-report-table') as any
         await Promise.all([chartFrame?.updateComplete, tableFrame?.updateComplete, chart?.updateComplete, table?.updateComplete])
+        const chartSpinner = chartFrame?.shadowRoot?.querySelector('lv-loading-spinner') as any
+        await chartSpinner?.updateComplete
+        const chartSpinnerSvg = chartSpinner?.shadowRoot?.querySelector('svg') as SVGElement | null
+        const chartIndicator = chartFrame?.shadowRoot?.querySelector('.loading-indicator.header') as HTMLElement | null
         return {
           chartBusy: chartFrame?.shadowRoot?.querySelector('article')?.getAttribute('aria-busy'),
           chartLoadingLabel: chartFrame?.shadowRoot?.querySelector('[role="status"]')?.getAttribute('aria-label'),
+          chartIndicatorPlacement: chartIndicator?.className ?? '',
+          chartIndicatorDelay: chartIndicator ? getComputedStyle(chartIndicator).animationDelay : '',
+          chartHasFullOverlay: Boolean(chartFrame?.shadowRoot?.querySelector('.refresh-overlay.loading')),
+          chartSpinnerDuration: chartSpinnerSvg ? getComputedStyle(chartSpinnerSvg).animationDuration : '',
+          chartSpinnerIsNeutral: Boolean(chartSpinner && chartIndicator && getComputedStyle(chartSpinner).color === getComputedStyle(chartIndicator).color),
           tableAlert: tableFrame?.shadowRoot?.querySelector('[role="alert"]')?.textContent?.replace(/\s+/g, ' ').trim(),
           tableRetainedRow: table?.shadowRoot?.textContent?.includes('o1'),
           kpiHasOverlay: Boolean(kpiFrame?.shadowRoot?.querySelector('.refresh-overlay')),
@@ -195,6 +204,11 @@ for (const viewport of [
       expect(progressiveState).toEqual({
         chartBusy: 'true',
         chartLoadingLabel: 'Refreshing component',
+        chartIndicatorPlacement: 'loading-indicator header',
+        chartIndicatorDelay: '0.5s',
+        chartHasFullOverlay: false,
+        chartSpinnerDuration: '1.8s',
+        chartSpinnerIsNeutral: true,
         tableAlert: 'Could not refresh this component Ratings query failed',
         tableRetainedRow: true,
         kpiHasOverlay: false,
@@ -203,9 +217,9 @@ for (const viewport of [
       })
 
       if (viewport.name === 'desktop') {
-        const updateIsolation = await page.locator('ld-dashboard-page').evaluate(async (element: any) => {
-          const chart = element.shadowRoot.querySelector('ld-echart') as any
-          const direct = document.createElement('ld-echart') as any
+        const updateIsolation = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
+          const chart = element.shadowRoot.querySelector('lv-echart') as any
+          const direct = document.createElement('lv-echart') as any
           direct.chart = structuredClone(chart.chart)
           document.body.append(direct)
           await direct.updateComplete
@@ -250,9 +264,9 @@ for (const viewport of [
       }
 
       if (viewport.name === 'desktop') {
-        const optimistic = await page.locator('ld-dashboard-page').evaluate(async (element: any) => {
+        const optimistic = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
           const root = element.shadowRoot
-          const chart = root.querySelector('ld-echart') as any
+          const chart = root.querySelector('lv-echart') as any
           const detail = (value: string) => ({
             sourceKind: 'visual',
             sourceId: 'orders_chart',
@@ -261,8 +275,8 @@ for (const viewport of [
             toggle: true,
             mappings: [{ field: 'orders.status', value, label: value }],
           })
-          chart.dispatchEvent(new CustomEvent('ld-interaction-select', { bubbles: true, composed: true, detail: detail('processing') }))
-          chart.dispatchEvent(new CustomEvent('ld-interaction-select', { bubbles: true, composed: true, detail: detail('complete') }))
+          chart.dispatchEvent(new CustomEvent('lv-interaction-select', { bubbles: true, composed: true, detail: detail('processing') }))
+          chart.dispatchEvent(new CustomEvent('lv-interaction-select', { bubbles: true, composed: true, detail: detail('complete') }))
           await element.updateComplete
           await chart.updateComplete
 
@@ -276,7 +290,7 @@ for (const viewport of [
           }
 
           const beforeForged = JSON.stringify(chart.chart.selection)
-          chart.dispatchEvent(new CustomEvent('ld-interaction-select', {
+          chart.dispatchEvent(new CustomEvent('lv-interaction-select', {
             bubbles: true,
             composed: true,
             detail: { ...detail('forged'), mappings: [{ field: 'orders.secret', value: 'forged' }] },
@@ -319,8 +333,8 @@ for (const viewport of [
       }
 
       if (viewport.name === 'desktop') {
-        const dockState = await page.locator('ld-dashboard-page').evaluate(async (element: any) => {
-          const dock = element.shadowRoot.querySelector('ld-filter-dock') as HTMLElement
+        const dockState = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
+          const dock = element.shadowRoot.querySelector('lv-filter-dock') as HTMLElement
           const root = dock.shadowRoot
           const beforeAside = root.querySelector('aside') as HTMLElement
           const beforeRail = root.querySelector('.rail') as HTMLElement
@@ -362,16 +376,57 @@ for (const viewport of [
   })
 }
 
+test('visual frame delays and distinguishes initial loading from background refresh', async () => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => customElements.get('lv-dashboard-visual-frame'))
+    const state = await page.evaluate(async () => {
+      const frame = document.createElement('lv-dashboard-visual-frame') as any
+      frame.refreshStatus = { generation: 4, loading: true, error: '' }
+      frame.loadingPresentation = 'center'
+      document.body.append(frame)
+      await frame.updateComplete
+      const center = frame.shadowRoot.querySelector('.loading-indicator.center') as HTMLElement
+      const centerSpinner = center.querySelector('lv-loading-spinner') as HTMLElement
+      const initial = {
+        delay: getComputedStyle(center).animationDelay,
+        background: getComputedStyle(center).backgroundColor,
+        spinnerSize: getComputedStyle(centerSpinner).width,
+      }
+
+      frame.loadingPresentation = 'header'
+      await frame.updateComplete
+      const header = frame.shadowRoot.querySelector('.loading-indicator.header') as HTMLElement
+      const headerSpinner = header.querySelector('lv-loading-spinner') as HTMLElement
+      const refresh = {
+        delay: getComputedStyle(header).animationDelay,
+        background: getComputedStyle(header).backgroundColor,
+        spinnerSize: getComputedStyle(headerSpinner).width,
+      }
+      frame.remove()
+      return { initial, refresh }
+    })
+
+    expect(state).toEqual({
+      initial: { delay: '0.25s', background: 'rgb(255, 255, 255)', spinnerSize: '24px' },
+      refresh: { delay: '0.5s', background: 'rgba(0, 0, 0, 0)', spinnerSize: '12px' },
+    })
+  } finally {
+    await page.close()
+  }
+})
+
 test('dashboard refresh progress follows only the latest generation', async () => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {
     await page.goto(baseURL)
     await page.waitForFunction(() => (
-      customElements.get('ld-dashboard-page')
-        && (document.querySelector('ld-dashboard-page') as any)?.page?.title === 'Executive Sales Dashboard'
+      customElements.get('lv-dashboard-page')
+        && (document.querySelector('lv-dashboard-page') as any)?.page?.title === 'Executive Sales Dashboard'
     ))
 
-    const states = await page.locator('ld-dashboard-page').evaluate(async (element: any) => {
+    const states = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
       const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev')
       const read = async () => {
         await element.updateComplete
@@ -451,7 +506,7 @@ test('dashboard refresh progress follows only the latest generation', async () =
         indeterminate: false,
         width: 'width:50%',
         animationName: 'none',
-        fadeDelay: '0s',
+        fadeDelay: '0.25s',
       },
       planning: {
         active: 'true',
@@ -463,7 +518,7 @@ test('dashboard refresh progress follows only the latest generation', async () =
         indeterminate: false,
         width: 'width:0%',
         animationName: 'none',
-        fadeDelay: '0s',
+        fadeDelay: '0.25s',
       },
       started: {
         active: 'true',
@@ -475,7 +530,7 @@ test('dashboard refresh progress follows only the latest generation', async () =
         indeterminate: false,
         width: 'width:0%',
         animationName: 'none',
-        fadeDelay: '0s',
+        fadeDelay: '0.25s',
       },
       progressive: {
         active: 'true',
@@ -487,7 +542,7 @@ test('dashboard refresh progress follows only the latest generation', async () =
         indeterminate: false,
         width: 'width:33.33333333333333%',
         animationName: 'none',
-        fadeDelay: '0s',
+        fadeDelay: '0.25s',
       },
       complete: {
         active: 'false',
@@ -522,7 +577,7 @@ function testDocument(): string {
     grid: { columns: 12, rowHeight: 48, gap: 16, padding: 16 },
     pages: [{ id: 'overview', title: 'Overview', href: '/dashboards/executive-sales/pages/overview', active: true }],
     components: [
-      { id: 'title', kind: 'header', x: 16, y: 16, width: 456, height: 88, title: 'Executive Sales', eyebrow: 'LibreDash report', badges: ['Sales'] },
+      { id: 'title', kind: 'header', x: 16, y: 16, width: 456, height: 88, title: 'Executive Sales', eyebrow: 'LeapView report', badges: ['Sales'] },
       { id: 'state-filter', kind: 'filter', filter: 'state', x: 488, y: 16, width: 216, height: 88 },
       { id: 'orders-kpi', kind: 'visual', visual: 'orders_kpi', x: 720, y: 16, width: 240, height: 88 },
       { id: 'orders-chart', kind: 'visual', visual: 'orders_chart', x: 16, y: 128, width: 456, height: 280 },
@@ -653,13 +708,14 @@ function testDocument(): string {
       <head>
         <style>
           html, body { margin: 0; min-height: 100%; }
-          body { --fontStack-system: system-ui; --ld-bg-app: #f6f8fa; --ld-bg-panel: #fff; --ld-bg-panel-muted: #f6f8fa; --ld-bg-control-hover: #f3f4f6; --ld-chart-surface: #fff; --ld-report-page-bg: #fff; --ld-report-canvas-bg: #eaeef2; --ld-report-rail-bg: #fff; --ld-bg-overlay: #fff; --ld-fg-default: #24292f; --ld-fg-muted: #57606a; --ld-fg-link: #0969da; --ld-line-muted: #d8dee4; --ld-border-default: 1px solid #d0d7de; --ld-border-muted: 1px solid #d8dee4; --ld-border-transparent: 1px solid transparent; --ld-radius-default: 6px; --ld-radius-full: 999px; --ld-dashboard-filter-width: 44px; --ld-dashboard-filter-open-width: 320px; --base-size-2: 2px; --base-size-4: 4px; --base-size-6: 6px; --base-size-8: 8px; --base-size-10: 10px; --base-size-12: 12px; --base-size-16: 16px; --base-size-20: 20px; --base-size-24: 24px; --control-medium-size: 32px; --control-xlarge-size: 40px; --ld-font-size-caption: 12px; --ld-font-size-body-sm: 14px; --ld-font-size-title-sm: 16px; --ld-font-size-title-lg: 28px; --ld-font-size-display: 32px; --ld-font-weight-medium: 500; --ld-font-weight-strong: 600; --ld-line-height-none: 1; --ld-line-height-tight: 1.2; --ld-line-height-compact: 1.3; --zIndex-dropdown: 100; --zIndex-modal: 200; --zIndex-sticky: 50; --shadow-resting-small: 0 1px 2px rgb(0 0 0 / .08); --shadow-floating-small: 0 8px 24px rgb(0 0 0 / .12); --ld-duration-fast: 160ms; --motion-easing-move: ease; --motion-transition-stateChange: 160ms ease; }
-          ld-dashboard-page { min-height: 720px; }
+          body { --fontStack-system: system-ui; --lv-bg-app: #f6f8fa; --lv-bg-panel: #fff; --lv-bg-panel-muted: #f6f8fa; --lv-bg-control-hover: #f3f4f6; --lv-chart-surface: #fff; --lv-report-page-bg: #fff; --lv-report-canvas-bg: #eaeef2; --lv-report-rail-bg: #fff; --lv-bg-overlay: #fff; --lv-fg-default: #24292f; --lv-fg-muted: #57606a; --lv-fg-link: #0969da; --lv-line-muted: #d8dee4; --lv-border-default: 1px solid #d0d7de; --lv-border-muted: 1px solid #d8dee4; --lv-border-transparent: 1px solid transparent; --lv-radius-default: 6px; --lv-radius-full: 999px; --lv-dashboard-filter-width: 44px; --lv-dashboard-filter-open-width: 320px; --base-size-2: 2px; --base-size-4: 4px; --base-size-6: 6px; --base-size-8: 8px; --base-size-10: 10px; --base-size-12: 12px; --base-size-16: 16px; --base-size-20: 20px; --base-size-24: 24px; --control-medium-size: 32px; --control-xlarge-size: 40px; --lv-font-size-caption: 12px; --lv-font-size-body-sm: 14px; --lv-font-size-title-sm: 16px; --lv-font-size-title-lg: 28px; --lv-font-size-display: 32px; --lv-font-weight-medium: 500; --lv-font-weight-strong: 600; --lv-line-height-none: 1; --lv-line-height-tight: 1.2; --lv-line-height-compact: 1.3; --zIndex-dropdown: 100; --zIndex-modal: 200; --zIndex-sticky: 50; --shadow-resting-small: 0 1px 2px rgb(0 0 0 / .08); --shadow-floating-small: 0 8px 24px rgb(0 0 0 / .12); --lv-duration-fast: 160ms; --lv-spinner-size-md: 16px; --lv-spinner-duration: 1800ms; --motion-easing-move: ease; --motion-transition-stateChange: 160ms ease; }
+          body { --lv-loading-delay-short: 250ms; --lv-loading-delay-long: 500ms; }
+          lv-dashboard-page { min-height: 720px; }
         </style>
       </head>
       <body>
         <main data-signals="${attr(signals)}">
-          <ld-dashboard-page></ld-dashboard-page>
+          <lv-dashboard-page></lv-dashboard-page>
         </main>
         <script type="module" src="/static/vendor/datastar-1.0.2.js?v=dev"></script>
         <script type="module" src="/dashboard-page-under-test.js"></script>

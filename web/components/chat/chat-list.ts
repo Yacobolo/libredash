@@ -5,7 +5,7 @@ import type { ChatConversationSummary } from '../../generated/signals'
 import { jsonAttribute } from '../shared/json-attribute'
 import { lucideIcon } from '../shared/lucide-icons'
 
-class LibreDashChatList extends LitElement {
+class LeapViewChatList extends LitElement {
   @property({ converter: jsonAttribute<ChatConversationSummary[]>([]) }) conversations: ChatConversationSummary[] = []
   @property({ attribute: 'active-conversation-id' }) activeConversationId = ''
   @state() private search = ''
@@ -14,8 +14,8 @@ class LibreDashChatList extends LitElement {
     :host {
       display: block;
       min-width: 0;
-      color: var(--ld-fg-default);
-      font-family: var(--ld-font-family-ui, var(--fontStack-system));
+      color: var(--lv-fg-default);
+      font-family: var(--lv-font-family-ui, var(--fontStack-system));
     }
 
     .shell {
@@ -38,10 +38,10 @@ class LibreDashChatList extends LitElement {
 
     h2 {
       margin: 0;
-      color: var(--ld-fg-default);
-      font-size: var(--ld-font-size-title-md);
-      font-weight: var(--ld-font-weight-strong);
-      line-height: var(--ld-line-height-compact);
+      color: var(--lv-fg-default);
+      font-size: var(--lv-font-size-title-md);
+      font-weight: var(--lv-font-weight-strong);
+      line-height: var(--lv-line-height-compact);
       letter-spacing: 0;
     }
 
@@ -59,7 +59,7 @@ class LibreDashChatList extends LitElement {
       width: var(--base-size-16);
       height: var(--base-size-16);
       place-items: center;
-      color: var(--ld-fg-muted);
+      color: var(--lv-fg-muted);
       transform: translateY(-50%);
       pointer-events: none;
     }
@@ -68,50 +68,50 @@ class LibreDashChatList extends LitElement {
       width: 100%;
       min-width: 0;
       height: var(--control-large-size);
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-panel);
-      color: var(--ld-fg-default);
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-panel);
+      color: var(--lv-fg-default);
       padding: 0 var(--base-size-12) 0 var(--base-size-36);
       font: inherit;
-      font-size: var(--ld-font-size-body-sm);
+      font-size: var(--lv-font-size-body-sm);
     }
 
     .search::placeholder {
-      color: var(--ld-fg-muted);
+      color: var(--lv-fg-muted);
       opacity: 1;
     }
 
     .search:focus-visible {
-      border-color: var(--borderColor-accent-emphasis, var(--ld-line-accent, var(--ld-accent)));
-      outline: var(--focus-outline, var(--ld-border-default));
-      outline-color: var(--borderColor-accent-emphasis, var(--ld-line-accent, var(--ld-accent)));
+      border-color: var(--borderColor-accent-emphasis, var(--lv-line-accent, var(--lv-accent)));
+      outline: var(--focus-outline, var(--lv-border-default));
+      outline-color: var(--borderColor-accent-emphasis, var(--lv-line-accent, var(--lv-accent)));
       outline-offset: var(--focus-outline-offset, var(--base-size-2));
     }
 
     .new-chat-link {
       display: inline-flex;
-      min-height: var(--ld-button-height, var(--control-medium-size));
+      min-height: var(--lv-button-height, var(--control-medium-size));
       flex: 0 0 auto;
       align-items: center;
       justify-content: center;
-      border: var(--borderWidth-default, var(--ld-border-width)) solid var(--ld-button-border-rest, var(--ld-line-default));
-      border-radius: var(--ld-button-radius, var(--ld-radius-default));
-      background: var(--ld-button-bg-rest, var(--ld-bg-panel));
-      color: var(--ld-button-fg-rest, var(--ld-fg-default));
-      padding: 0 var(--ld-button-padding-inline-spacious, var(--control-medium-paddingInline-spacious, var(--base-size-16)));
+      border: var(--borderWidth-default, var(--lv-border-width)) solid var(--lv-button-border-rest, var(--lv-line-default));
+      border-radius: var(--lv-button-radius, var(--lv-radius-default));
+      background: var(--lv-button-bg-rest, var(--lv-bg-panel));
+      color: var(--lv-button-fg-rest, var(--lv-fg-default));
+      padding: 0 var(--lv-button-padding-inline-spacious, var(--control-medium-paddingInline-spacious, var(--base-size-16)));
       text-decoration: none;
-      font-size: var(--ld-font-size-body-sm);
-      font-weight: var(--ld-font-weight-strong);
-      box-shadow: var(--ld-button-shadow-resting, none);
+      font-size: var(--lv-font-size-body-sm);
+      font-weight: var(--lv-font-weight-strong);
+      box-shadow: var(--lv-button-shadow-resting, none);
     }
 
     .new-chat-link:hover,
     .new-chat-link:focus-visible {
-      border-color: var(--ld-button-border-hover, var(--ld-line-default));
-      background: var(--ld-button-bg-hover, var(--ld-bg-control-hover));
-      outline: var(--focus-outline, var(--ld-border-default));
-      outline-color: var(--borderColor-accent-emphasis, var(--ld-line-accent, var(--ld-accent)));
+      border-color: var(--lv-button-border-hover, var(--lv-line-default));
+      background: var(--lv-button-bg-hover, var(--lv-bg-control-hover));
+      outline: var(--focus-outline, var(--lv-border-default));
+      outline-color: var(--borderColor-accent-emphasis, var(--lv-line-accent, var(--lv-accent)));
       outline-offset: var(--focus-outline-offset, var(--base-size-2));
     }
 
@@ -141,15 +141,15 @@ class LibreDashChatList extends LitElement {
 
     tbody tr {
       position: relative;
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
       cursor: pointer;
     }
 
     td {
       height: var(--control-medium-size);
-      border-bottom: var(--ld-border-muted);
+      border-bottom: var(--lv-border-muted);
       background-clip: padding-box;
-      padding: var(--ld-space-control) var(--base-size-12);
+      padding: var(--lv-space-control) var(--base-size-12);
       vertical-align: middle;
     }
 
@@ -165,21 +165,21 @@ class LibreDashChatList extends LitElement {
     tbody tr:focus-within td,
     tbody tr[data-active='true'] td {
       border-bottom-color: transparent;
-      background: var(--ld-bg-hover);
+      background: var(--lv-bg-hover);
     }
 
     tbody tr:hover td:first-child,
     tbody tr:focus-within td:first-child,
     tbody tr[data-active='true'] td:first-child {
-      border-top-left-radius: var(--ld-radius-default);
-      border-bottom-left-radius: var(--ld-radius-default);
+      border-top-left-radius: var(--lv-radius-default);
+      border-bottom-left-radius: var(--lv-radius-default);
     }
 
     tbody tr:hover td:last-child,
     tbody tr:focus-within td:last-child,
     tbody tr[data-active='true'] td:last-child {
-      border-top-right-radius: var(--ld-radius-default);
-      border-bottom-right-radius: var(--ld-radius-default);
+      border-top-right-radius: var(--lv-radius-default);
+      border-bottom-right-radius: var(--lv-radius-default);
     }
 
     .primary-cell {
@@ -191,12 +191,12 @@ class LibreDashChatList extends LitElement {
       position: absolute;
       z-index: 1;
       inset: 0;
-      border-radius: var(--ld-radius-default);
+      border-radius: var(--lv-radius-default);
       outline: 0;
     }
 
     .primary-link:focus-visible {
-      box-shadow: inset 0 0 0 var(--ld-border-width-focus) var(--ld-accent);
+      box-shadow: inset 0 0 0 var(--lv-border-width-focus) var(--lv-accent);
     }
 
     .row-content {
@@ -211,19 +211,19 @@ class LibreDashChatList extends LitElement {
     .title {
       overflow: hidden;
       min-width: 0;
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: var(--ld-font-size-body-sm);
-      font-weight: var(--ld-font-weight-medium, 500);
+      font-size: var(--lv-font-size-body-sm);
+      font-weight: var(--lv-font-weight-medium, 500);
     }
 
     .date {
       flex: 0 0 auto;
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
       white-space: nowrap;
-      transition: opacity var(--duration-fast) var(--ease-ld);
+      transition: opacity var(--duration-fast) var(--ease-lv);
     }
 
     .row-actions {
@@ -236,7 +236,7 @@ class LibreDashChatList extends LitElement {
       padding-right: var(--base-size-8);
       opacity: 0;
       pointer-events: none;
-      transition: opacity var(--duration-fast) var(--ease-ld);
+      transition: opacity var(--duration-fast) var(--ease-lv);
     }
 
     tbody tr:hover .date,
@@ -252,22 +252,22 @@ class LibreDashChatList extends LitElement {
 
     .options-button {
       display: grid;
-      width: var(--ld-button-height, var(--control-medium-size));
-      height: var(--ld-button-height, var(--control-medium-size));
+      width: var(--lv-button-height, var(--control-medium-size));
+      height: var(--lv-button-height, var(--control-medium-size));
       place-items: center;
-      border: var(--borderWidth-default, var(--ld-border-width)) solid var(--ld-button-invisible-border-rest, var(--control-transparent-borderColor-rest, var(--ld-line-muted)));
-      border-radius: var(--ld-button-radius, var(--ld-radius-default));
-      background: var(--ld-button-invisible-bg-rest, var(--control-transparent-bgColor-rest, var(--ld-bg-panel)));
-      color: var(--ld-button-invisible-icon-rest, var(--ld-fg-muted));
+      border: var(--borderWidth-default, var(--lv-border-width)) solid var(--lv-button-invisible-border-rest, var(--control-transparent-borderColor-rest, var(--lv-line-muted)));
+      border-radius: var(--lv-button-radius, var(--lv-radius-default));
+      background: var(--lv-button-invisible-bg-rest, var(--control-transparent-bgColor-rest, var(--lv-bg-panel)));
+      color: var(--lv-button-invisible-icon-rest, var(--lv-fg-muted));
       cursor: pointer;
       padding: 0;
     }
 
     .options-button:hover,
     .options-button:focus-visible {
-      border-color: var(--ld-button-invisible-border-hover, var(--control-transparent-borderColor-hover, var(--ld-line-muted)));
-      background: var(--ld-button-invisible-bg-hover, var(--ld-bg-hover));
-      color: var(--ld-fg-default);
+      border-color: var(--lv-button-invisible-border-hover, var(--control-transparent-borderColor-hover, var(--lv-line-muted)));
+      background: var(--lv-button-invisible-bg-hover, var(--lv-bg-hover));
+      color: var(--lv-fg-default);
       outline: 0;
     }
 
@@ -283,8 +283,8 @@ class LibreDashChatList extends LitElement {
 
     .empty {
       padding: var(--base-size-16) 0;
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-body-sm);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-body-sm);
     }
 
     @media (max-width: 640px) {
@@ -298,7 +298,7 @@ class LibreDashChatList extends LitElement {
       }
 
       h2 {
-        font-size: var(--ld-font-size-title-md);
+        font-size: var(--lv-font-size-title-md);
       }
 
       .new-chat-link {
@@ -385,7 +385,7 @@ class LibreDashChatList extends LitElement {
   private emitOptions(event: Event, conversation: ChatConversationSummary): void {
     event.preventDefault()
     event.stopPropagation()
-    this.dispatchEvent(new CustomEvent('ld-chat-list-options', {
+    this.dispatchEvent(new CustomEvent('lv-chat-list-options', {
       detail: { conversationId: conversation.id },
       bubbles: true,
       composed: true,
@@ -403,4 +403,4 @@ function shortDate(value: string): string {
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date)
 }
 
-if (!customElements.get('ld-chat-list')) customElements.define('ld-chat-list', LibreDashChatList)
+if (!customElements.get('lv-chat-list')) customElements.define('lv-chat-list', LeapViewChatList)

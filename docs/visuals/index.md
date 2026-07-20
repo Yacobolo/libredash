@@ -1,6 +1,6 @@
 # Visual types
 
-LibreDash visuals are defined in dashboard YAML. Every visual has a required `type`, a query, and type-specific presentation settings. Choose the visual that best fits the analytical task; rendering is inferred from its type.
+LeapView visuals are defined in dashboard YAML. Every visual has a required `type`, a query, and type-specific presentation settings. Choose the visual that best fits the analytical task; rendering is inferred from its type.
 
 Every preview is compiled and queried from the YAML printed beside it against a fixed documentation dataset. Invalid or stale examples fail documentation generation.
 

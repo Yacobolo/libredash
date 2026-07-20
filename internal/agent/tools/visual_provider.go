@@ -8,11 +8,11 @@ import (
 	"fmt"
 	"strings"
 
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
-	"github.com/Yacobolo/libredash/internal/dataquery"
-	agentcore "github.com/Yacobolo/libredash/pkg/agent"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	"github.com/Yacobolo/leapview/internal/dataquery"
+	agentcore "github.com/Yacobolo/leapview/pkg/agent"
 )
 
 const (
@@ -92,7 +92,7 @@ func (p VisualProvider) Definitions(scope Scope) []agentcore.ToolDefinition {
 	}
 	return []agentcore.ToolDefinition{{
 		Name:         agentVisualToolName,
-		Description:  "Create one read-only visual from LibreDash semantic model fields. Data is queried from semantic models; do not provide inline data.",
+		Description:  "Create one read-only visual from LeapView semantic model fields. Data is queried from semantic models; do not provide inline data.",
 		InputSchema:  inputSchema,
 		OutputSchema: json.RawMessage(`{"type":"object","properties":{"type":{"type":"string"},"id":{"type":"string"},"patch":{"type":"object"},"summary":{"type":"string"}},"required":["type","id","patch","summary"],"additionalProperties":false}`),
 		Effect:       "read",

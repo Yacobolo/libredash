@@ -10,10 +10,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/api"
-	"github.com/Yacobolo/libredash/internal/configschema"
-	"github.com/Yacobolo/libredash/internal/workspace"
-	workspacecompiler "github.com/Yacobolo/libredash/internal/workspace/compiler"
+	"github.com/Yacobolo/leapview/internal/api"
+	"github.com/Yacobolo/leapview/internal/configschema"
+	"github.com/Yacobolo/leapview/internal/workspace"
+	workspacecompiler "github.com/Yacobolo/leapview/internal/workspace/compiler"
 	"github.com/spf13/cobra"
 )
 
@@ -34,7 +34,7 @@ func validateCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 			return runValidate(ctx, opts, cmd.OutOrStdout())
 		},
 	}
-	cmd.Flags().StringVar(&opts.catalog, "project", filepath.Join("dashboards", "libredash.yaml"), "project path")
+	cmd.Flags().StringVar(&opts.catalog, "project", filepath.Join("dashboards", "leapview.yaml"), "project path")
 	cmd.Flags().BoolVar(&opts.jsonOutput, "json", false, "emit JSON diagnostics")
 	return cmd
 }
@@ -56,8 +56,8 @@ func planCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 			return runPlan(ctx, opts, cmd.OutOrStdout())
 		},
 	}
-	cmd.Flags().StringVar(&opts.catalog, "project", filepath.Join("dashboards", "libredash.yaml"), "project path")
-	cmd.Flags().StringVar(&opts.target, "target", "", "LibreDash server URL for active deployment diff")
+	cmd.Flags().StringVar(&opts.catalog, "project", filepath.Join("dashboards", "leapview.yaml"), "project path")
+	cmd.Flags().StringVar(&opts.target, "target", "", "LeapView server URL for active deployment diff")
 	cmd.Flags().StringVar(&opts.token, "token", "", "API token")
 	cmd.Flags().StringVar(&opts.environment, "environment", "", "assert the target instance environment for active diff")
 	cmd.Flags().StringVar(&opts.workspaceID, "workspace", opts.workspaceID, "workspace id for active diff")
@@ -68,7 +68,7 @@ func planCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 func schemaCommand(opts *rootOptions) *cobra.Command {
 	parent := &cobra.Command{
 		Use:   "schema",
-		Short: "Inspect LibreDash YAML schemas",
+		Short: "Inspect LeapView YAML schemas",
 	}
 	export := &cobra.Command{
 		Use:   "export",

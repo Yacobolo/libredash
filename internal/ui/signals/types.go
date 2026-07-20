@@ -6,11 +6,12 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/agent"
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
-	workspaceview "github.com/Yacobolo/libredash/internal/workspace"
+	"github.com/Yacobolo/leapview/internal/agent"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	"github.com/Yacobolo/leapview/internal/brand"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	workspaceview "github.com/Yacobolo/leapview/internal/workspace"
 )
 
 const (
@@ -346,7 +347,7 @@ func SidebarConfigForCatalog(catalog dashboard.Catalog) SidebarSignal {
 		modelID = catalog.Models[0].ID
 		modelTitle = catalog.Models[0].Title
 	}
-	return sidebarConfig(catalog, "dashboards", "", "LibreDash", "Dashboards", "Discovery", modelID, modelTitle, false, "", false)
+	return sidebarConfig(catalog, "dashboards", "", brand.Name, "Dashboards", "Discovery", modelID, modelTitle, false, "", false)
 }
 
 func SidebarConfigForWorkspace(catalog dashboard.Catalog, active, roleLabel string) SidebarSignal {
@@ -595,7 +596,7 @@ func workspaceDisplayTitle(catalog dashboard.Catalog) string {
 	if strings.TrimSpace(catalog.Workspace.ID) != "" {
 		return catalog.Workspace.ID
 	}
-	return "LibreDash"
+	return brand.Name
 }
 
 func pageVisualIDs(page dashboard.Page) []string {

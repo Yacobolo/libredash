@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/testutil/ssetest"
+	"github.com/Yacobolo/leapview/internal/testutil/ssetest"
 )
 
 func TestUpdatesStreamsRealRuntimeSignals(t *testing.T) {

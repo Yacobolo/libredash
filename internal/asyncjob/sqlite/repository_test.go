@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/asyncjob"
-	"github.com/Yacobolo/libredash/internal/platform"
+	"github.com/Yacobolo/leapview/internal/asyncjob"
+	"github.com/Yacobolo/leapview/internal/platform"
 )
 
 func TestRepositoryPersistsClaimsReclaimsAndOrderedEvents(t *testing.T) {

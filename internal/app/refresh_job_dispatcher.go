@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/analytics/materialize"
-	materializehttp "github.com/Yacobolo/libredash/internal/analytics/materialize/http"
-	"github.com/Yacobolo/libredash/internal/execution"
-	"github.com/Yacobolo/libredash/internal/workspace/refresh"
+	"github.com/Yacobolo/leapview/internal/analytics/materialize"
+	materializehttp "github.com/Yacobolo/leapview/internal/analytics/materialize/http"
+	"github.com/Yacobolo/leapview/internal/execution"
+	"github.com/Yacobolo/leapview/internal/workspace/refresh"
 )
 
 func (s *Server) dispatchQueuedRefreshJobs(ctx context.Context) {
@@ -75,7 +75,7 @@ func (s *Server) runRefreshJobDispatcher(ctx context.Context) {
 		Executor:     s.executionService(),
 		LeaseTimeout: s.jobLeaseTimeout,
 		Logger:       s.logger,
-		Owner:        fmt.Sprintf("libredash-%d", time.Now().UnixNano()),
+		Owner:        fmt.Sprintf("leapview-%d", time.Now().UnixNano()),
 		Environment:  string(s.defaultServingEnvironment()),
 		ExecutionStats: func() execution.Stats {
 			return s.executionService().Stats()

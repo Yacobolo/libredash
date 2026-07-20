@@ -1,11 +1,11 @@
 package compiler
 
 import (
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
-	"github.com/Yacobolo/libredash/internal/refreshpipeline"
-	"github.com/Yacobolo/libredash/internal/workspace"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	"github.com/Yacobolo/leapview/internal/refreshpipeline"
+	"github.com/Yacobolo/leapview/internal/workspace"
 )
 
 func catalogPayload(definition *workspace.Definition) catalogPayloadV1 {

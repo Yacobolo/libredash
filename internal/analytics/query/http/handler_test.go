@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 	"github.com/apache/arrow-go/v18/arrow/array"
 	"github.com/apache/arrow-go/v18/arrow/ipc"
 )
@@ -78,7 +78,7 @@ func TestSemanticArrowMatchesJSONRowsAndCarriesMetadata(t *testing.T) {
 	}
 	defer reader.Release()
 	metadata := reader.Schema().Metadata()
-	if value, ok := metadata.GetValue("libredash.query_id"); !ok || value != "query-a" {
+	if value, ok := metadata.GetValue("leapview.query_id"); !ok || value != "query-a" {
 		t.Fatalf("query metadata = %q, %v", value, ok)
 	}
 	if !reader.Next() {

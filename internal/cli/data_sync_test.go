@@ -17,9 +17,9 @@ import (
 	"sync"
 	"testing"
 
-	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
-	"github.com/Yacobolo/libredash/internal/manageddata"
-	"github.com/Yacobolo/libredash/internal/manageddata/localplan"
+	apigenapi "github.com/Yacobolo/leapview/internal/api/gen"
+	"github.com/Yacobolo/leapview/internal/manageddata"
+	"github.com/Yacobolo/leapview/internal/manageddata/localplan"
 )
 
 func TestDataSyncDeduplicatesAndUsesStableIdempotencyKey(t *testing.T) {
@@ -42,7 +42,7 @@ func TestDataSyncDeduplicatesAndUsesStableIdempotencyKey(t *testing.T) {
 	for range 2 {
 		var out bytes.Buffer
 		err := runDataSync(context.Background(), dataSyncRequest{
-			ProjectPath: "/catalog/libredash.yaml", ProjectID: "demo", Connection: "orders", Root: root,
+			ProjectPath: "/catalog/leapview.yaml", ProjectID: "demo", Connection: "orders", Root: root,
 			Target: server.URL, Token: "secret-token", Plan: plan, Out: &out, HTTPClient: server.Client(),
 		})
 		if err != nil {

@@ -1,13 +1,13 @@
 openapi: 3.0.0
 info:
-  title: LibreDash Headless API
+  title: LeapView Headless API
   version: 1.0.0
-  description: Headless API for LibreDash workspaces, deployments, managed data, access control, refreshes, and agent operations.
+  description: Headless API for LeapView workspaces, deployments, managed data, access control, refreshes, and agent operations.
 tags:
   - name: System
     description: API capabilities and protocol discovery.
   - name: Instance
-    description: The immutable serving identity of this LibreDash installation.
+    description: The immutable serving identity of this LeapView installation.
   - name: Projects
     description: Read-only project registry.
   - name: Releases
@@ -3414,7 +3414,7 @@ paths:
   /api/v1/instance:
     get:
       operationId: getInstance
-      summary: Get this LibreDash instance identity
+      summary: Get this LeapView instance identity
       parameters: []
       responses:
         '200':
@@ -20433,7 +20433,7 @@ paths:
       x-authz:
         mode: privilege
         privilege: VIEW_ITEM
-      x-libredash-object-scope: workspace-asset
+      x-leapview-object-scope: workspace-asset
   /api/v1/workspaces/{workspace}/assets/{assetId}/lineage:
     get:
       operationId: getWorkspaceAssetLineage
@@ -20723,7 +20723,7 @@ paths:
       x-authz:
         mode: privilege
         privilege: VIEW_ITEM
-      x-libredash-object-scope: workspace-asset
+      x-leapview-object-scope: workspace-asset
   /api/v1/workspaces/{workspace}/audit-events:
     get:
       operationId: listAuditEvents
@@ -21968,7 +21968,7 @@ paths:
       x-authz:
         mode: privilege
         privilege: VIEW_ITEM
-      x-libredash-object-scope: dashboard
+      x-leapview-object-scope: dashboard
   /api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}:
     get:
       operationId: getDashboardPage
@@ -22258,7 +22258,7 @@ paths:
       x-authz:
         mode: privilege
         privilege: VIEW_ITEM
-      x-libredash-object-scope: dashboard
+      x-leapview-object-scope: dashboard
   /api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/filters/{filter}:
     get:
       operationId: getDashboardFilter
@@ -22546,7 +22546,7 @@ paths:
       x-authz:
         mode: privilege
         privilege: VIEW_ITEM
-      x-libredash-object-scope: dashboard
+      x-leapview-object-scope: dashboard
   /api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/filters/{filter}/values:
     post:
       operationId: listDashboardFilterValues
@@ -22885,7 +22885,7 @@ paths:
       x-authz:
         mode: privilege
         privilege: QUERY_DATA
-      x-libredash-object-scope: dashboard
+      x-leapview-object-scope: dashboard
   /api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/query:
     post:
       operationId: queryDashboardPage
@@ -23272,7 +23272,7 @@ paths:
       x-authz:
         mode: privilege
         privilege: QUERY_DATA
-      x-libredash-object-scope: dashboard
+      x-leapview-object-scope: dashboard
   /api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/visuals/{visual}:
     get:
       operationId: getDashboardVisual
@@ -23638,7 +23638,7 @@ paths:
       x-authz:
         mode: privilege
         privilege: VIEW_ITEM
-      x-libredash-object-scope: dashboard
+      x-leapview-object-scope: dashboard
   /api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/visuals/{visual}/query:
     post:
       operationId: queryDashboardVisualData
@@ -23955,7 +23955,7 @@ paths:
       x-authz:
         mode: privilege
         privilege: QUERY_DATA
-      x-libredash-object-scope: dashboard
+      x-leapview-object-scope: dashboard
   /api/v1/workspaces/{workspace}/data-policies:
     get:
       operationId: listDataPolicies
@@ -34146,7 +34146,7 @@ paths:
       x-authz:
         mode: privilege
         privilege: VIEW_ITEM
-      x-libredash-object-scope: semantic-model
+      x-leapview-object-scope: semantic-model
   /api/v1/workspaces/{workspace}/semantic-models/{model}/datasets:
     get:
       operationId: listSemanticDatasets
@@ -34466,7 +34466,7 @@ paths:
       x-authz:
         mode: privilege
         privilege: VIEW_ITEM
-      x-libredash-object-scope: semantic-model
+      x-leapview-object-scope: semantic-model
   /api/v1/workspaces/{workspace}/semantic-models/{model}/datasets/{dataset}:
     get:
       operationId: getSemanticDataset
@@ -34772,7 +34772,7 @@ paths:
       x-authz:
         mode: privilege
         privilege: VIEW_ITEM
-      x-libredash-object-scope: semantic-model
+      x-leapview-object-scope: semantic-model
   /api/v1/workspaces/{workspace}/semantic-models/{model}/datasets/{dataset}/fields:
     get:
       operationId: listSemanticFields
@@ -35107,7 +35107,7 @@ paths:
       x-authz:
         mode: privilege
         privilege: VIEW_ITEM
-      x-libredash-object-scope: semantic-model
+      x-leapview-object-scope: semantic-model
   /api/v1/workspaces/{workspace}/semantic-models/{model}/datasets/{dataset}/preview:
     post:
       operationId: previewSemanticDataset
@@ -35450,7 +35450,7 @@ paths:
       x-authz:
         mode: privilege
         privilege: PREVIEW_DATA
-      x-libredash-object-scope: semantic-model
+      x-leapview-object-scope: semantic-model
   /api/v1/workspaces/{workspace}/semantic-models/{model}/datasets/{dataset}/preview/explain:
     post:
       operationId: explainSemanticPreview
@@ -35785,7 +35785,7 @@ paths:
       x-authz:
         mode: privilege
         privilege: PREVIEW_DATA
-      x-libredash-object-scope: semantic-model
+      x-leapview-object-scope: semantic-model
   /api/v1/workspaces/{workspace}/semantic-models/{model}/fields:
     get:
       operationId: listSemanticModelFields
@@ -36113,7 +36113,7 @@ paths:
       x-authz:
         mode: privilege
         privilege: VIEW_ITEM
-      x-libredash-object-scope: semantic-model
+      x-leapview-object-scope: semantic-model
   /api/v1/workspaces/{workspace}/semantic-models/{model}/query:
     post:
       operationId: querySemanticModel
@@ -36453,7 +36453,7 @@ paths:
       x-authz:
         mode: privilege
         privilege: QUERY_DATA
-      x-libredash-object-scope: semantic-model
+      x-leapview-object-scope: semantic-model
   /api/v1/workspaces/{workspace}/semantic-models/{model}/query/explain:
     post:
       operationId: explainSemanticModelQuery
@@ -36789,7 +36789,7 @@ paths:
       x-authz:
         mode: privilege
         privilege: QUERY_DATA
-      x-libredash-object-scope: semantic-model
+      x-leapview-object-scope: semantic-model
   /api/v1/workspaces/{workspace}/semantic-models/{model}/relationships:
     get:
       operationId: listSemanticRelationships
@@ -37083,7 +37083,7 @@ paths:
       x-authz:
         mode: privilege
         privilege: VIEW_ITEM
-      x-libredash-object-scope: semantic-model
+      x-leapview-object-scope: semantic-model
   /api/v1/workspaces/{workspace}/semantic-models/{model}/sources:
     get:
       operationId: listSemanticSources
@@ -37376,7 +37376,7 @@ paths:
       x-authz:
         mode: privilege
         privilege: VIEW_ITEM
-      x-libredash-object-scope: semantic-model
+      x-leapview-object-scope: semantic-model
 security:
   - BearerAuth: []
 components:

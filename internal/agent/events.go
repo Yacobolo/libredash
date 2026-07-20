@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	agentcore "github.com/Yacobolo/libredash/pkg/agent"
+	agentcore "github.com/Yacobolo/leapview/pkg/agent"
 )
 
 type storeEventSink struct {

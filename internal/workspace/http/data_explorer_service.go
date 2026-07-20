@@ -9,11 +9,11 @@ import (
 	"strconv"
 	"strings"
 
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	"github.com/Yacobolo/libredash/internal/assetnav"
-	"github.com/Yacobolo/libredash/internal/dataquery"
-	uisignals "github.com/Yacobolo/libredash/internal/ui/signals"
-	"github.com/Yacobolo/libredash/internal/workspace"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	"github.com/Yacobolo/leapview/internal/assetnav"
+	"github.com/Yacobolo/leapview/internal/dataquery"
+	uisignals "github.com/Yacobolo/leapview/internal/ui/signals"
+	"github.com/Yacobolo/leapview/internal/workspace"
 )
 
 func (h Handler) globalDataExplorerState(r *nethttp.Request, command uisignals.DataExplorerCommand) (uisignals.DataExplorerPageSignal, uisignals.DataExplorerSignal, error) {

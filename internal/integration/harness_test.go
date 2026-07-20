@@ -23,25 +23,25 @@ import (
 	"testing"
 	"time"
 
-	accesssqlite "github.com/Yacobolo/libredash/internal/access/sqlite"
-	analyticsduckdb "github.com/Yacobolo/libredash/internal/analytics/duckdb"
-	materializeruntime "github.com/Yacobolo/libredash/internal/analytics/materialize"
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	"github.com/Yacobolo/libredash/internal/app"
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	"github.com/Yacobolo/libredash/internal/dashboard/consumer"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
-	dashboardruntime "github.com/Yacobolo/libredash/internal/dashboard/runtime"
-	"github.com/Yacobolo/libredash/internal/dataquery"
-	"github.com/Yacobolo/libredash/internal/manageddata"
-	"github.com/Yacobolo/libredash/internal/platform"
-	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
-	servingstatefs "github.com/Yacobolo/libredash/internal/servingstate/filesystem"
-	servingstatesqlite "github.com/Yacobolo/libredash/internal/servingstate/sqlite"
-	"github.com/Yacobolo/libredash/internal/testutil/ssetest"
-	"github.com/Yacobolo/libredash/internal/workspace"
-	workspacecompiler "github.com/Yacobolo/libredash/internal/workspace/compiler"
-	workspacesqlite "github.com/Yacobolo/libredash/internal/workspace/sqlite"
+	accesssqlite "github.com/Yacobolo/leapview/internal/access/sqlite"
+	analyticsduckdb "github.com/Yacobolo/leapview/internal/analytics/duckdb"
+	materializeruntime "github.com/Yacobolo/leapview/internal/analytics/materialize"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	"github.com/Yacobolo/leapview/internal/app"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	"github.com/Yacobolo/leapview/internal/dashboard/consumer"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	dashboardruntime "github.com/Yacobolo/leapview/internal/dashboard/runtime"
+	"github.com/Yacobolo/leapview/internal/dataquery"
+	"github.com/Yacobolo/leapview/internal/manageddata"
+	"github.com/Yacobolo/leapview/internal/platform"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
+	servingstatefs "github.com/Yacobolo/leapview/internal/servingstate/filesystem"
+	servingstatesqlite "github.com/Yacobolo/leapview/internal/servingstate/sqlite"
+	"github.com/Yacobolo/leapview/internal/testutil/ssetest"
+	"github.com/Yacobolo/leapview/internal/workspace"
+	workspacecompiler "github.com/Yacobolo/leapview/internal/workspace/compiler"
+	workspacesqlite "github.com/Yacobolo/leapview/internal/workspace/sqlite"
 )
 
 type harness struct {
@@ -148,7 +148,7 @@ func newStoreBackedHarness(t *testing.T, opts ...harnessOption) *harness {
 
 	h, metrics, catalogPath := newHarnessWithMetrics(t, opts...)
 	ctx := context.Background()
-	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "libredash.db"))
+	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "leapview.db"))
 	if err != nil {
 		t.Fatalf("open platform store: %v", err)
 	}
@@ -435,7 +435,7 @@ func (h *harness) openUpdatesStream(t *testing.T, dashboardID, pageID string, si
 		t.Fatalf("create updates request: %v", err)
 	}
 	if clientID := clientIDFromSignals(signals); clientID != "" {
-		req.AddCookie(&http.Cookie{Name: "ld_client_id", Value: clientID})
+		req.AddCookie(&http.Cookie{Name: "lv_client_id", Value: clientID})
 	}
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -478,7 +478,7 @@ func (h *harness) postCommand(t *testing.T, path string, signals map[string]any)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if clientID := clientIDFromSignals(signals); clientID != "" {
-		req.AddCookie(&http.Cookie{Name: "ld_client_id", Value: clientID})
+		req.AddCookie(&http.Cookie{Name: "lv_client_id", Value: clientID})
 	}
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -532,7 +532,7 @@ func (h *harness) streamPageBootstrap(t *testing.T, pageBody string) string {
 		t.Fatalf("create bootstrap request: %v", err)
 	}
 	req.Header.Set("Authorization", "Bearer dev")
-	req.AddCookie(&http.Cookie{Name: "ld_client_id", Value: "integration-stream-first"})
+	req.AddCookie(&http.Cookie{Name: "lv_client_id", Value: "integration-stream-first"})
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("GET bootstrap %s: %v", matches[1], err)
@@ -747,13 +747,13 @@ func discoverCatalogPath(t *testing.T) string {
 		t.Fatalf("get working directory: %v", err)
 	}
 	for {
-		candidate := filepath.Join(dir, "dashboards", "libredash.yaml")
+		candidate := filepath.Join(dir, "dashboards", "leapview.yaml")
 		if _, err := os.Stat(candidate); err == nil {
 			return candidate
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			t.Fatal("could not find dashboards/libredash.yaml")
+			t.Fatal("could not find dashboards/leapview.yaml")
 		}
 		dir = parent
 	}

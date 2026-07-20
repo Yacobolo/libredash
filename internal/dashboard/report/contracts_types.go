@@ -2,7 +2,7 @@ package report
 
 import (
 	"fmt"
-	"github.com/Yacobolo/libredash/internal/dashboard"
+	"github.com/Yacobolo/leapview/internal/dashboard"
 	"strings"
 
 	"gopkg.in/yaml.v3"

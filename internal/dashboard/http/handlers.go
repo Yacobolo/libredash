@@ -2,21 +2,21 @@ package http
 
 import (
 	"context"
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	"log/slog"
 	nethttp "net/http"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/access"
-	"github.com/Yacobolo/libredash/internal/api"
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	"github.com/Yacobolo/libredash/internal/dashboard/consumer"
-	"github.com/Yacobolo/libredash/internal/dashboard/report"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
-	dashboardstream "github.com/Yacobolo/libredash/internal/dashboard/stream"
-	reportui "github.com/Yacobolo/libredash/internal/dashboard/ui"
-	"github.com/Yacobolo/libredash/internal/dataquery"
-	"github.com/Yacobolo/libredash/pkg/pagestream"
+	"github.com/Yacobolo/leapview/internal/access"
+	"github.com/Yacobolo/leapview/internal/api"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	"github.com/Yacobolo/leapview/internal/dashboard/consumer"
+	"github.com/Yacobolo/leapview/internal/dashboard/report"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	dashboardstream "github.com/Yacobolo/leapview/internal/dashboard/stream"
+	reportui "github.com/Yacobolo/leapview/internal/dashboard/ui"
+	"github.com/Yacobolo/leapview/internal/dataquery"
+	"github.com/Yacobolo/leapview/pkg/pagestream"
 	"github.com/go-chi/chi/v5"
 )
 

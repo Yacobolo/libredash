@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/configspec"
-	"github.com/Yacobolo/libredash/internal/execution"
+	"github.com/Yacobolo/leapview/internal/configspec"
+	"github.com/Yacobolo/leapview/internal/execution"
 	"github.com/caarlos0/env/v11"
 )
 
@@ -46,7 +46,7 @@ func (c Config) ListenAddr() string {
 }
 
 func (c Config) DBPath() string {
-	return filepath.Join(c.HomeDir, "libredash.db")
+	return filepath.Join(c.HomeDir, "leapview.db")
 }
 
 func (c Config) ArtifactDir() string {
@@ -83,7 +83,7 @@ func (c Config) ClientConfigPath() string {
 	if err != nil {
 		return filepath.Join(c.HomeDir, "cli.json")
 	}
-	return filepath.Join(dir, "libredash", "cli.json")
+	return filepath.Join(dir, "leapview", "cli.json")
 }
 
 func (c Config) AzureConfigured() bool {
@@ -156,7 +156,7 @@ func (c Config) CookieSecure() (bool, error) {
 	}
 	parsed, err := strconv.ParseBool(value)
 	if err != nil {
-		return false, fmt.Errorf("LIBREDASH_COOKIE_SECURE must be a boolean: %w", err)
+		return false, fmt.Errorf("LEAPVIEW_COOKIE_SECURE must be a boolean: %w", err)
 	}
 	return parsed, nil
 }
@@ -173,7 +173,7 @@ func (c Config) Validate(profile Profile) error {
 		return err
 	}
 	values := c.catalogValues()
-	values[configspec.EnvLIBREDASH_COOKIE_SECURE] = cookieSecure
+	values[configspec.EnvLEAPVIEW_COOKIE_SECURE] = cookieSecure
 	return configspec.Validate(values)
 }
 
@@ -254,10 +254,10 @@ func normalizeAllowedHost(raw string) (string, error) {
 		return "", nil
 	}
 	if strings.Contains(host, "://") || strings.ContainsAny(host, "/\\") {
-		return "", fmt.Errorf("LIBREDASH_ALLOWED_HOSTS entries must be hostnames, not URLs: %q", raw)
+		return "", fmt.Errorf("LEAPVIEW_ALLOWED_HOSTS entries must be hostnames, not URLs: %q", raw)
 	}
 	if host == "*" {
-		return "", fmt.Errorf("LIBREDASH_ALLOWED_HOSTS must not allow every host in production")
+		return "", fmt.Errorf("LEAPVIEW_ALLOWED_HOSTS must not allow every host in production")
 	}
 	if strings.HasPrefix(host, "[") {
 		if parsed, _, err := net.SplitHostPort(host); err == nil {
@@ -270,12 +270,12 @@ func normalizeAllowedHost(raw string) (string, error) {
 	if strings.HasPrefix(host, "*.") {
 		suffix := strings.TrimPrefix(host, "*.")
 		if suffix == "" || strings.Contains(suffix, "*") {
-			return "", fmt.Errorf("invalid LIBREDASH_ALLOWED_HOSTS wildcard entry: %q", raw)
+			return "", fmt.Errorf("invalid LEAPVIEW_ALLOWED_HOSTS wildcard entry: %q", raw)
 		}
 		return "*." + suffix, nil
 	}
 	if strings.Contains(host, "*") || strings.ContainsAny(host, " \r\n\t") {
-		return "", fmt.Errorf("invalid LIBREDASH_ALLOWED_HOSTS entry: %q", raw)
+		return "", fmt.Errorf("invalid LEAPVIEW_ALLOWED_HOSTS entry: %q", raw)
 	}
 	return host, nil
 }

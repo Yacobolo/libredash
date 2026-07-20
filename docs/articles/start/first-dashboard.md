@@ -38,7 +38,7 @@ The server writes worktree-local process state and logs beneath `.tmp/`. Open th
 The report is assembled from these files:
 
 ```text
-dashboards/libredash.yaml
+dashboards/leapview.yaml
 dashboards/connections/olist.yaml
 dashboards/sources/olist.*.yaml
 dashboards/workspaces/sales/workspace.yaml
@@ -66,7 +66,7 @@ For a first change, update only the label to `Average revenue per order`. This c
 Validate the entire project, not just the edited file:
 
 ```sh
-go run ./cmd/libredash validate --project dashboards/libredash.yaml
+go run ./cmd/leapview validate --project dashboards/leapview.yaml
 ```
 
 If validation reports a location, fix the resource before continuing. Common first-edit failures are incorrect indentation, an unknown field, or a reference to a semantic name that does not exist.
@@ -94,7 +94,7 @@ The visual owns its semantic query and presentation options. A page component la
 Inspect the candidate before activating it:
 
 ```sh
-go run ./cmd/libredash plan --project dashboards/libredash.yaml
+go run ./cmd/leapview plan --project dashboards/leapview.yaml
 ```
 
 Apply it to the managed development target:
@@ -108,8 +108,8 @@ task deploy:dev
 Run validation and planning once more immediately before deployment if another edit occurred after the earlier checks:
 
 ```sh
-go run ./cmd/libredash validate --project dashboards/libredash.yaml
-go run ./cmd/libredash plan --project dashboards/libredash.yaml
+go run ./cmd/leapview validate --project dashboards/leapview.yaml
+go run ./cmd/leapview plan --project dashboards/leapview.yaml
 ```
 
 The plan should contain only the resources you intended to change. Unexpected additions or removals usually indicate a discovery-pattern or stable-ID mistake.
@@ -118,7 +118,7 @@ The plan should contain only the resources you intended to change. Unexpected ad
 
 Reload Executive Sales and confirm both label changes. Also change a date or state filter to verify that the KPI still participates in the shared query lifecycle.
 
-LibreDash validates all workspace candidates before switching the active project. A rejected candidate does not replace the last valid serving state. This makes validation and plan review normal parts of authoring rather than recovery steps.
+LeapView validates all workspace candidates before switching the active project. A rejected candidate does not replace the last valid serving state. This makes validation and plan review normal parts of authoring rather than recovery steps.
 
 ## Troubleshooting
 

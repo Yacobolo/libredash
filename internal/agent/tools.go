@@ -3,7 +3,7 @@ package agent
 import (
 	"sort"
 
-	agentcore "github.com/Yacobolo/libredash/pkg/agent"
+	agentcore "github.com/Yacobolo/leapview/pkg/agent"
 )
 
 func (s *Service) toolDefinitions(scope Scope) []agentcore.ToolDefinition {

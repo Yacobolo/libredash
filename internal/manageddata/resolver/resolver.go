@@ -14,9 +14,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Yacobolo/libredash/internal/manageddata"
-	"github.com/Yacobolo/libredash/internal/runtimehost"
-	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
+	"github.com/Yacobolo/leapview/internal/manageddata"
+	"github.com/Yacobolo/leapview/internal/runtimehost"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
 )
 
 var (

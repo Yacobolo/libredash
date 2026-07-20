@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	cligen "github.com/Yacobolo/libredash/internal/cli/gen"
+	cligen "github.com/Yacobolo/leapview/internal/cli/gen"
 	"github.com/spf13/cobra"
 )
 

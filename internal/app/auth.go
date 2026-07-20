@@ -17,9 +17,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/access"
-	"github.com/Yacobolo/libredash/internal/access/httpauth"
-	oidcauth "github.com/Yacobolo/libredash/internal/access/oidc"
+	"github.com/Yacobolo/leapview/internal/access"
+	"github.com/Yacobolo/leapview/internal/access/httpauth"
+	oidcauth "github.com/Yacobolo/leapview/internal/access/oidc"
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/csrf"
 )
@@ -27,9 +27,9 @@ import (
 type principalContextKey struct{}
 type apiCredentialContextKey struct{}
 
-const csrfCookieName = "ld_csrf"
-const oidcStateCookieName = "ld_oidc_state"
-const authReturnCookieName = "ld_auth_return"
+const csrfCookieName = "lv_csrf"
+const oidcStateCookieName = "lv_oidc_state"
+const authReturnCookieName = "lv_auth_return"
 const oidcStateMaxAge = 10 * time.Minute
 const oidcStateClockSkew = time.Minute
 const maxAuthReturnTargetBytes = 2500
@@ -268,7 +268,7 @@ func (a *Auth) Callback(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *Auth) Logout(w http.ResponseWriter, r *http.Request) {
-	if cookie, err := r.Cookie("ld_session"); err == nil {
+	if cookie, err := r.Cookie("lv_session"); err == nil {
 		principal, _ := a.sessions.PrincipalForToken(r.Context(), cookie.Value)
 		if err := runAuthAuditedMutation(r, a.repo, func(txRepo access.Repository) (access.AuditEventInput, error) {
 			mutationErr := txRepo.DeleteSession(r.Context(), cookie.Value)
@@ -279,7 +279,7 @@ func (a *Auth) Logout(w http.ResponseWriter, r *http.Request) {
 		}
 		recordAccessAudit(r, a.repo, "sign_out", principal.ID, "", "principal", principal.ID, "", "success", nil)
 	}
-	http.SetCookie(w, &http.Cookie{Name: "ld_session", Value: "", Path: "/", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: a.cookieSecure})
+	http.SetCookie(w, &http.Cookie{Name: "lv_session", Value: "", Path: "/", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: a.cookieSecure})
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
@@ -505,7 +505,7 @@ func (a *Auth) mustChangeLocalPassword(r *http.Request, principalID string) bool
 }
 
 func writeBearerChallenge(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("WWW-Authenticate", `Bearer realm="libredash"`)
+	w.Header().Set("WWW-Authenticate", `Bearer realm="leapview"`)
 	if strings.HasPrefix(r.URL.Path, "/api/v1/") {
 		writeAPIProblem(w, r, http.StatusUnauthorized, "AUTHENTICATION_REQUIRED", "A valid bearer credential is required", nil)
 		return
@@ -614,7 +614,7 @@ func (a *Auth) authenticate(r *http.Request) (Principal, *access.APICredential, 
 	if a.apiTokenOnly {
 		return Principal{}, nil, false
 	}
-	cookie, err := r.Cookie("ld_session")
+	cookie, err := r.Cookie("lv_session")
 	if err != nil || cookie.Value == "" {
 		return Principal{}, nil, false
 	}
@@ -626,7 +626,7 @@ func (a *Auth) authenticate(r *http.Request) (Principal, *access.APICredential, 
 	return Principal{ID: principal.ID, Email: principal.Email, DisplayName: principal.DisplayName}, nil, true
 }
 
-// authenticateBearer resolves LibreDash REST API tokens. MCP OAuth tokens use
+// authenticateBearer resolves LeapView REST API tokens. MCP OAuth tokens use
 // the resource-server verifier and never enter the REST credential path.
 func (a *Auth) authenticateBearer(r *http.Request) (Principal, *access.APICredential, bool) {
 	if a == nil || bearerToken(r) == "" {
@@ -649,7 +649,7 @@ func (a *Auth) authenticateBearer(r *http.Request) (Principal, *access.APICreden
 }
 
 func hasSessionCookie(r *http.Request) bool {
-	cookie, err := r.Cookie("ld_session")
+	cookie, err := r.Cookie("lv_session")
 	return err == nil && strings.TrimSpace(cookie.Value) != ""
 }
 
@@ -691,7 +691,7 @@ func apiTokenAllows(token access.APIToken, workspaceID string, privilege access.
 
 func (a *Auth) sessionCookie(token string, expires time.Time) *http.Cookie {
 	return &http.Cookie{
-		Name:     "ld_session",
+		Name:     "lv_session",
 		Value:    token,
 		Path:     "/",
 		Expires:  expires,
@@ -887,7 +887,7 @@ func (a *Auth) decodeOIDCState(value string) (string, string, error) {
 
 func derivedSecret(secret, purpose string) []byte {
 	base := csrfKey(secret)
-	sum := sha256.Sum256(append([]byte("libredash:"+purpose+":"), base...))
+	sum := sha256.Sum256(append([]byte("leapview:"+purpose+":"), base...))
 	return sum[:]
 }
 
@@ -895,7 +895,7 @@ func (a *Auth) mcpOAuthSecret() []byte {
 	if a == nil {
 		return nil
 	}
-	sum := sha256.Sum256(append([]byte("libredash:mcp-oauth:"), a.stateKey...))
+	sum := sha256.Sum256(append([]byte("leapview:mcp-oauth:"), a.stateKey...))
 	return sum[:]
 }
 

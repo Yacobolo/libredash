@@ -10,13 +10,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/access"
-	accesssqlite "github.com/Yacobolo/libredash/internal/access/sqlite"
-	"github.com/Yacobolo/libredash/internal/config"
-	"github.com/Yacobolo/libredash/internal/platform"
-	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
-	"github.com/Yacobolo/libredash/internal/workspace"
-	workspacesqlite "github.com/Yacobolo/libredash/internal/workspace/sqlite"
+	"github.com/Yacobolo/leapview/internal/access"
+	accesssqlite "github.com/Yacobolo/leapview/internal/access/sqlite"
+	"github.com/Yacobolo/leapview/internal/config"
+	"github.com/Yacobolo/leapview/internal/platform"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
+	"github.com/Yacobolo/leapview/internal/workspace"
+	workspacesqlite "github.com/Yacobolo/leapview/internal/workspace/sqlite"
 )
 
 func TestServeProductionModeHonorsConfigEnv(t *testing.T) {
@@ -27,7 +27,7 @@ func TestServeProductionModeHonorsConfigEnv(t *testing.T) {
 }
 
 func TestServeCommandConstructionDoesNotParseEnvironment(t *testing.T) {
-	t.Setenv("LIBREDASH_EXEC_MAX_RUNNING_READS", "invalid")
+	t.Setenv("LEAPVIEW_EXEC_MAX_RUNNING_READS", "invalid")
 	cmd := serveCommand(context.Background(), &rootOptions{})
 	if cmd == nil {
 		t.Fatal("serveCommand() returned nil")
@@ -106,7 +106,7 @@ func TestDeploymentBackedDevServerAlwaysOpensPlatformStore(t *testing.T) {
 	}
 	defer cleanup()
 
-	if _, err := os.Stat(filepath.Join(home, "libredash.db")); err != nil {
+	if _, err := os.Stat(filepath.Join(home, "leapview.db")); err != nil {
 		t.Fatalf("platform store was not created: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(home, "artifacts")); err != nil {
@@ -203,7 +203,7 @@ func TestDeploymentBackedDevServerSeedsPlatformAdminPrincipal(t *testing.T) {
 	}
 	defer cleanup()
 
-	store, err := platform.Open(ctx, filepath.Join(home, "libredash.db"))
+	store, err := platform.Open(ctx, filepath.Join(home, "leapview.db"))
 	if err != nil {
 		t.Fatalf("open platform store: %v", err)
 	}
@@ -237,7 +237,7 @@ func TestDeploymentBackedDevServerDoesNotCreateWorkspacesOrDeployments(t *testin
 	}
 	defer cleanup()
 
-	store, err := platform.Open(ctx, filepath.Join(home, "libredash.db"))
+	store, err := platform.Open(ctx, filepath.Join(home, "leapview.db"))
 	if err != nil {
 		t.Fatalf("open platform store: %v", err)
 	}

@@ -14,9 +14,9 @@ import (
 	"sync"
 	"time"
 
-	semanticquery "github.com/Yacobolo/libredash/internal/analytics/query"
-	"github.com/Yacobolo/libredash/internal/dataquery"
-	"github.com/Yacobolo/libredash/internal/securefs"
+	semanticquery "github.com/Yacobolo/leapview/internal/analytics/query"
+	"github.com/Yacobolo/leapview/internal/dataquery"
+	"github.com/Yacobolo/leapview/internal/securefs"
 	duckdb "github.com/duckdb/duckdb-go/v2"
 )
 
@@ -318,7 +318,7 @@ func setCommitMessage(ctx context.Context, tx *sql.Tx, servingStateID string, ex
 	}
 	_, err = tx.ExecContext(ctx,
 		"CALL "+catalogAlias+".set_commit_message(?, ?, extra_info => ?)",
-		"LibreDash",
+		"LeapView",
 		"serving-state "+servingStateID,
 		string(bytes),
 	)

@@ -24,7 +24,7 @@ OpenAPI is the client-generation source. Generated prose summarizes endpoints bu
 
 ## Visuals
 
-Visual pages combine a live production component with dashboard configuration and expected query shape. The visual overview helps choose a renderer-neutral type. ECharts-specific adaptation remains behind LibreDash visual contracts.
+Visual pages combine a live production component with dashboard configuration and expected query shape. The visual overview helps choose a renderer-neutral type. ECharts-specific adaptation remains behind LeapView visual contracts.
 
 Validate a new visual against the live documentation route because it exercises the site bundle, lazy renderer registration, theme behavior, and example payload together.
 

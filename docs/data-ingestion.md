@@ -1,11 +1,11 @@
 # Managed data ingestion
 
-LibreDash managed data turns local files into immutable, project-global data
+LeapView managed data turns local files into immutable, project-global data
 revisions. A connection belongs to the project, not to an individual workspace.
 DuckDB reads the active revision through its native CSV, Parquet, and other file
 scanners; ingestion does not insert rows one at a time.
 
-The examples below assume the CLI is already authenticated with `libredash
+The examples below assume the CLI is already authenticated with `leapview
 login`. Replace the paths, connection name, project ID, target, and environment
 with values from your project.
 
@@ -16,8 +16,8 @@ connection, hashes them, and prints the canonical manifest and diff. It does not
 contact the server or modify data.
 
 ```sh
-libredash data plan \
-  --project dashboards/libredash.yaml \
+leapview data plan \
+  --project dashboards/leapview.yaml \
   --connection olist \
   --from /srv/olist
 ```
@@ -33,11 +33,11 @@ direct multipart uploads. The CLI streams files and verifies that they do not
 change during transfer.
 
 ```sh
-libredash data sync \
-  --project dashboards/libredash.yaml \
+leapview data sync \
+  --project dashboards/leapview.yaml \
   --connection olist \
   --from /srv/olist \
-  --target https://libredash.example.com
+  --target https://leapview.example.com
 ```
 
 `data sync` stages an immutable revision only. It does not activate the revision
@@ -48,11 +48,11 @@ project configuration and managed data revisions together.
 Deploy the project with the staged digest printed by `data sync`:
 
 ```sh
-libredash deploy \
-  --project dashboards/libredash.yaml \
+leapview deploy \
+  --project dashboards/leapview.yaml \
   --revision "olist=sha256:<64-lowercase-hex>" \
   --environment prod \
-  --target https://libredash.example.com \
+  --target https://leapview.example.com \
   --auto-approve
 ```
 
@@ -92,16 +92,16 @@ Revision inspection uses the server project ID from the project's
 `metadata.name`, not the local project file path.
 
 ```sh
-libredash data revisions list \
-  --project libredash-showcase \
+leapview data revisions list \
+  --project leapview-showcase \
   --connection olist \
-  --target https://libredash.example.com
+  --target https://leapview.example.com
 
-libredash data revisions current \
-  --project libredash-showcase \
+leapview data revisions current \
+  --project leapview-showcase \
   --connection olist \
   --environment prod \
-  --target https://libredash.example.com
+  --target https://leapview.example.com
 ```
 
 The list command also accepts `--limit` and `--page-token`. The current command
@@ -111,12 +111,12 @@ revision.
 ## Storage and recovery
 
 The Hetzner single-node deployment uses the local backend and stores managed
-objects under `/var/lib/libredash/home/managed-data`. Its stopped-state application
-backup contains the object store and LibreDash metadata, so backup and restore
+objects under `/var/lib/leapview/home/managed-data`. Its stopped-state application
+backup contains the object store and LeapView metadata, so backup and restore
 recover a complete local deployment.
 
-With the S3 backend, LibreDash backups still contain the control-plane metadata
+With the S3 backend, LeapView backups still contain the control-plane metadata
 and local runtime cache, but not the authoritative S3 objects. Enable bucket
 versioning and a bucket-native backup or replication policy. A recoverable S3
-deployment requires both the LibreDash metadata backup and the corresponding
+deployment requires both the LeapView metadata backup and the corresponding
 bucket objects.

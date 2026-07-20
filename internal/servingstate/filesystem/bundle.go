@@ -14,10 +14,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/manageddata"
-	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
-	"github.com/Yacobolo/libredash/internal/workspace"
-	workspacecompiler "github.com/Yacobolo/libredash/internal/workspace/compiler"
+	"github.com/Yacobolo/leapview/internal/manageddata"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
+	"github.com/Yacobolo/leapview/internal/workspace"
+	workspacecompiler "github.com/Yacobolo/leapview/internal/workspace/compiler"
 	securejoin "github.com/cyphar/filepath-securejoin"
 )
 
@@ -146,7 +146,7 @@ func PackProject(projectPath string, options PackProjectOptions, out io.Writer) 
 		Validation: CompiledArtifactValidation{
 			Status:        "passed",
 			GraphHash:     graphHash(compiledWorkspace.Workspace.Graph),
-			SchemaVersion: "libredash.dev/v1",
+			SchemaVersion: "leapview.dev/v1",
 		},
 		Definition: compiledWorkspace.Definition,
 		Graph:      compiledWorkspace.Workspace.Graph,
@@ -323,7 +323,7 @@ func ValidateArtifactWithOptions(path string, workspaceID servingstate.Workspace
 	if err != nil {
 		return servingstate.Validation{}, err
 	}
-	root, err := os.MkdirTemp("", "libredash-deploy-*")
+	root, err := os.MkdirTemp("", "leapview-deploy-*")
 	if err != nil {
 		return servingstate.Validation{}, err
 	}
@@ -579,7 +579,7 @@ func canonicalManagedRevisionDigest(value string) bool {
 	return err == nil
 }
 
-const projectAPIVersion = "libredash.dev/v1"
+const projectAPIVersion = "leapview.dev/v1"
 
 func ExtractArtifact(path, dest string) error {
 	file, err := os.Open(path)

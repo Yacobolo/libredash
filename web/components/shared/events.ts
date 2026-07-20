@@ -1,11 +1,11 @@
 export const domainEvents = {
-  chatSubmit: 'ld-chat-submit',
-  visualAction: 'ld-visual-action',
-  visualSelect: 'ld-visual-select',
-  tableWindow: 'ld-table-window',
-  tableSort: 'ld-table-sort',
-  filterChange: 'ld-filter-change',
-  filterClear: 'ld-filter-clear',
+  chatSubmit: 'lv-chat-submit',
+  visualAction: 'lv-visual-action',
+  visualSelect: 'lv-visual-select',
+  tableWindow: 'lv-table-window',
+  tableSort: 'lv-table-sort',
+  filterChange: 'lv-filter-change',
+  filterClear: 'lv-filter-clear',
 } as const
 
 export type DomainEventName = typeof domainEvents[keyof typeof domainEvents]

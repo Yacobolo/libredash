@@ -13,7 +13,7 @@ services:
     environment:
       CADDY_DOMAIN: ${CADDY_DOMAIN:?set CADDY_DOMAIN in deployment.env}
     depends_on:
-      libredash: {condition: service_healthy}
+      leapview: {condition: service_healthy}
     ports: ["80:80", "443:443", "443:443/udp"]
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro

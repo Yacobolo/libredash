@@ -1,6 +1,6 @@
 # Storage and recovery
 
-LibreDash separates application state, analytical metadata, analytical files, managed source objects, and ephemeral runtime data. Recovery succeeds only when the authoritative boundaries are backed up consistently.
+LeapView separates application state, analytical metadata, analytical files, managed source objects, and ephemeral runtime data. Recovery succeeds only when the authoritative boundaries are backed up consistently.
 
 ## Storage ownership
 
@@ -10,23 +10,23 @@ DuckLake owns analytical table schemas, snapshots, changesets, statistics, and p
 
 Managed-data storage owns staged source objects and immutable revision manifests. Runtime extraction directories and temporary files are caches or work areas and should be reconstructable.
 
-Do not back up only `libredash.db` and assume the rest can always be reconstructed. The control-plane pointer without its referenced DuckLake catalog and Parquet files is incomplete. Likewise, copied Parquet files without the catalog metadata do not form a recoverable analytical state.
+Do not back up only `leapview.db` and assume the rest can always be reconstructed. The control-plane pointer without its referenced DuckLake catalog and Parquet files is incomplete. Likewise, copied Parquet files without the catalog metadata do not form a recoverable analytical state.
 
 ## Local-backend backup
 
 Create a coordinated instance archive:
 
 ```sh
-libredash admin backup --out /srv/backups/libredash-backup.tar
+leapview admin backup --out /srv/backups/leapview-backup.tar
 ```
 
 Use `--database-only` only for a deliberately limited operation; it is not a complete analytical instance backup. Record the application version, configuration, storage backend, archive checksum, and creation time with the backup.
 
-For a local managed-data backend, the coordinated instance backup includes the local authoritative object store and LibreDash metadata according to the deployment contract. Ensure the destination is outside the live instance directory and is protected with appropriate permissions and retention.
+For a local managed-data backend, the coordinated instance backup includes the local authoritative object store and LeapView metadata according to the deployment contract. Ensure the destination is outside the live instance directory and is protected with appropriate permissions and retention.
 
 ## Object-storage boundary
 
-With an S3-style managed-data backend, the instance archive does not replace bucket-native protection of authoritative objects. Enable versioning and an independent backup or replication policy. Recovery requires both LibreDash metadata and the corresponding object versions.
+With an S3-style managed-data backend, the instance archive does not replace bucket-native protection of authoritative objects. Enable versioning and an independent backup or replication policy. Recovery requires both LeapView metadata and the corresponding object versions.
 
 The same principle applies to a remote DuckLake catalog or analytical data store: use the native backup mechanism required by that backend and capture a mutually consistent recovery point.
 
@@ -47,8 +47,8 @@ Practice restores on a schedule. A backup that has never been restored is an unt
 Stop serving traffic or enter the supported maintenance boundary before replacing an instance. Restore from a validated archive and ask the command to preserve the current instance first:
 
 ```sh
-libredash admin restore \
-  --from /srv/backups/libredash-backup.tar \
+leapview admin restore \
+  --from /srv/backups/leapview-backup.tar \
   --current-out /srv/backups/pre-restore.tar \
   --confirm
 ```

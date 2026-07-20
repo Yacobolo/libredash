@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/workspace"
+	"github.com/Yacobolo/leapview/internal/brand"
+	"github.com/Yacobolo/leapview/internal/workspace"
 )
 
 type Options struct {
@@ -40,5 +41,5 @@ func workspaceTitle(value, workspaceID string) string {
 	if strings.TrimSpace(workspaceID) != "" {
 		return workspaceID
 	}
-	return "LibreDash"
+	return brand.Name
 }

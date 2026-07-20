@@ -3,9 +3,9 @@ package command
 import (
 	"fmt"
 
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	"github.com/Yacobolo/libredash/internal/dashboard/consumer"
-	"github.com/Yacobolo/libredash/internal/dashboard/report"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	"github.com/Yacobolo/leapview/internal/dashboard/consumer"
+	"github.com/Yacobolo/leapview/internal/dashboard/report"
 )
 
 type TargetKind = consumer.Kind

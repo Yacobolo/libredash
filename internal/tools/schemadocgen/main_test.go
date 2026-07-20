@@ -21,7 +21,7 @@ func TestGenerateWritesACompleteSchemaReference(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(schemaDir, "project.schema.json"), []byte(`{
   "type": "object",
   "properties": {
-    "apiVersion": {"const": "libredash.dev/v1"},
+    "apiVersion": {"const": "leapview.dev/v1"},
     "kind": {"const": "Project"},
     "metadata": {"$ref": "#/$defs/Metadata"}
   },
@@ -32,7 +32,7 @@ func TestGenerateWritesACompleteSchemaReference(t *testing.T) {
 }`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(exampleDir, "libredash.yaml"), []byte("apiVersion: libredash.dev/v1\nkind: Project\nmetadata:\n  name: demo\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(exampleDir, "leapview.yaml"), []byte("apiVersion: leapview.dev/v1\nkind: Project\nmetadata:\n  name: demo\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -67,7 +67,7 @@ func TestExampleFromSchemaBuildsRequiredNestedValues(t *testing.T) {
 	root := schema{
 		"type": "object",
 		"properties": map[string]any{
-			"apiVersion": map[string]any{"const": "libredash.dev/v1"},
+			"apiVersion": map[string]any{"const": "leapview.dev/v1"},
 			"kind":       map[string]any{"const": "Grant"},
 			"metadata":   map[string]any{"$ref": "#/$defs/%23Metadata"},
 			"spec": map[string]any{
@@ -92,7 +92,7 @@ func TestExampleFromSchemaBuildsRequiredNestedValues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `apiVersion: libredash.dev/v1
+	want := `apiVersion: leapview.dev/v1
 kind: Grant
 metadata:
   name: example

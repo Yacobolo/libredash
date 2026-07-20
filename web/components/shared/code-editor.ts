@@ -28,11 +28,11 @@ class CodeEditor extends LitElement {
     :host {
       display: block;
       min-width: 0;
-      color: var(--ld-fg-default);
-      --ld-code-editor-font-family: var(--ld-font-family-mono);
-      --ld-code-editor-font-size: var(--ld-font-size-body-sm);
-      --ld-code-editor-line-height: var(--ld-line-height-snug);
-      font-family: var(--ld-font-family-ui, var(--fontStack-system));
+      color: var(--lv-fg-default);
+      --lv-code-editor-font-family: var(--lv-font-family-mono);
+      --lv-code-editor-font-size: var(--lv-font-size-body-sm);
+      --lv-code-editor-line-height: var(--lv-line-height-snug);
+      font-family: var(--lv-font-family-ui, var(--fontStack-system));
     }
 
     .editor-shell {
@@ -41,9 +41,9 @@ class CodeEditor extends LitElement {
       overflow: hidden;
       min-width: 0;
       min-height: 22rem;
-      border: var(--ld-code-editor-border, var(--ld-border-muted));
-      border-radius: var(--ld-code-editor-radius, var(--ld-radius-default));
-      background: var(--ld-bg-panel);
+      border: var(--lv-code-editor-border, var(--lv-border-muted));
+      border-radius: var(--lv-code-editor-radius, var(--lv-radius-default));
+      background: var(--lv-bg-panel);
     }
 
     .monaco-host {
@@ -64,13 +64,13 @@ class CodeEditor extends LitElement {
       right: var(--base-size-8);
       display: grid;
       place-items: center;
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-panel);
+      border: var(--lv-border-muted);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-panel);
       padding: var(--base-size-4) var(--base-size-8);
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
       pointer-events: none;
     }
 
@@ -80,13 +80,13 @@ class CodeEditor extends LitElement {
       min-height: 22rem;
       resize: vertical;
       border: 0;
-      background: var(--ld-bg-panel);
+      background: var(--lv-bg-panel);
       padding: var(--base-size-16);
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
       font: inherit;
-      font-family: var(--ld-code-editor-font-family);
-      font-size: var(--ld-code-editor-font-size);
-      line-height: var(--ld-code-editor-line-height);
+      font-family: var(--lv-code-editor-font-family);
+      font-size: var(--lv-code-editor-font-size);
+      line-height: var(--lv-code-editor-line-height);
       white-space: pre-wrap;
     }
 
@@ -97,11 +97,11 @@ class CodeEditor extends LitElement {
 
     .fallback-note {
       margin: 0;
-      border-top: var(--ld-border-muted);
+      border-top: var(--lv-border-muted);
       padding: var(--base-size-8) var(--base-size-16);
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
     }
 
   `
@@ -230,7 +230,7 @@ class CodeEditor extends LitElement {
   }
 
   private dispatchChange(value: string): void {
-    this.dispatchEvent(new CustomEvent('ld-code-editor-change', {
+    this.dispatchEvent(new CustomEvent('lv-code-editor-change', {
       bubbles: true,
       composed: true,
       detail: { value },
@@ -264,9 +264,9 @@ class CodeEditor extends LitElement {
 
   private editorTypography(): { fontFamily: string; fontSize: number; lineHeight: number } {
     const styles = getComputedStyle(this)
-    const fontFamily = styles.getPropertyValue('--ld-code-editor-font-family').trim() || 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
-    const fontSize = cssLengthToPixels(styles.getPropertyValue('--ld-code-editor-font-size'), 14)
-    const lineHeightToken = styles.getPropertyValue('--ld-code-editor-line-height').trim()
+    const fontFamily = styles.getPropertyValue('--lv-code-editor-font-family').trim() || 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
+    const fontSize = cssLengthToPixels(styles.getPropertyValue('--lv-code-editor-font-size'), 14)
+    const lineHeightToken = styles.getPropertyValue('--lv-code-editor-line-height').trim()
     const lineHeight = Math.round(cssLineHeightToPixels(lineHeightToken, fontSize, fontSize * 1.35))
     return { fontFamily, fontSize, lineHeight }
   }
@@ -325,4 +325,4 @@ function currentTheme(): 'github-light' | 'github-dark' {
   return 'github-light'
 }
 
-if (!customElements.get('ld-code-editor')) customElements.define('ld-code-editor', CodeEditor)
+if (!customElements.get('lv-code-editor')) customElements.define('lv-code-editor', CodeEditor)

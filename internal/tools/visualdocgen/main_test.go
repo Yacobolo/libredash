@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
-	"github.com/Yacobolo/libredash/internal/visualdocs"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	"github.com/Yacobolo/leapview/internal/visualdocs"
 )
 
 func TestParseVisualExamplesUsesMarkedYAMLAsSource(t *testing.T) {
@@ -51,7 +51,7 @@ func TestParseVisualExamplesUsesMarkedYAMLAsSource(t *testing.T) {
 
 func TestGenerateVisualExamplesExecutesEveryDocumentedQuery(t *testing.T) {
 	docsDir := filepath.Join("..", "..", "..", "docs", "visuals")
-	artifact, err := generateVisualExamples(docsDir, filepath.Join("testdata", "project", "libredash.yaml"), filepath.Join("testdata", "data"))
+	artifact, err := generateVisualExamples(docsDir, filepath.Join("testdata", "project", "leapview.yaml"), filepath.Join("testdata", "data"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +128,7 @@ func TestGenerateVisualExamplesExecutesEveryDocumentedQuery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	regenerated, err := generateVisualExamples(docsDir, filepath.Join("testdata", "project", "libredash.yaml"), filepath.Join("testdata", "data"))
+	regenerated, err := generateVisualExamples(docsDir, filepath.Join("testdata", "project", "leapview.yaml"), filepath.Join("testdata", "data"))
 	if err != nil {
 		t.Fatal(err)
 	}

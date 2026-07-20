@@ -8,7 +8,7 @@ import (
 
 func TestMCPOAuthMigrationCreatesPersistentProtocolState(t *testing.T) {
 	ctx := context.Background()
-	path := filepath.Join(t.TempDir(), "libredash.db")
+	path := filepath.Join(t.TempDir(), "leapview.db")
 	store, err := Open(ctx, path)
 	if err != nil {
 		t.Fatalf("open store: %v", err)

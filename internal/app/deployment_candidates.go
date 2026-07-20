@@ -8,9 +8,9 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/Yacobolo/libredash/internal/api"
-	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
-	workspacerefresh "github.com/Yacobolo/libredash/internal/workspace/refresh"
+	"github.com/Yacobolo/leapview/internal/api"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
+	workspacerefresh "github.com/Yacobolo/leapview/internal/workspace/refresh"
 )
 
 type runtimeReloader interface {

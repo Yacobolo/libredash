@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/manageddata"
+	"github.com/Yacobolo/leapview/internal/manageddata"
 )
 
 func TestS3MultipartRepositoryCreateIsIdempotentAndRejectsConflicts(t *testing.T) {

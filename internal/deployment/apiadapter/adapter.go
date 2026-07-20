@@ -11,8 +11,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/deployment"
-	"github.com/Yacobolo/libredash/internal/manageddata"
+	"github.com/Yacobolo/leapview/internal/deployment"
+	"github.com/Yacobolo/leapview/internal/manageddata"
 )
 
 var ErrInvalid = errors.New("invalid deployment request")
