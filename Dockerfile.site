@@ -17,14 +17,7 @@ COPY . .
 
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
-    go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 generate && \
-    go run ./internal/tools/configgen && \
-    go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3 typespec-compile -manifest api/apigen.yaml -target libredash-v1 && \
-    go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3 all -manifest api/apigen.yaml -target libredash-v1 && \
-    go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3 typespec-compile -manifest api/apigen.yaml -target ui-signals && \
-    go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3 all -manifest api/apigen.yaml -target ui-signals && \
-    go run ./internal/tools/uisignalspostprocess && \
-    go run ./cmd/libredash schema export --format json-schema --out schemas/json && \
+    ./scripts/generate_build_sources.sh && \
     go run ./internal/tools/clidocgen && \
     go run ./internal/tools/schemadocgen && \
     go run ./internal/tools/openapidocgen && \
@@ -38,10 +31,13 @@ COPY scripts ./scripts
 COPY static ./static
 COPY site ./site
 COPY web ./web
+COPY --from=sourcegen /src/api/gen ./api/gen
 COPY --from=sourcegen /src/web/generated ./web/generated
 
 RUN bun install --frozen-lockfile --no-cache
-RUN bun run build:site
+RUN bun scripts/generate_visualization_validator.ts && \
+    bun scripts/generate_vega_lite_validator.ts && \
+    bun run build:site
 
 FROM sourcegen AS build
 COPY --from=web /src/site/static ./site/static

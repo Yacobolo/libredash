@@ -17,14 +17,7 @@ COPY . .
 
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
-    go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 generate && \
-    go run ./internal/tools/configgen && \
-    go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3 typespec-compile -manifest api/apigen.yaml -target libredash-v1 && \
-    go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3 all -manifest api/apigen.yaml -target libredash-v1 && \
-    go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3 typespec-compile -manifest api/apigen.yaml -target ui-signals && \
-    go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3 all -manifest api/apigen.yaml -target ui-signals && \
-    go run ./internal/tools/uisignalspostprocess && \
-    go run ./cmd/libredash schema export --format json-schema --out schemas/json
+    ./scripts/generate_build_sources.sh
 
 FROM oven/bun:1.3.7@sha256:6cd5f00020e48b77a253bc8249f6b6dd3d92b3c04c2607f1f5a6d7dbf0a6fca3 AS web
 WORKDIR /src
@@ -33,10 +26,13 @@ COPY package.json bun.lock tsconfig.json ./
 COPY scripts ./scripts
 COPY static ./static
 COPY web ./web
+COPY --from=sourcegen /src/api/gen ./api/gen
 COPY --from=sourcegen /src/web/generated ./web/generated
 
 RUN bun install --frozen-lockfile --no-cache
-RUN bun run build
+RUN bun scripts/generate_visualization_validator.ts && \
+    bun scripts/generate_vega_lite_validator.ts && \
+    bun run build
 
 FROM golang:1.25-bookworm@sha256:a9c020ee3d1508c7be5435c262434e3d3fc1d0e76a11afeb9ddae7d60bc86aa4 AS build
 WORKDIR /src

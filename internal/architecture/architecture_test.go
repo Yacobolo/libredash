@@ -450,15 +450,14 @@ func TestProductionContainerContractExists(t *testing.T) {
 		"COPY --from=node /usr/local/bin/node /usr/local/bin/node",
 		"COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules",
 		"ln -sf ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm",
-		"go run ./internal/tools/configgen",
-		"go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3",
-		"typespec-compile -manifest api/apigen.yaml -target ui-signals",
-		"all -manifest api/apigen.yaml -target ui-signals",
-		"go run ./internal/tools/uisignalspostprocess",
+		"./scripts/generate_build_sources.sh",
 		"FROM oven/bun:1.3.7@sha256:",
+		"COPY --from=sourcegen /src/api/gen ./api/gen",
 		"COPY --from=sourcegen /src/web/generated ./web/generated",
 		"RUN bun install --frozen-lockfile --no-cache",
-		"RUN bun run build",
+		"bun scripts/generate_visualization_validator.ts",
+		"bun scripts/generate_vega_lite_validator.ts",
+		"bun run build",
 		"FROM golang:1.25-bookworm@sha256:",
 		"COPY --from=sourcegen /src/internal/api/gen ./internal/api/gen",
 		"COPY --from=sourcegen /src/internal/ui/signals/models.gen.go ./internal/ui/signals/models.gen.go",
@@ -500,14 +499,14 @@ func TestPublicSiteProductionContainerContractExists(t *testing.T) {
 	for _, want := range []string{
 		"FROM node:24-bookworm@sha256:",
 		"FROM golang:1.25-bookworm@sha256:",
-		"go run ./internal/tools/configgen",
-		"go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3",
-		"typespec-compile -manifest api/apigen.yaml -target ui-signals",
-		"all -manifest api/apigen.yaml -target ui-signals",
-		"go run ./internal/tools/uisignalspostprocess",
+		"./scripts/generate_build_sources.sh",
 		"FROM oven/bun:1.3.7@sha256:",
+		"COPY --from=sourcegen /src/api/gen ./api/gen",
+		"COPY --from=sourcegen /src/web/generated ./web/generated",
 		"RUN bun install --frozen-lockfile --no-cache",
-		"RUN bun run build:site",
+		"bun scripts/generate_visualization_validator.ts",
+		"bun scripts/generate_vega_lite_validator.ts",
+		"bun run build:site",
 		"FROM golang:1.25-bookworm@sha256:",
 		"CGO_ENABLED=0 go build -trimpath",
 		"./cmd/libredash-site",
@@ -523,6 +522,46 @@ func TestPublicSiteProductionContainerContractExists(t *testing.T) {
 	}
 	if strings.Contains(text, "apigen@v0.4.0") || strings.Contains(text, "apigenpostprocess") {
 		t.Error("Dockerfile.site still uses the retired APIGen v0.4 generation pipeline")
+	}
+}
+
+func TestBuildSourceGenerationContract(t *testing.T) {
+	root := repoRoot(t)
+	path := filepath.Join(root, "scripts", "generate_build_sources.sh")
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat shared build source generator: %v", err)
+	}
+	if info.Mode()&0o111 == 0 {
+		t.Fatal("shared build source generator is not executable")
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read shared build source generator: %v", err)
+	}
+	text := string(body)
+	commands := []string{
+		"go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 generate",
+		"go run ./internal/tools/configgen",
+		"apigenstage -target libredash-v1",
+		"typespec-compile -manifest api/apigen.yaml -target libredash-v1",
+		"apigenstage -target ui-signals",
+		"typespec-compile -manifest api/apigen.yaml -target ui-signals",
+		"typespec-compile -manifest api/apigen.yaml -target visualization-ir",
+		"all -manifest api/apigen.yaml -target visualization-ir",
+		"uisignalspostprocess -go-models internal/visualization/ir/models.gen.go -typescript=",
+		"schema export --format json-schema --out schemas/json",
+	}
+	previous := -1
+	for _, command := range commands {
+		current := strings.Index(text, command)
+		if current < 0 {
+			t.Fatalf("shared build source generator missing command %q", command)
+		}
+		if current <= previous {
+			t.Fatalf("shared build source generator command %q is out of order", command)
+		}
+		previous = current
 	}
 }
 
@@ -721,8 +760,11 @@ func TestSQLCOutputsAreGeneratedBuildInputs(t *testing.T) {
 			"internal/platform/db/models.go",
 			"internal/platform/db/*.sql.go",
 		},
-		"Dockerfile": {
+		filepath.Join("scripts", "generate_build_sources.sh"): {
 			"go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 generate",
+		},
+		"Dockerfile": {
+			"./scripts/generate_build_sources.sh",
 			"COPY --from=sourcegen /src/internal/platform/db/db.go ./internal/platform/db/db.go",
 			"COPY --from=sourcegen /src/internal/platform/db/models.go ./internal/platform/db/models.go",
 			"COPY --from=sourcegen /src/internal/platform/db/*.sql.go ./internal/platform/db/",
@@ -779,7 +821,7 @@ func TestDerivedArtifactsAreGeneratedBuildInputs(t *testing.T) {
 		},
 		"Dockerfile.site": {
 			"AS sourcegen",
-			"go run ./internal/tools/configgen",
+			"./scripts/generate_build_sources.sh",
 			"go run ./internal/tools/clidocgen",
 			"go run ./internal/tools/schemadocgen",
 			"go run ./internal/tools/openapidocgen",
@@ -790,6 +832,9 @@ func TestDerivedArtifactsAreGeneratedBuildInputs(t *testing.T) {
 		"Dockerfile": {
 			"COPY --from=sourcegen /src/internal/config/config_gen.go ./internal/config/config_gen.go",
 			"COPY --from=sourcegen /src/internal/configspec/names_gen.go ./internal/configspec/names_gen.go",
+		},
+		filepath.Join("scripts", "generate_build_sources.sh"): {
+			"go run ./internal/tools/configgen",
 		},
 		"Taskfile.yml": {
 			"desc: Build the LibreDash public site assets from generated contracts",
