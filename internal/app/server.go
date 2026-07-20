@@ -38,6 +38,7 @@ import (
 	"github.com/Yacobolo/leapview/internal/staticasset"
 	"github.com/Yacobolo/leapview/internal/ui"
 	"github.com/Yacobolo/leapview/internal/workspace"
+	workspacehttp "github.com/Yacobolo/leapview/internal/workspace/http"
 	workspacesqlite "github.com/Yacobolo/leapview/internal/workspace/sqlite"
 	agentcore "github.com/Yacobolo/leapview/pkg/agent"
 	"github.com/Yacobolo/leapview/pkg/pagestream"
@@ -93,6 +94,7 @@ type Server struct {
 	workspaceRepo                   workspace.Repository
 	assetCatalogMu                  sync.Mutex
 	assetCatalog                    workspace.AssetCatalogReader
+	workspaceSearchIndexes          workspacehttp.SearchIndexCache
 	accessRepo                      access.Repository
 	asyncJobs                       asyncjob.Repository
 	agent                           *agent.Service

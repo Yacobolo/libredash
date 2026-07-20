@@ -31,7 +31,7 @@ func ChatPage(catalog dashboard.Catalog, workspaceID, csrfToken, roleLabel, view
 		UpdatesURL: chatUpdatesURL,
 		Body: []g.Node{
 			g.El("lv-app-shell",
-				g.Attr("data-on:lv-chat-reference-search__debounce.200ms", "$agentReferenceSearch.query = evt.detail.query; "+uiactions.Get(chatBasePath+"/references/search", "agentReferenceSearch", "agentContext")),
+				g.Attr("data-on:lv-chat-reference-search__debounce.200ms", "$agentReferenceSearch.query = evt.detail.query; $agentReferenceSearch.requestId = evt.detail.requestId; "+uiactions.Get(chatBasePath+"/references/search", "agentReferenceSearch", "agentContext")),
 				g.El("lv-chat-page",
 					g.Attr("slot", "page"),
 					g.Attr("workspace-id", workspaceID),

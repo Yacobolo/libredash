@@ -70,6 +70,24 @@ func TestRankLimitMatchesFullRankingPrefix(t *testing.T) {
 	}
 }
 
+func TestIndexRanksAndLooksUpStableDocumentSnapshot(t *testing.T) {
+	documents := []Document{
+		{ID: "orders", Type: "dashboard", Name: "Orders", Weight: 20},
+		{ID: "revenue", Type: "measure", Name: "Revenue", Weight: 10},
+	}
+	index := NewIndex(documents)
+	documents[0].Name = "Mutated"
+
+	ranked := index.RankLimit(Query{Text: "orders"}, 1)
+	if len(ranked) != 1 || ranked[0].Name != "Orders" {
+		t.Fatalf("ranked = %#v, want immutable Orders snapshot", ranked)
+	}
+	lookedUp := index.LookupKeys(map[string]struct{}{"MEASURE:revenue": {}})
+	if len(lookedUp) != 1 || lookedUp[0].ID != "revenue" {
+		t.Fatalf("lookup = %#v, want revenue", lookedUp)
+	}
+}
+
 func TestParseTypesRejectsUnknownTypes(t *testing.T) {
 	if _, err := ParseTypes("dashboard,unknown"); err == nil {
 		t.Fatal("expected unknown type error")

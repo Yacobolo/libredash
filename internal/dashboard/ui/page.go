@@ -133,7 +133,7 @@ func Page(clientID, csrfToken string, catalog dashboard.Catalog, report reportde
 		UpdatesURL: dashboardUpdatesURL,
 		Body: []g.Node{
 			g.El("lv-app-shell",
-				g.Attr("data-on:lv-chat-reference-search__debounce.200ms", "$agentReferenceSearch.query = evt.detail.query; "+uiactions.Get("/chats/references/search", "agentReferenceSearch", "agentContext")),
+				g.Attr("data-on:lv-chat-reference-search__debounce.200ms", "$agentReferenceSearch.query = evt.detail.query; $agentReferenceSearch.requestId = evt.detail.requestId; "+uiactions.Get("/chats/references/search", "agentReferenceSearch", "agentContext")),
 				g.El("lv-dashboard-page",
 					g.Attr("slot", "page"),
 					g.Attr("workspace-id", catalog.Workspace.ID),

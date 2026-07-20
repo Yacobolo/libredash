@@ -8,7 +8,23 @@ import (
 	"github.com/Yacobolo/leapview/internal/access"
 	"github.com/Yacobolo/leapview/internal/api"
 	"github.com/Yacobolo/leapview/internal/workspace"
+	"github.com/Yacobolo/leapview/internal/workspace/search"
 )
+
+func TestSearchIndexCacheReusesOnlyCurrentServingState(t *testing.T) {
+	cache := &SearchIndexCache{}
+	builds := 0
+	build := func() *search.Index {
+		builds++
+		return search.NewIndex([]search.Document{{ID: "orders", Type: "dashboard", Name: "Orders"}})
+	}
+	first := cache.index("sales", "prod", "state-1", build)
+	second := cache.index("sales", "prod", "state-1", build)
+	third := cache.index("sales", "prod", "state-2", build)
+	if first != second || first == third || builds != 2 {
+		t.Fatalf("cache pointers = (%p, %p, %p), builds = %d; want reuse then rebuild", first, second, third, builds)
+	}
+}
 
 func TestFilterReadableSearchResultsStopsAtLimit(t *testing.T) {
 	rows := []api.SearchResult{

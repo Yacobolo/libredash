@@ -12,7 +12,7 @@ import (
 	uisignals "github.com/Yacobolo/leapview/internal/ui/signals"
 )
 
-func TestChatReferenceSearchUsesGlobalScopeWhilePreservingDashboardContext(t *testing.T) {
+func TestChatReferenceSearchUsesGlobalScopeAndEchoesRequestIdentity(t *testing.T) {
 	results := make([]uisignals.AgentReferenceSignal, 30)
 	for index := range results {
 		results[index] = uisignals.AgentReferenceSignal{
@@ -30,7 +30,7 @@ func TestChatReferenceSearchUsesGlobalScopeWhilePreservingDashboardContext(t *te
 	})
 	signals, err := json.Marshal(map[string]any{
 		"agentReferenceSearch": map[string]any{
-			"query": "field", "workspaceId": "sales", "dashboardId": "executive-sales", "pageId": "overview",
+			"query": "field", "requestId": 7,
 		},
 	})
 	if err != nil {
@@ -54,9 +54,14 @@ func TestChatReferenceSearchUsesGlobalScopeWhilePreservingDashboardContext(t *te
 	if got := strings.Count(response.Body.String(), `"kind":"field"`); got != 24 {
 		t.Fatalf("result count = %d, want 24:\n%s", got, response.Body.String())
 	}
-	for _, want := range []string{`"workspaceId":"sales"`, `"dashboardId":"executive-sales"`, `"pageId":"overview"`} {
+	for _, want := range []string{`"query":"field"`, `"requestId":7`, `"workspaceId":"sales"`} {
 		if !strings.Contains(response.Body.String(), want) {
-			t.Fatalf("dashboard context missing %s:\n%s", want, response.Body.String())
+			t.Fatalf("search response missing %s:\n%s", want, response.Body.String())
+		}
+	}
+	for _, deadField := range []string{`"dashboardId":"executive-sales"`, `"pageId":"overview"`} {
+		if strings.Contains(response.Body.String(), deadField) {
+			t.Fatalf("search response echoed redundant context %s:\n%s", deadField, response.Body.String())
 		}
 	}
 }

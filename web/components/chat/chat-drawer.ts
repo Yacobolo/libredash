@@ -9,9 +9,18 @@ import type {
   DashboardVisual,
 } from '../../generated/signals'
 import { DatastarLit } from '../shared/datastar-lit'
+import { domainEvents, emitDomainEvent } from '../shared/events'
 import { lucideIcon } from '../shared/lucide-icons'
 import './chat-composer'
 import './chat-thread'
+import {
+  type ChatReferencesChangeDetail,
+  defaultAgentReferenceLimit,
+  isOnPageReference,
+  mergeReferences,
+  normalizeReferenceLimit,
+  referenceIdentity,
+} from './reference'
 
 const emptyAgent: ChatSignal = {
   conversations: [],
@@ -20,8 +29,6 @@ const emptyAgent: ChatSignal = {
   status: { enabled: false, running: false },
   composer: { value: '', disabled: true, placeholder: 'Agent is not configured.' },
 }
-
-const defaultReferenceLimit = 12
 
 class ChatDrawer extends DatastarLit(LitElement) {
   @property({ type: Boolean, reflect: true }) open = false
@@ -211,7 +218,7 @@ class ChatDrawer extends DatastarLit(LitElement) {
 
 	get referenceSearch(): AgentReferenceSearchSignal {
 		return this.signal<AgentReferenceSearchSignal>('agentReferenceSearch', {
-			query: '', workspaceId: '', dashboardId: '', pageId: '', results: [],
+			query: '', requestId: 0, results: [],
 		})
 	}
 
@@ -224,7 +231,7 @@ class ChatDrawer extends DatastarLit(LitElement) {
   }
 
   public openWithReference(reference: AgentReferenceSignal): void {
-    const alreadyAttached = this.references.some((current) => referenceKey(current) === referenceKey(reference))
+    const alreadyAttached = this.references.some((current) => referenceIdentity(current) === referenceIdentity(reference))
     if (!alreadyAttached && this.references.length >= this.normalizedReferenceLimit()) {
       const limit = this.normalizedReferenceLimit()
       this.referenceLimitMessage = `Up to ${limit} ${limit === 1 ? 'item' : 'items'} can be attached`
@@ -295,9 +302,11 @@ class ChatDrawer extends DatastarLit(LitElement) {
           .pending=${this.pending}
           .placeholder=${agent.composer.placeholder || 'Ask about this dashboard…'}
           .references=${this.references}
-          .referenceLimit=${context?.referenceLimit ?? 12}
+          .referenceLimit=${context?.referenceLimit ?? defaultAgentReferenceLimit}
           .pinnedSuggestions=${pinnedSuggestions}
           .suggestions=${workspaceSuggestions}
+          .suggestionQuery=${this.referenceSearch.query}
+          .suggestionRequestId=${this.referenceSearch.requestId}
           @lv-chat-references-change=${this.referencesChanged}
         ></lv-chat-composer>
       </aside>
@@ -308,57 +317,27 @@ class ChatDrawer extends DatastarLit(LitElement) {
     this.references = []
     this.referenceLimitMessage = ''
     this.notifyReferences()
-		this.dispatchEvent(new CustomEvent('lv-chat-new', { bubbles: true, composed: true }))
+		emitDomainEvent(this, domainEvents.chatNew, undefined)
   }
 
 	private closeDrawer() {
 		this.open = false
-		this.dispatchEvent(new CustomEvent('lv-chat-drawer-close', { bubbles: true, composed: true }))
+		emitDomainEvent(this, domainEvents.chatDrawerClose, undefined)
 	}
 
-  private referencesChanged(event: CustomEvent<{ references: AgentReferenceSignal[] }>) {
+	private referencesChanged(event: CustomEvent<ChatReferencesChangeDetail>) {
     this.references = event.detail.references ?? []
     this.referenceLimitMessage = ''
     this.notifyReferences()
   }
 
   private normalizedReferenceLimit(): number {
-    const limit = this.context?.referenceLimit ?? defaultReferenceLimit
-    return Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : defaultReferenceLimit
+		return normalizeReferenceLimit(this.context?.referenceLimit ?? defaultAgentReferenceLimit)
   }
 
   private notifyReferences() {
-    this.dispatchEvent(new CustomEvent('lv-agent-references-change', {
-      bubbles: true,
-      composed: true,
-      detail: { references: this.references },
-    }))
+    emitDomainEvent<ChatReferencesChangeDetail>(this, domainEvents.agentReferencesChange, { references: this.references })
   }
-}
-
-function referenceKey(reference: AgentReferenceSignal): string {
-	return `${reference.workspaceId}:${reference.kind}:${reference.id || reference.componentId || reference.visualId || reference.title}`
-}
-
-function isOnPageReference(reference: AgentReferenceSignal, context: AgentContextSignal | null): boolean {
-	return Boolean(
-		context?.workspaceId
-		&& context.dashboardId
-		&& context.pageId
-		&& reference.workspaceId === context.workspaceId
-		&& reference.dashboardId === context.dashboardId
-		&& reference.pageId === context.pageId,
-	)
-}
-
-function mergeReferences(...groups: AgentReferenceSignal[][]): AgentReferenceSignal[] {
-	const seen = new Set<string>()
-	return groups.flat().filter((reference) => {
-		const key = referenceKey(reference)
-		if (seen.has(key)) return false
-		seen.add(key)
-		return true
-	})
 }
 
 if (!customElements.get('lv-chat-drawer')) customElements.define('lv-chat-drawer', ChatDrawer)

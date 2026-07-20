@@ -246,10 +246,7 @@ func DashboardInitialEnvelope(clientID, streamInstanceID string, catalog dashboa
 			References:     []AgentReferenceSignal{},
 		},
 		AgentReferenceSearch: AgentReferenceSearchSignal{
-			WorkspaceID: catalog.Workspace.ID,
-			DashboardID: report.ID,
-			PageID:      activePage.ID,
-			Results:     []AgentReferenceSignal{},
+			Results: []AgentReferenceSignal{},
 		},
 		AgentVisuals: map[string]DashboardVisual{},
 		Chrome:       ChromeSignal{Sidebar: sidebarConfig(catalog, "workspaces", report.ID, workspaceDisplayTitle(catalog), report.Title, activePage.Title, modelID, modelTitle, true, "", strings.TrimSpace(catalog.Workspace.ID) != "")},
@@ -313,7 +310,7 @@ func ChatInitialEnvelope(catalog dashboard.Catalog, workspaceID, roleLabel, view
 			ReferenceLimit: agent.MaxTurnReferences,
 			References:     []AgentReferenceSignal{},
 		},
-		AgentReferenceSearch: AgentReferenceSearchSignal{WorkspaceID: workspaceID, Results: []AgentReferenceSignal{}},
+		AgentReferenceSearch: AgentReferenceSearchSignal{Results: []AgentReferenceSignal{}},
 		Visuals:              state.Visuals,
 	}
 }

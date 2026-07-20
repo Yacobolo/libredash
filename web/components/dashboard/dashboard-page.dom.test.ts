@@ -689,7 +689,7 @@ test('dashboard agent drawer carries page context and explicit visual references
     const groupedSearch = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
       const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev')
       mergePatch({ agentReferenceSearch: {
-        query: 'orders', workspaceId: 'sales', dashboardId: 'executive-sales', pageId: 'overview',
+        query: 'orders', requestId: 1,
         results: [
           { kind: 'visual', id: 'visual:executive-sales.overview.orders_chart', workspaceId: 'sales', dashboardId: 'executive-sales', pageId: 'overview', componentId: 'orders-chart', visualId: 'orders_chart', title: 'Orders by status' },
           { kind: 'visual', id: 'visual:executive-sales.overview.foreign_orders', workspaceId: 'finance', dashboardId: 'executive-sales', pageId: 'overview', componentId: 'foreign-orders', visualId: 'foreign_orders', title: 'Finance orders', description: 'From another workspace' },

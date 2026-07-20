@@ -125,13 +125,10 @@ func (h *Handler) ChatReferenceSearch(w nethttp.ResponseWriter, r *nethttp.Reque
 		return
 	}
 	search := signals.AgentReferenceSearch
-	workspaceID := firstNonEmptyString(search.WorkspaceID, signals.AgentContext.WorkspaceID)
-	dashboardID := firstNonEmptyString(search.DashboardID, signals.AgentContext.DashboardID)
-	pageID := firstNonEmptyString(search.PageID, signals.AgentContext.PageID)
 	// Reference discovery follows the global agent boundary. SearchReferences
 	// applies the request principal or API credential to both workspace discovery
-	// and object-level results; the dashboard context below is retained only so
-	// the client can pin matches from the current page.
+	// and object-level results. The client pins current-page matches by comparing
+	// each result with the separately streamed agent context.
 	results, err := h.options.SearchReferences(r, "", strings.TrimSpace(search.Query), maxChatReferenceSearchResults)
 	if err != nil {
 		nethttp.Error(w, err.Error(), nethttp.StatusInternalServerError)
@@ -142,11 +139,9 @@ func (h *Handler) ChatReferenceSearch(w nethttp.ResponseWriter, r *nethttp.Reque
 	}
 	updates := pagestream.NewSignalStream(w, r)
 	_ = updates.Patch(pagestream.SignalPatch{"agentReferenceSearch": ui.AgentReferenceSearchSignal{
-		Query:       strings.TrimSpace(search.Query),
-		WorkspaceID: workspaceID,
-		DashboardID: dashboardID,
-		PageID:      pageID,
-		Results:     results,
+		Query:     strings.TrimSpace(search.Query),
+		RequestID: search.RequestID,
+		Results:   results,
 	}})
 }
 

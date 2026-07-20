@@ -64,6 +64,56 @@ type Result struct {
 	Refs
 }
 
+// Index owns an immutable document snapshot that can be reused for ranking and
+// exact reference resolution throughout one serving-state generation.
+type Index struct {
+	documents []Document
+	byKey     map[string]Document
+}
+
+func NewIndex(documents []Document) *Index {
+	copied := make([]Document, len(documents))
+	byKey := make(map[string]Document, len(documents))
+	for index, document := range documents {
+		document.Terms = append([]string(nil), document.Terms...)
+		copied[index] = document
+		byKey[documentKey(document.Type, document.ID)] = document
+	}
+	return &Index{documents: copied, byKey: byKey}
+}
+
+func (i *Index) Rank(query Query) []Result {
+	if i == nil {
+		return []Result{}
+	}
+	return Rank(i.documents, query)
+}
+
+func (i *Index) RankLimit(query Query, limit int) []Result {
+	if i == nil {
+		return []Result{}
+	}
+	return RankLimit(i.documents, query, limit)
+}
+
+func (i *Index) LookupKeys(keys map[string]struct{}) []Result {
+	if i == nil || len(keys) == 0 {
+		return []Result{}
+	}
+	out := make([]Result, 0, len(keys))
+	for rawKey := range keys {
+		document, ok := i.byKey[normalizeDocumentKey(rawKey)]
+		if !ok {
+			continue
+		}
+		out = append(out, resultFromDocument(document, document.Weight))
+	}
+	sort.SliceStable(out, func(left, right int) bool {
+		return documentKey(out[left].Type, out[left].ID) < documentKey(out[right].Type, out[right].ID)
+	})
+	return out
+}
+
 type rankedDocument struct {
 	document Document
 	score    int
@@ -139,17 +189,32 @@ func rank(documents []Document, query Query, limit int) []Result {
 	})
 	out := make([]Result, 0, len(ranked))
 	for _, item := range ranked {
-		document := item.document
-		out = append(out, Result{
-			ID:          document.ID,
-			Type:        document.Type,
-			Name:        document.Name,
-			Description: document.Description,
-			Score:       item.score,
-			Refs:        document.Refs,
-		})
+		out = append(out, resultFromDocument(item.document, item.score))
 	}
 	return out
+}
+
+func resultFromDocument(document Document, score int) Result {
+	return Result{
+		ID:          document.ID,
+		Type:        document.Type,
+		Name:        document.Name,
+		Description: document.Description,
+		Score:       score,
+		Refs:        document.Refs,
+	}
+}
+
+func documentKey(documentType, id string) string {
+	return strings.ToLower(strings.TrimSpace(documentType)) + ":" + strings.TrimSpace(id)
+}
+
+func normalizeDocumentKey(key string) string {
+	documentType, id, ok := strings.Cut(strings.TrimSpace(key), ":")
+	if !ok {
+		return ""
+	}
+	return documentKey(documentType, id)
 }
 
 func rankedDocumentBetter(left, right rankedDocument) bool {

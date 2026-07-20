@@ -5,6 +5,7 @@ import { DatastarLit } from '../shared/datastar-lit'
 import { checkSignalContract } from '../shared/signal-contract'
 import '../dashboard/visual-modal'
 import './chat-thread'
+import { type ChatReferencesChangeDetail, defaultAgentReferenceLimit } from './reference'
 import './chat-composer'
 import './chat-list'
 
@@ -209,9 +210,9 @@ class LeapViewChatPage extends DatastarLit(LitElement) {
     return this.signal<boolean>('agentTurnPending', false) || Boolean(this.agent.status?.running)
   }
 
-  get referenceSearch(): AgentReferenceSearchSignal {
+	get referenceSearch(): AgentReferenceSearchSignal {
 		return this.signal<AgentReferenceSearchSignal>('agentReferenceSearch', {
-			query: '', workspaceId: '', dashboardId: '', pageId: '', results: [],
+			query: '', requestId: 0, results: [],
 		})
 	}
 
@@ -294,14 +295,16 @@ class LeapViewChatPage extends DatastarLit(LitElement) {
         .pending=${this.pending || status.running}
         .placeholder=${composer.placeholder ?? emptyAgent.composer.placeholder}
         .references=${this.references}
-        .referenceLimit=${this.context?.referenceLimit ?? 12}
+        .referenceLimit=${this.context?.referenceLimit ?? defaultAgentReferenceLimit}
         .suggestions=${this.referenceSearch.results ?? []}
+        .suggestionQuery=${this.referenceSearch.query}
+        .suggestionRequestId=${this.referenceSearch.requestId}
         @lv-chat-references-change=${this.referencesChanged}
       ></lv-chat-composer>
     `
   }
 
-	private referencesChanged(event: CustomEvent<{ references: AgentReferenceSignal[] }>) {
+	private referencesChanged(event: CustomEvent<ChatReferencesChangeDetail>) {
 		this.references = [...(event.detail.references ?? [])]
 	}
 }

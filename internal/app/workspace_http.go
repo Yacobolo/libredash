@@ -19,6 +19,7 @@ func (s *Server) workspaceHTTPHandler() workspacehttp.Handler {
 		CSRFToken:        func(r *http.Request) string { return csrfToken(r, s.auth) },
 		CurrentRoleLabel: s.currentRoleLabel,
 		ChromeOptions:    func(r *http.Request) []ui.ChromeOption { return []ui.ChromeOption{s.chatChromeOption(r)} },
+		SearchIndexes:    &s.workspaceSearchIndexes,
 	}
 }
 

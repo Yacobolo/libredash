@@ -5,13 +5,92 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/Yacobolo/leapview/internal/access"
 	"github.com/Yacobolo/leapview/internal/agent"
+	"github.com/Yacobolo/leapview/internal/api"
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 )
+
+func (s *Server) resolveAgentTurnContext(r *http.Request, scope agent.Scope, candidate agent.TurnContext) (agent.TurnContext, error) {
+	if len(candidate.References) > agent.MaxTurnReferences {
+		return agent.TurnContext{}, fmt.Errorf("at most %d references can be attached", agent.MaxTurnReferences)
+	}
+	switch strings.ToLower(strings.TrimSpace(candidate.Surface)) {
+	case "dashboard":
+		return s.resolveDashboardTurnContext(r.Context(), scope, candidate)
+	case "chat":
+		defaultWorkspaceID := firstNonEmpty(candidate.WorkspaceID, s.defaultWorkspaceID)
+		workspaceKeys := map[string]map[string]struct{}{}
+		workspaceOrder := []string{}
+		for _, reference := range candidate.References {
+			workspaceID := firstNonEmpty(reference.WorkspaceID, defaultWorkspaceID)
+			if workspaceID == "" {
+				continue
+			}
+			workspaceScope := scope
+			workspaceScope.WorkspaceID = workspaceID
+			if !agentCredentialAllowsPrivilege(workspaceScope, access.PrivilegeViewItem) {
+				return agent.TurnContext{}, errors.New("credential cannot view referenced context")
+			}
+			if _, exists := workspaceKeys[workspaceID]; !exists {
+				workspaceKeys[workspaceID] = map[string]struct{}{}
+				workspaceOrder = append(workspaceOrder, workspaceID)
+			}
+			workspaceKeys[workspaceID][agentReferenceLookupKey(reference.Kind, reference.ID)] = struct{}{}
+		}
+		workspaceRows := map[string]map[string]api.SearchResult{}
+		for _, workspaceID := range workspaceOrder {
+			rows, err := s.workspaceHTTPHandler().SearchResultsByKeys(r, workspaceID, workspaceKeys[workspaceID])
+			if err != nil {
+				return agent.TurnContext{}, err
+			}
+			byKey := make(map[string]api.SearchResult, len(rows))
+			for _, row := range rows {
+				byKey[agentReferenceLookupKey(row.Type, row.ID)] = row
+			}
+			workspaceRows[workspaceID] = byKey
+		}
+		resolved := make([]agent.TurnReference, 0, min(len(candidate.References), agent.MaxTurnReferences))
+		seen := map[string]struct{}{}
+		resolvedWorkspaceID := ""
+		for _, reference := range candidate.References {
+			if len(resolved) == agent.MaxTurnReferences {
+				break
+			}
+			workspaceID := firstNonEmpty(reference.WorkspaceID, defaultWorkspaceID)
+			key := workspaceID + ":" + strings.ToLower(strings.TrimSpace(reference.Kind)) + ":" + strings.TrimSpace(reference.ID)
+			row, ok := workspaceRows[workspaceID][agentReferenceLookupKey(reference.Kind, reference.ID)]
+			if !ok {
+				continue
+			}
+			if _, exists := seen[key]; exists {
+				continue
+			}
+			seen[key] = struct{}{}
+			resolved = append(resolved, agent.TurnReference{
+				Kind: row.Type, ID: row.ID, Title: row.Name, WorkspaceID: workspaceID, ComponentID: row.ComponentID,
+				DashboardID: row.DashboardID, PageID: row.PageID, VisualID: row.VisualID, TableID: row.TableID,
+				FilterID: row.FilterID, ModelID: row.ModelID, DatasetID: row.DatasetID, FieldID: row.FieldID, AssetID: row.AssetID,
+			})
+			if len(resolved) == 1 {
+				resolvedWorkspaceID = workspaceID
+			} else if resolvedWorkspaceID != workspaceID {
+				resolvedWorkspaceID = ""
+			}
+		}
+		return agent.TurnContext{Surface: "chat", WorkspaceID: resolvedWorkspaceID, References: resolved}, nil
+	default:
+		return agent.TurnContext{}, errors.New("unsupported agent context surface")
+	}
+}
+
+func agentReferenceLookupKey(kind, id string) string {
+	return strings.ToLower(strings.TrimSpace(kind)) + ":" + strings.TrimSpace(id)
+}
 
 func (s *Server) resolveDashboardTurnContext(ctx context.Context, scope agent.Scope, candidate agent.TurnContext) (agent.TurnContext, error) {
 	workspaceID := strings.TrimSpace(candidate.WorkspaceID)

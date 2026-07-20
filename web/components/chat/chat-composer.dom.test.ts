@@ -330,6 +330,69 @@ test('mention picker opens immediately, renders compact rows, and scrolls with k
   }
 })
 
+test('mention picker ignores search responses from an older request', async () => {
+  const page = await browser.newPage({ viewport: { width: 800, height: 600 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => customElements.get('lv-chat-composer'))
+    const result = await page.locator('lv-chat-composer').evaluate(async (element: any) => {
+      const textarea = element.shadowRoot.querySelector('textarea') as HTMLTextAreaElement
+      const requests: Array<{ query: string; requestId: number }> = []
+      element.addEventListener('lv-chat-reference-search', (event: CustomEvent) => requests.push(event.detail))
+
+      const search = async (value: string) => {
+        textarea.value = value
+        textarea.setSelectionRange(value.length, value.length)
+        textarea.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true }))
+        await element.updateComplete
+      }
+
+      await search('@orders')
+      const first = requests[0]
+      element.suggestionQuery = first.query
+      element.suggestionRequestId = first.requestId
+      element.suggestions = [{ kind: 'visual', id: 'orders', workspaceId: 'sales', title: 'Orders' }]
+      await element.updateComplete
+      const firstVisible = element.shadowRoot.querySelector('.mention-option')?.textContent?.trim()
+
+      await search('@revenue')
+      const second = requests[1]
+      element.suggestionQuery = first.query
+      element.suggestionRequestId = first.requestId
+      element.suggestions = [{ kind: 'visual', id: 'orders-old', workspaceId: 'sales', title: 'Old orders response' }]
+      await element.updateComplete
+      const staleVisible = element.shadowRoot.querySelector('.mention-option')?.textContent?.trim() ?? ''
+      const staleStatus = element.shadowRoot.querySelector('.mention-status')?.textContent?.replace(/\s+/g, ' ').trim()
+
+      element.suggestionQuery = second.query
+      element.suggestionRequestId = second.requestId
+      element.suggestions = [{ kind: 'measure', id: 'revenue', workspaceId: 'sales', title: 'Revenue' }]
+      await element.updateComplete
+      const currentVisible = element.shadowRoot.querySelector('.mention-option')?.textContent?.trim()
+
+      element.suggestionQuery = first.query
+      element.suggestionRequestId = first.requestId
+      element.suggestions = [{ kind: 'visual', id: 'orders-late', workspaceId: 'sales', title: 'Late orders response' }]
+      await element.updateComplete
+      const afterLateStale = element.shadowRoot.querySelector('.mention-option')?.textContent?.trim()
+
+      return { requests, firstVisible, staleVisible, staleStatus, currentVisible, afterLateStale }
+    })
+
+    expect(result.requests).toEqual([
+      { query: 'orders', requestId: 1 },
+      { query: 'revenue', requestId: 2 },
+    ])
+    expect(result.firstVisible).toBe('Orders')
+    expect(result.staleVisible).toBe('')
+    expect(result.staleStatus).toBe('Searching…')
+    expect(result.currentVisible).toBe('Revenue')
+    expect(result.afterLateStale).toBe('Revenue')
+  } finally {
+    await page.close()
+  }
+})
+
 test('mention picker pins on-page results above deduplicated accessible results', async () => {
   const page = await browser.newPage({ viewport: { width: 800, height: 600 } })
   try {

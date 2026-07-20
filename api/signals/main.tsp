@@ -410,9 +410,7 @@ model AgentReferenceSignal {
 @apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "agent" })
 model AgentReferenceSearchSignal {
   `query`: string;
-  `workspaceId`: string;
-  `dashboardId`: string;
-  `pageId`: string;
+  `requestId`: int64;
   `results`: AgentReferenceSignal[];
 }
 

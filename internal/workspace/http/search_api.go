@@ -10,11 +10,12 @@ import (
 	"github.com/Yacobolo/leapview/internal/api"
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	"github.com/Yacobolo/leapview/internal/workspace"
 	"github.com/Yacobolo/leapview/internal/workspace/search"
 	"github.com/go-chi/chi/v5"
 )
 
-const searchAuthorizationCandidateMultiplier = 4
+const initialSearchAuthorizationCandidateMultiplier = 4
 
 func (h Handler) SearchWorkspace(w nethttp.ResponseWriter, r *nethttp.Request) {
 	types, err := search.ParseTypes(r.URL.Query().Get("types"))
@@ -44,15 +45,38 @@ func (h Handler) SearchWorkspace(w nethttp.ResponseWriter, r *nethttp.Request) {
 // used by the public search API. Product surfaces should call this instead of
 // maintaining their own search index or authorization path.
 func (h Handler) SearchResults(r *nethttp.Request, workspaceID, query string, types search.TypeSet, limit int) ([]api.SearchResult, error) {
-	candidateLimit := 0
-	if limit > 0 {
-		candidateLimit = limit * searchAuthorizationCandidateMultiplier
-	}
-	results, err := h.workspaceSearchResultsLimit(r, workspaceID, query, types, candidateLimit)
+	index, err := h.workspaceSearchIndex(r, workspaceID)
 	if err != nil {
 		return nil, err
 	}
-	return h.filterReadableSearchResults(r, workspaceID, results, limit)
+	searchQuery := search.Query{Text: query, Types: types}
+	if limit <= 0 {
+		results := searchResultsFromWorkspaceResults(index.Rank(searchQuery))
+		return h.filterReadableSearchResults(r, workspaceID, results, 0)
+	}
+	candidateLimit := limit * initialSearchAuthorizationCandidateMultiplier
+	if candidateLimit < limit {
+		candidateLimit = limit
+	}
+	for {
+		results := searchResultsFromWorkspaceResults(index.RankLimit(searchQuery, candidateLimit))
+		readable, err := h.filterReadableSearchResults(r, workspaceID, results, limit)
+		if err != nil {
+			return nil, err
+		}
+		if len(readable) >= limit || len(results) < candidateLimit {
+			return readable, nil
+		}
+		if candidateLimit > int(^uint(0)>>1)/2 {
+			candidateLimit = 0
+		} else {
+			candidateLimit *= 2
+		}
+		if candidateLimit == 0 {
+			results = searchResultsFromWorkspaceResults(index.Rank(searchQuery))
+			return h.filterReadableSearchResults(r, workspaceID, results, limit)
+		}
+	}
 }
 
 // SearchResultsByKeys resolves only explicitly requested type:id pairs through
@@ -62,16 +86,11 @@ func (h Handler) SearchResultsByKeys(r *nethttp.Request, workspaceID string, key
 	if len(keys) == 0 {
 		return []api.SearchResult{}, nil
 	}
-	results, err := h.workspaceSearchResults(r, workspaceID, "", nil)
+	index, err := h.workspaceSearchIndex(r, workspaceID)
 	if err != nil {
 		return nil, err
 	}
-	candidates := make([]api.SearchResult, 0, len(keys))
-	for _, row := range results {
-		if _, ok := keys[searchResultKey(row.Type, row.ID)]; ok {
-			candidates = append(candidates, row)
-		}
-	}
+	candidates := searchResultsFromWorkspaceResults(index.LookupKeys(keys))
 	return h.filterReadableSearchResults(r, workspaceID, candidates, len(keys))
 }
 
@@ -115,10 +134,6 @@ func (h Handler) filterReadableSearchResults(r *nethttp.Request, workspaceID str
 	return out, nil
 }
 
-func searchResultKey(resultType, id string) string {
-	return strings.ToLower(strings.TrimSpace(resultType)) + ":" + strings.TrimSpace(id)
-}
-
 func searchResultObject(workspaceID string, row api.SearchResult) (access.ObjectRef, bool) {
 	workspaceObject := access.WorkspaceObject(workspaceID)
 	if row.AssetID != "" {
@@ -146,33 +161,60 @@ func (h Handler) workspaceSearchResults(r *nethttp.Request, workspaceID, query s
 }
 
 func (h Handler) workspaceSearchResultsLimit(r *nethttp.Request, workspaceID, query string, types search.TypeSet, limit int) ([]api.SearchResult, error) {
-	documents := make([]search.Document, 0)
-	if metrics, ok := h.metricsForWorkspace(workspaceID); ok && metrics != nil {
-		documents = append(documents, workspaceSearchDocuments(workspaceID, metrics)...)
+	index, err := h.workspaceSearchIndex(r, workspaceID)
+	if err != nil {
+		return nil, err
 	}
+	searchQuery := search.Query{Text: query, Types: types}
+	if limit > 0 {
+		return searchResultsFromWorkspaceResults(index.RankLimit(searchQuery, limit)), nil
+	}
+	return searchResultsFromWorkspaceResults(index.Rank(searchQuery)), nil
+}
+
+func (h Handler) workspaceSearchIndex(r *nethttp.Request, workspaceID string) (*search.Index, error) {
 	assets, _, err := h.assetsAndEdges(r, workspaceID)
 	if err != nil {
 		return nil, err
 	}
+	build := func() *search.Index {
+		documents := make([]search.Document, 0)
+		if metrics, ok := h.metricsForWorkspace(workspaceID); ok && metrics != nil {
+			documents = append(documents, workspaceSearchDocuments(workspaceID, metrics)...)
+		}
+		for _, asset := range assets {
+			name := firstNonEmpty(asset.Title, asset.Key, asset.ID)
+			documents = append(documents, search.Document{
+				ID:          asset.ID,
+				Type:        "asset",
+				Name:        name,
+				Description: firstNonEmpty(asset.Description, asset.Type+" asset "+asset.Key),
+				Refs: search.Refs{
+					AssetID: asset.ID,
+				},
+				Terms:  []string{asset.ID, asset.Type, asset.Key, asset.Title, asset.Description},
+				Weight: -10,
+			})
+		}
+		return search.NewIndex(documents)
+	}
+	revision := searchIndexServingStateID(assets)
+	return h.SearchIndexes.index(workspaceID, h.environment(r), revision, build), nil
+}
+
+func searchIndexServingStateID(assets []workspace.AssetView) string {
+	revision := ""
 	for _, asset := range assets {
-		name := firstNonEmpty(asset.Title, asset.Key, asset.ID)
-		documents = append(documents, search.Document{
-			ID:          asset.ID,
-			Type:        "asset",
-			Name:        name,
-			Description: firstNonEmpty(asset.Description, asset.Type+" asset "+asset.Key),
-			Refs: search.Refs{
-				AssetID: asset.ID,
-			},
-			Terms:  []string{asset.ID, asset.Type, asset.Key, asset.Title, asset.Description},
-			Weight: -10,
-		})
+		candidate := strings.TrimSpace(asset.ServingStateID)
+		if candidate == "" {
+			continue
+		}
+		if revision != "" && revision != candidate {
+			return ""
+		}
+		revision = candidate
 	}
-	searchQuery := search.Query{Text: query, Types: types}
-	if limit > 0 {
-		return searchResultsFromWorkspaceResults(search.RankLimit(documents, searchQuery, limit)), nil
-	}
-	return searchResultsFromWorkspaceResults(search.Rank(documents, searchQuery)), nil
+	return revision
 }
 
 func workspaceSearchDocuments(workspaceID string, metrics Metrics) []search.Document {

@@ -1,15 +1,24 @@
 import { LitElement, css, html } from 'lit'
 import { property, state } from 'lit/decorators.js'
-import { BarChart3, Boxes, Columns3, Database, File, Filter, LayoutDashboard, PanelsTopLeft, Plug, Search, Send, Sigma, Table2, X } from 'lucide'
-import type { AgentReferenceSignal } from '../../generated/signals'
+import { Search, Send, X } from 'lucide'
+import { domainEvents, emitDomainEvent } from '../shared/events'
 import { lucideIcon } from '../shared/lucide-icons'
 import '../shared/loading-spinner'
-
-export type ChatContextReference = AgentReferenceSignal
+import {
+  type ChatContextReference,
+  type ChatReferenceSearchDetail,
+  type ChatReferencesChangeDetail,
+  defaultAgentReferenceLimit,
+  matchesReferenceQuery,
+  normalizeReferenceLimit,
+  normalizedReferenceQuery,
+  referenceIcon,
+  referenceIdentity,
+  uniqueReferences,
+} from './reference'
 
 const maxPinnedMentionSuggestions = 8
 const maxGlobalMentionSuggestions = 8
-const defaultReferenceLimit = 12
 
 class ChatComposer extends LitElement {
   @property({ type: String }) value = ''
@@ -19,11 +28,17 @@ class ChatComposer extends LitElement {
 	@property({ attribute: false }) references: ChatContextReference[] = []
 	@property({ attribute: false }) pinnedSuggestions: ChatContextReference[] = []
 	@property({ attribute: false }) suggestions: ChatContextReference[] = []
-  @property({ type: Number, attribute: 'reference-limit' }) referenceLimit = defaultReferenceLimit
+  @property({ type: Number, attribute: 'reference-limit' }) referenceLimit = defaultAgentReferenceLimit
+  @property({ type: String, attribute: false }) suggestionQuery = ''
+  @property({ type: Number, attribute: false }) suggestionRequestId = 0
   @state() private draft = ''
 	@state() private mentionIndex = 0
 	@state() private mentionSearchPending = false
+	@state() private acceptedSuggestions: ChatContextReference[] = []
   private lastSearchQuery: string | null = null
+  private latestSearchRequestId = 0
+	private acceptedSuggestionQuery = ''
+	private acceptedSuggestionRequestId = 0
   private resizeObserver?: ResizeObserver
   private observedWidth = -1
 
@@ -318,7 +333,14 @@ class ChatComposer extends LitElement {
       this.draft = this.value || ''
       void this.updateComplete.then(() => this.resizeTextarea())
     }
-		if (changed.has('suggestions') && this.mentionSearchPending) {
+		if (
+			(changed.has('suggestions') || changed.has('suggestionQuery') || changed.has('suggestionRequestId'))
+			&& this.mentionSearchPending
+			&& this.isCurrentSuggestionResponse()
+		) {
+			this.acceptedSuggestions = [...this.suggestions]
+			this.acceptedSuggestionQuery = this.suggestionQuery
+			this.acceptedSuggestionRequestId = this.suggestionRequestId
 			this.mentionSearchPending = false
 		}
   }
@@ -459,11 +481,7 @@ class ChatComposer extends LitElement {
   private dispatchSubmit() {
     const input = this.draft.trim()
     if (this.disabled || this.pending || input === '') return
-    this.dispatchEvent(new CustomEvent('lv-chat-submit', {
-      bubbles: true,
-      composed: true,
-			detail: { input, references: this.references },
-    }))
+    emitDomainEvent(this, domainEvents.chatSubmit, { input, references: this.references })
   }
 
 	private mentionSuggestions(): ChatContextReference[] {
@@ -481,7 +499,7 @@ class ChatComposer extends LitElement {
 			.filter((reference) => matchesReferenceQuery(reference, query))
 		const pinned = pinnedCandidates.slice(0, maxPinnedMentionSuggestions)
 		const excluded = new Set([...selected, ...pinnedCandidates.map(referenceIdentity)])
-		const global = uniqueReferences(this.suggestions)
+		const global = uniqueReferences(this.currentSuggestionCandidates())
 			.filter((reference) => !excluded.has(referenceIdentity(reference)))
 			.filter((reference) => matchesReferenceQuery(reference, query))
 			.slice(0, maxGlobalMentionSuggestions)
@@ -517,11 +535,7 @@ class ChatComposer extends LitElement {
 		}
 		this.mentionIndex = 0
 		this.lastSearchQuery = null
-		this.dispatchEvent(new CustomEvent('lv-chat-references-change', {
-			bubbles: true,
-			composed: true,
-			detail: { references: this.references },
-		}))
+		emitDomainEvent<ChatReferencesChangeDetail>(this, domainEvents.chatReferencesChange, { references: this.references })
 		void this.updateComplete.then(() => this.shadowRoot?.querySelector('textarea')?.focus())
 	}
 
@@ -540,19 +554,39 @@ class ChatComposer extends LitElement {
 		if (query === this.lastSearchQuery) return
 		this.lastSearchQuery = query
 		this.mentionSearchPending = true
-		this.dispatchEvent(new CustomEvent('lv-chat-reference-search', {
-			bubbles: true,
-			composed: true,
-			detail: { query },
-		}))
+		this.latestSearchRequestId += 1
+		this.acceptedSuggestions = []
+		this.acceptedSuggestionQuery = ''
+		this.acceptedSuggestionRequestId = 0
+		emitDomainEvent<ChatReferenceSearchDetail>(this, domainEvents.chatReferenceSearch, {
+			query,
+			requestId: this.latestSearchRequestId,
+		})
 	}
 
 	private notifyReferences() {
-		this.dispatchEvent(new CustomEvent('lv-chat-references-change', {
-			bubbles: true,
-			composed: true,
-			detail: { references: this.references },
-		}))
+		emitDomainEvent<ChatReferencesChangeDetail>(this, domainEvents.chatReferencesChange, { references: this.references })
+	}
+
+	private isCurrentSuggestionResponse(): boolean {
+		if (this.suggestionRequestId === 0 && this.suggestionQuery === '') return true
+		const mention = this.activeMention()
+		return Boolean(
+			mention
+			&& this.suggestionRequestId === this.latestSearchRequestId
+			&& normalizedReferenceQuery(this.suggestionQuery) === normalizedReferenceQuery(mention.query),
+		)
+	}
+
+	private currentSuggestionCandidates(): ChatContextReference[] {
+		if (this.suggestionRequestId === 0 && this.suggestionQuery === '') return this.suggestions
+		if (this.isCurrentSuggestionResponse()) return this.suggestions
+		const mention = this.activeMention()
+		if (!mention) return []
+		return this.acceptedSuggestionRequestId === this.latestSearchRequestId
+			&& normalizedReferenceQuery(this.acceptedSuggestionQuery) === normalizedReferenceQuery(mention.query)
+			? this.acceptedSuggestions
+			: []
 	}
 
 	private activeMention(textarea = this.shadowRoot?.querySelector('textarea') as HTMLTextAreaElement | null): { start: number; end: number; query: string } | null {
@@ -587,9 +621,7 @@ class ChatComposer extends LitElement {
 	}
 
 	private normalizedReferenceLimit(): number {
-		return Number.isFinite(this.referenceLimit) && this.referenceLimit > 0
-			? Math.floor(this.referenceLimit)
-			: defaultReferenceLimit
+		return normalizeReferenceLimit(this.referenceLimit)
 	}
 
 	private referenceLimitReached(): boolean {
@@ -608,50 +640,6 @@ class ChatComposer extends LitElement {
     textarea.style.height = `${height}px`
     textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden'
   }
-}
-
-function referenceIdentity(reference: ChatContextReference): string {
-	return `${reference.workspaceId ?? ''}:${reference.kind}:${reference.id || reference.componentId || reference.visualId || reference.title}`
-}
-
-function uniqueReferences(references: ChatContextReference[]): ChatContextReference[] {
-	const seen = new Set<string>()
-	return references.filter((reference) => {
-		const key = referenceIdentity(reference)
-		if (seen.has(key)) return false
-		seen.add(key)
-		return true
-	})
-}
-
-const mentionStopWords = new Set(['a', 'an', 'and', 'by', 'for', 'in', 'of', 'on', 'the', 'to'])
-
-function matchesReferenceQuery(reference: ChatContextReference, query: string): boolean {
-	const tokens = query
-		.toLocaleLowerCase()
-		.split(/[^\p{L}\p{N}_]+/u)
-		.filter((token) => token !== '' && !mentionStopWords.has(token))
-	if (tokens.length === 0) return true
-	const haystack = `${reference.title} ${reference.description ?? ''} ${reference.kind}`.toLocaleLowerCase()
-	return tokens.every((token) => haystack.includes(token))
-}
-
-function referenceIcon(kind: string) {
-	switch (kind) {
-		case 'dashboard': return lucideIcon(LayoutDashboard)
-		case 'page': return lucideIcon(PanelsTopLeft)
-		case 'visual': return lucideIcon(BarChart3)
-		case 'filter': return lucideIcon(Filter)
-		case 'semantic_model': return lucideIcon(Boxes)
-		case 'dataset':
-		case 'semantic_table': return lucideIcon(Database)
-		case 'measure': return lucideIcon(Sigma)
-		case 'field': return lucideIcon(Columns3)
-		case 'source': return lucideIcon(Plug)
-		case 'table': return lucideIcon(Table2)
-		case 'asset': return lucideIcon(File)
-		default: return lucideIcon(Search)
-	}
 }
 
 if (!customElements.get('lv-chat-composer')) customElements.define('lv-chat-composer', ChatComposer)

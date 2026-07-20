@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"html"
 	"io"
 	"net/http"
@@ -22,6 +23,7 @@ import (
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 	"github.com/Yacobolo/leapview/internal/platform"
 	"github.com/Yacobolo/leapview/internal/workspace"
+	workspacehttp "github.com/Yacobolo/leapview/internal/workspace/http"
 	"github.com/Yacobolo/leapview/pkg/pagestream"
 )
 
@@ -138,7 +140,7 @@ func TestChatReferenceSearchReturnsTypedGovernedWorkspaceResults(t *testing.T) {
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, Agent: agent.NewService(fakeMetrics{}, testAgentRepository(store), agent.Config{APIKey: "key", Model: "fake-model"}), DefaultWorkspaceID: "test"})
 
 	signals, _ := json.Marshal(map[string]any{
-		"agentReferenceSearch": map[string]any{"query": "orders by", "workspaceId": "test"},
+		"agentReferenceSearch": map[string]any{"query": "orders by"},
 		"agentContext":         map[string]any{"surface": "chat", "workspaceId": "test"},
 	})
 	req := httptest.NewRequest(http.MethodGet, "/chats/references/search?datastar="+url.QueryEscape(string(signals)), nil)
@@ -261,6 +263,75 @@ func TestGlobalChatReferenceSearchRanksAcrossWorkspaces(t *testing.T) {
 		t.Fatalf("globally ranked results = %#v", results)
 	}
 }
+
+func TestChatReferenceSearchFillsLimitAfterObjectAuthorization(t *testing.T) {
+	store := testStore(t)
+	ctx := context.Background()
+	repo := testAccessRepository(store)
+	principal := testPrincipal(t, ctx, store, "limited-search@example.com", "Limited Search", "")
+	workspaceObject := access.WorkspaceObject("test")
+	if _, err := repo.UpsertSecurableObject(ctx, workspaceObject, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.CreateGrant(ctx, access.GrantInput{
+		Object: workspaceObject, SubjectType: access.SubjectPrincipal, SubjectID: principal.ID, Privilege: access.PrivilegeUseWorkspace,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for index := 1; index <= 5; index++ {
+		dashboardID := fmt.Sprintf("match-%d", index)
+		object := access.ItemObjectWithParent(access.SecurableDashboard, "test", dashboardID, workspaceObject)
+		if _, err := repo.UpsertSecurableObject(ctx, object, ""); err != nil {
+			t.Fatal(err)
+		}
+		if index == 5 {
+			if _, err := repo.CreateGrant(ctx, access.GrantInput{
+				Object: object, SubjectType: access.SubjectPrincipal, SubjectID: principal.ID, Privilege: access.PrivilegeViewItem,
+			}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	server := NewWithOptions(authorizationFillMetrics{fakeMetrics: fakeMetrics{}}, Options{
+		Store: store, Auth: testAuth(store, "test", AuthConfig{APITokenOnly: true}), DefaultWorkspaceID: "test",
+	})
+	handler := server.workspaceHTTPHandler()
+	handler.ReadModel.CurrentPrincipal = func(*http.Request) (workspacehttp.Principal, bool) {
+		return workspacehttp.Principal{ID: principal.ID}, true
+	}
+	request := httptest.NewRequest(http.MethodGet, "/chats/references/search", nil)
+
+	results, err := handler.SearchResults(request, "test", "match", nil, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 || results[0].ID != "match-5" {
+		t.Fatalf("authorized results = %#v, want match-5", results)
+	}
+}
+
+type authorizationFillMetrics struct {
+	fakeMetrics
+}
+
+func (authorizationFillMetrics) Catalog() dashboard.Catalog {
+	dashboards := make([]dashboard.CatalogDashboard, 0, 5)
+	for index := 1; index <= 5; index++ {
+		dashboards = append(dashboards, dashboard.CatalogDashboard{
+			ID: fmt.Sprintf("match-%d", index), Title: fmt.Sprintf("Match %d", index),
+		})
+	}
+	return dashboard.Catalog{Workspace: dashboard.CatalogWorkspace{ID: "test", Title: "Test"}, Dashboards: dashboards}
+}
+
+func (authorizationFillMetrics) Report(dashboardID string) (reportdef.Dashboard, *semanticmodel.Model, bool) {
+	if !strings.HasPrefix(dashboardID, "match-") {
+		return reportdef.Dashboard{}, nil, false
+	}
+	return reportdef.Dashboard{ID: dashboardID, Title: "Match " + strings.TrimPrefix(dashboardID, "match-")}, nil, true
+}
+
+func (authorizationFillMetrics) Pages(string) []dashboard.Page { return nil }
 
 type globalRankSearchMetrics struct {
 	workspaceSearchMetrics
