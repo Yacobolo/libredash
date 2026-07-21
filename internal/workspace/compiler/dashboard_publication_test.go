@@ -153,6 +153,82 @@ spec:
 	}
 }
 
+func TestCompileProjectPublicationClosureIncludesFilterDatasetAncestorsAndLogicalDimension(t *testing.T) {
+	files := minimalProjectFiles(map[string]string{
+		"workspaces/sales/workspace.yaml":            workspaceYAMLWithPublications("sales"),
+		"workspaces/sales/publications/website.yaml": dashboardPublicationYAML("sales", "website", "executive-sales", "overview", nil),
+		"workspaces/sales/semantic-models/sales.yaml": `
+apiVersion: leapview.dev/v1
+kind: SemanticModel
+metadata:
+  workspace: sales
+  name: sales
+spec:
+  tables:
+    - orders
+  dimensions:
+    order_key:
+      type: string
+      bindings:
+        orders: {field: orders.order_id}
+  measures:
+    order_count:
+      fact: orders
+      aggregation: count
+      empty: zero
+`,
+		"workspaces/sales/dashboards/executive-sales.yaml": `
+apiVersion: leapview.dev/v1
+kind: Dashboard
+metadata:
+  workspace: sales
+  name: executive-sales
+  title: Executive sales
+spec:
+  semanticModel: sales
+  filters:
+    status:
+      type: multi_select
+      label: Status
+      field: order_key
+      operator: in
+      values:
+        source: distinct
+  visuals:
+    total:
+      type: kpi
+      query:
+        measures:
+          order_count:
+  pages:
+    - id: overview
+      title: Overview
+      components:
+        - id: total
+          kind: visual
+          visual: total
+          placement: {col: 1, row: 1, col_span: 3, row_span: 2}
+`,
+	})
+
+	compiled, err := CompileProject(writeProjectFixture(t, files), Options{ServingStateID: "dep_public_filter"})
+	if err != nil {
+		t.Fatalf("CompileProject() error = %v", err)
+	}
+	closure := compiled.Workspaces["sales"].Definition.Publications["website"].DependencyAssetIDs
+	for _, want := range []string{
+		"field:sales.sales.order_key",
+		"field:sales.sales.orders.order_id",
+		"semantic_table:sales.sales.orders",
+		"model_table:sales.orders",
+		"source:olist.orders",
+	} {
+		if !containsString(closure, want) {
+			t.Fatalf("dependency closure = %v, missing %q", closure, want)
+		}
+	}
+}
+
 func TestCompileProjectRejectsInvalidDashboardPublication(t *testing.T) {
 	tests := []struct {
 		name        string

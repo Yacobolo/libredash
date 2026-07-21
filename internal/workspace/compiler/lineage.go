@@ -196,6 +196,30 @@ func ExtractLineage(workspaceID workspace.WorkspaceID, servingStateID workspace.
 				edge(semanticTableID, fieldID, workspace.AssetEdgeContains)
 			}
 		}
+		for _, dimensionName := range sortedMapKeys(model.Dimensions) {
+			dimension := model.Dimensions[dimensionName]
+			logical := semanticmodel.MetricDimension{
+				Field: dimensionName, Name: dimensionName, Label: dimension.Label,
+				Description: dimension.Description, Type: dimension.Type,
+			}
+			dimensionID, err := add(workspace.AssetTypeField, modelKey+"."+dimensionName, modelID, dimensionLabel(dimensionName, dimension.Label), dimension.Description, fieldPayload(logical))
+			if err != nil {
+				return workspace.AssetGraph{}, err
+			}
+			edge(modelID, dimensionID, workspace.AssetEdgeContains)
+			bindings := make([]string, 0, len(dimension.Bindings))
+			for _, binding := range dimension.Bindings {
+				bindings = append(bindings, binding.Field)
+			}
+			sort.Strings(bindings)
+			for _, binding := range bindings {
+				fieldID, err := assetID(workspace.AssetTypeField, modelKey+"."+binding)
+				if err != nil {
+					return workspace.AssetGraph{}, err
+				}
+				edge(dimensionID, fieldID, workspace.AssetEdgeUsesField)
+			}
+		}
 		for _, relationship := range model.Relationships {
 			id, err := add(workspace.AssetTypeRelationship, modelKey+"."+relationship.ID, modelID, relationship.ID, relationship.Description, relationshipPayload(relationship))
 			if err != nil {
@@ -309,19 +333,12 @@ func ExtractLineage(workspaceID workspace.WorkspaceID, servingStateID workspace.
 			if ref == "" {
 				return nil
 			}
-			if dimension, ok := model.Dimensions[ref]; ok {
-				bindings := make([]string, 0, len(dimension.Bindings))
-				for _, binding := range dimension.Bindings {
-					bindings = append(bindings, binding.Field)
+			if _, ok := model.Dimensions[ref]; ok {
+				fieldID, err := assetID(workspace.AssetTypeField, modelKey+"."+ref)
+				if err != nil {
+					return err
 				}
-				sort.Strings(bindings)
-				for _, binding := range bindings {
-					fieldID, err := assetID(workspace.AssetTypeField, modelKey+"."+binding)
-					if err != nil {
-						return err
-					}
-					edge(fromID, fieldID, edgeType)
-				}
+				edge(fromID, fieldID, edgeType)
 				return nil
 			}
 			if dimension, err := model.ResolveDimension(ref); err == nil {

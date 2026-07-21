@@ -92,8 +92,10 @@ func CompileProject(projectPath string, opts Options) (CompiledProject, error) {
 
 func compilePublicationClosures(definition *workspace.Definition, graph workspace.AssetGraph) error {
 	types := make(map[workspace.AssetID]workspace.AssetType, len(graph.Assets))
+	parents := make(map[workspace.AssetID]workspace.AssetID, len(graph.Assets))
 	for _, asset := range graph.Assets {
 		types[asset.ID] = asset.Type
+		parents[asset.ID] = asset.ParentID
 	}
 	adjacent := make(map[workspace.AssetID][]workspace.AssetEdge, len(graph.Assets))
 	for _, edge := range graph.Edges {
@@ -106,9 +108,18 @@ func compilePublicationClosures(definition *workspace.Definition, graph workspac
 		for len(queue) > 0 {
 			current := queue[0]
 			queue = queue[1:]
+			if parent := parents[current]; parent != "" {
+				if _, ok := seen[parent]; !ok {
+					seen[parent] = struct{}{}
+					queue = append(queue, parent)
+				}
+			}
 			for _, edge := range adjacent[current] {
-				if edge.Type == workspace.AssetEdgeContains && (types[current] == workspace.AssetTypeSemanticModel || types[current] == workspace.AssetTypeSemanticTable) {
-					continue
+				if edge.Type == workspace.AssetEdgeContains {
+					switch types[current] {
+					case workspace.AssetTypeCatalog, workspace.AssetTypeSemanticModel, workspace.AssetTypeSemanticTable:
+						continue
+					}
 				}
 				next := edge.ToAssetID
 				if _, ok := seen[next]; ok {
