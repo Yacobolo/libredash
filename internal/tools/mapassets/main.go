@@ -11,13 +11,16 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
+
+	visualizationmapasset "github.com/Yacobolo/libredash/internal/visualization/mapasset"
 )
 
 const (
 	planetURL        = "https://build.protomaps.com/20260720.pmtiles"
-	archiveDigest    = "2d97ee8907670936ab722da7ca06eafec0734392f73fa1cd337d4debd85d676f"
-	basemapAssetsSHA = "028c18f713baecad011301ff7a69acc39bcc2ae7"
+	archiveDigest    = visualizationmapasset.ArchiveSHA256
+	basemapAssetsSHA = visualizationmapasset.BasemapAssetsRevision
 )
 
 var glyphRanges = []string{
@@ -33,7 +36,7 @@ var glyphRanges = []string{
 }
 
 func main() {
-	out := flag.String("out", ".data/map-assets/libredash-streets", "map asset output directory")
+	out := flag.String("out", ".data/map-assets", "map asset root directory")
 	flag.Parse()
 	if err := install(context.Background(), *out); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -45,36 +48,79 @@ func install(ctx context.Context, out string) error {
 	if err := os.MkdirAll(out, 0o755); err != nil {
 		return err
 	}
-	archive := filepath.Join(out, "basemap.pmtiles")
-	if err := ensureArchive(ctx, archive); err != nil {
+	asset, err := visualizationmapasset.Resolve("streets")
+	if err != nil {
 		return err
 	}
-	if err := copyFile("static/map-assets/libredash-streets/style.json", filepath.Join(out, "style.json")); err != nil {
+	archive, err := assetTarget(out, asset.ArchiveURL)
+	if err != nil {
+		return err
+	}
+	legacyArchive := filepath.Join(out, "libredash-streets", "basemap.pmtiles")
+	if err := ensureArchive(ctx, archive, legacyArchive); err != nil {
+		return err
+	}
+	style, err := assetTarget(out, asset.StyleURL)
+	if err != nil {
+		return err
+	}
+	if err := copyFile("static/map-assets/libredash-streets/style.json", style); err != nil {
 		return fmt.Errorf("install map style: %w", err)
+	}
+	if err := verifyFile(style, visualizationmapasset.StyleSHA256); err != nil {
+		return err
 	}
 	client := &http.Client{Timeout: 45 * time.Second}
 	for _, font := range []string{"Noto Sans Regular", "Noto Sans Medium", "Noto Sans Italic"} {
 		for _, glyphRange := range glyphRanges {
-			rel := filepath.Join("glyphs", font, glyphRange+".pbf")
+			assetURL := strings.ReplaceAll(strings.ReplaceAll(asset.GlyphsURL, "{fontstack}", url.PathEscape(font)), "{range}", glyphRange)
+			target, err := assetTarget(out, assetURL)
+			if err != nil {
+				return err
+			}
+			expected, err := expectedDigest(assetURL)
+			if err != nil {
+				return err
+			}
 			remote := fmt.Sprintf("https://raw.githubusercontent.com/protomaps/basemaps-assets/%s/fonts/%s/%s.pbf", basemapAssetsSHA, url.PathEscape(font), glyphRange)
-			if err := downloadIfMissing(ctx, client, remote, filepath.Join(out, rel)); err != nil {
+			if err := downloadIfMissing(ctx, client, remote, target, expected); err != nil {
 				return err
 			}
 		}
 	}
 	for _, suffix := range []string{".json", ".png", "@2x.json", "@2x.png"} {
+		assetURL := asset.SpriteURL + suffix
+		target, err := assetTarget(out, assetURL)
+		if err != nil {
+			return err
+		}
+		expected, err := expectedDigest(assetURL)
+		if err != nil {
+			return err
+		}
 		remote := fmt.Sprintf("https://raw.githubusercontent.com/protomaps/basemaps-assets/%s/sprites/v4/light%s", basemapAssetsSHA, suffix)
-		if err := downloadIfMissing(ctx, client, remote, filepath.Join(out, "sprites", "libredash"+suffix)); err != nil {
+		if err := downloadIfMissing(ctx, client, remote, target, expected); err != nil {
 			return err
 		}
 	}
-	return nil
+	return visualizationmapasset.VerifyInstalled(out)
 }
 
-func ensureArchive(ctx context.Context, target string) error {
+func ensureArchive(ctx context.Context, target, legacy string) error {
 	if _, err := os.Stat(target); err == nil {
 		return verifyFile(target, archiveDigest)
 	} else if !os.IsNotExist(err) {
+		return err
+	}
+	if legacy != "" && legacy != target {
+		if err := verifyFile(legacy, archiveDigest); err == nil {
+			if err := copyFile(legacy, target); err != nil {
+				return fmt.Errorf("reuse verified map archive: %w", err)
+			}
+			return nil
+		}
+	}
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return err
 	}
 	temporary := target + ".partial"
@@ -92,9 +138,11 @@ func ensureArchive(ctx context.Context, target string) error {
 	return nil
 }
 
-func downloadIfMissing(ctx context.Context, client *http.Client, remote, target string) error {
+func downloadIfMissing(ctx context.Context, client *http.Client, remote, target, expected string) error {
 	if info, err := os.Stat(target); err == nil && info.Size() > 0 {
-		return nil
+		if err := verifyFile(target, expected); err == nil {
+			return nil
+		}
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, remote, nil)
 	if err != nil {
@@ -124,7 +172,39 @@ func downloadIfMissing(ctx context.Context, client *http.Client, remote, target 
 	if closeErr != nil {
 		return closeErr
 	}
+	if err := verifyFile(temporary, expected); err != nil {
+		return err
+	}
 	return os.Rename(temporary, target)
+}
+
+func assetTarget(root, value string) (string, error) {
+	if !visualizationmapasset.IsContentAddressedURLPath(value) {
+		return "", fmt.Errorf("map asset URL is not content addressed: %q", value)
+	}
+	decoded, err := url.PathUnescape(strings.TrimPrefix(value, "/map-assets/"))
+	if err != nil {
+		return "", err
+	}
+	target := filepath.Join(root, filepath.FromSlash(decoded))
+	relative, err := filepath.Rel(root, target)
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("map asset target escapes root")
+	}
+	return target, nil
+}
+
+func expectedDigest(value string) (string, error) {
+	decoded, err := url.PathUnescape(strings.TrimPrefix(value, "/map-assets/"))
+	if err != nil {
+		return "", err
+	}
+	for _, file := range visualizationmapasset.ExpectedFiles() {
+		if file.Path == decoded {
+			return file.Digest, nil
+		}
+	}
+	return "", fmt.Errorf("map asset %q is not in the compiled inventory", value)
 }
 
 func verifyFile(name, expected string) error {

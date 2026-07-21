@@ -8,7 +8,7 @@ import { blankMapStyle, loadGeometryAsset, loadMapStyleAsset, registerPMTilesPro
 import { applyBasemapTheme, mapThemeColors, type BasemapColors } from './maplibre/basemap'
 import { coordinateGeometry, joinGeometry, pathGeometry } from './maplibre/data'
 import { applyFeatureScales, mapLayer, mapOutlineLayer, paletteColors } from './maplibre/layers'
-import { interactionCommandForRenderedFeatures, mapInteractionCommand, updateSelectionSources } from './maplibre/interactions'
+import { clusterExpansionForRenderedFeatures, interactionCommandForRenderedFeatures, mapInteractionCommand, updateSelectionSources } from './maplibre/interactions'
 import { mapAccessibleData, mapTooltipEntries, type RenderedFeatureLocator } from './maplibre/overlays'
 import { emitMapObservation, installWebGLRecovery, mapNow, removeRendererFrame, waitForMapIdle, type MapObservationStage } from './maplibre/lifecycle'
 import { spatialWindowRequest, type MapSpatialWindowRequest } from './maplibre/spatial'
@@ -18,7 +18,7 @@ export { loadMapStyleAsset, sameOriginGeometryURL, verifyGeometryDigest } from '
 export { applyBasemapTheme, basemapBoundaryLayer, basemapLayer, concreteCSSColor, mapThemeColors } from './maplibre/basemap'
 export { coordinateGeometry, joinGeometry, pathGeometry } from './maplibre/data'
 export { applyFeatureScales, mapLayer, mapOutlineLayer, normalizeFeatureWeights } from './maplibre/layers'
-export { interactionCommandForRenderedFeatures, mapInteractionCommand, updateSelectionSources } from './maplibre/interactions'
+export { clusterExpansionForRenderedFeatures, interactionCommandForRenderedFeatures, mapInteractionCommand, updateSelectionSources } from './maplibre/interactions'
 export { mapAccessibleData, mapTooltipEntries } from './maplibre/overlays'
 export { installWebGLRecovery, removeRendererFrame } from './maplibre/lifecycle'
 export { spatialWindowRequest, type MapSpatialWindowRequest } from './maplibre/spatial'
@@ -407,16 +407,15 @@ class MapLibreHandle implements RendererHandle {
   }
 
   private readonly handleClick = (event: MapMouseEvent) => {
-    if (!this.envelope || this.selectableLayerIDs.length === 0) return
+    if (!this.envelope) return
     const clusters = this.clusterLayerIDs.length ? this.map.queryRenderedFeatures(event.point, { layers: this.clusterLayerIDs }) : []
-    const cluster = clusters[0]
-    const clusterID = cluster?.properties?.cluster_id
-    const sourceID = cluster?.layer?.id ? this.clusterSources.get(cluster.layer.id) : undefined
-    if (typeof clusterID === 'number' && sourceID) {
-      const source = this.map.getSource(sourceID) as GeoJSONSource | undefined
-      void source?.getClusterExpansionZoom(clusterID).then((zoom) => this.map.easeTo({ center: (cluster.geometry as any).coordinates, zoom }))
+    const expansion = clusterExpansionForRenderedFeatures(clusters, this.clusterSources)
+    if (expansion) {
+      const source = this.map.getSource(expansion.sourceID) as GeoJSONSource | undefined
+      void source?.getClusterExpansionZoom(expansion.clusterID).then((zoom) => this.map.easeTo({ center: expansion.center, zoom }))
       return
     }
+    if (this.selectableLayerIDs.length === 0) return
     const features = this.map.queryRenderedFeatures(event.point, { layers: this.selectableLayerIDs })
     const command = mapInteractionCommand(this.envelope, features, this.selectableLayerIDs)
     if (command) this.dispatchInteraction(command)

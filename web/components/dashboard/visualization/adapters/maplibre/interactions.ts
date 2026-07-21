@@ -7,6 +7,24 @@ import { coordinateGeometry, joinGeometry, pathGeometry } from './data'
 import { applyFeatureScales } from './layers'
 import type { RenderedFeatureLocator } from './overlays'
 
+type ClusterFeatureLocator = RenderedFeatureLocator & Readonly<{ geometry?: { type?: string; coordinates?: unknown } }>
+
+export function clusterExpansionForRenderedFeatures(
+  features: readonly ClusterFeatureLocator[],
+  sourceByLayer: ReadonlyMap<string, string>,
+): { sourceID: string; clusterID: number; center: [number, number] } | undefined {
+  for (const feature of features) {
+    const layerID = feature.layer?.id
+    const clusterID = feature.properties?.cluster_id
+    const coordinates = feature.geometry?.coordinates
+    if (typeof layerID !== 'string' || !Number.isInteger(clusterID) || (clusterID as number) < 0) continue
+    if (!Array.isArray(coordinates) || coordinates.length < 2 || !coordinates.slice(0, 2).every(Number.isFinite)) continue
+    const sourceID = sourceByLayer.get(layerID)
+    if (sourceID) return { sourceID, clusterID: clusterID as number, center: [coordinates[0] as number, coordinates[1] as number] }
+  }
+  return undefined
+}
+
 export function interactionCommandForRenderedFeatures(
   envelope: VisualizationEnvelope,
   features: readonly RenderedFeatureLocator[],

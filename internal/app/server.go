@@ -128,6 +128,7 @@ type Server struct {
 	managedDataTus                  http.Handler
 	managedDataExpirer              managedDataUploadExpirer
 	managedDataExpireInterval       time.Duration
+	mapAssetDir                     string
 	managedDataMaintenanceStarted   bool
 	refreshPipelineSchedulerStarted bool
 	apiIdempotencyMu                sync.Mutex
@@ -193,6 +194,7 @@ type Options struct {
 	ManagedDataTus            http.Handler
 	ManagedDataExpirer        managedDataUploadExpirer
 	ManagedDataExpireInterval time.Duration
+	MapAssetDir               string
 	MCPOAuth                  MCPOAuthConfig
 	RefreshPipelineClock      refreshpipeline.Clock
 }
@@ -307,6 +309,10 @@ func NewWithOptions(metrics QueryMetrics, options Options) *Server {
 	server.managedDataTus = options.ManagedDataTus
 	server.managedDataExpirer = options.ManagedDataExpirer
 	server.managedDataExpireInterval = options.ManagedDataExpireInterval
+	server.mapAssetDir = strings.TrimSpace(options.MapAssetDir)
+	if server.mapAssetDir == "" {
+		server.mapAssetDir = ".data/map-assets"
+	}
 	server.jobLeaseTimeout = options.JobLeaseTimeout
 	if server.jobLeaseTimeout <= 0 {
 		server.jobLeaseTimeout = 2 * time.Minute

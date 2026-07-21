@@ -55,10 +55,13 @@ type Refresh struct {
 }
 
 type RefreshPreparation struct {
-	Filters dashboard.Filters
-	Command string
-	Targets []string
-	Plan    any
+	Filters       dashboard.Filters
+	Command       string
+	Targets       []string
+	Plan          any
+	SequenceKey   string
+	Sequence      int64
+	SequenceEpoch int64
 }
 
 type RefreshSummary struct {
@@ -93,6 +96,12 @@ var refreshSequence atomic.Uint64
 const refreshExecutionDebounce = 35 * time.Millisecond
 
 var ErrCoordinatorClosed = errors.New("dashboard refresh coordinator is closed")
+var ErrStalePreparation = errors.New("dashboard refresh preparation is stale")
+
+type preparationSequence struct {
+	epoch    int64
+	sequence int64
+}
 
 // Coordinator owns the canonical filters and active refresh generation for a
 // single rendered page stream. Work contexts outlive command POST requests and
@@ -105,6 +114,7 @@ type Coordinator struct {
 	filters    dashboard.Filters
 	generation uint64
 	revisions  map[string]int64
+	sequences  map[string]preparationSequence
 	closed     bool
 	publish    EventPublisher
 	started    StartObserver
@@ -138,6 +148,7 @@ func NewCoordinator(parent context.Context, publish EventPublisher) *Coordinator
 		cancel:    cancel,
 		filters:   cloneFilters(dashboard.Filters{}.WithDefaults()),
 		revisions: map[string]int64{},
+		sequences: map[string]preparationSequence{},
 		publish:   publish,
 	}
 }
@@ -172,6 +183,17 @@ func (c *Coordinator) BeginPrepared(prepare RefreshPrepare, work func(RefreshPre
 			c.mu.Unlock()
 			return Refresh{}, err
 		}
+	}
+	if preparation.SequenceKey != "" {
+		if preparation.Sequence <= 0 || preparation.SequenceEpoch < 0 {
+			c.mu.Unlock()
+			return Refresh{}, fmt.Errorf("invalid preparation sequence for %q", preparation.SequenceKey)
+		}
+		if current, ok := c.sequences[preparation.SequenceKey]; ok && (preparation.SequenceEpoch < current.epoch || (preparation.SequenceEpoch == current.epoch && preparation.Sequence <= current.sequence)) {
+			c.mu.Unlock()
+			return Refresh{}, ErrStalePreparation
+		}
+		c.sequences[preparation.SequenceKey] = preparationSequence{epoch: preparation.SequenceEpoch, sequence: preparation.Sequence}
 	}
 	filters := cloneFilters(preparation.Filters.WithDefaults())
 	preparation.Filters = cloneFilters(filters)

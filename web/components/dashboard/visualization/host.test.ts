@@ -121,3 +121,24 @@ test('a superseded asynchronous mount cannot dispose the winning renderer', asyn
   expect(await (await controller.snapshot()).text()).toBe('2')
   expect(disposed).toEqual([1])
 })
+
+test('repeated mount and dispose cycles release every renderer exactly once', async () => {
+  let mounts = 0
+  let disposals = 0
+  const registry = new RendererRegistry()
+  registry.register({
+    id: 'test', version: '1.0.0', schemaVersions: [2], kinds: ['kpi'], capabilities: { snapshot: true, windowed: false, interactive: false },
+    load: async () => ({ mount: () => {
+      mounts++
+      return { update: () => {}, resize: () => {}, snapshot: async () => new Blob(), dispose: () => { disposals++ } }
+    } }),
+  })
+  for (let cycle = 0; cycle < 100; cycle++) {
+    const controller = new VisualizationController(registry, {} as HTMLElement)
+    await controller.apply(envelope(cycle + 1))
+    controller.dispose()
+    controller.dispose()
+  }
+  expect(mounts).toBe(100)
+  expect(disposals).toBe(100)
+})

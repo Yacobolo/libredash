@@ -216,6 +216,63 @@ func TestCoordinatorDebounceSkipsSupersededGenerationWork(t *testing.T) {
 	}
 }
 
+func TestCoordinatorRejectsStaleSequencedPreparationWithoutSupersedingCurrentWork(t *testing.T) {
+	events := make(chan RefreshEvent, 8)
+	coordinator := NewCoordinator(context.Background(), func(event RefreshEvent) { events <- event })
+	t.Cleanup(coordinator.Close)
+	started := make(chan struct{})
+	release := make(chan struct{})
+
+	begin := func(sequence, epoch int64) (Refresh, error) {
+		return coordinator.BeginPrepared(func(current dashboard.Filters) (RefreshPreparation, error) {
+			return RefreshPreparation{Filters: current, Command: "visual_spatial_window", SequenceKey: "spatial:customer_map", Sequence: sequence, SequenceEpoch: epoch}, nil
+		}, func(RefreshPreparation) RefreshWork {
+			return func(ctx context.Context, _ RefreshPublisher) {
+				select {
+				case started <- struct{}{}:
+				case <-ctx.Done():
+					return
+				}
+				select {
+				case <-release:
+				case <-ctx.Done():
+				}
+			}
+		})
+	}
+
+	current, err := begin(8, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertRefreshEvent(t, events, RefreshEventStart, current.Generation)
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("current work did not start")
+	}
+	if _, err := begin(7, 2); !errors.Is(err, ErrStalePreparation) {
+		t.Fatalf("out-of-order request error = %v, want ErrStalePreparation", err)
+	}
+	if _, err := begin(8, 2); !errors.Is(err, ErrStalePreparation) {
+		t.Fatalf("duplicate request error = %v, want ErrStalePreparation", err)
+	}
+	select {
+	case event := <-events:
+		t.Fatalf("stale request published event %#v", event)
+	default:
+	}
+	close(release)
+
+	reset, err := begin(1, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reset.Generation != current.Generation+1 {
+		t.Fatalf("reset generation = %d, want %d", reset.Generation, current.Generation+1)
+	}
+}
+
 func TestCoordinatorLatestGenerationSuppressesCanceledResultsAndCompletion(t *testing.T) {
 	var (
 		mu     sync.Mutex

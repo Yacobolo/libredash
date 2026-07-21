@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"errors"
 	nethttp "net/http"
 
 	"github.com/Yacobolo/libredash/internal/dashboard"
@@ -112,6 +113,10 @@ func (h Handler) handleCommandWithBefore(w nethttp.ResponseWriter, r *nethttp.Re
 		}
 		return dashboardstream.TargetWork(metrics, workRequest)
 	})
+	if errors.Is(err, dashboardstream.ErrStalePreparation) {
+		writeJSON(w, nethttp.StatusOK, map[string]any{})
+		return
+	}
 	if err != nil {
 		// Invalid commands still form a generation so the canonical filters and
 		// scoped failure are delivered through the page stream.
@@ -138,12 +143,19 @@ func streamPreparation(prepared command.PreparedRefresh) dashboardstream.Refresh
 	for _, target := range prepared.Plan.Targets {
 		targets = append(targets, target.Key())
 	}
-	return dashboardstream.RefreshPreparation{
+	preparation := dashboardstream.RefreshPreparation{
 		Filters: prepared.Filters,
 		Command: prepared.Plan.Command,
 		Targets: targets,
 		Plan:    prepared.Plan,
 	}
+	if prepared.Plan.Command == "visual_spatial_window" && len(prepared.Plan.Targets) == 1 {
+		request := prepared.Plan.Targets[0].SpatialRequest
+		preparation.SequenceKey = "spatial:" + request.VisualID
+		preparation.Sequence = request.RequestSeq
+		preparation.SequenceEpoch = request.ResetVersion
+	}
+	return preparation
 }
 
 func (h Handler) readSignals(w nethttp.ResponseWriter, r *nethttp.Request) (dashboard.Signals, bool) {

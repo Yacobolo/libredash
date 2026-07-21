@@ -17,7 +17,8 @@ COPY . .
 
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
-    ./scripts/generate_build_sources.sh
+    ./scripts/generate_build_sources.sh && \
+    go run ./internal/tools/mapassets --out .data/map-assets
 
 FROM oven/bun:1.3.7@sha256:6cd5f00020e48b77a253bc8249f6b6dd3d92b3c04c2607f1f5a6d7dbf0a6fca3 AS web
 WORKDIR /src
@@ -84,6 +85,7 @@ COPY --from=build /out/libredash /usr/local/bin/libredash
 COPY --from=build /out/libredashctl /usr/local/libexec/libredashctl
 COPY --from=web /src/static ./static
 COPY --from=build /src/schemas ./schemas
+COPY --from=sourcegen /src/.data/map-assets ./.data/map-assets
 COPY dashboards ./dashboards
 
 RUN mkdir -p /var/lib/libredash && \
@@ -94,6 +96,7 @@ USER libredash
 ENV LIBREDASH_ADDR=:8080 \
     LIBREDASH_ENVIRONMENT=prod \
     LIBREDASH_HOME=/var/lib/libredash/home \
+    LIBREDASH_MAP_ASSET_DIR=/app/.data/map-assets \
     LIBREDASH_MANAGED_DATA_DIR=/var/lib/libredash/home/managed-data \
     LIBREDASH_PRODUCTION=1
 

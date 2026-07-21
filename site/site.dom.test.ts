@@ -977,7 +977,7 @@ test('map documentation renders fitted, attributed canvases without adapter erro
       { title: 'State order paths', expand: 'Expand map' },
     ])
     expect(states.every(({ width, height }) => width > 500 && height >= 400)).toBe(true)
-    expect(await page.evaluate(() => performance.getEntriesByName(`${location.origin}/map-assets/libredash-streets/style.json`).length)).toBeGreaterThan(0)
+    expect(await page.evaluate(() => performance.getEntries().some(({ name }) => /\/map-assets\/libredash-streets\/styles\/[0-9a-f]{64}\/style\.json$/.test(name)))).toBe(true)
     expect(await page.locator('ld-site-visual-example').evaluateAll((elements) => elements.map((element) => {
       const host = element.shadowRoot?.querySelector('ld-visualization-host')
       const fallback = host?.shadowRoot?.querySelector('[data-map-data-table]')

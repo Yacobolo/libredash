@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 
 import type { VisualizationEnvelope, VisualizationGeographicLayer } from '../../../../generated/visualization'
 import type { FeatureCollection } from 'geojson'
-import { applyFeatureScales, basemapBoundaryLayer, basemapLayer, concreteCSSColor, coordinateGeometry, coordinateReferenceGrid, fitMapToGeographicData, installWebGLRecovery, interactionCommandForRenderedFeatures, joinGeometry, loadMapStyleAsset, mapAccessibleData, mapInteractionCommand, mapLayer, mapOutlineLayer, mapPointerOptions, mapThemeColors, mapTooltipEntries, normalizeFeatureWeights, pathGeometry, removeRendererFrame, sameOriginGeometryURL, spatialWindowRequest, updateSelectionSources, verifyGeometryDigest } from './maplibre'
+import { applyFeatureScales, basemapBoundaryLayer, basemapLayer, clusterExpansionForRenderedFeatures, concreteCSSColor, coordinateGeometry, coordinateReferenceGrid, fitMapToGeographicData, installWebGLRecovery, interactionCommandForRenderedFeatures, joinGeometry, loadMapStyleAsset, mapAccessibleData, mapInteractionCommand, mapLayer, mapOutlineLayer, mapPointerOptions, mapThemeColors, mapTooltipEntries, normalizeFeatureWeights, pathGeometry, removeRendererFrame, sameOriginGeometryURL, spatialWindowRequest, updateSelectionSources, verifyGeometryDigest } from './maplibre'
 import { adapterObservation } from '../telemetry'
 
 test('MapLibre geometry assets are same-origin and content addressed', async () => {
@@ -15,18 +15,20 @@ test('MapLibre geometry assets are same-origin and content addressed', async () 
 test('MapLibre map styles rewrite only pinned same-origin PMTiles and assets', async () => {
   const style = new TextEncoder().encode(JSON.stringify({ version: 8, sources: { base: { type: 'vector', url: 'pmtiles://__LIBREDASH_ARCHIVE__' } }, layers: [] }))
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', style))
+  const styleDigest = [...digest].map((value) => value.toString(16).padStart(2, '0')).join('')
   const asset = {
-    id: 'streets', styleUrl: '/map-assets/streets/style.json', styleDigest: `sha256:${[...digest].map((value) => value.toString(16).padStart(2, '0')).join('')}`,
-    archiveUrl: '/map-assets/streets/map.pmtiles', archiveDigest: `sha256:${'a'.repeat(64)}`, glyphsUrl: '/map-assets/streets/glyphs/{fontstack}/{range}.pbf', spriteUrl: '/map-assets/streets/sprite',
+    id: 'streets', styleUrl: `/map-assets/libredash-streets/styles/${styleDigest}/style.json`, styleDigest: `sha256:${styleDigest}`,
+    archiveUrl: `/map-assets/libredash-streets/archives/${'a'.repeat(64)}/basemap.pmtiles`, archiveDigest: `sha256:${'a'.repeat(64)}`, glyphsUrl: `/map-assets/libredash-streets/assets/${'b'.repeat(40)}/glyphs/{fontstack}/{range}.pbf`, spriteUrl: `/map-assets/libredash-streets/assets/${'b'.repeat(40)}/sprites/libredash`,
     source: 'OSM', license: 'ODbL', attribution: 'OSM', minimumZoom: 0, maximumZoom: 6, bounds: [-180, -85, 180, 85], labelAnchor: 'labels',
   } as const
   const previous = globalThis.fetch
   globalThis.fetch = (async () => new Response(style)) as typeof fetch
   try {
     const loaded = await loadMapStyleAsset(asset, 'https://dash.example/workspaces/maps')
-    expect((loaded.sources.base as { url?: string }).url).toBe('pmtiles://https://dash.example/map-assets/streets/map.pmtiles')
-    expect(loaded.glyphs).toBe('https://dash.example/map-assets/streets/glyphs/{fontstack}/{range}.pbf')
+    expect((loaded.sources.base as { url?: string }).url).toBe(`pmtiles://https://dash.example/map-assets/libredash-streets/archives/${'a'.repeat(64)}/basemap.pmtiles`)
+    expect(loaded.glyphs).toBe(`https://dash.example/map-assets/libredash-streets/assets/${'b'.repeat(40)}/glyphs/{fontstack}/{range}.pbf`)
     await expect(loadMapStyleAsset({ ...asset, styleUrl: 'https://attacker.example/style.json' }, 'https://dash.example/maps')).rejects.toThrow(/same-origin/)
+    await expect(loadMapStyleAsset({ ...asset, styleUrl: '/map-assets/libredash-streets/style.json' }, 'https://dash.example/maps')).rejects.toThrow(/content-addressed/)
   } finally { globalThis.fetch = previous }
 })
 
@@ -104,6 +106,17 @@ test('MapLibre hit testing selects the topmost valid point or region and rejects
   expect(interactionCommandForRenderedFeatures(envelope, [{ layer: { id: 'ld-states' }, properties: { __ld_dataset: 'forged', __ld_row_index: 0, __ld_layer_id: 'states' } }], ['ld-states'])).toBeUndefined()
   expect(interactionCommandForRenderedFeatures(envelope, [{ layer: { id: 'ld-states' }, properties: { __ld_dataset: 'primary', __ld_row_index: 99, __ld_layer_id: 'states' } }], ['ld-states'])).toBeUndefined()
   expect(interactionCommandForRenderedFeatures(envelope, [{ layer: { id: 'ld-heat' }, properties: { __ld_dataset: 'primary', __ld_row_index: 0, __ld_layer_id: 'heat' } }], ['ld-states'])).toBeUndefined()
+})
+
+test('MapLibre cluster expansion selects the topmost valid cluster without requiring datum selection', () => {
+  const sources = new Map([['ld-points-clusters', 'ld-points-source']])
+  expect(clusterExpansionForRenderedFeatures([
+    { layer: { id: 'forged' }, properties: { cluster_id: 7 }, geometry: { type: 'Point', coordinates: [1, 2] } },
+    { layer: { id: 'ld-points-clusters' }, properties: { cluster_id: 9 }, geometry: { type: 'Point', coordinates: [-46.63, -23.55] } },
+  ], sources)).toEqual({ sourceID: 'ld-points-source', clusterID: 9, center: [-46.63, -23.55] })
+  expect(clusterExpansionForRenderedFeatures([
+    { layer: { id: 'ld-points-clusters' }, properties: { cluster_id: 'forged' }, geometry: { type: 'Point', coordinates: [-46.63, -23.55] } },
+  ], sources)).toBeUndefined()
 })
 
 test('MapLibre keeps semantic selection active when pan and zoom are disabled', () => {

@@ -11,6 +11,7 @@ import (
 	"github.com/Yacobolo/libredash/internal/access/scimprov"
 	dashboardhttp "github.com/Yacobolo/libredash/internal/dashboard/http"
 	"github.com/Yacobolo/libredash/internal/staticasset"
+	visualizationmapasset "github.com/Yacobolo/libredash/internal/visualization/mapasset"
 	workspacehttp "github.com/Yacobolo/libredash/internal/workspace/http"
 	"github.com/go-chi/chi/v5"
 )
@@ -136,13 +137,18 @@ func (s *Server) Routes() http.Handler {
 		})
 	}
 	mux.Handle("/static/*", staticAssetCache(http.StripPrefix("/static/", http.FileServer(http.Dir("static")))))
-	mux.Handle("/map-assets/*", mapAssetCache(http.StripPrefix("/map-assets/", http.FileServer(http.Dir(".data/map-assets")))))
+	mux.Handle("/map-assets/*", mapAssetCache(http.StripPrefix("/map-assets/", http.FileServer(http.Dir(s.mapAssetDir)))))
 
 	return mux
 }
 
 func mapAssetCache(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !visualizationmapasset.IsContentAddressedURLPath(r.URL.Path) {
+			w.Header().Set("Cache-Control", "no-store")
+			http.NotFound(w, r)
+			return
+		}
 		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		w.Header().Set("Accept-Ranges", "bytes")
 		next.ServeHTTP(w, r)

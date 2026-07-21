@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -36,6 +37,7 @@ import (
 	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 	servingstatesqlite "github.com/Yacobolo/libredash/internal/servingstate/sqlite"
 	storagemaintenance "github.com/Yacobolo/libredash/internal/storage/maintenance"
+	visualizationmapasset "github.com/Yacobolo/libredash/internal/visualization/mapasset"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	workspacesqlite "github.com/Yacobolo/libredash/internal/workspace/sqlite"
 	"github.com/spf13/cobra"
@@ -72,6 +74,9 @@ func runServe(ctx context.Context, opts *rootOptions) error {
 	cfg.Addr = addr
 	if err := cfg.Validate(config.ProfileServe); err != nil {
 		return err
+	}
+	if err := visualizationmapasset.VerifyInstalled(cfg.MapAssetDir); err != nil {
+		return fmt.Errorf("verify map assets: %w", err)
 	}
 	environment := serveEnvironment(production, opts.environment, cfg.Environment)
 	instanceLock, err := instancelock.Acquire(cfg.HomeDir)
@@ -409,6 +414,7 @@ func servingStateBackedServer(ctx context.Context, cfg config.Config, production
 			uploadTTL: cfg.ManagedDataUploadSessionTTL, collector: managedDataCollector, runtime: managedDataRuntimeCollector,
 		},
 		ManagedDataExpireInterval: cfg.ManagedDataGCInterval,
+		MapAssetDir:               cfg.MapAssetDir,
 	})
 	return server, cleanupWithRegistry, nil
 }

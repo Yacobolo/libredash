@@ -18,7 +18,7 @@ COPY . .
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
     ./scripts/generate_build_sources.sh && \
-    go run ./internal/tools/mapassets --out .data/map-assets/libredash-streets && \
+    go run ./internal/tools/mapassets --out .data/map-assets && \
     go run ./internal/tools/clidocgen && \
     go run ./internal/tools/schemadocgen && \
     go run ./internal/tools/openapidocgen && \

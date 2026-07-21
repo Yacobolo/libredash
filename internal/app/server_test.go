@@ -699,7 +699,7 @@ func TestMapAssetCacheIsImmutableAndRangeCapable(t *testing.T) {
 	handler := mapAssetCache(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusPartialContent)
 	}))
-	request := httptest.NewRequest(http.MethodGet, "/map-assets/libredash-streets/basemap.pmtiles", nil)
+	request := httptest.NewRequest(http.MethodGet, "/map-assets/libredash-streets/archives/2d97ee8907670936ab722da7ca06eafec0734392f73fa1cd337d4debd85d676f/basemap.pmtiles", nil)
 	request.Header.Set("Range", "bytes=0-126")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
@@ -711,6 +711,21 @@ func TestMapAssetCacheIsImmutableAndRangeCapable(t *testing.T) {
 	}
 	if got := response.Header().Get("Accept-Ranges"); got != "bytes" {
 		t.Fatalf("accept ranges = %q", got)
+	}
+}
+
+func TestMapAssetCacheRejectsUnversionedPaths(t *testing.T) {
+	handler := mapAssetCache(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("unversioned request reached asset filesystem")
+	}))
+	request := httptest.NewRequest(http.MethodGet, "/map-assets/libredash-streets/basemap.pmtiles", nil)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusNotFound)
+	}
+	if got := response.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("cache control = %q, want no-store", got)
 	}
 }
 

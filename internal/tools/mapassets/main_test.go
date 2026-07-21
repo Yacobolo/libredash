@@ -34,3 +34,18 @@ func TestGlyphPackageCoversBasemapScriptsObservedAtRuntime(t *testing.T) {
 		}
 	}
 }
+
+func TestInstallTargetsContentAddressedPackagePaths(t *testing.T) {
+	root := t.TempDir()
+	archive, err := assetTarget(root, "/map-assets/libredash-streets/archives/"+archiveDigest+"/basemap.pmtiles")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(root, "libredash-streets", "archives", archiveDigest, "basemap.pmtiles")
+	if archive != want {
+		t.Fatalf("asset target = %q, want %q", archive, want)
+	}
+	if _, err := assetTarget(root, "/map-assets/libredash-streets/../../secret"); err == nil {
+		t.Fatal("assetTarget accepted traversal")
+	}
+}

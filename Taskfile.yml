@@ -46,7 +46,7 @@ tasks:
   map-assets:install:
     desc: Install the pinned local PMTiles, glyph, and sprite assets used by development
     cmds:
-      - go run ./internal/tools/mapassets --out .data/map-assets/libredash-streets
+      - go run ./internal/tools/mapassets --out .data/map-assets
 
   bootstrap:movielens:
     desc: Download/sync MovieLens 32M CSVs if missing

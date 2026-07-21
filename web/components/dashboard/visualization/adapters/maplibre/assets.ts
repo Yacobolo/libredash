@@ -19,10 +19,10 @@ export function blankMapStyle(background: string): StyleSpecification {
 }
 
 export async function loadMapStyleAsset(asset: VisualizationMapStyleAsset, baseURL: string): Promise<StyleSpecification> {
-  const styleURL = sameOriginGeometryURL(asset.styleUrl, baseURL)
-  const archiveURL = sameOriginGeometryURL(asset.archiveUrl, baseURL)
-  const glyphsURL = sameOriginGeometryURL(asset.glyphsUrl, baseURL)
-  const spriteURL = sameOriginGeometryURL(asset.spriteUrl, baseURL)
+  const styleURL = contentAddressedMapAssetURL(asset.styleUrl, asset.styleDigest, 'styles', baseURL)
+  const archiveURL = contentAddressedMapAssetURL(asset.archiveUrl, asset.archiveDigest, 'archives', baseURL)
+  const glyphsURL = revisionAddressedMapAssetURL(asset.glyphsUrl, baseURL)
+  const spriteURL = revisionAddressedMapAssetURL(asset.spriteUrl, baseURL)
   const key = `${styleURL.href}\0${asset.styleDigest}\0${archiveURL.href}\0${asset.archiveDigest}`
   let pending = mapStyleCache.get(key)
   if (!pending) {
@@ -46,6 +46,23 @@ export async function loadMapStyleAsset(asset: VisualizationMapStyleAsset, baseU
     void pending.catch(() => { if (mapStyleCache.get(key) === pending) mapStyleCache.delete(key) })
   }
   return structuredClone(await pending)
+}
+
+function contentAddressedMapAssetURL(value: string, declared: string, kind: 'styles' | 'archives', base: string): URL {
+  const url = sameOriginGeometryURL(value, base)
+  const match = /^sha256:([0-9a-f]{64})$/.exec(declared)
+  if (!match || !url.pathname.includes(`/map-assets/libredash-streets/${kind}/${match[1]}/`)) {
+    throw new Error('map asset URL must be content-addressed by its declared digest')
+  }
+  return url
+}
+
+function revisionAddressedMapAssetURL(value: string, base: string): URL {
+  const url = sameOriginGeometryURL(value, base)
+  if (!/\/map-assets\/libredash-streets\/assets\/[0-9a-f]{40}\//.test(url.pathname)) {
+    throw new Error('map supporting asset URL must be content-addressed by its pinned revision')
+  }
+  return url
 }
 
 export async function loadGeometryAsset(asset: VisualizationGeometryAsset, baseURL: string): Promise<FeatureCollection> {

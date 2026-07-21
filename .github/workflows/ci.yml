@@ -290,7 +290,7 @@ jobs:
 
       - name: Install pinned documentation basemap
         if: matrix.name == 'site'
-        run: go run ./internal/tools/mapassets --out .data/map-assets/libredash-streets
+        run: go run ./internal/tools/mapassets --out .data/map-assets
 
       - name: Install browser dependencies
         run: bunx playwright install --with-deps chromium

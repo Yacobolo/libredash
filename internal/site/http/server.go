@@ -13,6 +13,7 @@ import (
 	"os"
 	"strings"
 
+	visualizationmapasset "github.com/Yacobolo/libredash/internal/visualization/mapasset"
 	"github.com/Yacobolo/libredash/pkg/pagestream"
 	siteassets "github.com/Yacobolo/libredash/site"
 )
@@ -85,6 +86,11 @@ func siteMapAssets() http.Handler {
 
 func mapAssetCache(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !visualizationmapasset.IsContentAddressedURLPath(r.URL.Path) {
+			w.Header().Set("Cache-Control", "no-store")
+			http.NotFound(w, r)
+			return
+		}
 		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		w.Header().Set("Accept-Ranges", "bytes")
 		next.ServeHTTP(w, r)
