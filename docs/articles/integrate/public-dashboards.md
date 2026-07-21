@@ -1,4 +1,4 @@
-# Publish and embed a dashboard
+# Public and embedded dashboards
 
 Dashboard publications expose one compiled dashboard as an anonymous, governed read surface. Each publication has a stable standalone URL and an iframe URL. Publishing does not create an API credential, inherit the deployer's permissions, or make arbitrary semantic queries available.
 
@@ -66,4 +66,3 @@ Mutation API requests require an `Idempotency-Key`.
 Use the generated iframe snippet. Keep `sandbox="allow-scripts allow-same-origin"` and `referrerpolicy="no-referrer"`. The iframe document has no authenticated application chrome or cookies, and browser CSP verifies that the parent origin is explicitly allowed.
 
 Public IDs reduce accidental discovery but are not secrets. Apply data policies as though anyone with the URL can view the publication, monitor public query and rate-limit telemetry, and rotate the URL if it is distributed unintentionally.
-
