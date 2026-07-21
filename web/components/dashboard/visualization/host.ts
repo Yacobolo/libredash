@@ -4,18 +4,22 @@ import type { VisualizationEnvelope } from '../../../generated/visualization'
 import validateGeneratedEnvelope from '../../../generated/visualization/validate'
 import { visualActionStyles } from '../visual-action-styles'
 import { visualMenuIcon } from '../visual-menu-icons'
+import type { VisualActionDetail } from '../visual-modal'
 import { VisualizationController, validateEnvelopeBoundary } from './host-controller'
 import { visualizationRegistry } from './registry'
 import { adapterObservation } from './telemetry'
 
 export class VisualizationHost extends LitElement {
   @property({ attribute: false }) envelope?: VisualizationEnvelope
+  @property({ attribute: false }) openVisualFocus?: (source: HTMLElement, detail: VisualActionDetail) => void
   @query('.renderer') private rendererContainer?: HTMLDivElement
   @state() private error = ''
   @state() private applying = false
   private controller?: VisualizationController
   private resizeObserver?: ResizeObserver
   private applyGeneration = 0
+  private connectionGeneration = 0
+  private focusMirror?: VisualizationHost
 
   static styles = [visualActionStyles, css`
     :host, .surface { display: block; width: 100%; height: 100%; min-width: 0; min-height: 0; }
@@ -53,7 +57,21 @@ export class VisualizationHost extends LitElement {
   `]
 
   protected firstUpdated(): void {
-    if (!this.rendererContainer) return
+    this.renderRoot.addEventListener('click', this.handleToolbarClick)
+    this.ensureController()
+  }
+
+  connectedCallback(): void {
+    super.connectedCallback()
+    const generation = ++this.connectionGeneration
+    if (!this.hasUpdated || this.controller) return
+    queueMicrotask(() => {
+      if (generation === this.connectionGeneration && this.isConnected) this.ensureController()
+    })
+  }
+
+  private ensureController(): void {
+    if (this.controller || !this.rendererContainer) return
     this.controller = new VisualizationController(
       visualizationRegistry,
       this.rendererContainer,
@@ -69,17 +87,33 @@ export class VisualizationHost extends LitElement {
   }
 
   protected updated(changed: Map<PropertyKey, unknown>): void {
-    if (changed.has('envelope')) void this.applyEnvelope()
+    if (changed.has('envelope')) {
+      if (this.focusMirror) this.focusMirror.envelope = this.envelope
+      void this.applyEnvelope()
+    }
   }
 
   disconnectedCallback(): void {
-    this.resizeObserver?.disconnect()
-    this.controller?.dispose()
-    this.controller = undefined
+    const generation = ++this.connectionGeneration
     super.disconnectedCallback()
+    // A synchronous DOM move fires disconnected/connected callbacks even though
+    // the visual remains live. Defer teardown so transient moves retain renderer
+    // state; a host that stays detached is still disposed in the same microtask.
+    queueMicrotask(() => {
+      if (generation !== this.connectionGeneration || this.isConnected) return
+      this.resizeObserver?.disconnect()
+      this.resizeObserver = undefined
+      this.controller?.dispose()
+      this.controller = undefined
+    })
   }
 
   async snapshot(): Promise<Blob> { return this.controller?.snapshot() ?? Promise.reject(new Error('visualization is not mounted')) }
+
+  setFocusMirror(mirror?: VisualizationHost): void {
+    this.focusMirror = mirror
+    if (mirror) mirror.envelope = this.envelope
+  }
 
   protected render() {
     const statusError = this.envelope?.status.kind === 'error' ? this.envelope.status.message ?? 'Visualization error' : ''
@@ -90,7 +124,7 @@ export class VisualizationHost extends LitElement {
         <header class="toolbar">
           <div class="toolbar-title"><h2 data-visualization-title>${this.envelope?.spec.title}</h2></div>
           <div class="visual-actions">
-            <button class="icon-action" type="button" data-visualization-id=${this.envelope?.visualID ?? ''} aria-label=${`Expand ${header}`} title=${`Expand ${header}`} @click=${this.expand}>${visualMenuIcon('focus')}</button>
+            <button class="icon-action" type="button" data-visualization-expand data-visualization-id=${this.envelope?.visualID ?? ''} aria-label=${`Expand ${header}`} title=${`Expand ${header}`}>${visualMenuIcon('focus')}</button>
           </div>
         </header>
       ` : null}
@@ -126,19 +160,35 @@ export class VisualizationHost extends LitElement {
     const envelope = this.envelope
     const visualType = this.sharedHeader()
     if (!envelope || !visualType) return
+    const detail: VisualActionDetail = {
+      action: 'focus',
+      visualType,
+      visualId: envelope.visualID,
+      title: envelope.spec.title,
+      columns: [],
+      rows: [],
+      selection: envelope.selection.map((entry) => entry.label ?? Object.values(entry.datum.identity).join(' · ')),
+    }
+    this.openFocus(detail)
+  }
+
+  private openFocus(detail: VisualActionDetail): void {
+    if (this.openVisualFocus) {
+      this.openVisualFocus(this, detail)
+      return
+    }
     this.dispatchEvent(new CustomEvent('ld-visual-action', {
       bubbles: true,
       composed: true,
-      detail: {
-        action: 'focus',
-        visualType,
-        visualId: envelope.visualID,
-        title: envelope.spec.title,
-        columns: [],
-        rows: [],
-        selection: envelope.selection.map((entry) => entry.label ?? Object.values(entry.datum.identity).join(' · ')),
-      },
+      detail,
     }))
+  }
+
+  private handleToolbarClick = (event: Event): void => {
+    const expand = event.composedPath().some((target) => (
+      target instanceof HTMLElement && target.hasAttribute('data-visualization-expand')
+    ))
+    if (expand) this.expand()
   }
 
   private forwardAdapterObservation = (event: CustomEvent<unknown>): void => {

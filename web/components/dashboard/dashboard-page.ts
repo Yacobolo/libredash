@@ -20,6 +20,7 @@ import './filters/filter-dock'
 import './report-canvas'
 import './report-footer'
 import './visual-modal'
+import type { VisualActionDetail } from './visual-modal'
 import { loadDashboardComponent } from './registry'
 import './visualization/host'
 import { DashboardVisualizationSignalDecoder } from './visualization/signal-envelope'
@@ -497,7 +498,7 @@ class LibreDashDashboardPage extends DatastarLit(LitElement) {
       case 'visual': {
         const visual = this.visualFor(component)
         if (!visual) return this.missingPayload('visual')
-        return html`<ld-visualization-host .envelope=${visual}></ld-visualization-host>`
+        return html`<ld-visualization-host .envelope=${visual} .openVisualFocus=${this.openVisualFocus}></ld-visualization-host>`
       }
       default:
         return html`<div class="unsupported">Unsupported dashboard component: ${component.kind}</div>`
@@ -516,6 +517,10 @@ class LibreDashDashboardPage extends DatastarLit(LitElement) {
         </div>
       </div>
     `
+  }
+
+  private openVisualFocus = (source: HTMLElement, detail: VisualActionDetail): void => {
+    this.renderRoot.querySelector('ld-visual-modal')?.openVisualFocus(source, detail)
   }
 
   private renderFilterCard(component: DashboardComponentSignal) {

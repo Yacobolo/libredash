@@ -2,7 +2,7 @@ import { LitElement, css, html, nothing } from 'lit'
 import { state } from 'lit/decorators.js'
 import { X } from 'lucide'
 import { lucideIcon } from '../shared/lucide-icons'
-import { mountVisualFocus, restoreVisualFocus, visualSourceFromEvent, type VisualFocusMount } from './visual-modal-focus'
+import { visualSourceFromEvent } from './visual-modal-focus'
 import '../shared/record-table'
 
 type VisualActionName = 'focus' | 'show-data' | 'copy-data' | 'export-csv' | 'clear-selection'
@@ -15,7 +15,7 @@ type VisualColumn = {
 
 type VisualRow = Record<string, unknown>
 
-type VisualActionDetail = {
+export type VisualActionDetail = {
   action: VisualActionName
   visualType: 'chart' | 'map' | 'table' | 'visualization'
   visualId: string
@@ -29,13 +29,14 @@ type VisualActionDetail = {
 
 type ModalMode = 'focus' | 'show-data'
 
-class VisualModal extends LitElement {
+export class VisualModal extends LitElement {
   @state() private mode: ModalMode | '' = ''
   @state() private detail: VisualActionDetail | null = null
   @state() private notice = ''
-  private focusMount: VisualFocusMount<HTMLElement> | null = null
+  private focusClone: HTMLElement | null = null
   private focusSource: HTMLElement | null = null
   private restoreFocusTo: HTMLElement | null = null
+  private actionEventTarget: Node | null = null
 
   static styles = css`
     :host {
@@ -144,7 +145,7 @@ class VisualModal extends LitElement {
       position: absolute;
       top: var(--ld-space-md);
       right: var(--ld-space-md);
-      z-index: var(--zIndex-popover);
+      z-index: var(--zIndex-popover, 300);
       display: grid;
       place-items: center;
       background: var(--ld-bg-overlay);
@@ -237,12 +238,14 @@ class VisualModal extends LitElement {
 
   connectedCallback(): void {
     super.connectedCallback()
-    window.addEventListener('ld-visual-action', this.handleVisualAction as EventListener)
+    this.actionEventTarget = this.getRootNode()
+    this.actionEventTarget.addEventListener('ld-visual-action', this.handleVisualAction as EventListener, { capture: true })
     window.addEventListener('keydown', this.handleKeydown)
   }
 
   disconnectedCallback(): void {
-    window.removeEventListener('ld-visual-action', this.handleVisualAction as EventListener)
+    this.actionEventTarget?.removeEventListener('ld-visual-action', this.handleVisualAction as EventListener, { capture: true })
+    this.actionEventTarget = null
     window.removeEventListener('keydown', this.handleKeydown)
     this.restoreFocusedVisual(false)
     super.disconnectedCallback()
@@ -358,7 +361,12 @@ class VisualModal extends LitElement {
   private openFocus(detail: VisualActionDetail, event: Event): void {
     const source = visualSourceFromEvent(event)
     if (!source) return
-    if (this.mode === 'focus' && this.focusMount?.element === source) return
+    this.openVisualFocus(source, detail)
+  }
+
+  openVisualFocus(source: HTMLElement, detail: VisualActionDetail): void {
+    if (detail.action !== 'focus') return
+    if (this.mode === 'focus' && this.focusSource === source && this.focusClone) return
 
     const focusToRestore = this.deepActiveElement()
     this.restoreFocusedVisual(false)
@@ -367,24 +375,35 @@ class VisualModal extends LitElement {
     this.mode = 'focus'
     this.focusSource = source
     void this.updateComplete.then(() => {
-      this.mountFocusedVisual(source)
+      this.mountFocusedVisualClone(source)
       this.focusInitialControl()
     })
   }
 
-  private mountFocusedVisual(source: HTMLElement): void {
-    if (this.mode !== 'focus' || this.focusSource !== source || this.focusMount?.element === source) return
-    const mount = mountVisualFocus(source, this, { slot: 'focus-visual' })
-    if (!mount) return
-    this.focusMount = mount
+  private mountFocusedVisualClone(source: HTMLElement): void {
+    if (this.mode !== 'focus' || this.focusSource !== source || this.focusClone) return
+    const clone = source.cloneNode(false) as HTMLElement & {
+      envelope?: unknown
+      openVisualFocus?: (source: HTMLElement, detail: VisualActionDetail) => void
+    }
+    const sourceProperties = source as typeof clone & { setFocusMirror?: (mirror?: HTMLElement) => void }
+    clone.removeAttribute('id')
+    clone.setAttribute('slot', 'focus-visual')
+    clone.setAttribute('data-visual-focus-clone', '')
+    if (source.id) clone.setAttribute('data-visual-focus-source-id', source.id)
+    clone.envelope = sourceProperties.envelope
+    clone.openVisualFocus = sourceProperties.openVisualFocus
+    this.appendChild(clone)
+    this.focusClone = clone
+    sourceProperties.setFocusMirror?.(clone)
   }
 
   private restoreFocusedVisual(restoreFocus: boolean): void {
     const focusToRestore = this.restoreFocusTo
-    if (this.focusMount) {
-      restoreVisualFocus(this.focusMount)
-    }
-    this.focusMount = null
+    const sourceWithMirror = this.focusSource as (HTMLElement & { setFocusMirror?: (mirror?: HTMLElement) => void }) | null
+    sourceWithMirror?.setFocusMirror?.()
+    this.focusClone?.remove()
+    this.focusClone = null
     this.focusSource = null
     this.restoreFocusTo = null
     if (restoreFocus && focusToRestore?.isConnected) {
@@ -421,7 +440,7 @@ class VisualModal extends LitElement {
   private focusableElements(): HTMLElement[] {
     return [
       ...this.deepFocusableElements(this.renderRoot),
-      ...(this.focusMount ? this.deepFocusableElements(this.focusMount.element) : []),
+      ...(this.focusClone ? this.deepFocusableElements(this.focusClone) : []),
     ]
   }
 
@@ -522,3 +541,5 @@ function slug(value: string): string {
 }
 
 customElements.define('ld-visual-modal', VisualModal)
+
+declare global { interface HTMLElementTagNameMap { 'ld-visual-modal': VisualModal } }

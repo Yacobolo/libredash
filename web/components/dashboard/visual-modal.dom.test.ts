@@ -73,7 +73,7 @@ async function dispatchVisualAction(page: Awaited<ReturnType<typeof setupPage>>,
   await page.locator('ld-visual-modal').evaluate((modal: any) => modal.updateComplete)
 }
 
-test('focus action moves the original source into the modal and close restores it', async () => {
+test('focus action renders a modal clone and leaves the live source in place', async () => {
   const page = await setupPage()
   try {
     await page.locator('#trigger').focus()
@@ -83,18 +83,25 @@ test('focus action moves the original source into the modal and close restores i
       const modal = document.querySelector('ld-visual-modal')!
       const first = document.getElementById('first')!
       const parent = document.getElementById('parent')!
+      const clone = modal.querySelector('[data-visual-focus-clone]')
       return {
         sourceParent: first.parentElement?.localName,
         slot: first.getAttribute('slot'),
-        placeholderAtSource: Array.from(parent.childNodes).some((node) => node.nodeType === Node.COMMENT_NODE),
+        sourcePosition: parent.children[0] === first,
+        cloneParent: clone?.parentElement?.localName,
+        cloneSlot: clone?.getAttribute('slot'),
+        cloneSource: clone?.getAttribute('data-visual-focus-source-id'),
         activeInModal: modal.shadowRoot?.activeElement?.classList.contains('focus-close') ?? false,
       }
     })
 
     expect(focusedState).toEqual({
-      sourceParent: 'ld-visual-modal',
-      slot: 'focus-visual',
-      placeholderAtSource: true,
+      sourceParent: 'section',
+      slot: null,
+      sourcePosition: true,
+      cloneParent: 'ld-visual-modal',
+      cloneSlot: 'focus-visual',
+      cloneSource: 'first',
       activeInModal: true,
     })
 
@@ -113,6 +120,7 @@ test('focus action moves the original source into the modal and close restores i
         sourceParent: first.parentElement?.id,
         slot: first.getAttribute('slot'),
         restoredPosition: parent.children[0] === first,
+        cloneRemoved: !document.querySelector('ld-visual-modal')?.querySelector('[data-visual-focus-clone]'),
         activeId: document.activeElement?.id,
       }
     })
@@ -121,6 +129,7 @@ test('focus action moves the original source into the modal and close restores i
       sourceParent: 'parent',
       slot: null,
       restoredPosition: true,
+      cloneRemoved: true,
       activeId: 'trigger',
     })
   } finally {
@@ -138,19 +147,22 @@ test('opening another focused source restores the previous element first', async
       const parent = document.getElementById('parent')!
       const first = document.getElementById('first')!
       const second = document.getElementById('second')!
+      const clone = document.querySelector('ld-visual-modal')?.querySelector('[data-visual-focus-clone]')
       return {
         firstParent: first.parentElement?.id,
         firstPosition: parent.children[0] === first,
-        secondParent: second.parentElement?.localName,
+        secondParent: second.parentElement?.id,
         secondSlot: second.getAttribute('slot'),
+        cloneSource: clone?.getAttribute('data-visual-focus-source-id'),
       }
     })
 
     expect(state).toEqual({
       firstParent: 'parent',
       firstPosition: true,
-      secondParent: 'ld-visual-modal',
-      secondSlot: 'focus-visual',
+      secondParent: 'parent',
+      secondSlot: null,
+      cloneSource: 'second',
     })
   } finally {
     await page.close()
@@ -169,6 +181,7 @@ test('non-focus visual actions do not move the source element', async () => {
         sourceParent: first.parentElement?.id,
         slot: first.getAttribute('slot'),
         hasFocusSlot: Boolean(modal.shadowRoot?.querySelector('slot[name="focus-visual"]')),
+        hasFocusClone: Boolean(modal.querySelector('[data-visual-focus-clone]')),
       }
     })
 
@@ -176,6 +189,7 @@ test('non-focus visual actions do not move the source element', async () => {
       sourceParent: 'parent',
       slot: null,
       hasFocusSlot: false,
+      hasFocusClone: false,
     })
   } finally {
     await page.close()

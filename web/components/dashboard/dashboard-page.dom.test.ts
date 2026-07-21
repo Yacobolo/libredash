@@ -179,46 +179,70 @@ test('dashboard keeps the source visualization selected through canonicalization
   } finally { await page.close() }
 })
 
-test('visualization host renders the shared title and expands through the visual modal', async () => {
+test('visualization host renders the shared title and expands without moving the live source', async () => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {
     await page.goto(baseURL)
     await page.waitForFunction(() => (document.querySelector('ld-dashboard-page') as any)?.page?.title === 'Executive Sales Dashboard')
-    const state = await page.locator('ld-dashboard-page').evaluate(async (element: any) => {
+    const initial = await page.locator('ld-dashboard-page').evaluate(async (element: any) => {
       await element.updateComplete
       const hosts = Array.from(element.shadowRoot.querySelectorAll('ld-visualization-host') as NodeListOf<any>)
       const host = hosts.find((candidate: any) => candidate.envelope?.visualID === 'orders_chart')
       await host.updateComplete
       const title = host.shadowRoot.querySelector('[data-visualization-title]')?.textContent?.trim()
       const expand = host.shadowRoot.querySelector('button[aria-label="Expand chart"]') as HTMLButtonElement | null
-      expand?.click()
-
-      const modal = element.shadowRoot.querySelector('ld-visual-modal') as any
-      await modal.updateComplete
-      await Promise.resolve()
-      await modal.updateComplete
-      const focused = {
-        dialog: modal.shadowRoot.querySelector('[role="dialog"]')?.getAttribute('aria-label'),
-        slot: host.getAttribute('slot'),
-        parent: host.parentElement?.localName,
-      }
-
-      const close = modal.shadowRoot.querySelector('button[aria-label="Close visual modal"]') as HTMLButtonElement | null
-      close?.click()
-      await modal.updateComplete
-      await Promise.resolve()
-      return {
-        title,
-        expand: expand?.title,
-        focused,
-        restored: host.parentElement?.localName === 'ld-dashboard-visual-frame' && !host.hasAttribute('slot'),
-      }
+      return { title, expand: expand?.title }
     })
-    expect(state).toEqual({
+    expect(initial).toEqual({
       title: 'Orders by status',
       expand: 'Expand chart',
-      focused: { dialog: 'Orders by status', slot: 'focus-visual', parent: 'ld-visual-modal' },
-      restored: true,
+    })
+
+    await page.locator('[data-visualization-id="orders_chart"][data-visualization-expand]').click()
+    await page.waitForFunction(() => {
+      const dashboard = document.querySelector('ld-dashboard-page')
+      return Boolean(dashboard?.shadowRoot?.querySelector('ld-visual-modal')?.shadowRoot?.querySelector('[role="dialog"]'))
+    })
+    const focused = await page.locator('ld-dashboard-page').evaluate((dashboard: any) => {
+      const host = Array.from(dashboard.shadowRoot.querySelectorAll('ld-visualization-host') as NodeListOf<any>)
+        .find((candidate: any) => candidate.envelope?.visualID === 'orders_chart') as HTMLElement | undefined
+      const modal = dashboard.shadowRoot.querySelector('ld-visual-modal') as HTMLElement
+      const clone = modal.querySelector('[data-visual-focus-clone]') as HTMLElement | null
+      return {
+        dialog: modal.shadowRoot?.querySelector('[role="dialog"]')?.getAttribute('aria-label'),
+        sourceParent: host?.parentElement?.localName,
+        sourceSlot: host?.getAttribute('slot'),
+        cloneParent: clone?.parentElement?.localName,
+        cloneSlot: clone?.getAttribute('slot'),
+        cloneTitle: clone?.shadowRoot?.querySelector('[data-visualization-title]')?.textContent?.trim(),
+      }
+    })
+    expect(focused).toEqual({
+      dialog: 'Orders by status',
+      sourceParent: 'ld-dashboard-visual-frame',
+      sourceSlot: null,
+      cloneParent: 'ld-visual-modal',
+      cloneSlot: 'focus-visual',
+      cloneTitle: 'Orders by status',
+    })
+
+    const mirroredStatus = await page.locator('ld-dashboard-page').evaluate(async (dashboard: any) => {
+      const source = Array.from(dashboard.shadowRoot.querySelectorAll('ld-visualization-host') as NodeListOf<any>)
+        .find((candidate: any) => candidate.envelope?.visualID === 'orders_chart') as any
+      const modal = dashboard.shadowRoot.querySelector('ld-visual-modal') as HTMLElement
+      const clone = modal.querySelector('[data-visual-focus-clone]') as any
+      source.envelope = { ...source.envelope, status: { kind: 'partial', message: 'Focused refresh' } }
+      await source.updateComplete
+      await clone.updateComplete
+      return clone.envelope?.status
+    })
+    expect(mirroredStatus).toEqual({ kind: 'partial', message: 'Focused refresh' })
+
+    await page.locator('button[aria-label="Close visual modal"]').click()
+    await page.waitForFunction(() => {
+      const dashboard = document.querySelector('ld-dashboard-page')
+      const modal = dashboard?.shadowRoot?.querySelector('ld-visual-modal')
+      return !modal?.shadowRoot?.querySelector('[role="dialog"]') && !modal?.querySelector('[data-visual-focus-clone]')
     })
   } finally { await page.close() }
 })
