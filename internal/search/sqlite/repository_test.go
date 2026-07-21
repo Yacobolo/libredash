@@ -192,7 +192,7 @@ func TestRepositorySearchUsesFTSAndHydratesEveryVisualLocation(t *testing.T) {
 			('dashboard', 'dashboard:sales.executive', 'sales', 'sales_active', 'dashboard', 'sales.executive', 'catalog:sales', 'Executive Sales', 'Executive dashboard', 'dashboard.v1', '{"id":"executive"}', 'dashboard'),
 			('page-overview', 'page:sales.executive.overview', 'sales', 'sales_active', 'page', 'sales.executive.overview', 'dashboard:sales.executive', 'Overview', '', 'page.v1', '{"id":"overview"}', 'page-overview'),
 			('page-detail', 'page:sales.executive.detail', 'sales', 'sales_active', 'page', 'sales.executive.detail', 'dashboard:sales.executive', 'Detail', '', 'page.v1', '{"id":"detail"}', 'page-detail'),
-			('visual', 'visual:sales.executive.orders_by_category', 'sales', 'sales_active', 'visual', 'sales.executive.orders_by_category', 'dashboard:sales.executive', 'Orders by category', 'Order count grouped by category', 'visual.v1', '{"query":{"measures":["order_count"]}}', 'visual'),
+			('visual', 'visual:sales.executive.orders_by_category', 'sales', 'sales_active', 'visual', 'sales.executive.orders_by_category', 'dashboard:sales.executive', 'Orders by category', 'Order count grouped by category', 'visual.v1', '{"Type":"bar","Query":{"Measures":["order_count"]}}', 'visual'),
 			('item-overview', 'page_item:sales.executive.overview.orders', 'sales', 'sales_active', 'page_item', 'sales.executive.overview.orders', 'page:sales.executive.overview', 'Orders by category', '', 'page_item.v1', '{}', 'item-overview'),
 			('item-detail', 'page_item:sales.executive.detail.orders', 'sales', 'sales_active', 'page_item', 'sales.executive.detail.orders', 'page:sales.executive.detail', 'Orders by category', '', 'page_item.v1', '{}', 'item-detail');
 		INSERT INTO asset_edges (id, workspace_id, serving_state_id, from_logical_asset_id, to_logical_asset_id, edge_type) VALUES
@@ -227,6 +227,9 @@ func TestRepositorySearchUsesFTSAndHydratesEveryVisualLocation(t *testing.T) {
 	}
 	if visual.Reference.ID != "executive.orders_by_category" {
 		t.Fatalf("visual reference = %#v", visual.Reference)
+	}
+	if visual.VisualType != "bar" {
+		t.Fatalf("visual type = %q, want bar", visual.VisualType)
 	}
 	if len(visual.Locations) != 2 || visual.Locations[0].PageID != "detail" || visual.Href != visual.Locations[0].Href {
 		t.Fatalf("visual locations = %#v href=%q, want contextual detail first and both pages", visual.Locations, visual.Href)

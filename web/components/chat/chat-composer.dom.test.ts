@@ -179,6 +179,7 @@ test('composer searches for and attaches typed @ references with spaces', async 
       const reference = {
         reference: { workspaceId: 'sales', type: 'visual', id: 'executive-sales.orders_chart' },
         name: 'Orders',
+		visualType: 'table',
         description: 'Overview · Executive Sales',
         workspace: { id: 'sales', name: 'Sales' },
         href: '/workspaces/sales/dashboards/executive-sales/pages/overview',
@@ -206,18 +207,21 @@ test('composer searches for and attaches typed @ references with spaces', async 
         element.addEventListener('lv-chat-submit', (event: CustomEvent) => resolve(event.detail), { once: true })
         textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
       })
-      return { searches, optionText, draftAfterReference, submitted }
+		const iconClass = option.querySelector('.mention-icon svg')?.getAttribute('class')
+		return { searches, optionText, iconClass, draftAfterReference, submitted }
     })
 
     expect(result).toEqual({
       searches: ['orders by'],
       optionText: 'Orders Sales › Executive Sales › Overview Visual',
+		iconClass: 'reference-icon-table',
       draftAfterReference: 'Compare',
       submitted: {
         input: 'Compare this with last month',
         references: [{
           reference: { workspaceId: 'sales', type: 'visual', id: 'executive-sales.orders_chart' },
           name: 'Orders',
+		  visualType: 'table',
           description: 'Overview · Executive Sales',
           workspace: { id: 'sales', name: 'Sales' },
           href: '/workspaces/sales/dashboards/executive-sales/pages/overview',

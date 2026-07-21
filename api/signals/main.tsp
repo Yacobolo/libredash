@@ -410,6 +410,7 @@ model AgentReferenceSignal {
   `reference`: AgentReferenceKeySignal;
   `name`: string;
   `description`?: string;
+	`visualType`?: string;
   `workspace`: AgentReferenceWorkspaceSignal;
 	`hierarchy`: string[];
   `href`: string;

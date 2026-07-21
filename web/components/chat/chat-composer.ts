@@ -544,7 +544,7 @@ class ChatComposer extends LitElement {
 				@mousedown=${(event: MouseEvent) => event.preventDefault()}
 				@click=${() => this.selectMention(reference)}
 			>
-				<span class="mention-icon" aria-hidden="true">${referenceIcon(reference.reference.type)}</span>
+				<span class="mention-icon" aria-hidden="true">${referenceIcon(reference.reference.type, reference.visualType)}</span>
 				<span class="mention-copy">
 					<span class="mention-title">${reference.name}</span>
 					<span class="mention-hierarchy">${hierarchy}</span>

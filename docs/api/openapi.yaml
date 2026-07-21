@@ -16278,6 +16278,7 @@ paths:
                       id: example
                       type: workspace
                       workspaceId: example
+                    visualType: example
                     workspace:
                       id: example
                       name: example
@@ -43232,6 +43233,7 @@ components:
                 id: example
                 type: workspace
                 workspaceId: example
+              visualType: example
               workspace:
                 id: example
                 name: example
@@ -43254,6 +43256,7 @@ components:
               id: example
               type: workspace
               workspaceId: example
+            visualType: example
             workspace:
               id: example
               name: example
@@ -43275,6 +43278,9 @@ components:
           type: string
           example: example
         description:
+          type: string
+          example: example
+        visualType:
           type: string
           example: example
         workspace:
@@ -43314,6 +43320,7 @@ components:
           id: example
           type: workspace
           workspaceId: example
+        visualType: example
         workspace:
           id: example
           name: example

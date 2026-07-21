@@ -240,6 +240,7 @@ func agentReferenceSignalFromTurn(reference agent.TurnReference) AgentReferenceS
 		},
 		Name:        reference.Name,
 		Description: optionalValue(reference.Description),
+		VisualType:  optionalValue(reference.VisualType),
 		Workspace:   AgentReferenceWorkspaceSignal{ID: reference.Workspace.ID, Name: reference.Workspace.Name},
 		Hierarchy:   hierarchy,
 		Href:        reference.Href,

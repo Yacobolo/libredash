@@ -49,6 +49,7 @@ model SearchResult {
   reference: SearchReference;
   name: string;
   description?: string;
+  visualType?: string;
   workspace: SearchWorkspaceSummary;
   href: string;
   locations: SearchLocation[];

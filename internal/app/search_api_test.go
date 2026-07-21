@@ -11,8 +11,23 @@ import (
 
 	"github.com/Yacobolo/leapview/internal/access"
 	apigenapi "github.com/Yacobolo/leapview/internal/api/gen"
+	productsearch "github.com/Yacobolo/leapview/internal/search"
 	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
 )
+
+func TestSearchAPIResultsIncludeVisualSubtype(t *testing.T) {
+	items := searchAPIResults([]productsearch.Result{{
+		Reference:  productsearch.Reference{WorkspaceID: "sales", Type: productsearch.TypeVisual, ID: "orders.revenue"},
+		Name:       "Revenue",
+		VisualType: "line",
+		Workspace:  productsearch.Workspace{ID: "sales", Name: "Sales"},
+		Locations:  []productsearch.Location{},
+		Context:    []productsearch.ContextTag{},
+	}})
+	if len(items) != 1 || items[0].VisualType == nil || *items[0].VisualType != "line" {
+		t.Fatalf("search API visual subtype = %#v", items)
+	}
+}
 
 func TestGlobalSearchReturnsStructuredResultsAcrossWorkspaces(t *testing.T) {
 	store := testStore(t)

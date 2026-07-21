@@ -144,8 +144,9 @@ func searchAPIResults(items []productsearch.Result) []apigenapi.SearchResult {
 		out = append(out, apigenapi.SearchResult{
 			Reference: apigenapi.SearchReference{WorkspaceId: item.Reference.WorkspaceID, Type: apigenapi.SearchResultType(item.Reference.Type), Id: item.Reference.ID},
 			Name:      item.Name, Description: optionalString(item.Description),
-			Workspace: apigenapi.SearchWorkspaceSummary{Id: item.Workspace.ID, Name: item.Workspace.Name},
-			Href:      item.Href, Locations: locations, Context: contextTags,
+			VisualType: optionalString(item.VisualType),
+			Workspace:  apigenapi.SearchWorkspaceSummary{Id: item.Workspace.ID, Name: item.Workspace.Name},
+			Href:       item.Href, Locations: locations, Context: contextTags,
 		})
 	}
 	return out

@@ -15,7 +15,7 @@ func TestChatTranscriptItemsProjectsTurnReferences(t *testing.T) {
 		ID: "user_1", Kind: "user", Text: "Explain this", References: []agent.TurnReference{{
 			Reference: agent.TurnReferenceKey{WorkspaceID: "sales", Type: "visual", ID: "executive-sales.revenue"},
 			Name:      "Revenue by month", Workspace: agent.TurnReferenceWorkspace{ID: "sales", Name: "Sales"},
-			Hierarchy: []string{"Sales", "Executive Sales", "Overview"}, Href: "/overview",
+			Hierarchy: []string{"Sales", "Executive Sales", "Overview"}, Href: "/overview", VisualType: "line",
 		}},
 	}})
 
@@ -25,6 +25,9 @@ func TestChatTranscriptItemsProjectsTurnReferences(t *testing.T) {
 	reference := (*items[0].References)[0]
 	if reference.Name != "Revenue by month" || reference.Reference.Type != "visual" || reference.Href != "/overview" {
 		t.Fatalf("turn reference signal = %#v", reference)
+	}
+	if reference.VisualType == nil || *reference.VisualType != "line" {
+		t.Fatalf("turn reference visual type = %#v, want line", reference.VisualType)
 	}
 }
 

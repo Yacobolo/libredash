@@ -117,6 +117,7 @@ type Result struct {
 	Reference   Reference       `json:"reference"`
 	Name        string          `json:"name"`
 	Description string          `json:"description,omitempty"`
+	VisualType  string          `json:"visualType,omitempty"`
 	Workspace   Workspace       `json:"workspace"`
 	Hierarchy   []HierarchyItem `json:"-"`
 	Href        string          `json:"href"`

@@ -1,6 +1,6 @@
 import { LitElement, css, html } from 'lit'
 import { property, state } from 'lit/decorators.js'
-import { Bot, ExternalLink, Plus, X } from 'lucide'
+import { ExternalLink, Plus, X } from 'lucide'
 import type {
   AgentContextSignal,
   AgentReferenceSearchSignal,
@@ -11,6 +11,7 @@ import type {
 import { DatastarLit } from '../shared/datastar-lit'
 import { domainEvents, emitDomainEvent } from '../shared/events'
 import { lucideIcon } from '../shared/lucide-icons'
+import { agentIcon } from './agent-icon'
 import './chat-composer'
 import './chat-thread'
 import {
@@ -273,7 +274,7 @@ class ChatDrawer extends DatastarLit(LitElement) {
 		<aside class="drawer" aria-label="Dashboard agent" aria-hidden=${String(!this.open)} ?inert=${!this.open}>
         <header class="header">
           <div class="toolbar">
-            <div class="title">${lucideIcon(Bot)}<span>Agent</span></div>
+            <div class="title">${agentIcon()}<span>Agent</span></div>
             <div class="toolbar-actions">
               <button type="button" title="New chat" aria-label="New chat" @click=${this.newChat}>${lucideIcon(Plus)}</button>
               <a href=${conversationHref} title="Open full chat" aria-label="Open full chat">${lucideIcon(ExternalLink)}</a>

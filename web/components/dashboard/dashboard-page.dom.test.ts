@@ -576,13 +576,17 @@ test('dashboard agent drawer carries page context and explicit visual references
     const initial = await page.locator('lv-dashboard-page').evaluate((element: any) => {
       const root = element.shadowRoot
       const drawer = root.querySelector('lv-chat-drawer') as any
+      const toggle = root.querySelector('.agent-toggle') as HTMLButtonElement
+      const toggleStyle = getComputedStyle(toggle)
       return {
-        hasToggle: Boolean(root.querySelector('.agent-toggle')),
+        hasToggle: Boolean(toggle),
+        toggleHasVisibleSurface: toggleStyle.borderColor !== 'rgba(0, 0, 0, 0)'
+          && toggleStyle.backgroundColor !== 'rgba(0, 0, 0, 0)',
         open: drawer?.open,
         drawerWidth: Math.round(drawer?.getBoundingClientRect().width ?? 0),
       }
     })
-    expect(initial).toEqual({ hasToggle: true, open: false, drawerWidth: 0 })
+    expect(initial).toEqual({ hasToggle: true, toggleHasVisibleSurface: true, open: false, drawerWidth: 0 })
 
     const visualActionsAtRest = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
       const root = element.shadowRoot
@@ -597,6 +601,8 @@ test('dashboard agent drawer carries page context and explicit visual references
       const askStyle = getComputedStyle(ask)
       const expand = chart.shadowRoot.querySelector('[aria-label="Expand visual"]') as HTMLElement
       const options = chart.shadowRoot.querySelector('[aria-label="Visual options"]') as HTMLElement
+      const agentIconMarkup = root.querySelector('.agent-toggle svg')?.innerHTML
+      const drawer = root.querySelector('lv-chat-drawer') as any
       return {
         askOpacity: askStyle.opacity,
         askPointerEvents: askStyle.pointerEvents,
@@ -608,6 +614,8 @@ test('dashboard agent drawer carries page context and explicit visual references
         kpiAskActionRow: kpiAsk.assignedSlot?.parentElement?.className,
         tableAskActionRow: tableAsk.assignedSlot?.parentElement?.className,
         askPressed: ask.getAttribute('aria-pressed'),
+        askUsesAgentIcon: ask.querySelector('svg')?.innerHTML === agentIconMarkup
+          && drawer.shadowRoot.querySelector('.title svg')?.innerHTML === agentIconMarkup,
         chartActions: [expand, options].map((control) => control.getAttribute('aria-label')),
         chartHasExport: Array.from(chart.shadowRoot.querySelectorAll('[role="menuitem"]'))
           .some((item: any) => item.textContent?.trim() === 'Export CSV'),
@@ -625,6 +633,7 @@ test('dashboard agent drawer carries page context and explicit visual references
       kpiAskActionRow: 'visual-actions',
       tableAskActionRow: 'visual-actions',
       askPressed: 'false',
+      askUsesAgentIcon: true,
       chartActions: ['Expand visual', 'Visual options'],
       chartHasExport: true,
       tableHasExpand: true,
@@ -794,13 +803,14 @@ test('dashboard agent drawer carries page context and explicit visual references
     expect(submitted).toEqual({
       input: 'Why did this decline?',
       references: [{
-		reference: { workspaceId: 'sales', type: 'visual', id: 'executive-sales.orders_chart' },
-		name: 'Orders by status',
-		workspace: { id: 'sales', name: 'sales' },
-		hierarchy: ['sales', 'Executive Sales Dashboard', 'Overview'],
-		href: '/workspaces/sales/dashboards/executive-sales/pages/overview',
-		locations: [{ dashboardId: 'executive-sales', dashboardName: 'Executive Sales Dashboard', pageId: 'overview', pageName: 'Overview', href: '/workspaces/sales/dashboards/executive-sales/pages/overview' }],
-		context: ['current_page', 'current_dashboard', 'current_workspace'],
+        reference: { workspaceId: 'sales', type: 'visual', id: 'executive-sales.orders_chart' },
+        name: 'Orders by status',
+        visualType: 'bar',
+        workspace: { id: 'sales', name: 'sales' },
+        hierarchy: ['sales', 'Executive Sales Dashboard', 'Overview'],
+        href: '/workspaces/sales/dashboards/executive-sales/pages/overview',
+        locations: [{ dashboardId: 'executive-sales', dashboardName: 'Executive Sales Dashboard', pageId: 'overview', pageName: 'Overview', href: '/workspaces/sales/dashboards/executive-sales/pages/overview' }],
+        context: ['current_page', 'current_dashboard', 'current_workspace'],
       }],
     })
 

@@ -70,9 +70,10 @@ func agentReferenceSignal(result productsearch.Result) uisignals.AgentReferenceS
 	return uisignals.AgentReferenceSignal{
 		Reference: uisignals.AgentReferenceKeySignal{WorkspaceID: result.Reference.WorkspaceID, Type: string(result.Reference.Type), ID: result.Reference.ID},
 		Name:      result.Name, Description: uisignals.Optional(result.Description),
-		Workspace: uisignals.AgentReferenceWorkspaceSignal{ID: result.Workspace.ID, Name: result.Workspace.Name},
-		Hierarchy: agentReferenceHierarchy(result),
-		Href:      result.Href, Locations: locations, Context: contextTags,
+		VisualType: uisignals.Optional(result.VisualType),
+		Workspace:  uisignals.AgentReferenceWorkspaceSignal{ID: result.Workspace.ID, Name: result.Workspace.Name},
+		Hierarchy:  agentReferenceHierarchy(result),
+		Href:       result.Href, Locations: locations, Context: contextTags,
 	}
 }
 
@@ -122,9 +123,10 @@ func agentTurnReference(result productsearch.Result) agent.TurnReference {
 	reference := agent.TurnReference{
 		Reference: agent.TurnReferenceKey{WorkspaceID: result.Reference.WorkspaceID, Type: string(result.Reference.Type), ID: result.Reference.ID},
 		Name:      result.Name, Description: result.Description,
-		Workspace: agent.TurnReferenceWorkspace{ID: result.Workspace.ID, Name: result.Workspace.Name},
-		Hierarchy: agentReferenceHierarchy(result),
-		Href:      result.Href, Locations: locations, Context: contextTags,
+		VisualType: result.VisualType,
+		Workspace:  agent.TurnReferenceWorkspace{ID: result.Workspace.ID, Name: result.Workspace.Name},
+		Hierarchy:  agentReferenceHierarchy(result),
+		Href:       result.Href, Locations: locations, Context: contextTags,
 	}
 	parts := strings.Split(result.Reference.ID, ".")
 	switch result.Reference.Type {

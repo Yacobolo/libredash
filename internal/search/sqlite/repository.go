@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"sort"
@@ -269,9 +270,10 @@ func (r *Repository) hydrateCandidate(ctx context.Context, document document, co
 	}
 	result := productsearch.Result{
 		Reference: reference, Name: firstNonEmpty(document.title, reference.ID), Description: document.description,
-		Workspace: productsearch.Workspace{ID: document.workspaceID, Name: firstNonEmpty(document.workspaceTitle, document.workspaceID)},
-		Hierarchy: ancestorHierarchy(ancestors),
-		Href:      href, Locations: locations, Context: contextTags,
+		VisualType: visualTypeFromTerms(typ, document.terms),
+		Workspace:  productsearch.Workspace{ID: document.workspaceID, Name: firstNonEmpty(document.workspaceTitle, document.workspaceID)},
+		Hierarchy:  ancestorHierarchy(ancestors),
+		Href:       href, Locations: locations, Context: contextTags,
 	}
 	object := securityObject(document, ancestors)
 	locationObjects := make([]access.ObjectRef, 0, len(locations))
@@ -288,6 +290,19 @@ func (r *Repository) hydrateCandidate(ctx context.Context, document document, co
 		Result: result, Object: object, LocationObjects: locationObjects,
 		RequireLocation: document.assetType == "visual" || document.assetType == "filter",
 	}, nil
+}
+
+func visualTypeFromTerms(typ productsearch.Type, terms string) string {
+	if typ != productsearch.TypeVisual {
+		return ""
+	}
+	var payload struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal([]byte(terms), &payload); err != nil {
+		return ""
+	}
+	return strings.ToLower(strings.TrimSpace(payload.Type))
 }
 
 func ancestorHierarchy(ancestors []document) []productsearch.HierarchyItem {

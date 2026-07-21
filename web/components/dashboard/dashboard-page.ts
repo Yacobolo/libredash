@@ -1,6 +1,5 @@
 import { LitElement, css, html, nothing } from 'lit'
 import { property, state } from 'lit/decorators.js'
-import { Bot, MessageSquareText } from 'lucide'
 import type {
   AgentContextSignal,
   AgentReferenceSignal,
@@ -18,7 +17,7 @@ import type {
 import { DatastarLit } from '../shared/datastar-lit'
 import { domainEvents, emitDomainEvent } from '../shared/events'
 import { checkSignalContract } from '../shared/signal-contract'
-import { lucideIcon } from '../shared/lucide-icons'
+import { agentIcon } from '../chat/agent-icon'
 import '../shared/loading-spinner'
 import '../navigation/sub-sidebar'
 import '../chat/chat-drawer'
@@ -222,8 +221,9 @@ class LeapViewDashboardPage extends DatastarLit(LitElement) {
 			display: inline-flex;
 			width: auto;
 			gap: var(--base-size-6);
-			border-color: transparent;
-			padding-inline: var(--base-size-8);
+			border-color: var(--lv-line-muted);
+			background: var(--lv-bg-control, var(--lv-bg-panel-muted));
+			padding-inline: var(--base-size-12);
 			font-size: var(--lv-font-size-body-sm);
 			font-weight: var(--lv-font-weight-medium);
 		}
@@ -558,7 +558,7 @@ class LeapViewDashboardPage extends DatastarLit(LitElement) {
 								aria-label="Toggle dashboard agent"
 								aria-expanded=${String(this.agentDrawerOpen)}
 								@click=${() => { this.setAgentDrawerOpen(!this.agentDrawerOpen) }}
-							>${lucideIcon(Bot)}<span>Ask</span></button>
+							>${agentIcon()}<span>Ask</span></button>
 						</div>
           </header>
           <div class="body">
@@ -736,7 +736,7 @@ class LeapViewDashboardPage extends DatastarLit(LitElement) {
 				title=${`Ask about ${reference.name}`}
 				@click=${(event: MouseEvent) => this.dispatchAgentReference(event, reference)}
 			>
-				${lucideIcon(MessageSquareText)}<span>Ask</span>
+				${agentIcon()}<span>Ask</span>
 			</button>
 		`
 	}
@@ -777,6 +777,7 @@ class LeapViewDashboardPage extends DatastarLit(LitElement) {
 		return {
 			reference: { workspaceId, type: 'visual', id: `${page.dashboardId}.${component.visual}` },
 			name: component.title || visual.title || component.visual,
+			visualType: visual.type,
 			workspace: { id: workspaceId, name: workspaceId },
 			hierarchy: [workspaceId, this.agentContext?.dashboardTitle ?? page.dashboardTitle, page.pageTitle].filter(Boolean),
 			href,

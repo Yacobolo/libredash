@@ -9,8 +9,23 @@ import (
 	"github.com/Yacobolo/leapview/internal/agent"
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	productsearch "github.com/Yacobolo/leapview/internal/search"
 	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
 )
+
+func TestAgentReferenceSignalIncludesSearchVisualSubtype(t *testing.T) {
+	result := agentReferenceSignal(productsearch.Result{
+		Reference:  productsearch.Reference{WorkspaceID: "sales", Type: productsearch.TypeVisual, ID: "orders.revenue"},
+		Name:       "Revenue",
+		VisualType: "line",
+		Workspace:  productsearch.Workspace{ID: "sales", Name: "Sales"},
+		Locations:  []productsearch.Location{},
+		Context:    []productsearch.ContextTag{},
+	})
+	if result.VisualType == nil || *result.VisualType != "line" {
+		t.Fatalf("agent reference visual subtype = %#v", result)
+	}
+}
 
 func TestResolveChatTurnReferencesUsesAuthorizedSearchMetadata(t *testing.T) {
 	store := testStore(t)

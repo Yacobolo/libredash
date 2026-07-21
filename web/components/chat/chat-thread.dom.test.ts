@@ -167,6 +167,7 @@ test('chat thread renders turn-scoped references inside the user message bubble'
       references: [{
         reference: { workspaceId: 'sales', type: 'visual', id: 'executive-sales.revenue' },
         name: 'Revenue by month',
+        visualType: 'line',
         workspace: { id: 'sales', name: 'Sales' },
         hierarchy: ['Sales', 'Executive Sales', 'Overview'],
         href: '/workspaces/sales/dashboards/executive-sales/pages/overview',
@@ -188,6 +189,7 @@ test('chat thread renders turn-scoped references inside the user message bubble'
       tooltip: reference.getAttribute('title'),
       accessibleName: reference.getAttribute('aria-label'),
       hasVisibleMetadata: Boolean(reference.querySelector('.turn-reference-hierarchy, .turn-reference-type')),
+      iconClass: reference.querySelector('.turn-reference-icon svg')?.getAttribute('class'),
     }
   })
 
@@ -199,7 +201,41 @@ test('chat thread renders turn-scoped references inside the user message bubble'
     tooltip: 'Revenue by month · Sales › Executive Sales › Overview · Visual',
     accessibleName: 'Revenue by month · Sales › Executive Sales › Overview · Visual',
     hasVisibleMetadata: false,
+    iconClass: 'reference-icon-line',
   })
+  await page.close()
+})
+
+test('chat thread uses the visual subtype for reference icons', async () => {
+  const page = await browser.newPage()
+  await page.goto(baseURL)
+  await page.evaluate(async () => {
+    await customElements.whenDefined('lv-chat-thread')
+    const thread = document.querySelector('lv-chat-thread') as any
+    const reference = (id: string, visualType: string) => ({
+      reference: { workspaceId: 'sales', type: 'visual', id },
+      name: id,
+      visualType,
+      workspace: { id: 'sales', name: 'Sales' },
+      hierarchy: ['Sales'],
+      href: `/${id}`,
+      locations: [],
+      context: [],
+    })
+    thread.transcript = [{
+      id: 'user-1',
+      kind: 'user',
+      text: 'Compare these',
+      references: [reference('trend', 'line'), reference('revenue', 'kpi'), reference('orders', 'table')],
+    }]
+    await thread.updateComplete
+  })
+
+  const classes = await page.locator('lv-chat-thread').evaluate((element: any) => (
+    Array.from(element.shadowRoot.querySelectorAll('.turn-reference-icon svg'))
+      .map((icon: any) => icon.getAttribute('class'))
+  ))
+  expect(classes).toEqual(['reference-icon-line', 'reference-icon-kpi', 'reference-icon-table'])
   await page.close()
 })
 
