@@ -117,6 +117,9 @@ func (s Service) PrepareVisualSpatialWindow(request Request, authoritative dashb
 			return PreparedRefresh{}, fmt.Errorf("visual %q is not geographic", spatial.VisualID)
 		}
 	}
+	if visual.Query.Kind != visualizationdefinition.QuerySpatial || visual.Query.Spatial == nil || visual.Query.Spatial.Viewport == nil {
+		return PreparedRefresh{}, fmt.Errorf("visual %q does not use spatial windowing", spatial.VisualID)
+	}
 	if spatial.SpecRevision != visual.SpecRevision {
 		return PreparedRefresh{}, fmt.Errorf("spatial visual %q specification revision is stale", spatial.VisualID)
 	}
@@ -237,22 +240,11 @@ func (s Service) selectionTargets(request Request, sourceKind, sourceID string) 
 }
 
 func spatialTarget(definition visualizationdefinition.Definition, current dashboard.SpatialWindowRequest, reset bool) (Target, bool) {
-	base, err := visualizationir.SpecificationBase(definition.Spec)
-	if err != nil || base.DataBudget.MaxRows <= 20_000 {
+	if definition.Query.Kind != visualizationdefinition.QuerySpatial || definition.Query.Spatial == nil || definition.Query.Spatial.Viewport == nil {
 		return Target{}, false
 	}
-	geographic, ok := definition.Spec.Value.(*visualizationir.GeographicVisualizationSpec)
+	_, ok := definition.Spec.Value.(*visualizationir.GeographicVisualizationSpec)
 	if !ok {
-		return Target{}, false
-	}
-	windowable := false
-	for _, candidate := range geographic.Layers {
-		switch candidate.Value.(type) {
-		case *visualizationir.VisualizationPointLayer, *visualizationir.VisualizationHeatLayer, *visualizationir.VisualizationDensityLayer, *visualizationir.VisualizationPathLayer:
-			windowable = true
-		}
-	}
-	if !windowable {
 		return Target{}, false
 	}
 	if current.VisualID != definition.ID || current.SpecRevision != definition.SpecRevision || current.Width <= 0 || current.Height <= 0 {

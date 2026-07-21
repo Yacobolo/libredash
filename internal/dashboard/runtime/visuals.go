@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
 	"strings"
 	"sync"
 
@@ -14,6 +13,7 @@ import (
 	"github.com/Yacobolo/libredash/internal/dataquery"
 	visualizationdefinition "github.com/Yacobolo/libredash/internal/visualization/definition"
 	visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
+	visualizationruntime "github.com/Yacobolo/libredash/internal/visualization/runtime"
 )
 
 type VisualizationDataService struct {
@@ -23,8 +23,8 @@ type VisualizationDataService struct {
 	filters  *FilterService
 }
 
-func (s *VisualizationDataService) visuals(ctx context.Context, runtime *modelRuntime, report *dashboarddefinition.Definition, filters dashboard.Filters, keys []string) (map[string]dashboard.Visual, error) {
-	visuals := make(map[string]dashboard.Visual, len(keys))
+func (s *VisualizationDataService) visuals(ctx context.Context, runtime *modelRuntime, report *dashboarddefinition.Definition, filters dashboard.Filters, keys []string) (map[string]visualizationir.VisualizationEnvelope, error) {
+	visuals := make(map[string]visualizationir.VisualizationEnvelope, len(keys))
 	batchedData, err := s.batchedSingleValueData(ctx, runtime, report, filters, keys)
 	if err != nil {
 		return nil, err
@@ -45,110 +45,117 @@ func (s *VisualizationDataService) visuals(ctx context.Context, runtime *modelRu
 				return nil, err
 			}
 		}
-		visuals[key] = applySourceSelectionToVisual(buildVisualPayload(runtime, key, visual, data), filters)
+		frame, err := frameFromDatums(definition, data)
+		if err != nil {
+			return nil, err
+		}
+		envelope, err := visualizationruntime.EnvelopeFromFrame(definition, frame, selectedEntries(filters, "visual", key), 0, 0)
+		if err != nil {
+			return nil, err
+		}
+		visuals[key] = envelope
 	}
 	return visuals, nil
 }
 
-func (s *VisualizationDataService) spatialVisual(ctx context.Context, runtime *modelRuntime, report *dashboarddefinition.Definition, filters dashboard.Filters, request dashboard.SpatialWindowRequest) (dashboard.Visual, error) {
+func (s *VisualizationDataService) spatialEnvelope(ctx context.Context, runtime *modelRuntime, report *dashboarddefinition.Definition, filters dashboard.Filters, request dashboard.SpatialWindowRequest) (visualizationir.VisualizationEnvelope, error) {
 	definition, ok := report.Visualizations[request.VisualID]
 	if !ok {
-		return dashboard.Visual{}, fmt.Errorf("unknown spatial visual %q", request.VisualID)
+		return visualizationir.VisualizationEnvelope{}, fmt.Errorf("unknown spatial visual %q", request.VisualID)
 	}
 	visual, err := newVisualPlan(definition)
 	if err != nil {
-		return dashboard.Visual{}, err
+		return visualizationir.VisualizationEnvelope{}, err
 	}
-	geographic, ok := definition.Spec.Value.(*visualizationir.GeographicVisualizationSpec)
-	if !ok {
-		return dashboard.Visual{}, fmt.Errorf("visual %q is not geographic", request.VisualID)
+	if _, ok := definition.Spec.Value.(*visualizationir.GeographicVisualizationSpec); !ok {
+		return visualizationir.VisualizationEnvelope{}, fmt.Errorf("visual %q is not geographic", request.VisualID)
 	}
-	latitudeAlias, longitudeAlias, ok := geographicCoordinateAliases(geographic)
-	if !ok {
-		return dashboard.Visual{}, fmt.Errorf("spatial visual %q has no coordinate layer", request.VisualID)
-	}
-	latitudeField, longitudeField := bindingFieldID(visual, latitudeAlias), bindingFieldID(visual, longitudeAlias)
-	if latitudeField == "" || longitudeField == "" {
-		return dashboard.Visual{}, fmt.Errorf("spatial visual %q coordinate fields are unresolved", request.VisualID)
+	spatial := definition.Query.Spatial
+	if definition.Query.Kind != visualizationdefinition.QuerySpatial || spatial == nil || spatial.Viewport == nil {
+		return visualizationir.VisualizationEnvelope{}, fmt.Errorf("visual %q has no compiled spatial viewport", request.VisualID)
 	}
 	queryFilters, err := s.filters.semanticFilters(ctx, runtime, report, filters, "visual", request.VisualID)
 	if err != nil {
-		return dashboard.Visual{}, err
+		return visualizationir.VisualizationEnvelope{}, err
 	}
-	queryFilters = append(queryFilters,
-		reportdef.QueryFilter{Field: latitudeField, Operator: "greater_than_or_equal", Values: []any{request.Bounds.South}},
-		reportdef.QueryFilter{Field: latitudeField, Operator: "less_than", Values: []any{math.Nextafter(request.Bounds.North, math.Inf(1))}},
-	)
-	if request.Bounds.West <= request.Bounds.East {
-		queryFilters = append(queryFilters,
-			reportdef.QueryFilter{Field: longitudeField, Operator: "greater_than_or_equal", Values: []any{request.Bounds.West}},
-			reportdef.QueryFilter{Field: longitudeField, Operator: "less_than", Values: []any{math.Nextafter(request.Bounds.East, math.Inf(1))}},
-		)
-	} else {
-		queryFilters = append(queryFilters, reportdef.QueryFilter{Groups: []reportdef.QueryFilterGroup{
-			{Filters: []reportdef.QueryFilter{{Field: longitudeField, Operator: "greater_than_or_equal", Values: []any{request.Bounds.West}}}},
-			{Filters: []reportdef.QueryFilter{{Field: longitudeField, Operator: "less_than", Values: []any{math.Nextafter(request.Bounds.East, math.Inf(1))}}}},
-		}})
+	precision := dataquery.SpatialPrecisionAggregated
+	if request.Zoom >= spatial.Viewport.RawMinimumZoom {
+		precision = dataquery.SpatialPrecisionRaw
 	}
-	data, err := s.querySemanticDatums(ctx, runtime, reportdef.AggregateQuery{
-		Table: visual.Table, Dimensions: aliasedQueryFields(visual.Dimensions), Measures: aliasedQueryFields(visual.Measures),
-		Filters: queryFilters, Sort: aliasedVisualSorts(visual), Limit: visual.Limit,
-	})
+	execute := func(next dataquery.SpatialPrecision) (dataquery.Result, error) {
+		query := dataquery.Query{
+			Surface: dataquery.SurfaceDashboard, Operation: dataquery.OperationDashboardSpatial, ModelID: definition.Query.ModelID, Kind: dataquery.KindSemanticSpatial, Target: spatial.TableID,
+			Fields: fieldBindingsToDataFields(spatial.Dimensions), Measures: fieldBindingsToDataFields(spatial.Measures), Filters: reportFiltersToDataFilters(queryFilters),
+			Sort: reportSortToDataSort(aliasedVisualSorts(visual)),
+			Spatial: &dataquery.SpatialWindow{
+				Latitude: dataquery.Field{Field: spatial.Viewport.Latitude.FieldID, Alias: spatial.Viewport.Latitude.Alias}, Longitude: dataquery.Field{Field: spatial.Viewport.Longitude.FieldID, Alias: spatial.Viewport.Longitude.Alias},
+				West: request.Bounds.West, South: request.Bounds.South, East: request.Bounds.East, North: request.Bounds.North, Width: request.Width, Height: request.Height, FeatureCap: int(spatial.Viewport.FeatureCap), Precision: next,
+			},
+		}
+		if spatial.Time != nil {
+			query.Time = dataquery.Time{Field: spatial.Time.FieldID, Alias: spatial.Time.Alias, Grain: spatial.Time.Grain}
+		}
+		return runtime.data.ExecuteDataQuery(ctx, query)
+	}
+	result, err := execute(precision)
 	if err != nil {
-		return dashboard.Visual{}, err
+		return visualizationir.VisualizationEnvelope{}, err
 	}
-	return applySourceSelectionToVisual(buildVisualPayload(runtime, request.VisualID, visual, data), filters), nil
-}
-
-func geographicCoordinateAliases(spec *visualizationir.GeographicVisualizationSpec) (string, string, bool) {
-	for _, candidate := range spec.Layers {
-		switch layer := candidate.Value.(type) {
-		case *visualizationir.VisualizationPointLayer:
-			return layer.Latitude.Field, layer.Longitude.Field, true
-		case *visualizationir.VisualizationHeatLayer:
-			return layer.Latitude.Field, layer.Longitude.Field, true
-		case *visualizationir.VisualizationDensityLayer:
-			return layer.Latitude.Field, layer.Longitude.Field, true
-		case *visualizationir.VisualizationPathLayer:
-			return layer.Latitude.Field, layer.Longitude.Field, true
+	if precision == dataquery.SpatialPrecisionRaw && result.TotalRowsKnown && result.TotalRows > int(spatial.Viewport.FeatureCap) {
+		precision = dataquery.SpatialPrecisionAggregated
+		result, err = execute(precision)
+		if err != nil {
+			return visualizationir.VisualizationEnvelope{}, err
 		}
 	}
-	return "", "", false
-}
-
-func bindingFieldID(visual visualPlan, alias string) string {
-	for _, binding := range append(append([]visualizationdefinition.FieldBinding{}, visual.Dimensions...), visual.Measures...) {
-		if binding.Alias == alias {
-			return binding.FieldID
+	base, err := visualizationir.SpecificationBase(definition.Spec)
+	if err != nil || len(base.Datasets) != 1 {
+		return visualizationir.VisualizationEnvelope{}, fmt.Errorf("spatial visual %q has invalid compiled dataset", request.VisualID)
+	}
+	columns := make([]string, len(base.Datasets[0].Fields))
+	for index, field := range base.Datasets[0].Fields {
+		columns[index] = field.ID
+	}
+	rows := make([][]any, len(result.Rows))
+	for index, row := range result.Rows {
+		rows[index] = make([]any, len(columns))
+		for columnIndex, column := range columns {
+			rows[index][columnIndex] = normalizeDatumValue(row[column])
 		}
 	}
-	return ""
+	cardinality := int64(result.TotalRows)
+	irPrecision := visualizationir.VisualizationSpatialPrecision(precision)
+	return visualizationruntime.SpatialEnvelopeFromFrame(definition, visualizationruntime.Frame{Columns: columns, Rows: rows}, selectedEntries(filters, "visual", request.VisualID), request, irPrecision, cardinality, 0, 0)
 }
 
-func buildVisualPayload(runtime *modelRuntime, key string, visual visualPlan, data []dashboard.Datum) dashboard.Visual {
-	measureName := visual.Measures[0].FieldID
-	measure := aggregateMemberMetadata(runtime.model, measureName)
-	title := visual.Title()
-	if title == "" {
-		title = measure.Label
+func fieldBindingsToDataFields(bindings []visualizationdefinition.FieldBinding) []dataquery.Field {
+	fields := make([]dataquery.Field, len(bindings))
+	for index, binding := range bindings {
+		fields[index] = dataquery.Field{Field: binding.FieldID, Alias: binding.Alias}
 	}
-	if title == "" {
-		title = measureName
-	}
-	unit := measure.Unit
-	if len(visual.Measures) > 1 {
-		unit = ""
-	}
-	series := []string{}
-	if visual.Series != nil {
-		series = append(series, visual.Series.FieldID)
-	}
-	interaction, _ := visual.Interaction()
-	kind, visualType := visual.KindAndType()
-	return dashboard.Visual{Version: 3, ID: key, Kind: kind, Shape: visual.Shape(), Renderer: visual.Definition.RendererID, Type: visualType, Title: title, Unit: unit, Format: measure.Format, Interaction: compiledInteractionConfig(interaction), Dimensions: visualDimensionNames(visual), Measure: displayField(measureName), Measures: displayFields(queryMeasureFields(visual.Measures)), Series: series, Selection: []dashboard.InteractionSelectionEntry{}, Data: data}
+	return fields
 }
 
-func (s *VisualizationDataService) bundledVisuals(ctx context.Context, runtime *modelRuntime, report *dashboarddefinition.Definition, filters dashboard.Filters, keys []string) (map[string]dashboard.Visual, error) {
+func frameFromDatums(definition visualizationdefinition.Definition, data []dashboard.Datum) (visualizationruntime.Frame, error) {
+	base, err := visualizationir.SpecificationBase(definition.Spec)
+	if err != nil || len(base.Datasets) != 1 {
+		return visualizationruntime.Frame{}, fmt.Errorf("visualization %q has invalid compiled dataset", definition.ID)
+	}
+	columns := make([]string, len(base.Datasets[0].Fields))
+	for index, field := range base.Datasets[0].Fields {
+		columns[index] = field.ID
+	}
+	rows := make([][]any, len(data))
+	for index, datum := range data {
+		rows[index] = make([]any, len(columns))
+		for columnIndex, column := range columns {
+			rows[index][columnIndex] = normalizeDatumValue(datum[column])
+		}
+	}
+	return visualizationruntime.Frame{Columns: columns, Rows: rows}, nil
+}
+
+func (s *VisualizationDataService) bundledVisuals(ctx context.Context, runtime *modelRuntime, report *dashboarddefinition.Definition, filters dashboard.Filters, keys []string) (map[string]visualizationir.VisualizationEnvelope, error) {
 	port, ok := runtime.data.(dataquery.BundleExecutor)
 	if !ok {
 		return nil, &dataquery.BundleIncompatibleError{Err: fmt.Errorf("runtime has no governed bundle port")}
@@ -175,7 +182,7 @@ func (s *VisualizationDataService) bundledVisuals(ctx context.Context, runtime *
 	if err != nil {
 		return nil, err
 	}
-	visuals := make(map[string]dashboard.Visual, len(keys))
+	visuals := make(map[string]visualizationir.VisualizationEnvelope, len(keys))
 	for _, key := range keys {
 		visual := definitions[key]
 		data := datumsFromDataQuery(bundle.Results[key].Rows)
@@ -198,7 +205,16 @@ func (s *VisualizationDataService) bundledVisuals(ctx context.Context, runtime *
 				}
 			}
 		}
-		visuals[key] = applySourceSelectionToVisual(buildVisualPayload(runtime, key, visual, data), filters)
+		definition := report.Visualizations[key]
+		frame, frameErr := frameFromDatums(definition, data)
+		if frameErr != nil {
+			return nil, frameErr
+		}
+		envelope, envelopeErr := visualizationruntime.EnvelopeFromFrame(definition, frame, selectedEntries(filters, "visual", key), 0, 0)
+		if envelopeErr != nil {
+			return nil, envelopeErr
+		}
+		visuals[key] = envelope
 	}
 	return visuals, nil
 }
@@ -479,14 +495,6 @@ func categoryDimension(visual visualPlan, alias string) ([]reportdef.QueryField,
 		return nil, reportdef.QueryTime{Field: visual.Time.FieldID, Grain: visual.Time.Grain, Alias: alias}
 	}
 	return []reportdef.QueryField{fieldRef(visual.Dimensions[0].FieldID, alias)}, reportdef.QueryTime{}
-}
-
-func visualDimensionNames(visual visualPlan) []string {
-	names := displayFields(queryDimensionFields(visual.Dimensions))
-	if visual.Time != nil {
-		names = append(names, displayField(visual.Time.FieldID))
-	}
-	return names
 }
 
 func (s *VisualizationDataService) categoryDeltaData(ctx context.Context, runtime *modelRuntime, report *dashboarddefinition.Definition, visualID string, visual visualPlan, filters dashboard.Filters) ([]dashboard.Datum, error) {

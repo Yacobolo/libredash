@@ -6,6 +6,7 @@ import { visualActionStyles } from '../visual-action-styles'
 import { visualMenuIcon } from '../visual-menu-icons'
 import { VisualizationController, validateEnvelopeBoundary } from './host-controller'
 import { visualizationRegistry } from './registry'
+import { adapterObservation } from './telemetry'
 
 export class VisualizationHost extends LitElement {
   @property({ attribute: false }) envelope?: VisualizationEnvelope
@@ -93,7 +94,7 @@ export class VisualizationHost extends LitElement {
           </div>
         </header>
       ` : null}
-      <div class="renderer" role="group" aria-label=${this.envelope?.spec.accessibility.title ?? 'Visualization'} aria-describedby="visualization-fallback" aria-busy=${String(this.applying)}></div>
+      <div class="renderer" role="group" aria-label=${this.envelope?.spec.accessibility.title ?? 'Visualization'} aria-describedby="visualization-fallback" aria-busy=${String(this.applying)} @ld-map-observation=${this.forwardAdapterObservation}></div>
       <div id="visualization-fallback" class="fallback">${this.accessibleFallback()}</div>
       ${error ? html`<div class="error" role="alert">${error}</div>` : null}
     </div>`
@@ -138,6 +139,13 @@ export class VisualizationHost extends LitElement {
         selection: envelope.selection.map((entry) => entry.label ?? Object.values(entry.datum.identity).join(' · ')),
       },
     }))
+  }
+
+  private forwardAdapterObservation = (event: CustomEvent<unknown>): void => {
+    const detail = adapterObservation(event.detail)
+    if (!detail) return
+    event.stopPropagation()
+    this.dispatchEvent(new CustomEvent('ld-visualization-observation', { bubbles: true, composed: true, detail }))
   }
 
   private accessibleFallback() {

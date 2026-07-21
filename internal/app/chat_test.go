@@ -16,8 +16,10 @@ import (
 	"github.com/Yacobolo/libredash/internal/agent"
 	"github.com/Yacobolo/libredash/internal/api"
 	"github.com/Yacobolo/libredash/internal/dashboard"
+	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
 	"github.com/Yacobolo/libredash/internal/platform"
 	visualizationruntime "github.com/Yacobolo/libredash/internal/visualization/runtime"
+	workspacecompiler "github.com/Yacobolo/libredash/internal/workspace/compiler"
 	"github.com/Yacobolo/libredash/pkg/pagestream"
 )
 
@@ -391,7 +393,14 @@ func TestChatConversationRouteLoadsArtifactSignalsOutsideTranscript(t *testing.T
 	if err != nil {
 		t.Fatalf("create conversation: %v", err)
 	}
-	artifactEnvelope, err := visualizationruntime.VisualEnvelope(dashboard.Visual{ID: "agent_visual_123", Type: "bar", Title: "Orders", Data: []dashboard.Datum{{"label": "delivered", "value": 42}}}, 1, 1)
+	definitions, err := workspacecompiler.CompileVisualizationDefinitions(&reportdef.Dashboard{
+		ID: "agent", SemanticModel: "sales",
+		Visuals: map[string]reportdef.Visual{"agent_visual_123": {Type: "bar", Title: "Orders", Query: reportdef.VisualQuery{Table: "orders", Measures: []reportdef.FieldRef{{Field: "order_count"}}}}},
+	})
+	if err != nil {
+		t.Fatalf("compile artifact definition: %v", err)
+	}
+	artifactEnvelope, err := visualizationruntime.EnvelopeFromFrame(definitions["agent_visual_123"], visualizationruntime.Frame{Columns: []string{"label", "value"}, Rows: [][]any{{"delivered", 42}}}, nil, 1, 1)
 	if err != nil {
 		t.Fatalf("build artifact envelope: %v", err)
 	}

@@ -3,6 +3,7 @@ import { expect, test } from 'bun:test'
 import type { VisualizationEnvelope, VisualizationGeographicLayer } from '../../../../generated/visualization'
 import type { FeatureCollection } from 'geojson'
 import { applyFeatureScales, basemapBoundaryLayer, basemapLayer, concreteCSSColor, coordinateGeometry, coordinateReferenceGrid, fitMapToGeographicData, installWebGLRecovery, interactionCommandForRenderedFeatures, joinGeometry, loadMapStyleAsset, mapAccessibleData, mapInteractionCommand, mapLayer, mapOutlineLayer, mapPointerOptions, mapThemeColors, mapTooltipEntries, normalizeFeatureWeights, pathGeometry, removeRendererFrame, sameOriginGeometryURL, spatialWindowRequest, updateSelectionSources, verifyGeometryDigest } from './maplibre'
+import { adapterObservation } from '../telemetry'
 
 test('MapLibre geometry assets are same-origin and content addressed', async () => {
   expect(sameOriginGeometryURL('/static/geometry/states.geojson', 'https://dash.example/workspaces/sales').href).toBe('https://dash.example/static/geometry/states.geojson')
@@ -49,6 +50,13 @@ test('MapLibre prevents permanent WebGL loss, repaints after restoration, and re
   dispose()
   canvas.dispatchEvent(new Event('webglcontextrestored'))
   expect([resized, repainted]).toEqual([1, 1])
+})
+
+test('MapLibre observations enter the shared visualization telemetry contract', () => {
+  expect(adapterObservation({ stage: 'basemap_load', durationMs: 12, visualID: 'map', rendererID: 'maplibre' })).toEqual({
+    stage: 'adapter_observation', adapterStage: 'basemap_load', durationMs: 12, visualID: 'map', rendererID: 'maplibre',
+  })
+  expect(adapterObservation({ stage: 'unknown', durationMs: 12, visualID: 'map', rendererID: 'maplibre' })).toBeUndefined()
 })
 
 test('MapLibre point, heat, and density layers use typed in-memory coordinates without geometry fetches', () => {

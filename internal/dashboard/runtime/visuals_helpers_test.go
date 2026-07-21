@@ -35,19 +35,3 @@ func TestCategoryMultiMeasureDatumsDecodesBundledWideRows(t *testing.T) {
 		t.Fatalf("datums = %#v, want %#v", got, want)
 	}
 }
-
-func TestApplySourceSelectionToVisualKeepsCanonicalEntries(t *testing.T) {
-	filters := dashboard.Filters{Selections: []dashboard.InteractionSelection{
-		{SourceKind: "visual", SourceID: "state_map", InteractionKind: "point_selection", Entries: []dashboard.InteractionSelectionEntry{{
-			Label: "São Paulo", Mappings: []dashboard.InteractionSelectionMapping{{Field: "customers.state", Fact: "customers", Value: "SP"}},
-		}}},
-		{SourceKind: "visual", SourceID: "other", InteractionKind: "point_selection", Entries: []dashboard.InteractionSelectionEntry{{
-			Mappings: []dashboard.InteractionSelectionMapping{{Field: "customers.state", Fact: "customers", Value: "RJ"}},
-		}}},
-	}}
-
-	visual := applySourceSelectionToVisual(dashboard.Visual{ID: "state_map"}, filters)
-	if len(visual.Selection) != 1 || visual.Selection[0].Label != "São Paulo" || visual.Selection[0].Mappings[0].Value != "SP" {
-		t.Fatalf("visual selection = %#v", visual.Selection)
-	}
-}

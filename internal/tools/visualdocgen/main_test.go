@@ -273,38 +273,38 @@ func TestValidateVisualPayloadRejectsInvalidGeneratedData(t *testing.T) {
 	tests := []struct {
 		name    string
 		visual  visualExample
-		payload dashboard.Visual
+		payload []dashboard.Datum
 		want    string
 	}{
 		{
 			name:    "non finite metric",
 			visual:  visualExample{ID: "bad_number", Chart: reportVisualPointer("category_value", "line", nil)},
-			payload: dashboard.Visual{Data: []dashboard.Datum{{"label": "Jan", "value": math.NaN()}}},
+			payload: []dashboard.Datum{{"label": "Jan", "value": math.NaN()}},
 			want:    `non-finite number at data[0].value`,
 		},
 		{
 			name:    "unknown map region",
 			visual:  visualExample{ID: "bad_map", Chart: reportVisualPointer("geo", "map", map[string]any{"map": "brazil_states"})},
-			payload: dashboard.Visual{Data: []dashboard.Datum{{"name": "CA", "value": 2.0}}},
+			payload: []dashboard.Datum{{"name": "CA", "value": 2.0}},
 			want:    `region "CA" is not defined by map "brazil_states"`,
 		},
 		{
 			name:    "incomplete map coverage",
 			visual:  visualExample{ID: "incomplete_map", Chart: reportVisualPointer("geo", "map", map[string]any{"map": "brazil_states"})},
-			payload: dashboard.Visual{Data: []dashboard.Datum{{"name": "SP", "value": 2.0}}},
+			payload: []dashboard.Datum{{"name": "SP", "value": 2.0}},
 			want:    `does not provide data for map region`,
 		},
 		{
 			name:    "no numeric values",
 			visual:  visualExample{ID: "empty_series", Chart: reportVisualPointer("category_value", "line", nil)},
-			payload: dashboard.Visual{Data: []dashboard.Datum{{"label": "Jan"}}},
+			payload: []dashboard.Datum{{"label": "Jan"}},
 			want:    `has no finite numeric values`,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateVisualPayload(tt.visual, tt.payload)
+			err := validateVisualData(tt.visual, tt.payload)
 			if err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Fatalf("error = %v, want containing %q", err, tt.want)
 			}

@@ -228,6 +228,8 @@ func (r *Runtime) ExecuteDataQuery(ctx context.Context, request dataquery.Query)
 			result, err = r.executeSemanticHistogram(execCtx, request)
 		case dataquery.KindSemanticDistribution:
 			result, err = r.executeSemanticDistribution(execCtx, request)
+		case dataquery.KindSemanticSpatial:
+			result, err = r.executeSemanticSpatial(execCtx, request)
 		default:
 			return dataquery.Result{}, fmt.Errorf("unsupported data query kind %q", request.Kind)
 		}
@@ -529,11 +531,47 @@ func dashboardQueryResultCacheable(request dataquery.Query) bool {
 		dataquery.OperationDashboardCount,
 		dataquery.OperationDashboardHistogram,
 		dataquery.OperationDashboardDistribution,
-		dataquery.OperationDashboardFilterOptions:
+		dataquery.OperationDashboardFilterOptions,
+		dataquery.OperationDashboardSpatial:
 		return true
 	default:
 		return false
 	}
+}
+
+func (r *Runtime) executeSemanticSpatial(ctx context.Context, request dataquery.Query) (dataquery.Result, error) {
+	if request.Spatial == nil {
+		return dataquery.Result{}, fmt.Errorf("semantic spatial query requires spatial window")
+	}
+	precision := semanticquery.SpatialPrecision(request.Spatial.Precision)
+	planningStarted := time.Now()
+	plan, err := r.queryPlanner().PlanSpatial(semanticquery.SpatialRequest{
+		Table: request.Target, Dimensions: dataQueryFields(request.Fields), Measures: dataQueryFields(request.Measures),
+		Time: semanticquery.Time{Field: request.Time.Field, Grain: request.Time.Grain, Alias: request.Time.Alias}, Filters: dataQueryFilters(request.Filters), Sort: dataQuerySorts(request.Sort), ColumnMasks: dataQueryColumnMasks(request.ColumnMasks),
+		Latitude:  semanticquery.Field{Field: request.Spatial.Latitude.Field, Alias: request.Spatial.Latitude.Alias},
+		Longitude: semanticquery.Field{Field: request.Spatial.Longitude.Field, Alias: request.Spatial.Longitude.Alias},
+		West:      request.Spatial.West, South: request.Spatial.South, East: request.Spatial.East, North: request.Spatial.North,
+		Width: request.Spatial.Width, Height: request.Spatial.Height, FeatureCap: request.Spatial.FeatureCap, Precision: precision,
+	})
+	planningMS := elapsedStageMS(planningStarted)
+	if err != nil {
+		return dataquery.Result{}, err
+	}
+	databaseStarted := time.Now()
+	markPhysicalStatement(ctx)
+	rows, err := r.db.Query(ctx, plan)
+	databaseMS := elapsedStageMS(databaseStarted)
+	if err != nil {
+		return dataquery.Result{}, err
+	}
+	result := dataquery.Result{Columns: dataquery.ColumnsFromNames(plan.Columns[:len(plan.Columns)-1]), Rows: dataQueryRows(rows), SQL: plan.SQL, PlanningMS: planningMS, DatabaseMS: databaseMS, TotalRowsKnown: true}
+	if len(result.Rows) > 0 {
+		result.TotalRows = intFromDataQueryValue(result.Rows[0][semanticquery.SpatialTotalColumn])
+	}
+	for _, row := range result.Rows {
+		delete(row, semanticquery.SpatialTotalColumn)
+	}
+	return result, nil
 }
 
 func (r *Runtime) ClearQueryCache() {

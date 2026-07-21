@@ -1259,13 +1259,13 @@ func assertVisualShowcaseCoverage(t *testing.T, report *dashboarddefinition.Defi
 			t.Fatalf("visual-showcase missing geographic layer kind %q", kind)
 		}
 	}
-	assertAggregateDimensions(t, report, "customer_point_map", "customers.zip_prefix", "customers.latitude", "customers.longitude")
-	assertAggregateDimensions(t, report, "customer_revenue_heat_map", "customers.zip_prefix", "customers.latitude", "customers.longitude")
-	assertAggregateDimensions(t, report, "customer_density_map", "customers.zip_prefix", "customers.latitude", "customers.longitude")
-	assertAggregateDimensions(t, report, "customer_path_map", "delivery_routes.route_id", "delivery_routes.point_order", "delivery_routes.latitude", "delivery_routes.longitude")
+	assertSpatialDimensions(t, report, "customer_point_map", "customers.zip_prefix", "customers.latitude", "customers.longitude")
+	assertSpatialDimensions(t, report, "customer_revenue_heat_map", "customers.zip_prefix", "customers.latitude", "customers.longitude")
+	assertSpatialDimensions(t, report, "customer_density_map", "customers.zip_prefix", "customers.latitude", "customers.longitude")
+	assertSpatialDimensions(t, report, "customer_path_map", "delivery_routes.route_id", "delivery_routes.point_order", "delivery_routes.latitude", "delivery_routes.longitude")
 	for _, id := range []string{"customer_point_map", "customer_revenue_heat_map", "customer_density_map", "customer_path_map"} {
 		visual := report.Visualizations[id]
-		if visual.Query.Aggregate == nil || len(visual.Query.Aggregate.Sort) == 0 {
+		if visual.Query.Spatial == nil || len(visual.Query.Spatial.Sort) == 0 {
 			t.Errorf("visual-showcase geographic visual %q requires deterministic sorting before its row budget", id)
 		}
 	}
@@ -1308,15 +1308,15 @@ func assertVisualShowcaseCoverage(t *testing.T, report *dashboarddefinition.Defi
 	}
 }
 
-func assertAggregateDimensions(t *testing.T, report *dashboarddefinition.Definition, visualID string, want ...string) {
+func assertSpatialDimensions(t *testing.T, report *dashboarddefinition.Definition, visualID string, want ...string) {
 	t.Helper()
 	visual, ok := report.Visualizations[visualID]
-	if !ok || visual.Query.Aggregate == nil {
-		t.Errorf("visual-showcase missing aggregate visual %q", visualID)
+	if !ok || visual.Query.Spatial == nil {
+		t.Errorf("visual-showcase missing spatial visual %q", visualID)
 		return
 	}
-	present := make(map[string]bool, len(visual.Query.Aggregate.Dimensions))
-	for _, dimension := range visual.Query.Aggregate.Dimensions {
+	present := make(map[string]bool, len(visual.Query.Spatial.Dimensions))
+	for _, dimension := range visual.Query.Spatial.Dimensions {
 		present[dimension.FieldID] = true
 	}
 	for _, field := range want {

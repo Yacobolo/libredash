@@ -5,12 +5,16 @@ import (
 
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	dashboardstream "github.com/Yacobolo/libredash/internal/dashboard/stream"
+	visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
 )
 
 func TestDashboardTelemetryObservesAcceptedProgressiveTargetEvents(t *testing.T) {
 	telemetry := newHTTPTelemetry()
 	for _, event := range []dashboardstream.RefreshEvent{
-		{Type: dashboardstream.RefreshEventVisual, Target: "revenue", Value: dashboard.Visual{Data: []dashboard.Datum{{"value": 1}}}},
+		{Type: dashboardstream.RefreshEventVisual, Target: "revenue", Value: visualizationir.VisualizationEnvelope{
+			Spec:      visualizationir.VisualizationSpec{Value: &visualizationir.KPIVisualizationSpec{}},
+			DataState: visualizationir.VisualizationDataState{Value: &visualizationir.InlineVisualizationDataState{Kind: "inline", Datasets: []visualizationir.VisualizationInlineDataset{{Rows: [][]any{{1}}}}}},
+		}},
 		{Type: dashboardstream.RefreshEventTable, Target: "orders", Value: dashboard.Table{AvailableRows: 1, Cardinality: dashboard.ExactCardinality(1), Blocks: map[string]dashboard.TableBlock{"a": {Rows: []map[string]any{{"order_id": "o1"}}}}}},
 		{Type: dashboardstream.RefreshEventTableCountErr, Target: "orders"},
 		{Type: dashboardstream.RefreshEventFilterOptions, Target: "state"},

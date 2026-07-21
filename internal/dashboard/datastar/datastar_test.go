@@ -7,27 +7,25 @@ import (
 	"testing"
 
 	"github.com/Yacobolo/libredash/internal/dashboard"
+	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
 	dashboardstream "github.com/Yacobolo/libredash/internal/dashboard/stream"
 	uisignals "github.com/Yacobolo/libredash/internal/ui/signals"
 	visualizationdefinition "github.com/Yacobolo/libredash/internal/visualization/definition"
 	visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
 	visualizationruntime "github.com/Yacobolo/libredash/internal/visualization/runtime"
+	workspacecompiler "github.com/Yacobolo/libredash/internal/workspace/compiler"
 )
 
-func testVisualDefinition(t *testing.T, visual dashboard.Visual) visualizationdefinition.Definition {
+func testVisualDefinition(t *testing.T, id string) visualizationdefinition.Definition {
 	t.Helper()
-	envelope, err := visualizationruntime.VisualEnvelope(visual, 0, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	definition, err := visualizationdefinition.New(visual.ID, envelope.Spec, visualizationdefinition.QueryBinding{
-		Kind: visualizationdefinition.QueryAggregate, ModelID: "model", DatasetID: "primary",
-		Aggregate: &visualizationdefinition.AggregateQueryBinding{TableID: "table", Measures: []visualizationdefinition.FieldBinding{{FieldID: "measure", Alias: "value"}}, Limit: 1},
+	definitions, err := workspacecompiler.CompileVisualizationDefinitions(&reportdef.Dashboard{
+		ID: "test", SemanticModel: "model",
+		Visuals: map[string]reportdef.Visual{id: {Type: "bar", Title: id, Query: reportdef.VisualQuery{Table: "table", Measures: []reportdef.FieldRef{{Field: "measure"}}}}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	return definition
+	return definitions[id]
 }
 
 func testTableDefinition(t *testing.T, id string, table dashboard.Table) visualizationdefinition.Definition {
@@ -46,9 +44,9 @@ func testTableDefinition(t *testing.T, id string, table dashboard.Table) visuali
 	return definition
 }
 
-func testVisualEnvelope(t *testing.T, visual dashboard.Visual, dataRevision, generation int64) visualizationir.VisualizationEnvelope {
+func testVisualEnvelope(t *testing.T, id string, dataRevision, generation int64) visualizationir.VisualizationEnvelope {
 	t.Helper()
-	envelope, err := visualizationruntime.VisualEnvelopeFromDefinition(testVisualDefinition(t, visual), visual, dataRevision, generation)
+	envelope, err := visualizationruntime.EnvelopeFromFrame(testVisualDefinition(t, id), visualizationruntime.Frame{Columns: []string{"label", "value"}, Rows: [][]any{}}, nil, dataRevision, generation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +140,6 @@ func equalOptionalPercent(left, right *float64) bool {
 }
 
 func TestRefreshEventEnvelopeCarriesExplicitDeliveryMetadata(t *testing.T) {
-	visual := dashboard.Visual{ID: "rating_count", Type: "bar"}
 	tests := []struct {
 		name          string
 		event         dashboardstream.RefreshEvent
@@ -160,7 +157,7 @@ func TestRefreshEventEnvelopeCarriesExplicitDeliveryMetadata(t *testing.T) {
 		{
 			name: "visual result batch",
 			event: dashboardstream.RefreshEvent{
-				Type: dashboardstream.RefreshEventVisual, RefreshID: "refresh-9", Generation: 9, Target: "rating_count", Value: testVisualEnvelope(t, visual, 1, 9),
+				Type: dashboardstream.RefreshEventVisual, RefreshID: "refresh-9", Generation: 9, Target: "rating_count", Value: testVisualEnvelope(t, "rating_count", 1, 9),
 			},
 			wantGroup:     "dashboard-results",
 			wantMergeRoot: "visuals",
@@ -204,10 +201,9 @@ func TestTableMetadataUpdatesDataWithoutChangingComponentStatus(t *testing.T) {
 }
 
 func TestVisualizationEnvelopeUsesStreamOwnedRevisionAndStatus(t *testing.T) {
-	visual := dashboard.Visual{ID: "orders", Type: "bar"}
 	patch := RefreshEventPatch(dashboardstream.RefreshEvent{
 		Type: dashboardstream.RefreshEventVisual, Target: "orders", Generation: 7, DataRevision: 11,
-		Value: testVisualEnvelope(t, visual, 11, 7),
+		Value: testVisualEnvelope(t, "orders", 11, 7),
 	})
 	visuals, ok := patch["visuals"].(map[string]uisignals.DashboardVisualizationSignal)
 	if !ok {

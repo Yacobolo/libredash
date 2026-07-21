@@ -16,6 +16,8 @@ import (
 	dashboarddefinition "github.com/Yacobolo/libredash/internal/dashboard/definition"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
 	"github.com/Yacobolo/libredash/internal/testutil/dashboardfixture"
+	visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
+	visualizationruntime "github.com/Yacobolo/libredash/internal/visualization/runtime"
 	agentcore "github.com/Yacobolo/libredash/pkg/agent"
 )
 
@@ -902,11 +904,15 @@ func (fakeAgentMetrics) NormalizeTableRequest(_ string, request dashboard.TableR
 }
 
 func (fakeAgentMetrics) QueryDashboardPage(_ context.Context, dashboardID, pageID string, filters dashboard.Filters) (dashboard.Patch, error) {
+	report, _, _ := fakeAgentMetrics{}.Report(dashboardID)
+	definition := report.Visualizations["orders"]
+	envelope, err := visualizationruntime.EnvelopeFromFrame(definition, visualizationruntime.Frame{Columns: []string{"label", "value"}, Rows: [][]any{{"delivered", 10}}}, nil, 0, 0)
+	if err != nil {
+		return dashboard.Patch{}, err
+	}
 	return dashboard.Patch{
 		Filters: filters.WithDefaults(),
-		Visuals: map[string]dashboard.Visual{
-			"orders": {ID: "orders", Title: "Orders", Data: []dashboard.Datum{{"label": "delivered", "value": 10}}},
-		},
+		Visuals: map[string]visualizationir.VisualizationEnvelope{"orders": envelope},
 	}, nil
 }
 

@@ -10,6 +10,7 @@ import (
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	dashboardstream "github.com/Yacobolo/libredash/internal/dashboard/stream"
 	"github.com/Yacobolo/libredash/internal/secret"
+	visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
 	"github.com/go-chi/chi/v5"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -166,8 +167,11 @@ func (t *httpTelemetry) dashboardRefreshEventObserved(event dashboardstream.Refr
 		t.dashboardTargetObserved("filter_options", "success")
 	case dashboardstream.RefreshEventVisual:
 		t.dashboardTargetObserved("visual", "success")
-		if visual, ok := event.Value.(dashboard.Visual); ok {
-			t.observeVisualizationFrame("inline", len(visual.Data), len(visual.Data), visual)
+		if envelope, ok := event.Value.(visualizationir.VisualizationEnvelope); ok {
+			if state, ok := envelope.DataState.Value.(*visualizationir.InlineVisualizationDataState); ok && len(state.Datasets) == 1 {
+				rows := len(state.Datasets[0].Rows)
+				t.observeVisualizationFrame("inline", rows, rows, envelope)
+			}
 		}
 	case dashboardstream.RefreshEventTable:
 		t.dashboardTargetObserved("visual", "success")

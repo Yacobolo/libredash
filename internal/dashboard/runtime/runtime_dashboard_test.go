@@ -262,10 +262,10 @@ c2,20040,Rio de Janeiro,RJ
 		t.Fatalf("unexpected status error: %s", patch.Status.Error)
 	}
 	assertVisualKeys(t, patch, []string{"delivery_days", "delivery_speed", "orders_by_status", "review_by_status", "review_score", "total_orders"})
-	if got := datumInt(patch.Visuals["total_orders"].Data[0], "value"); got != 2 {
+	if got := datumInt(envelopeRows(t, patch.Visuals["total_orders"])[0], "value"); got != 2 {
 		t.Fatalf("orders KPI value = %d, want 2", got)
 	}
-	if len(patch.Visuals["orders_by_status"].Data) == 0 {
+	if len(envelopeRows(t, patch.Visuals["orders_by_status"])) == 0 {
 		t.Fatal("orders by status chart has no data")
 	}
 }
@@ -599,40 +599,41 @@ relogios_presentes,watches_gifts
 		t.Fatalf("unexpected status error: %s", patch.Status.Error)
 	}
 	assertVisualKeys(t, patch, overviewVisualKeys())
-	if got := datumInt(patch.Visuals["total_orders"].Data[0], "value"); got != 1 {
+	if got := datumInt(envelopeRows(t, patch.Visuals["total_orders"])[0], "value"); got != 1 {
 		t.Fatalf("orders KPI value = %d, want 1", got)
 	}
-	if got := patch.Visuals["total_orders"].Kind; got != "kpi" {
+	if got := specKind(t, patch.Visuals["total_orders"]); got != "kpi" {
 		t.Fatalf("orders KPI kind = %q, want kpi", got)
 	}
-	if got := patch.Visuals["total_orders"].Type; got != "kpi" {
-		t.Fatalf("orders KPI type = %q, want kpi", got)
+	if _, ok := patch.Visuals["total_orders"].Spec.Value.(*visualizationir.KPIVisualizationSpec); !ok {
+		t.Fatalf("orders KPI spec = %T, want KPI", patch.Visuals["total_orders"].Spec.Value)
 	}
-	if got := patch.Visuals["total_orders"].Title; got != "Orders" {
+	if got := specBase(t, patch.Visuals["total_orders"]).Title; got != "Orders" {
 		t.Fatalf("orders KPI title = %q, want Orders", got)
 	}
-	if len(patch.Visuals["revenue_by_month"].Data) != 1 {
-		t.Fatalf("revenue points = %d, want 1", len(patch.Visuals["revenue_by_month"].Data))
+	if len(envelopeRows(t, patch.Visuals["revenue_by_month"])) != 1 {
+		t.Fatalf("revenue points = %d, want 1", len(envelopeRows(t, patch.Visuals["revenue_by_month"])))
 	}
-	if got := patch.Visuals["revenue_by_month"].Type; got != "area" {
+	revenueSpec, ok := patch.Visuals["revenue_by_month"].Spec.Value.(*visualizationir.CartesianVisualizationSpec)
+	if !ok {
+		t.Fatalf("revenue chart spec = %T, want cartesian", patch.Visuals["revenue_by_month"].Spec.Value)
+	}
+	if got := revenueSpec.Mark; got != visualizationir.VisualizationCartesianMarkArea {
 		t.Fatalf("revenue chart type = %q, want area", got)
 	}
-	if got := patch.Visuals["revenue_by_month"].Version; got != 3 {
+	if got := patch.Visuals["revenue_by_month"].SchemaVersion; got != visualizationir.CurrentSchemaVersion {
 		t.Fatalf("revenue chart version = %d, want 3", got)
 	}
-	if got := patch.Visuals["revenue_by_month"].Kind; got != "chart" {
-		t.Fatalf("revenue chart kind = %q, want chart", got)
+	if got := specKind(t, patch.Visuals["revenue_by_month"]); got != "cartesian" {
+		t.Fatalf("revenue chart kind = %q, want cartesian", got)
 	}
-	if got := patch.Visuals["revenue_by_month"].Shape; got != "category_value" {
-		t.Fatalf("revenue chart shape = %q, want category_value", got)
-	}
-	if got := patch.Visuals["revenue_by_month"].Renderer; got != "echarts" {
+	if got := patch.Visuals["revenue_by_month"].RendererID; got != "echarts" {
 		t.Fatalf("revenue chart renderer = %q, want echarts", got)
 	}
-	if got := patch.Visuals["revenue_by_month"].Measures[0]; got != "revenue" {
-		t.Fatalf("revenue chart measure = %q, want revenue", got)
+	if got := revenueSpec.Y[0].Field; got != "value" {
+		t.Fatalf("revenue chart encoded value field = %q, want value", got)
 	}
-	if got := datumString(patch.Visuals["category_revenue"].Data[0], "label"); got != "health_beauty" {
+	if got := datumString(envelopeRows(t, patch.Visuals["category_revenue"])[0], "label"); got != "health_beauty" {
 		t.Fatalf("top category = %q, want health_beauty", got)
 	}
 	if got := len(patch.FilterOptions["state"]); got != 2 {
@@ -666,22 +667,22 @@ relogios_presentes,watches_gifts
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := datumInt(selectedPatch.Visuals["total_orders"].Data[0], "value"); got != 2 {
+	if got := datumInt(envelopeRows(t, selectedPatch.Visuals["total_orders"])[0], "value"); got != 2 {
 		t.Fatalf("selected orders KPI value = %d, want 2", got)
 	}
-	if len(selectedPatch.Visuals["orders"].Data) != 2 {
-		t.Fatalf("orders chart points without explicit self-target = %d, want 2", len(selectedPatch.Visuals["orders"].Data))
+	if len(envelopeRows(t, selectedPatch.Visuals["orders"])) != 2 {
+		t.Fatalf("orders chart points without explicit self-target = %d, want 2", len(envelopeRows(t, selectedPatch.Visuals["orders"])))
 	}
-	if !pointSelected(selectedPatch.Visuals["orders"].Data, "delivered") {
-		t.Fatalf("orders chart did not mark delivered as selected: %#v", selectedPatch.Visuals["orders"].Data)
+	if !pointSelected(envelopeRows(t, selectedPatch.Visuals["orders"]), "delivered") {
+		t.Fatalf("orders chart did not mark delivered as selected: %#v", envelopeRows(t, selectedPatch.Visuals["orders"]))
 	}
-	if got := selectedEntryValue(selectedPatch.Visuals["orders"].Selection, "orders.status"); got != "delivered" {
+	if got := selectedEnvelopeEntryValue(selectedPatch.Visuals["orders"].Selection, "orders.status"); got != "delivered" {
 		t.Fatalf("orders chart selection entry = %q, want delivered: %#v", got, selectedPatch.Visuals["orders"].Selection)
 	}
-	if got := datumString(selectedPatch.Visuals["categories"].Data[0], "label"); got != "health_beauty" {
+	if got := datumString(envelopeRows(t, selectedPatch.Visuals["categories"])[0], "label"); got != "health_beauty" {
 		t.Fatalf("category chart under status selection = %q, want health_beauty", got)
 	}
-	if got := datumString(selectedPatch.Visuals["revenue"].Data[0], "series"); got != "" {
+	if got := datumString(envelopeRows(t, selectedPatch.Visuals["revenue"])[0], "series"); got != "" {
 		t.Fatalf("single-series chart row series = %q, want empty", got)
 	}
 
@@ -694,11 +695,11 @@ relogios_presentes,watches_gifts
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(selfTargetPatch.Visuals["orders"].Data) != 1 {
-		t.Fatalf("orders chart points with explicit self-target = %d, want 1", len(selfTargetPatch.Visuals["orders"].Data))
+	if len(envelopeRows(t, selfTargetPatch.Visuals["orders"])) != 1 {
+		t.Fatalf("orders chart points with explicit self-target = %d, want 1", len(envelopeRows(t, selfTargetPatch.Visuals["orders"])))
 	}
-	if !pointSelected(selfTargetPatch.Visuals["orders"].Data, "delivered") {
-		t.Fatalf("self-targeted orders chart did not mark delivered as selected: %#v", selfTargetPatch.Visuals["orders"].Data)
+	if !pointSelected(envelopeRows(t, selfTargetPatch.Visuals["orders"]), "delivered") {
+		t.Fatalf("self-targeted orders chart did not mark delivered as selected: %#v", envelopeRows(t, selfTargetPatch.Visuals["orders"]))
 	}
 	report = metrics.reports.workspace.Dashboards["executive-sales"]
 	setCompiledInteractionTarget(&ordersVisual.Spec, "orders", false)
@@ -710,17 +711,18 @@ relogios_presentes,watches_gifts
 		t.Fatal(err)
 	}
 	assertVisualKeys(t, columnPatch, []string{"orders_by_month_column", "orders_by_month_status", "orders_by_month_status_grouped"})
-	if got := columnPatch.Visuals["orders_by_month_status"].Shape; got != "category_series_value" {
-		t.Fatalf("multi-series chart shape = %q, want category_series_value", got)
+	columnSpec, ok := columnPatch.Visuals["orders_by_month_status"].Spec.Value.(*visualizationir.CartesianVisualizationSpec)
+	if !ok || columnSpec.Series == nil {
+		t.Fatalf("multi-series chart spec = %#v, want cartesian series", columnPatch.Visuals["orders_by_month_status"].Spec.Value)
 	}
-	if got := columnPatch.Visuals["orders_by_month_status"].Options["stacked"]; got != true {
+	if got := columnSpec.Presentation.Stacked; !got {
 		t.Fatalf("multi-series chart stacked option = %v, want true", got)
 	}
-	if got := datumString(columnPatch.Visuals["orders_by_month_status"].Data[0], "series"); got == "" {
+	if got := datumString(envelopeRows(t, columnPatch.Visuals["orders_by_month_status"])[0], "series"); got == "" {
 		t.Fatal("multi-series chart row series is empty")
 	}
-	if len(columnPatch.Visuals["orders_by_month_status"].Data) != 2 {
-		t.Fatalf("non-target multi-series chart points under status selection = %d, want 2", len(columnPatch.Visuals["orders_by_month_status"].Data))
+	if len(envelopeRows(t, columnPatch.Visuals["orders_by_month_status"])) != 2 {
+		t.Fatalf("non-target multi-series chart points under status selection = %d, want 2", len(envelopeRows(t, columnPatch.Visuals["orders_by_month_status"])))
 	}
 
 	boxplotPatch, err := metrics.QueryDashboardPage(context.Background(), "executive-sales", "chart-boxplot", dashboard.Filters{})
@@ -728,7 +730,7 @@ relogios_presentes,watches_gifts
 		t.Fatal(err)
 	}
 	assertVisualKeys(t, boxplotPatch, []string{"delivery_distribution", "review_distribution", "revenue_distribution"})
-	if len(boxplotPatch.Visuals["revenue_distribution"].Data) == 0 {
+	if len(envelopeRows(t, boxplotPatch.Visuals["revenue_distribution"])) == 0 {
 		t.Fatal("revenue distribution payload is empty")
 	}
 
@@ -779,7 +781,7 @@ relogios_presentes,watches_gifts
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(candlestickPatch.Visuals["revenue_candlestick"].Data) == 0 {
+	if len(envelopeRows(t, candlestickPatch.Visuals["revenue_candlestick"])) == 0 {
 		t.Fatal("revenue candlestick payload is empty")
 	}
 
@@ -788,11 +790,11 @@ relogios_presentes,watches_gifts
 		t.Fatal(err)
 	}
 	assertVisualKeys(t, comboPatch, []string{"review_delivery_combo", "revenue_orders_combo", "revenue_orders_dual_axis_combo"})
-	if got := comboPatch.Visuals["revenue_orders_combo"].Shape; got != "category_multi_measure" {
-		t.Fatalf("combo chart shape = %q, want category_multi_measure", got)
+	if comboSpec, ok := comboPatch.Visuals["revenue_orders_combo"].Spec.Value.(*visualizationir.CartesianVisualizationSpec); !ok || len(comboSpec.Y) != 2 {
+		t.Fatalf("combo chart spec = %#v, want two measures", comboPatch.Visuals["revenue_orders_combo"].Spec.Value)
 	}
-	if !hasDatumValue(comboPatch.Visuals["revenue_orders_combo"].Data, "series", "Revenue") || !hasDatumValue(comboPatch.Visuals["revenue_orders_combo"].Data, "series", "Orders") {
-		t.Fatalf("combo chart rows missing expected measure series: %#v", comboPatch.Visuals["revenue_orders_combo"].Data)
+	if !hasDatumValue(envelopeRows(t, comboPatch.Visuals["revenue_orders_combo"]), "series", "Revenue") || !hasDatumValue(envelopeRows(t, comboPatch.Visuals["revenue_orders_combo"]), "series", "Orders") {
+		t.Fatalf("combo chart rows missing expected measure series: %#v", envelopeRows(t, comboPatch.Visuals["revenue_orders_combo"]))
 	}
 
 	waterfallPatch, err := metrics.QueryDashboardPage(context.Background(), "executive-sales", "chart-waterfall", selectedFilters)
@@ -800,11 +802,11 @@ relogios_presentes,watches_gifts
 		t.Fatal(err)
 	}
 	assertVisualKeys(t, waterfallPatch, []string{"orders_waterfall", "revenue_waterfall", "revenue_waterfall_labeled"})
-	if got := waterfallPatch.Visuals["revenue_waterfall"].Shape; got != "category_delta" {
-		t.Fatalf("waterfall chart shape = %q, want category_delta", got)
+	if got := cartesianMark(t, waterfallPatch.Visuals["revenue_waterfall"]); got != visualizationir.VisualizationCartesianMarkWaterfall {
+		t.Fatalf("waterfall chart mark = %q, want waterfall", got)
 	}
-	if _, ok := waterfallPatch.Visuals["revenue_waterfall"].Data[0]["start"]; !ok {
-		t.Fatalf("waterfall row missing start/end: %#v", waterfallPatch.Visuals["revenue_waterfall"].Data[0])
+	if _, ok := envelopeRows(t, waterfallPatch.Visuals["revenue_waterfall"])[0]["start"]; !ok {
+		t.Fatalf("waterfall row missing start/end: %#v", envelopeRows(t, waterfallPatch.Visuals["revenue_waterfall"])[0])
 	}
 
 	histogramPatch, err := metrics.QueryDashboardPage(context.Background(), "executive-sales", "chart-histogram", selectedFilters)
@@ -812,11 +814,11 @@ relogios_presentes,watches_gifts
 		t.Fatal(err)
 	}
 	assertVisualKeys(t, histogramPatch, []string{"delivery_histogram", "review_histogram", "revenue_histogram"})
-	if got := histogramPatch.Visuals["delivery_histogram"].Shape; got != "binned_measure" {
-		t.Fatalf("histogram chart shape = %q, want binned_measure", got)
+	if got := cartesianMark(t, histogramPatch.Visuals["delivery_histogram"]); got != visualizationir.VisualizationCartesianMarkHistogram {
+		t.Fatalf("histogram chart mark = %q, want histogram", got)
 	}
-	if _, ok := histogramPatch.Visuals["delivery_histogram"].Data[0]["binStart"]; !ok {
-		t.Fatalf("histogram row missing bin metadata: %#v", histogramPatch.Visuals["delivery_histogram"].Data[0])
+	if _, ok := envelopeRows(t, histogramPatch.Visuals["delivery_histogram"])[0]["binStart"]; !ok {
+		t.Fatalf("histogram row missing bin metadata: %#v", envelopeRows(t, histogramPatch.Visuals["delivery_histogram"])[0])
 	}
 
 	mapPatch, err := metrics.QueryDashboardPage(context.Background(), "executive-sales", "chart-map", selectedFilters)
@@ -824,11 +826,11 @@ relogios_presentes,watches_gifts
 		t.Fatal(err)
 	}
 	assertVisualKeys(t, mapPatch, []string{"state_order_map", "state_revenue_map", "state_revenue_map_labeled"})
-	if got := mapPatch.Visuals["state_order_map"].Shape; got != "geo" {
-		t.Fatalf("map chart shape = %q, want geo", got)
+	if got := specKind(t, mapPatch.Visuals["state_order_map"]); got != "geographic" {
+		t.Fatalf("map chart kind = %q, want geographic", got)
 	}
-	if !hasDatumValue(mapPatch.Visuals["state_order_map"].Data, "name", "SP") {
-		t.Fatalf("map chart rows missing SP: %#v", mapPatch.Visuals["state_order_map"].Data)
+	if !hasDatumValue(envelopeRows(t, mapPatch.Visuals["state_order_map"]), "name", "SP") {
+		t.Fatalf("map chart rows missing SP: %#v", envelopeRows(t, mapPatch.Visuals["state_order_map"]))
 	}
 
 	graphPatch, err := metrics.QueryDashboardPage(context.Background(), "executive-sales", "chart-graph", selectedFilters)
@@ -836,11 +838,12 @@ relogios_presentes,watches_gifts
 		t.Fatal(err)
 	}
 	assertVisualKeys(t, graphPatch, []string{"category_status_graph", "category_status_graph_circular", "status_delivery_graph"})
-	if got := graphPatch.Visuals["status_delivery_graph"].Type; got != "graph" {
-		t.Fatalf("graph visual type = %q, want graph", got)
+	graphSpec, ok := graphPatch.Visuals["status_delivery_graph"].Spec.Value.(*visualizationir.HierarchyVisualizationSpec)
+	if !ok || graphSpec.Mark != visualizationir.VisualizationHierarchyMarkGraph {
+		t.Fatalf("graph visual spec = %#v, want graph", graphPatch.Visuals["status_delivery_graph"].Spec.Value)
 	}
-	if !hasDatumValue(graphPatch.Visuals["status_delivery_graph"].Data, "source", "delivered") {
-		t.Fatalf("graph rows missing delivered source: %#v", graphPatch.Visuals["status_delivery_graph"].Data)
+	if !hasDatumValue(envelopeRows(t, graphPatch.Visuals["status_delivery_graph"]), "source", "delivered") {
+		t.Fatalf("graph rows missing delivered source: %#v", envelopeRows(t, graphPatch.Visuals["status_delivery_graph"]))
 	}
 
 	sunburstPatch, err := metrics.QueryDashboardPage(context.Background(), "executive-sales", "chart-sunburst", selectedFilters)
@@ -848,11 +851,12 @@ relogios_presentes,watches_gifts
 		t.Fatal(err)
 	}
 	assertVisualKeys(t, sunburstPatch, []string{"category_state_status_sunburst", "category_status_sunburst", "state_status_sunburst"})
-	if got := sunburstPatch.Visuals["category_status_sunburst"].Shape; got != "hierarchy" {
-		t.Fatalf("hierarchy chart shape = %q, want hierarchy", got)
+	sunburstSpec, ok := sunburstPatch.Visuals["category_status_sunburst"].Spec.Value.(*visualizationir.HierarchyVisualizationSpec)
+	if !ok || sunburstSpec.Mark != visualizationir.VisualizationHierarchyMarkSunburst {
+		t.Fatalf("hierarchy chart spec = %#v, want sunburst", sunburstPatch.Visuals["category_status_sunburst"].Spec.Value)
 	}
-	if !hasHierarchyPathValue(sunburstPatch.Visuals["category_status_sunburst"].Data, "health_beauty") {
-		t.Fatalf("hierarchy rows missing health_beauty path: %#v", sunburstPatch.Visuals["category_status_sunburst"].Data)
+	if !hasHierarchyPathValue(envelopeRows(t, sunburstPatch.Visuals["category_status_sunburst"]), "health_beauty") {
+		t.Fatalf("hierarchy rows missing health_beauty path: %#v", envelopeRows(t, sunburstPatch.Visuals["category_status_sunburst"]))
 	}
 
 	table, err := metrics.QueryTable(context.Background(), "executive-sales", dashboard.Filters{}, dashboard.TableRequest{
@@ -971,7 +975,7 @@ relogios_presentes,watches_gifts
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := datumInt(uiOnlyRowPatch.Visuals["total_orders"].Data[0], "value"); got != 2 {
+	if got := datumInt(envelopeRows(t, uiOnlyRowPatch.Visuals["total_orders"])[0], "value"); got != 2 {
 		t.Fatalf("UI-only row selection KPI value = %d, want unfiltered value 2", got)
 	}
 
@@ -984,11 +988,11 @@ relogios_presentes,watches_gifts
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := datumInt(multiRowPatch.Visuals["total_orders"].Data[0], "value"); got != 2 {
+	if got := datumInt(envelopeRows(t, multiRowPatch.Visuals["total_orders"])[0], "value"); got != 2 {
 		t.Fatalf("multi-row selected orders KPI value = %d, want 2", got)
 	}
-	if len(multiRowPatch.Visuals["orders"].Data) != 2 {
-		t.Fatalf("orders chart points under multi-row table selection = %d, want 2", len(multiRowPatch.Visuals["orders"].Data))
+	if len(envelopeRows(t, multiRowPatch.Visuals["orders"])) != 2 {
+		t.Fatalf("orders chart points under multi-row table selection = %d, want 2", len(envelopeRows(t, multiRowPatch.Visuals["orders"])))
 	}
 	andMultiRowPatch, err := metrics.QueryDashboardPage(context.Background(), "executive-sales", "overview", dashboard.Filters{
 		Controls: map[string]dashboard.FilterControl{
@@ -999,7 +1003,7 @@ relogios_presentes,watches_gifts
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := datumInt(andMultiRowPatch.Visuals["total_orders"].Data[0], "value"); got != 1 {
+	if got := datumInt(envelopeRows(t, andMultiRowPatch.Visuals["total_orders"])[0], "value"); got != 1 {
 		t.Fatalf("page filter AND multi-row selected orders KPI value = %d, want 1", got)
 	}
 
@@ -1155,13 +1159,13 @@ relogios_presentes,watches_gifts
 	if patch.Status.Error != "" {
 		t.Fatalf("unexpected status error: %s", patch.Status.Error)
 	}
-	if got := categoryRevenue(patch.Visuals["category_revenue"].Data, "health_beauty"); got != 110 {
+	if got := categoryRevenue(envelopeRows(t, patch.Visuals["category_revenue"]), "health_beauty"); got != 110 {
 		t.Fatalf("health_beauty revenue = %v, want 110", got)
 	}
-	if got := categoryRevenue(patch.Visuals["category_revenue"].Data, "watches_gifts"); got != 220 {
+	if got := categoryRevenue(envelopeRows(t, patch.Visuals["category_revenue"]), "watches_gifts"); got != 220 {
 		t.Fatalf("watches_gifts revenue = %v, want 220", got)
 	}
-	if got := categoryRevenueTotal(patch.Visuals["category_revenue"].Data); got != 330 {
+	if got := categoryRevenueTotal(envelopeRows(t, patch.Visuals["category_revenue"])); got != 330 {
 		t.Fatalf("category revenue total = %v, want 330 without cross-matched tuples", got)
 	}
 
@@ -1263,7 +1267,7 @@ relogios_presentes,watches_gifts
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got := fmt.Sprint(datumInt(patch.Visuals["total_orders"].Data[0], "value")); got != tt.want {
+			if got := fmt.Sprint(datumInt(envelopeRows(t, patch.Visuals["total_orders"])[0], "value")); got != tt.want {
 				t.Fatalf("orders KPI value = %q, want %s", got, tt.want)
 			}
 		})
@@ -1342,6 +1346,76 @@ func exactTableRows(t *testing.T, table dashboard.Table) int {
 	return value
 }
 
+func specBase(t *testing.T, envelope visualizationir.VisualizationEnvelope) visualizationir.VisualizationSpecBase {
+	t.Helper()
+	base, err := visualizationir.SpecificationBase(envelope.Spec)
+	if err != nil {
+		t.Fatalf("visualization %q spec: %v", envelope.VisualID, err)
+	}
+	return base
+}
+
+func specKind(t *testing.T, envelope visualizationir.VisualizationEnvelope) string {
+	t.Helper()
+	return specBase(t, envelope).Kind
+}
+
+func cartesianMark(t *testing.T, envelope visualizationir.VisualizationEnvelope) visualizationir.VisualizationCartesianMark {
+	t.Helper()
+	spec, ok := envelope.Spec.Value.(*visualizationir.CartesianVisualizationSpec)
+	if !ok {
+		t.Fatalf("visualization %q spec = %T, want cartesian", envelope.VisualID, envelope.Spec.Value)
+	}
+	return spec.Mark
+}
+
+func envelopeRows(t *testing.T, envelope visualizationir.VisualizationEnvelope) []dashboard.Datum {
+	t.Helper()
+	var columns []string
+	var rows [][]any
+	switch state := envelope.DataState.Value.(type) {
+	case *visualizationir.InlineVisualizationDataState:
+		if len(state.Datasets) != 1 {
+			t.Fatalf("visualization %q datasets = %d, want 1", envelope.VisualID, len(state.Datasets))
+		}
+		columns, rows = state.Datasets[0].Columns, state.Datasets[0].Rows
+	case visualizationir.InlineVisualizationDataState:
+		if len(state.Datasets) != 1 {
+			t.Fatalf("visualization %q datasets = %d, want 1", envelope.VisualID, len(state.Datasets))
+		}
+		columns, rows = state.Datasets[0].Columns, state.Datasets[0].Rows
+	case *visualizationir.SpatialWindowedVisualizationDataState:
+		if state.Window == nil {
+			return nil
+		}
+		for _, field := range state.Schema.Fields {
+			columns = append(columns, field.ID)
+		}
+		rows = state.Window.Rows
+	case visualizationir.SpatialWindowedVisualizationDataState:
+		if state.Window == nil {
+			return nil
+		}
+		for _, field := range state.Schema.Fields {
+			columns = append(columns, field.ID)
+		}
+		rows = state.Window.Rows
+	default:
+		t.Fatalf("visualization %q data state = %T, want inline or spatial", envelope.VisualID, envelope.DataState.Value)
+	}
+	data := make([]dashboard.Datum, len(rows))
+	for rowIndex, row := range rows {
+		if len(row) != len(columns) {
+			t.Fatalf("visualization %q row %d width = %d, want %d", envelope.VisualID, rowIndex, len(row), len(columns))
+		}
+		data[rowIndex] = dashboard.Datum{}
+		for columnIndex, column := range columns {
+			data[rowIndex][column] = row[columnIndex]
+		}
+	}
+	return data
+}
+
 func categoryRevenue(data []dashboard.Datum, label string) float64 {
 	for _, row := range data {
 		if datumString(row, "label") == label {
@@ -1357,6 +1431,15 @@ func categoryRevenueTotal(data []dashboard.Datum) float64 {
 		total += datumFloat(row["value"])
 	}
 	return total
+}
+
+func selectedEnvelopeEntryValue(entries []visualizationir.VisualizationSelectionEntry, field string) string {
+	for _, entry := range entries {
+		if value, ok := entry.Datum.Identity[field]; ok {
+			return fmt.Sprint(value)
+		}
+	}
+	return ""
 }
 
 func selectedEntryValue(entries []dashboard.InteractionSelectionEntry, field string) string {

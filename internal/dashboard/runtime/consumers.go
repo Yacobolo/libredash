@@ -13,6 +13,7 @@ import (
 	"github.com/Yacobolo/libredash/internal/dashboard/consumer"
 	"github.com/Yacobolo/libredash/internal/dataquery"
 	visualizationdefinition "github.com/Yacobolo/libredash/internal/visualization/definition"
+	visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
 	visualizationruntime "github.com/Yacobolo/libredash/internal/visualization/runtime"
 )
 
@@ -206,13 +207,8 @@ func (s *QueryService) executeConsumerJob(ctx context.Context, request consumer.
 }
 
 func (s *QueryService) executeSpatialConsumer(ctx context.Context, request consumer.Request, target consumer.Target, startedAt time.Time, publish consumer.Publisher) {
-	visual, err := s.snapshots.querySpatialVisualPage(ctx, request.DashboardID, request.PageID, request.Filters, target.SpatialRequest)
-	definition, ok := s.snapshots.reports.VisualizationDefinition(request.DashboardID, target.ID)
-	if !ok {
-		err = errors.Join(err, fmt.Errorf("unknown spatial visualization %q", target.ID))
-	}
-	envelope, envelopeErr := visualizationruntime.SpatialEnvelopeFromDefinition(definition, visual, target.SpatialRequest, 0, 0)
-	publish(consumer.Result{Target: target, Envelope: envelope, Err: errors.Join(err, envelopeErr), Duration: time.Since(startedAt)})
+	envelope, err := s.snapshots.querySpatialVisualPage(ctx, request.DashboardID, request.PageID, request.Filters, target.SpatialRequest)
+	publish(consumer.Result{Target: target, Envelope: envelope, Err: err, Duration: time.Since(startedAt)})
 }
 
 func (s *QueryService) executeVisualConsumerJob(ctx context.Context, request consumer.Request, job consumer.Job, startedAt time.Time, publish consumer.Publisher) {
@@ -221,7 +217,7 @@ func (s *QueryService) executeVisualConsumerJob(ctx context.Context, request con
 		ids[index] = query.Target.ID
 	}
 	var (
-		visuals map[string]dashboard.Visual
+		visuals map[string]visualizationir.VisualizationEnvelope
 		err     error
 	)
 	switch job.Strategy {
@@ -231,25 +227,21 @@ func (s *QueryService) executeVisualConsumerJob(ctx context.Context, request con
 		visuals, err = s.snapshots.queryVisualsPage(ctx, request.DashboardID, request.PageID, request.Filters, ids)
 	default:
 		visual, queryErr := s.snapshots.queryVisualPage(ctx, request.DashboardID, request.PageID, request.Filters, ids[0])
-		visuals = map[string]dashboard.Visual{ids[0]: visual}
+		visuals = map[string]visualizationir.VisualizationEnvelope{ids[0]: visual}
 		err = queryErr
 	}
 	if err != nil && len(ids) > 1 && ctx.Err() == nil {
 		var branchErr *dataquery.BundleBranchError
 		if job.Strategy == consumer.StrategyBatch || dataquery.IsBundleIncompatible(err) || errors.As(err, &branchErr) {
 			for _, query := range job.Queries {
-				visual, queryErr := s.snapshots.queryVisualPage(ctx, request.DashboardID, request.PageID, request.Filters, query.Target.ID)
-				definition, _ := s.snapshots.reports.VisualizationDefinition(request.DashboardID, query.Target.ID)
-				envelope, envelopeErr := visualizationruntime.VisualEnvelopeFromDefinition(definition, visual, 0, 0)
-				publish(consumer.Result{Target: query.Target, Envelope: envelope, Err: errors.Join(queryErr, envelopeErr), Duration: time.Since(startedAt)})
+				envelope, queryErr := s.snapshots.queryVisualPage(ctx, request.DashboardID, request.PageID, request.Filters, query.Target.ID)
+				publish(consumer.Result{Target: query.Target, Envelope: envelope, Err: queryErr, Duration: time.Since(startedAt)})
 			}
 			return
 		}
 	}
 	for _, query := range job.Queries {
-		definition, _ := s.snapshots.reports.VisualizationDefinition(request.DashboardID, query.Target.ID)
-		envelope, envelopeErr := visualizationruntime.VisualEnvelopeFromDefinition(definition, visuals[query.Target.ID], 0, 0)
-		publish(consumer.Result{Target: query.Target, Envelope: envelope, Err: errors.Join(err, envelopeErr), Duration: time.Since(startedAt)})
+		publish(consumer.Result{Target: query.Target, Envelope: visuals[query.Target.ID], Err: err, Duration: time.Since(startedAt)})
 	}
 }
 

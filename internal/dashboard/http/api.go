@@ -17,8 +17,6 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-const maxAPIVisualDatums = 1000
-
 func (h Handler) ListDashboards(w nethttp.ResponseWriter, r *nethttp.Request) {
 	metrics, ok := h.biMetrics(w, r)
 	if !ok {
@@ -165,17 +163,7 @@ func (h Handler) QueryDashboardPage(w nethttp.ResponseWriter, r *nethttp.Request
 		return
 	}
 	visuals := make(map[string]visualizationir.VisualizationEnvelope, len(patch.Visuals))
-	for id, visual := range patch.Visuals {
-		definition, exists := metrics.VisualizationDefinition(dashboardID, id)
-		if !exists {
-			writeJSONError(w, fmt.Errorf("compiled visualization %q not found", id), nethttp.StatusInternalServerError)
-			return
-		}
-		envelope, err := visualizationruntime.VisualEnvelopeFromDefinition(definition, boundedVisual(visual), 1, 1)
-		if err != nil {
-			writeJSONError(w, err, nethttp.StatusInternalServerError)
-			return
-		}
+	for id, envelope := range patch.Visuals {
 		visuals[id] = envelope
 	}
 	if report, _, exists := metrics.Report(dashboardID); exists {
@@ -271,12 +259,7 @@ func (h Handler) QueryDashboardVisualData(w nethttp.ResponseWriter, r *nethttp.R
 		writeJSONError(w, fmt.Errorf("visual %q data not found", visualID), nethttp.StatusNotFound)
 		return
 	}
-	envelope, err := visualizationruntime.VisualEnvelopeFromDefinition(definition, boundedVisual(visual), 1, 1)
-	if err != nil {
-		writeJSONError(w, err, nethttp.StatusInternalServerError)
-		return
-	}
-	writeJSON(w, nethttp.StatusOK, envelope)
+	writeJSON(w, nethttp.StatusOK, visual)
 }
 
 func isGridQueryKind(kind visualizationdefinition.QueryKind) bool {
@@ -482,13 +465,6 @@ func dashboardFilters(raw map[string]any) dashboard.Filters {
 		return dashboard.Filters{}
 	}
 	return filters
-}
-
-func boundedVisual(visual dashboard.Visual) dashboard.Visual {
-	if len(visual.Data) > maxAPIVisualDatums {
-		visual.Data = visual.Data[:maxAPIVisualDatums]
-	}
-	return visual
 }
 
 func dashboardSummaryDTO(row dashboard.CatalogDashboard) api.DashboardSummary {

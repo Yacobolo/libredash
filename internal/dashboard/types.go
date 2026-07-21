@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 	"time"
+
+	visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
 )
 
 type Signals struct {
@@ -609,10 +611,10 @@ func joinValues(values []string) string {
 }
 
 type Patch struct {
-	Filters       Filters                   `json:"filters"`
-	FilterOptions map[string][]FilterOption `json:"filterOptions,omitempty"`
-	Status        Status                    `json:"status"`
-	Visuals       map[string]Visual         `json:"visuals"`
+	Filters       Filters                                          `json:"filters"`
+	FilterOptions map[string][]FilterOption                        `json:"filterOptions,omitempty"`
+	Status        Status                                           `json:"status"`
+	Visuals       map[string]visualizationir.VisualizationEnvelope `json:"visuals"`
 }
 
 type FilterOption struct {
@@ -640,27 +642,6 @@ func NormalizeProgressPercent(percent *float64, loading bool) *float64 {
 	}
 	value := math.Max(0, math.Min(100, *percent))
 	return &value
-}
-
-type Visual struct {
-	Version         int                         `json:"version"`
-	ID              string                      `json:"id"`
-	Kind            string                      `json:"-"`
-	Shape           string                      `json:"shape"`
-	Renderer        string                      `json:"renderer"`
-	Type            string                      `json:"type"`
-	Title           string                      `json:"title"`
-	Unit            string                      `json:"unit"`
-	Format          string                      `json:"format,omitempty"`
-	Interaction     InteractionConfig           `json:"interaction"`
-	Dimensions      []string                    `json:"dimensions"`
-	Measure         string                      `json:"measure"`
-	Measures        []string                    `json:"measures"`
-	Series          []string                    `json:"series"`
-	Options         map[string]any              `json:"options"`
-	RendererOptions map[string]map[string]any   `json:"rendererOptions"`
-	Selection       []InteractionSelectionEntry `json:"selection"`
-	Data            []Datum                     `json:"data"`
 }
 
 type Datum map[string]any
@@ -944,27 +925,6 @@ func EmptyPatch(filters Filters, err error) Patch {
 			SetupRequired:   err != nil,
 			ProgressPercent: NormalizeProgressPercent(nil, false),
 		},
-		Visuals: map[string]Visual{},
-	}
-}
-
-func emptyChart(id, chartType, title, unit, dimension, measure string) Visual {
-	return Visual{
-		Version:         3,
-		ID:              id,
-		Kind:            "chart",
-		Shape:           "category_value",
-		Renderer:        "echarts",
-		Type:            chartType,
-		Title:           title,
-		Unit:            unit,
-		Dimensions:      []string{dimension},
-		Measure:         measure,
-		Measures:        []string{measure},
-		Series:          []string{},
-		Options:         map[string]any{},
-		RendererOptions: map[string]map[string]any{},
-		Selection:       []InteractionSelectionEntry{},
-		Data:            []Datum{},
+		Visuals: map[string]visualizationir.VisualizationEnvelope{},
 	}
 }

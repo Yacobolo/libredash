@@ -23,6 +23,7 @@ import (
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
 	dashboardruntime "github.com/Yacobolo/libredash/internal/dashboard/runtime"
 	"github.com/Yacobolo/libredash/internal/visualdocs"
+	visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
 	visualizationruntime "github.com/Yacobolo/libredash/internal/visualization/runtime"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	workspacecompiler "github.com/Yacobolo/libredash/internal/workspace/compiler"
@@ -176,22 +177,15 @@ func generateVisualExamples(docsDir, projectPath, dataRoot string) (visualExampl
 		payloads := make([]visualdocs.Payload, 0, len(examplesByPage[document.Source]))
 		for _, example := range examplesByPage[document.Source] {
 			if example.Chart != nil {
-				payload, ok := patch.Visuals[example.ID]
-				if !ok || len(payload.Data) == 0 {
+				envelope, ok := patch.Visuals[example.ID]
+				if !ok || len(envelopeRows(envelope)) == 0 {
 					return visualExamplesArtifact{}, fmt.Errorf("query %s did not return visual %q data", document.Source, example.ID)
 				}
-				if err := validateVisualPayload(example, payload); err != nil {
+				if err := validateVisualEnvelope(example, envelope); err != nil {
 					return visualExamplesArtifact{}, err
 				}
-				canonicalizePayloadData(*example.Chart, &payload)
-				compiledVisualization, ok := visualizations[example.ID]
-				if !ok {
-					return visualExamplesArtifact{}, fmt.Errorf("visual example %q has no compiled definition", example.ID)
-				}
-				envelope, err := visualizationruntime.VisualEnvelopeFromDefinition(compiledVisualization, payload, 1, 1)
-				if err != nil {
-					return visualExamplesArtifact{}, fmt.Errorf("visual example %q envelope: %w", example.ID, err)
-				}
+				canonicalizeEnvelopeData(&envelope)
+				normalizeEnvelopeRevision(&envelope, 1, 1)
 				payloads = append(payloads, envelope)
 				continue
 			}
@@ -236,9 +230,13 @@ func stringSet(values ...string) map[string]struct{} {
 	return result
 }
 
-func validateVisualPayload(example visualExample, payload dashboard.Visual) error {
+func validateVisualEnvelope(example visualExample, envelope visualizationir.VisualizationEnvelope) error {
+	return validateVisualData(example, envelopeRows(envelope))
+}
+
+func validateVisualData(example visualExample, payload []dashboard.Datum) error {
 	finiteNumbers := 0
-	for index, datum := range payload.Data {
+	for index, datum := range payload {
 		if len(datum) == 0 {
 			return fmt.Errorf("visual example %q has an empty row at data[%d]", example.ID, index)
 		}
@@ -260,8 +258,8 @@ func validateVisualPayload(example visualExample, payload dashboard.Visual) erro
 		if !ok {
 			return fmt.Errorf("visual example %q uses unsupported documentation map %q", example.ID, layer.GeometryAsset)
 		}
-		seenRegions := make(map[string]struct{}, len(payload.Data))
-		for index, datum := range payload.Data {
+		seenRegions := make(map[string]struct{}, len(payload))
+		for index, datum := range payload {
 			region, _ := datum[layer.Join].(string)
 			if _, ok := regions[region]; !ok {
 				return fmt.Errorf("visual example %q region %q is not defined by map %q at data[%d].%s", example.ID, region, layer.GeometryAsset, index, layer.Join)
@@ -275,6 +273,101 @@ func validateVisualPayload(example visualExample, payload dashboard.Visual) erro
 		}
 	}
 	return nil
+}
+
+func envelopeRows(envelope visualizationir.VisualizationEnvelope) []dashboard.Datum {
+	state, ok := envelope.DataState.Value.(*visualizationir.InlineVisualizationDataState)
+	if !ok || len(state.Datasets) != 1 {
+		return nil
+	}
+	dataset := state.Datasets[0]
+	rows := make([]dashboard.Datum, len(dataset.Rows))
+	for rowIndex, values := range dataset.Rows {
+		if len(values) != len(dataset.Columns) {
+			return nil
+		}
+		rows[rowIndex] = make(dashboard.Datum, len(values))
+		for columnIndex, column := range dataset.Columns {
+			rows[rowIndex][column] = values[columnIndex]
+		}
+	}
+	return rows
+}
+
+func normalizeEnvelopeRevision(envelope *visualizationir.VisualizationEnvelope, dataRevision, generation int64) {
+	if envelope == nil {
+		return
+	}
+	envelope.DataRevision = dataRevision
+	for index := range envelope.Selection {
+		envelope.Selection[index].Datum.DataRevision = dataRevision
+	}
+	if state, ok := envelope.DataState.Value.(*visualizationir.InlineVisualizationDataState); ok {
+		state.DataRevision, state.Generation = dataRevision, generation
+		for index := range state.Datasets {
+			state.Datasets[index].DataRevision, state.Datasets[index].Generation = dataRevision, generation
+		}
+	}
+}
+
+func canonicalizeEnvelopeData(envelope *visualizationir.VisualizationEnvelope) {
+	if envelope == nil {
+		return
+	}
+	state, ok := envelope.DataState.Value.(*visualizationir.InlineVisualizationDataState)
+	if !ok {
+		return
+	}
+	for datasetIndex := range state.Datasets {
+		rows := state.Datasets[datasetIndex].Rows
+		sort.SliceStable(rows, func(left, right int) bool {
+			for column := 0; column < len(rows[left]) && column < len(rows[right]); column++ {
+				comparison := compareEnvelopeValues(rows[left][column], rows[right][column])
+				if comparison != 0 {
+					return comparison < 0
+				}
+			}
+			return len(rows[left]) < len(rows[right])
+		})
+	}
+}
+
+func compareEnvelopeValues(left, right any) int {
+	leftNumber, leftIsNumber := envelopeNumber(left)
+	rightNumber, rightIsNumber := envelopeNumber(right)
+	if leftIsNumber && rightIsNumber {
+		if leftNumber < rightNumber {
+			return -1
+		}
+		if leftNumber > rightNumber {
+			return 1
+		}
+		return 0
+	}
+	return strings.Compare(fmt.Sprint(left), fmt.Sprint(right))
+}
+
+func envelopeNumber(value any) (float64, bool) {
+	switch typed := value.(type) {
+	case int:
+		return float64(typed), true
+	case int32:
+		return float64(typed), true
+	case int64:
+		return float64(typed), true
+	case uint:
+		return float64(typed), true
+	case uint32:
+		return float64(typed), true
+	case uint64:
+		return float64(typed), true
+	case float32:
+		return float64(typed), true
+	case float64:
+		return typed, true
+	default:
+		return 0, false
+	}
 }
 
 func inspectPayloadValue(value any, path string, finiteNumbers *int) error {
@@ -501,96 +594,6 @@ func visualAccessibilityGuidance(visual reportdef.Visual) string {
 		return "Use meaningful node labels and keep the hierarchy or flow small enough to follow without relying on color alone."
 	default:
 		return "Use a descriptive title and unit, and do not rely on color alone to distinguish series or values."
-	}
-}
-
-func canonicalizePayloadData(visual reportdef.Visual, payload *dashboard.Visual) {
-	if payload == nil || len(payload.Data) < 2 || payload.Shape == "binned_measure" || payload.Shape == "single_value" {
-		return
-	}
-	sort.SliceStable(payload.Data, func(left, right int) bool {
-		for _, order := range visual.Query.Sort {
-			leftValue := payloadSortValue(visual, payload.Data[left], order.Field)
-			rightValue := payloadSortValue(visual, payload.Data[right], order.Field)
-			comparison := comparePayloadValues(leftValue, rightValue)
-			if comparison == 0 {
-				continue
-			}
-			if strings.EqualFold(order.Direction, "desc") {
-				return comparison > 0
-			}
-			return comparison < 0
-		}
-		leftJSON, _ := json.Marshal(payload.Data[left])
-		rightJSON, _ := json.Marshal(payload.Data[right])
-		return bytes.Compare(leftJSON, rightJSON) < 0
-	})
-}
-
-func payloadSortValue(visual reportdef.Visual, datum dashboard.Datum, field string) any {
-	if value, ok := datum[field]; ok {
-		return value
-	}
-	for index, dimension := range visual.Query.Dimensions {
-		if field != dimension.Field && field != dimension.Alias {
-			continue
-		}
-		switch visual.ShapeOrDefault() {
-		case "matrix":
-			if index == 0 {
-				return datum["row"]
-			}
-			return datum["column"]
-		case "graph":
-			if index == 0 {
-				return datum["source"]
-			}
-			return datum["target"]
-		case "geo":
-			return datum[dimension.Alias]
-		default:
-			return datum["label"]
-		}
-	}
-	return nil
-}
-
-func comparePayloadValues(left, right any) int {
-	leftNumber, leftIsNumber := payloadNumber(left)
-	rightNumber, rightIsNumber := payloadNumber(right)
-	if leftIsNumber && rightIsNumber {
-		switch {
-		case leftNumber < rightNumber:
-			return -1
-		case leftNumber > rightNumber:
-			return 1
-		default:
-			return 0
-		}
-	}
-	return strings.Compare(fmt.Sprint(left), fmt.Sprint(right))
-}
-
-func payloadNumber(value any) (float64, bool) {
-	switch typed := value.(type) {
-	case int:
-		return float64(typed), true
-	case int32:
-		return float64(typed), true
-	case int64:
-		return float64(typed), true
-	case uint:
-		return float64(typed), true
-	case uint32:
-		return float64(typed), true
-	case uint64:
-		return float64(typed), true
-	case float32:
-		return float64(typed), true
-	case float64:
-		return typed, true
-	default:
-		return 0, false
 	}
 }
 

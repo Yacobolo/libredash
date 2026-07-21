@@ -10,6 +10,7 @@ import (
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	dashboarddefinition "github.com/Yacobolo/libredash/internal/dashboard/definition"
 	visualizationdefinition "github.com/Yacobolo/libredash/internal/visualization/definition"
+	visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
 )
 
 type QueryService struct {
@@ -86,7 +87,7 @@ func (s *SnapshotService) QueryDashboardPage(ctx context.Context, dashboardID, p
 			LastUpdated:     refreshLabel(runtime),
 			ProgressPercent: dashboard.NormalizeProgressPercent(nil, false),
 		},
-		Visuals: map[string]dashboard.Visual{},
+		Visuals: map[string]visualizationir.VisualizationEnvelope{},
 	}
 
 	page := dashboardPage(report, pageID)
@@ -105,33 +106,33 @@ func (s *SnapshotService) QueryDashboardPage(ctx context.Context, dashboardID, p
 	return patch, nil
 }
 
-func (s *SnapshotService) queryVisualPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualID string) (dashboard.Visual, error) {
+func (s *SnapshotService) queryVisualPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualID string) (visualizationir.VisualizationEnvelope, error) {
 	visuals, err := s.queryVisualsPage(ctx, dashboardID, pageID, filters, []string{visualID})
 	if err != nil {
-		return dashboard.Visual{}, err
+		return visualizationir.VisualizationEnvelope{}, err
 	}
 	return visuals[visualID], nil
 }
 
-func (s *SnapshotService) querySpatialVisualPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request dashboard.SpatialWindowRequest) (dashboard.Visual, error) {
+func (s *SnapshotService) querySpatialVisualPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request dashboard.SpatialWindowRequest) (visualizationir.VisualizationEnvelope, error) {
 	report, runtime, err := s.reports.reportRuntime(dashboardID, s.runtimes)
 	if err != nil {
-		return dashboard.Visual{}, err
+		return visualizationir.VisualizationEnvelope{}, err
 	}
 	if !runtime.ready {
-		return dashboard.Visual{}, runtime.missing
+		return visualizationir.VisualizationEnvelope{}, runtime.missing
 	}
 	page := dashboardPage(report, pageID)
 	filters = report.NormalizeFiltersForPage(page.ID, filters)
 	if !contains(pageVisualIDs(page), request.VisualID) {
-		return dashboard.Visual{}, fmt.Errorf("visual %q is not on page %q", request.VisualID, page.ID)
+		return visualizationir.VisualizationEnvelope{}, fmt.Errorf("visual %q is not on page %q", request.VisualID, page.ID)
 	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.visualizations.spatialVisual(ctx, runtime, report, filters, request)
+	return s.visualizations.spatialEnvelope(ctx, runtime, report, filters, request)
 }
 
-func (s *SnapshotService) queryVisualsPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualIDs []string) (map[string]dashboard.Visual, error) {
+func (s *SnapshotService) queryVisualsPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualIDs []string) (map[string]visualizationir.VisualizationEnvelope, error) {
 	report, runtime, err := s.reports.reportRuntime(dashboardID, s.runtimes)
 	if err != nil {
 		return nil, err
@@ -152,7 +153,7 @@ func (s *SnapshotService) queryVisualsPage(ctx context.Context, dashboardID, pag
 	return s.visualizations.visuals(ctx, runtime, report, filters, append([]string{}, visualIDs...))
 }
 
-func (s *SnapshotService) queryVisualBundlePage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualIDs []string) (map[string]dashboard.Visual, error) {
+func (s *SnapshotService) queryVisualBundlePage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualIDs []string) (map[string]visualizationir.VisualizationEnvelope, error) {
 	report, runtime, err := s.reports.reportRuntime(dashboardID, s.runtimes)
 	if err != nil {
 		return nil, err

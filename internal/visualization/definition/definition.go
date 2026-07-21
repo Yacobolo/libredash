@@ -25,6 +25,7 @@ const (
 	QueryMatrix    QueryKind = "matrix"
 	QueryPivot     QueryKind = "pivot"
 	QueryCustom    QueryKind = "custom"
+	QuerySpatial   QueryKind = "spatial"
 )
 
 // QueryBinding is the closed compiler/runtime boundary. Exactly one branch is
@@ -42,6 +43,7 @@ type QueryBinding struct {
 	Matrix    *MatrixQueryBinding    `json:"matrix,omitempty" yaml:"matrix,omitempty"`
 	Pivot     *PivotQueryBinding     `json:"pivot,omitempty" yaml:"pivot,omitempty"`
 	Custom    *CustomQueryBinding    `json:"custom,omitempty" yaml:"custom,omitempty"`
+	Spatial   *SpatialQueryBinding   `json:"spatial,omitempty" yaml:"spatial,omitempty"`
 }
 
 type FieldBinding struct {
@@ -89,6 +91,31 @@ type CustomQueryBinding struct {
 	Limit   int64          `json:"limit" yaml:"limit"`
 }
 
+// SpatialQueryBinding is the compiler-resolved query contract for a
+// geographic visualization. Viewport is present only when the visual uses the
+// large-data spatial runtime; inline and keyed choropleth maps deliberately
+// keep it nil while retaining the same geographic query ownership.
+type SpatialQueryBinding struct {
+	TableID    string                  `json:"tableID" yaml:"table_id"`
+	Dimensions []FieldBinding          `json:"dimensions,omitempty" yaml:"dimensions,omitempty"`
+	Series     *FieldBinding           `json:"series,omitempty" yaml:"series,omitempty"`
+	Measures   []FieldBinding          `json:"measures,omitempty" yaml:"measures,omitempty"`
+	Time       *TimeBinding            `json:"time,omitempty" yaml:"time,omitempty"`
+	Sort       []Sort                  `json:"sort,omitempty" yaml:"sort,omitempty"`
+	Limit      int64                   `json:"limit" yaml:"limit"`
+	Viewport   *SpatialViewportBinding `json:"viewport,omitempty" yaml:"viewport,omitempty"`
+}
+
+// SpatialViewportBinding identifies the one compiler-resolved coordinate pair
+// used to govern viewport requests. All coordinate layers in a windowed map
+// must use this pair.
+type SpatialViewportBinding struct {
+	Latitude       FieldBinding `json:"latitude" yaml:"latitude"`
+	Longitude      FieldBinding `json:"longitude" yaml:"longitude"`
+	FeatureCap     int64        `json:"featureCap" yaml:"feature_cap"`
+	RawMinimumZoom float64      `json:"rawMinimumZoom" yaml:"raw_minimum_zoom"`
+}
+
 type Sort struct {
 	FieldID   string `json:"fieldID" yaml:"field_id"`
 	Direction string `json:"direction" yaml:"direction"`
@@ -99,7 +126,7 @@ func (query QueryBinding) Validate() error {
 		return fmt.Errorf("visualization query binding requires kind, model ID, and dataset ID")
 	}
 	branches := 0
-	for _, present := range []bool{query.Aggregate != nil, query.Detail != nil, query.Matrix != nil, query.Pivot != nil, query.Custom != nil} {
+	for _, present := range []bool{query.Aggregate != nil, query.Detail != nil, query.Matrix != nil, query.Pivot != nil, query.Custom != nil, query.Spatial != nil} {
 		if present {
 			branches++
 		}
@@ -136,6 +163,31 @@ func (query QueryBinding) Validate() error {
 			return fmt.Errorf("custom query binding requires custom branch")
 		}
 		tableID, fields, limit = query.Custom.TableID, query.Custom.Fields, query.Custom.Limit
+	case QuerySpatial:
+		if query.Spatial == nil {
+			return fmt.Errorf("spatial query binding requires spatial branch")
+		}
+		tableID = query.Spatial.TableID
+		fields = append(fields, query.Spatial.Dimensions...)
+		if query.Spatial.Series != nil {
+			fields = append(fields, *query.Spatial.Series)
+		}
+		if query.Spatial.Time != nil {
+			fields = append(fields, FieldBinding{FieldID: query.Spatial.Time.FieldID, Alias: query.Spatial.Time.Alias})
+		}
+		fields = append(fields, query.Spatial.Measures...)
+		limit = query.Spatial.Limit
+		if viewport := query.Spatial.Viewport; viewport != nil {
+			if viewport.FeatureCap <= 0 || viewport.FeatureCap > limit {
+				return fmt.Errorf("spatial viewport requires a positive feature cap no greater than its row limit")
+			}
+			if viewport.RawMinimumZoom < 0 || viewport.RawMinimumZoom > 24 {
+				return fmt.Errorf("spatial viewport raw minimum zoom must be between 0 and 24")
+			}
+			if !containsFieldBinding(fields, viewport.Latitude) || !containsFieldBinding(fields, viewport.Longitude) {
+				return fmt.Errorf("spatial viewport coordinates must reference compiled query fields")
+			}
+		}
 	default:
 		return fmt.Errorf("unsupported visualization query kind %q", query.Kind)
 	}
@@ -148,6 +200,18 @@ func (query QueryBinding) Validate() error {
 		}
 	}
 	return nil
+}
+
+func containsFieldBinding(fields []FieldBinding, target FieldBinding) bool {
+	if target.FieldID == "" || target.Alias == "" {
+		return false
+	}
+	for _, field := range fields {
+		if field == target {
+			return true
+		}
+	}
+	return false
 }
 
 type Definition struct {
@@ -223,7 +287,7 @@ func ownership(spec ir.VisualizationSpec) (string, QueryKind, error) {
 	case *ir.KPIVisualizationSpec, ir.KPIVisualizationSpec:
 		return RendererHTML, QueryAggregate, nil
 	case *ir.GeographicVisualizationSpec, ir.GeographicVisualizationSpec:
-		return RendererMapLibre, QueryAggregate, nil
+		return RendererMapLibre, QuerySpatial, nil
 	case *ir.CustomVisualizationSpec, ir.CustomVisualizationSpec:
 		return RendererVegaLite, QueryCustom, nil
 	default:

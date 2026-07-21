@@ -1,8 +1,6 @@
 package runtime
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"math"
 	"strconv"
@@ -37,6 +35,12 @@ func newVisualPlan(definition visualizationdefinition.Definition) (visualPlan, e
 		query := definition.Query.Aggregate
 		if query == nil {
 			return visualPlan{}, fmt.Errorf("visualization %q has no aggregate binding", definition.ID)
+		}
+		plan.Table, plan.Dimensions, plan.Series, plan.Measures, plan.Time, plan.Sort, plan.Limit = query.TableID, query.Dimensions, query.Series, query.Measures, query.Time, query.Sort, int(query.Limit)
+	case visualizationdefinition.QuerySpatial:
+		query := definition.Query.Spatial
+		if query == nil {
+			return visualPlan{}, fmt.Errorf("visualization %q has no spatial binding", definition.ID)
 		}
 		plan.Table, plan.Dimensions, plan.Series, plan.Measures, plan.Time, plan.Sort, plan.Limit = query.TableID, query.Dimensions, query.Series, query.Measures, query.Time, query.Sort, int(query.Limit)
 	case visualizationdefinition.QueryCustom:
@@ -169,22 +173,6 @@ func queryDimensionFields(dimensions []visualizationdefinition.FieldBinding) []s
 		fields[i] = dimension.FieldID
 	}
 	return fields
-}
-
-func queryMeasureFields(measures []visualizationdefinition.FieldBinding) []string {
-	fields := make([]string, len(measures))
-	for i, measure := range measures {
-		fields[i] = measure.FieldID
-	}
-	return fields
-}
-
-func displayFields(fields []string) []string {
-	values := make([]string, len(fields))
-	for i, field := range fields {
-		values[i] = displayField(field)
-	}
-	return values
 }
 
 func displayField(field string) string {
@@ -408,11 +396,6 @@ func selectedEntries(filters dashboard.Filters, sourceKind, sourceID string) []d
 	return entries
 }
 
-func applySourceSelectionToVisual(visual dashboard.Visual, filters dashboard.Filters) dashboard.Visual {
-	visual.Selection = selectedEntries(filters, "visual", visual.ID)
-	return visual
-}
-
 func copySelectionEntry(entry dashboard.InteractionSelectionEntry) dashboard.InteractionSelectionEntry {
 	next := dashboard.InteractionSelectionEntry{
 		Label:    entry.Label,
@@ -420,58 +403,6 @@ func copySelectionEntry(entry dashboard.InteractionSelectionEntry) dashboard.Int
 	}
 	copy(next.Mappings, entry.Mappings)
 	return next
-}
-
-func markSelected(data []dashboard.Datum, selection reportdef.SelectionInteraction, entries []dashboard.InteractionSelectionEntry) {
-	if len(data) == 0 || len(selection.Mappings) == 0 || len(entries) == 0 {
-		return
-	}
-	for _, row := range data {
-		if datumMatchesAnySelectionEntry(row, selection.Mappings, entries) {
-			row["selected"] = true
-		}
-	}
-}
-
-func datumMatchesAnySelectionEntry(row dashboard.Datum, mappings []reportdef.SelectionMapping, entries []dashboard.InteractionSelectionEntry) bool {
-	for _, entry := range entries {
-		if datumMatchesSelectionEntry(row, mappings, entry) {
-			return true
-		}
-	}
-	return false
-}
-
-func datumMatchesSelectionEntry(row dashboard.Datum, mappings []reportdef.SelectionMapping, entry dashboard.InteractionSelectionEntry) bool {
-	if len(entry.Mappings) == 0 {
-		return false
-	}
-	for _, mapping := range mappings {
-		selectedValue, ok := selectionEntryMappingValue(entry, mapping.Field, mapping.Fact, mapping.Grain)
-		if !ok {
-			return false
-		}
-		value, ok := row[mapping.Value]
-		if !ok || !selectionValuesEqual(value, selectedValue) {
-			return false
-		}
-	}
-	return true
-}
-
-func selectionEntryMappingValue(entry dashboard.InteractionSelectionEntry, field, fact, grain string) (dashboard.InteractionSelectionValue, bool) {
-	for _, mapping := range entry.Mappings {
-		if mapping.Field == field && mapping.Fact == fact && mapping.Grain == grain {
-			return mapping.Value, true
-		}
-	}
-	return nil, false
-}
-
-func selectionValuesEqual(left, right any) bool {
-	leftJSON, leftErr := json.Marshal(left)
-	rightJSON, rightErr := json.Marshal(right)
-	return leftErr == nil && rightErr == nil && bytes.Equal(leftJSON, rightJSON)
 }
 
 func normalizeDatumValue(value any) any {

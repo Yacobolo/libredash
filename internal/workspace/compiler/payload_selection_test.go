@@ -9,6 +9,7 @@ import (
 
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	"github.com/Yacobolo/libredash/internal/dashboard/report"
+	visualizationdefinition "github.com/Yacobolo/libredash/internal/visualization/definition"
 	visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
 )
 
@@ -131,6 +132,12 @@ func TestGeographicVisualCompilesEveryLayerKind(t *testing.T) {
 	}
 	if got, want := spec.DataBudget.MaxRows, int64(20_000); got != want {
 		t.Fatalf("geographic data budget = %d, want %d", got, want)
+	}
+	if definition.Query.Kind != visualizationdefinition.QuerySpatial || definition.Query.Spatial == nil {
+		t.Fatalf("geographic query binding = %#v, want explicit spatial binding", definition.Query)
+	}
+	if definition.Query.Spatial.Viewport != nil {
+		t.Fatalf("20,000-row map unexpectedly compiled viewport strategy: %#v", definition.Query.Spatial.Viewport)
 	}
 	if got, want := spec.Presentation.Legend, visualizationir.VisualizationLegendPositionHidden; got != want {
 		t.Fatalf("geographic legend = %q, want %q", got, want)

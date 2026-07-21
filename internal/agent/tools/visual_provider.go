@@ -15,6 +15,7 @@ import (
 	"github.com/Yacobolo/libredash/internal/dataquery"
 	visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
 	visualizationruntime "github.com/Yacobolo/libredash/internal/visualization/runtime"
+	workspacecompiler "github.com/Yacobolo/libredash/internal/workspace/compiler"
 	agentcore "github.com/Yacobolo/libredash/pkg/agent"
 )
 
@@ -235,29 +236,29 @@ func (p VisualProvider) queryAgentChart(ctx context.Context, workspaceID string,
 	if title == "" {
 		title = measureLabelForAgent(input.Measures[0].Field, measure)
 	}
-	contract := agentReportVisual(input)
 	chartType := input.Type
-	visual := dashboard.Visual{
-		Version:         3,
-		ID:              id,
-		Kind:            contract.KindOrDefault(),
-		Shape:           shape,
-		Renderer:        contract.RendererOrDefault(),
-		Type:            chartType,
-		Title:           title,
-		Unit:            measure.Unit,
-		Format:          measure.Format,
-		Interaction:     dashboard.InteractionConfig{},
-		Dimensions:      displayAgentFields(input.Dimensions),
-		Measure:         displayAgentField(input.Measures[0]),
-		Measures:        displayAgentFields(input.Measures),
-		Series:          agentVisualSeries(input.Series),
-		Options:         contract.CoreOptions(),
-		RendererOptions: map[string]map[string]any{},
-		Selection:       []dashboard.InteractionSelectionEntry{},
-		Data:            data,
+	authored := agentReportVisual(input)
+	authored.Title = title
+	definitions, err := workspacecompiler.CompileVisualizationDefinitions(&reportdef.Dashboard{
+		ID: "agent-visual", Title: "Agent visual", SemanticModel: input.Model,
+		Visuals: map[string]reportdef.Visual{id: authored},
+	}, model)
+	if err != nil {
+		return agentVisualResult{}, fmt.Errorf("compile agent visualization: %w", err)
 	}
-	envelope, err := visualizationruntime.VisualEnvelope(visual, 1, 1)
+	definition, ok := definitions[id]
+	if !ok {
+		return agentVisualResult{}, fmt.Errorf("compiled agent visualization %q is missing", id)
+	}
+	records := make([]map[string]any, len(data))
+	for index, datum := range data {
+		records[index] = map[string]any(datum)
+	}
+	frame, err := visualizationruntime.FrameFromRecords(definition, records)
+	if err != nil {
+		return agentVisualResult{}, fmt.Errorf("shape agent visualization: %w", err)
+	}
+	envelope, err := visualizationruntime.EnvelopeFromFrame(definition, frame, nil, 1, 1)
 	if err != nil {
 		return agentVisualResult{}, err
 	}

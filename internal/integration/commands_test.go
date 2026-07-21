@@ -219,11 +219,10 @@ func (m canceledVisualWindowMetrics) QueryTablePage(_ context.Context, _ string,
 func drainInitialSnapshot(t *testing.T, stream *streamClient) []map[string]any {
 	t.Helper()
 	patches := []map[string]any{}
-	quiet := time.NewTimer(150 * time.Millisecond)
-	defer quiet.Stop()
 	deadline := time.NewTimer(3 * time.Second)
 	defer deadline.Stop()
 	seenSnapshotTable := false
+	var generation float64
 	for {
 		select {
 		case patch, ok := <-stream.patches:
@@ -234,25 +233,22 @@ func drainInitialSnapshot(t *testing.T, stream *streamClient) []map[string]any {
 			if tableHasSnapshot(patch, "orders_table") {
 				seenSnapshotTable = true
 			}
-			if !quiet.Stop() {
-				select {
-				case <-quiet.C:
-				default:
-				}
+			status := mapAt(patch, "status")
+			loading, hasLoading := status["loading"].(bool)
+			currentGeneration, _ := status["generation"].(float64)
+			if hasLoading && loading && currentGeneration > 0 && generation == 0 {
+				generation = currentGeneration
 			}
-			quiet.Reset(150 * time.Millisecond)
+			if seenSnapshotTable && hasLoading && !loading && generation > 0 && currentGeneration == generation {
+				return patches
+			}
 		case err := <-stream.errs:
 			if err != nil {
 				t.Fatalf("read initial updates stream: %v", err)
 			}
 			return patches
-		case <-quiet.C:
-			if seenSnapshotTable {
-				return patches
-			}
-			quiet.Reset(150 * time.Millisecond)
 		case <-deadline.C:
-			t.Fatalf("initial stream did not include populated tables patch: %#v", patches)
+			t.Fatalf("initial stream did not complete with populated tables: %#v", patches)
 		}
 	}
 }

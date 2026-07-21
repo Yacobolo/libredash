@@ -214,7 +214,7 @@ func (m Metrics) authorizeDataQuery(ctx context.Context, principalID string, pri
 }
 
 func (m Metrics) resolvedDependencyObjects(request dataquery.Query) ([]access.ObjectRef, []access.ObjectRef, error) {
-	if request.Kind != dataquery.KindSemanticAggregate {
+	if request.Kind != dataquery.KindSemanticAggregate && request.Kind != dataquery.KindSemanticSpatial {
 		return nil, nil, nil
 	}
 	model, ok := m.Metrics.SemanticModel(request.ModelID)
@@ -466,7 +466,7 @@ func (m Metrics) applyDataPolicies(ctx context.Context, request dataquery.Query,
 				return request, err
 			}
 			maskedFields := selectedMaskedFields(request, mask)
-			if request.Kind == dataquery.KindSemanticAggregate {
+			if request.Kind == dataquery.KindSemanticAggregate || request.Kind == dataquery.KindSemanticSpatial {
 				maskedFields = append(maskedFields, mask.Fields...)
 			}
 			for _, field := range uniqueStrings(maskedFields) {

@@ -3,58 +3,60 @@ package runtime
 
 import (
 	"fmt"
-	"math"
-	"sort"
 	"strings"
 
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	visualizationdefinition "github.com/Yacobolo/libredash/internal/visualization/definition"
-	visualizationgeometry "github.com/Yacobolo/libredash/internal/visualization/geometry"
 	"github.com/Yacobolo/libredash/internal/visualization/ir"
 )
 
 const primaryDataset = "primary"
 
-func VisualEnvelope(visual dashboard.Visual, dataRevision, generation int64) (ir.VisualizationEnvelope, error) {
-	shape := runtimeShape(visual)
-	data := normalizedVisualData(shape, visual.Data)
-	columns := visualColumns(shape, data)
-	schema := schemaFromData(columns, data)
-	markIdentityFields(&schema, visual.Interaction)
-	base := ir.VisualizationSpecBase{
-		Title: defaultText(visual.Title, visual.ID), Datasets: []ir.VisualizationDatasetSchema{schema},
-		DataBudget:    ir.VisualizationDataBudget{MaxRows: max(int64(len(data)), 1), RequiredCompleteness: ir.VisualizationCompletenessComplete},
-		Accessibility: ir.VisualizationAccessibility{Title: defaultText(visual.Title, visual.ID), Description: defaultText(visual.Title, visual.ID)},
-		Interactions:  interactions(visual, schema),
-	}
-	spec, renderer, err := visualSpec(visual, base, columns)
-	if err != nil {
-		return ir.VisualizationEnvelope{}, err
-	}
-	revision, err := ir.ComputeSpecRevision(spec)
-	if err != nil {
-		return ir.VisualizationEnvelope{}, err
-	}
-	rows := make([][]any, len(data))
-	for index, datum := range data {
-		rows[index] = row(columns, datum)
-	}
-	state := ir.InlineVisualizationDataState{VisualizationDataStateBase: ir.VisualizationDataStateBase{Kind: "inline", SpecRevision: revision.String(), DataRevision: dataRevision, Generation: generation}, Kind: "inline", Datasets: []ir.VisualizationInlineDataset{{ID: primaryDataset, SpecRevision: revision.String(), DataRevision: dataRevision, Generation: generation, Columns: columns, Rows: rows, Completeness: completeness(rows)}}}
-	envelope := ir.VisualizationEnvelope{SchemaVersion: ir.CurrentSchemaVersion, VisualID: visual.ID, RendererID: renderer, SpecRevision: revision.String(), Spec: spec, DataRevision: dataRevision, DataState: ir.VisualizationDataState{Value: &state}, Selection: []ir.VisualizationSelectionEntry{}, Status: ir.VisualizationStatus{Kind: statusKind(len(rows), "")}, Diagnostics: []ir.VisualizationDiagnostic{}}
-	if err := ir.ValidateEnvelope(envelope); err != nil {
-		return ir.VisualizationEnvelope{}, fmt.Errorf("visualization %q: %w", visual.ID, err)
-	}
-	return envelope, nil
+// Frame is the renderer-independent result of a compiled visualization query.
+// Columns must use compiled field aliases; rows are ordered to those columns.
+type Frame struct {
+	Columns []string
+	Rows    [][]any
 }
 
-// VisualEnvelopeFromDefinition shapes runtime data while retaining the exact
-// immutable specification and renderer selected by the compiler.
-func VisualEnvelopeFromDefinition(definition visualizationdefinition.Definition, visual dashboard.Visual, dataRevision, generation int64) (ir.VisualizationEnvelope, error) {
+// FrameFromRecords orders named query values according to the immutable
+// compiled dataset schema. It is the shared boundary for non-dashboard
+// producers such as agent-generated visualizations.
+func FrameFromRecords(definition visualizationdefinition.Definition, records []map[string]any) (Frame, error) {
+	base, err := ir.SpecificationBase(definition.Spec)
+	if err != nil {
+		return Frame{}, err
+	}
+	schema, err := compiledDatasetSchema(base, definition.Query.DatasetID)
+	if err != nil {
+		return Frame{}, err
+	}
+	columns := make([]string, len(schema.Fields))
+	for index, field := range schema.Fields {
+		columns[index] = field.ID
+	}
+	rows := make([][]any, len(records))
+	for rowIndex, record := range records {
+		rows[rowIndex] = make([]any, len(columns))
+		for columnIndex, column := range columns {
+			rows[rowIndex][columnIndex] = record[column]
+		}
+	}
+	return Frame{Columns: columns, Rows: rows}, nil
+}
+
+// SelectionEntriesFromDefinition projects canonical dashboard selection state
+// into renderer-independent DatumRef values.
+func SelectionEntriesFromDefinition(definition visualizationdefinition.Definition, entries []dashboard.InteractionSelectionEntry, dataRevision int64) ([]ir.VisualizationSelectionEntry, error) {
+	return compiledSelections(definition.Spec, entries, dataRevision)
+}
+
+// EnvelopeFromFrame creates the canonical inline renderer boundary directly
+// from a compiled query frame. No legacy visual presentation DTO participates
+// in this path.
+func EnvelopeFromFrame(definition visualizationdefinition.Definition, frame Frame, selections []dashboard.InteractionSelectionEntry, dataRevision, generation int64) (ir.VisualizationEnvelope, error) {
 	if err := definition.Validate(); err != nil {
 		return ir.VisualizationEnvelope{}, err
-	}
-	if visual.ID != definition.ID {
-		return ir.VisualizationEnvelope{}, fmt.Errorf("runtime visualization %q does not match compiled definition %q", visual.ID, definition.ID)
 	}
 	base, err := ir.SpecificationBase(definition.Spec)
 	if err != nil {
@@ -62,32 +64,27 @@ func VisualEnvelopeFromDefinition(definition visualizationdefinition.Definition,
 	}
 	schema, err := compiledDatasetSchema(base, definition.Query.DatasetID)
 	if err != nil {
-		return ir.VisualizationEnvelope{}, fmt.Errorf("compiled visualization %q: %w", definition.ID, err)
+		return ir.VisualizationEnvelope{}, err
 	}
-	columns := make([]string, len(schema.Fields))
+	wantColumns := make([]string, len(schema.Fields))
 	for index, field := range schema.Fields {
-		columns[index] = field.ID
+		wantColumns[index] = field.ID
 	}
-	data := normalizeCompiledData(schema, visual.Data)
-	rows := make([][]any, len(data))
-	for index, datum := range data {
-		rows[index] = row(columns, datum)
+	if err := validateFrameColumns(definition.ID, frame.Columns, wantColumns); err != nil {
+		return ir.VisualizationEnvelope{}, err
 	}
 	state := ir.InlineVisualizationDataState{
 		VisualizationDataStateBase: ir.VisualizationDataStateBase{Kind: "inline", SpecRevision: definition.SpecRevision, DataRevision: dataRevision, Generation: generation},
-		Kind:                       "inline",
-		Datasets: []ir.VisualizationInlineDataset{{
+		Kind:                       "inline", Datasets: []ir.VisualizationInlineDataset{{
 			ID: definition.Query.DatasetID, SpecRevision: definition.SpecRevision, DataRevision: dataRevision, Generation: generation,
-			Columns: columns, Rows: rows, Completeness: completeness(rows),
+			Columns: append([]string{}, frame.Columns...), Rows: frame.Rows, Completeness: completeness(frame.Rows),
 		}},
 	}
 	envelope := ir.VisualizationEnvelope{
-		SchemaVersion: ir.CurrentSchemaVersion, VisualID: definition.ID, RendererID: definition.RendererID,
-		SpecRevision: definition.SpecRevision, Spec: definition.Spec, DataRevision: dataRevision,
-		DataState: ir.VisualizationDataState{Value: &state}, Selection: []ir.VisualizationSelectionEntry{},
-		Status: ir.VisualizationStatus{Kind: statusKind(len(rows), "")}, Diagnostics: []ir.VisualizationDiagnostic{},
+		SchemaVersion: ir.CurrentSchemaVersion, VisualID: definition.ID, RendererID: definition.RendererID, SpecRevision: definition.SpecRevision, Spec: definition.Spec,
+		DataRevision: dataRevision, DataState: ir.VisualizationDataState{Value: &state}, Status: ir.VisualizationStatus{Kind: statusKind(len(frame.Rows), "")}, Diagnostics: []ir.VisualizationDiagnostic{},
 	}
-	envelope.Selection, err = compiledSelections(definition.Spec, visual.Selection, dataRevision)
+	envelope.Selection, err = compiledSelections(definition.Spec, selections, dataRevision)
 	if err != nil {
 		return ir.VisualizationEnvelope{}, err
 	}
@@ -97,55 +94,60 @@ func VisualEnvelopeFromDefinition(definition visualizationdefinition.Definition,
 	return envelope, nil
 }
 
-// SpatialEnvelopeFromDefinition shapes a governed geographic result into a
-// bounded viewport block. It never truncates in source order: when a viewport
-// exceeds the feature budget, deterministic Web-Mercator grid cells replace
-// raw points and are explicitly marked aggregated.
-func SpatialEnvelopeFromDefinition(definition visualizationdefinition.Definition, visual dashboard.Visual, request dashboard.SpatialWindowRequest, dataRevision, generation int64) (ir.VisualizationEnvelope, error) {
-	envelope, err := VisualEnvelopeFromDefinition(definition, visual, dataRevision, generation)
-	if err != nil {
+func validateFrameColumns(visualID string, got, want []string) error {
+	if len(got) != len(want) {
+		return fmt.Errorf("visualization %q frame has %d columns, want %d", visualID, len(got), len(want))
+	}
+	for index := range want {
+		if got[index] != want[index] {
+			return fmt.Errorf("visualization %q frame column %d is %q, want %q", visualID, index, got[index], want[index])
+		}
+	}
+	return nil
+}
+
+// SpatialEnvelopeFromFrame packages an already governed and bounded spatial
+// query result. Spatial aggregation belongs to the database planner; this
+// boundary validates and serializes it without filtering or re-aggregating.
+func SpatialEnvelopeFromFrame(definition visualizationdefinition.Definition, frame Frame, selections []dashboard.InteractionSelectionEntry, request dashboard.SpatialWindowRequest, precision ir.VisualizationSpatialPrecision, cardinality int64, dataRevision, generation int64) (ir.VisualizationEnvelope, error) {
+	if err := definition.Validate(); err != nil {
 		return ir.VisualizationEnvelope{}, err
 	}
 	geographic, ok := definition.Spec.Value.(*ir.GeographicVisualizationSpec)
-	if !ok {
-		return ir.VisualizationEnvelope{}, fmt.Errorf("visualization %q is not geographic", definition.ID)
+	if !ok || definition.Query.Kind != visualizationdefinition.QuerySpatial || definition.Query.Spatial == nil || definition.Query.Spatial.Viewport == nil {
+		return ir.VisualizationEnvelope{}, fmt.Errorf("visualization %q has no compiled spatial viewport", definition.ID)
 	}
-	latitude, longitude, value, ok := spatialCoordinateFields(geographic)
-	if !ok {
-		return ir.VisualizationEnvelope{}, fmt.Errorf("visualization %q has no spatially windowable coordinate layer", definition.ID)
+	schema, err := compiledDatasetSchema(geographic.VisualizationSpecBase, definition.Query.DatasetID)
+	if err != nil {
+		return ir.VisualizationEnvelope{}, err
 	}
-	inline, ok := envelope.DataState.Value.(*ir.InlineVisualizationDataState)
-	if !ok || len(inline.Datasets) != 1 {
-		return ir.VisualizationEnvelope{}, fmt.Errorf("visualization %q does not have one inline source frame", definition.ID)
+	columns := make([]string, len(schema.Fields))
+	for index, field := range schema.Fields {
+		columns[index] = field.ID
 	}
-	dataset := inline.Datasets[0]
-	latitudeIndex, longitudeIndex := columnIndex(dataset.Columns, latitude), columnIndex(dataset.Columns, longitude)
-	if latitudeIndex < 0 || longitudeIndex < 0 {
-		return ir.VisualizationEnvelope{}, fmt.Errorf("visualization %q spatial fields are absent from its frame", definition.ID)
+	if err := validateFrameColumns(definition.ID, frame.Columns, columns); err != nil {
+		return ir.VisualizationEnvelope{}, err
 	}
-	valueIndex := columnIndex(dataset.Columns, value)
-	rows, extent := spatialViewportRows(dataset.Rows, latitudeIndex, longitudeIndex, request.Bounds)
-	precision := ir.VisualizationSpatialPrecisionRaw
-	const featureCap = 5000
-	if len(rows) > featureCap {
-		rows = aggregateSpatialRows(rows, latitudeIndex, longitudeIndex, valueIndex, request.Bounds, request.Width, request.Height, featureCap)
-		precision = ir.VisualizationSpatialPrecisionAggregated
-	}
-	base, _ := ir.SpecificationBase(definition.Spec)
-	count := int64(len(dataset.Rows))
+	featureCap := definition.Query.Spatial.Viewport.FeatureCap
 	state := ir.SpatialWindowedVisualizationDataState{
 		VisualizationDataStateBase: ir.VisualizationDataStateBase{Kind: "spatial_windowed", SpecRevision: definition.SpecRevision, DataRevision: dataRevision, Generation: generation},
-		Kind:                       "spatial_windowed", Schema: geographic.Datasets[0], Cardinality: ir.VisualizationCardinality{Kind: ir.VisualizationCardinalityKindEstimated, Count: &count},
-		Extent: extent, RowCap: base.DataBudget.MaxRows, FeatureCap: featureCap, ResetVersion: request.ResetVersion,
-		Window: &ir.VisualizationSpatialWindowBlock{ID: request.WindowID, Bounds: spatialBounds(request.Bounds), Zoom: request.Zoom, Width: int32(request.Width), Height: int32(request.Height), Precision: precision, Rows: rows, RequestSeq: request.RequestSeq, ResetVersion: request.ResetVersion},
+		Kind:                       "spatial_windowed", Schema: schema, Cardinality: ir.VisualizationCardinality{Kind: ir.VisualizationCardinalityKindExact, Count: &cardinality},
+		Extent: spatialBounds(request.Bounds), RowCap: definition.Query.Spatial.Limit, FeatureCap: featureCap, ResetVersion: request.ResetVersion,
+		Window: &ir.VisualizationSpatialWindowBlock{ID: request.WindowID, Bounds: spatialBounds(request.Bounds), Zoom: request.Zoom, Width: int32(request.Width), Height: int32(request.Height), Precision: precision, Rows: frame.Rows, RequestSeq: request.RequestSeq, ResetVersion: request.ResetVersion},
 	}
-	envelope.DataState = ir.VisualizationDataState{Value: &state}
-	if len(rows) == 0 {
-		envelope.Status.Kind = ir.VisualizationStatusKindNoData
+	status := ir.VisualizationStatusKindReady
+	if len(frame.Rows) == 0 {
+		status = ir.VisualizationStatusKindNoData
 	} else if precision == ir.VisualizationSpatialPrecisionAggregated {
-		envelope.Status.Kind = ir.VisualizationStatusKindPartial
-	} else {
-		envelope.Status.Kind = ir.VisualizationStatusKindReady
+		status = ir.VisualizationStatusKindPartial
+	}
+	envelope := ir.VisualizationEnvelope{
+		SchemaVersion: ir.CurrentSchemaVersion, VisualID: definition.ID, RendererID: definition.RendererID, SpecRevision: definition.SpecRevision, Spec: definition.Spec,
+		DataRevision: dataRevision, DataState: ir.VisualizationDataState{Value: &state}, Status: ir.VisualizationStatus{Kind: status}, Diagnostics: []ir.VisualizationDiagnostic{},
+	}
+	envelope.Selection, err = compiledSelections(definition.Spec, selections, dataRevision)
+	if err != nil {
+		return ir.VisualizationEnvelope{}, err
 	}
 	if err := ir.ValidateEnvelope(envelope); err != nil {
 		return ir.VisualizationEnvelope{}, fmt.Errorf("compiled spatial visualization %q: %w", definition.ID, err)
@@ -153,156 +155,8 @@ func SpatialEnvelopeFromDefinition(definition visualizationdefinition.Definition
 	return envelope, nil
 }
 
-func spatialCoordinateFields(spec *ir.GeographicVisualizationSpec) (latitude, longitude, value string, ok bool) {
-	for _, candidate := range spec.Layers {
-		switch layer := candidate.Value.(type) {
-		case *ir.VisualizationPointLayer:
-			latitude, longitude = layer.Latitude.Field, layer.Longitude.Field
-			if layer.Value != nil {
-				value = layer.Value.Field
-			}
-			return latitude, longitude, value, true
-		case *ir.VisualizationHeatLayer:
-			latitude, longitude = layer.Latitude.Field, layer.Longitude.Field
-			if layer.Value != nil {
-				value = layer.Value.Field
-			}
-			return latitude, longitude, value, true
-		case *ir.VisualizationDensityLayer:
-			latitude, longitude = layer.Latitude.Field, layer.Longitude.Field
-			if layer.Value != nil {
-				value = layer.Value.Field
-			}
-			return latitude, longitude, value, true
-		case *ir.VisualizationPathLayer:
-			latitude, longitude = layer.Latitude.Field, layer.Longitude.Field
-			if layer.Value != nil {
-				value = layer.Value.Field
-			}
-			return latitude, longitude, value, true
-		}
-	}
-	return "", "", "", false
-}
-
-func columnIndex(columns []string, field string) int {
-	if field == "" {
-		return -1
-	}
-	for index, candidate := range columns {
-		if candidate == field {
-			return index
-		}
-	}
-	return -1
-}
-
 func spatialBounds(value dashboard.SpatialBounds) ir.VisualizationSpatialBounds {
 	return ir.VisualizationSpatialBounds{West: value.West, South: value.South, East: value.East, North: value.North}
-}
-
-func spatialViewportRows(rows [][]any, latitudeIndex, longitudeIndex int, bounds dashboard.SpatialBounds) ([][]any, ir.VisualizationSpatialBounds) {
-	out := make([][]any, 0, len(rows))
-	west, south, east, north := 180.0, 90.0, -180.0, -90.0
-	for _, row := range rows {
-		if latitudeIndex >= len(row) || longitudeIndex >= len(row) {
-			continue
-		}
-		latitude, latOK := scalarFloat(row[latitudeIndex])
-		longitude, lonOK := scalarFloat(row[longitudeIndex])
-		if !latOK || !lonOK || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180 {
-			continue
-		}
-		west, south, east, north = math.Min(west, longitude), math.Min(south, latitude), math.Max(east, longitude), math.Max(north, latitude)
-		insideLongitude := longitude >= bounds.West && longitude <= bounds.East
-		if bounds.West > bounds.East {
-			insideLongitude = longitude >= bounds.West || longitude <= bounds.East
-		}
-		if insideLongitude && latitude >= bounds.South && latitude <= bounds.North {
-			out = append(out, append([]any{}, row...))
-		}
-	}
-	if west >= east || south >= north {
-		return out, ir.VisualizationSpatialBounds{West: -180, South: -85, East: 180, North: 85}
-	}
-	return out, ir.VisualizationSpatialBounds{West: west, South: south, East: east, North: north}
-}
-
-func aggregateSpatialRows(rows [][]any, latitudeIndex, longitudeIndex, valueIndex int, bounds dashboard.SpatialBounds, width, height, cap int) [][]any {
-	columns := max(1, min(width/48, int(math.Sqrt(float64(cap)*max(float64(width), 1)/max(float64(height), 1)))))
-	rowCount := max(1, min(height/48, cap/columns))
-	longitudeSpan := bounds.East - bounds.West
-	if longitudeSpan <= 0 {
-		longitudeSpan += 360
-	}
-	latitudeSpan := max(bounds.North-bounds.South, 0.000001)
-	type cell struct {
-		row                        []any
-		latitude, longitude, value float64
-		count                      int
-		hasValue                   bool
-	}
-	cells := map[[2]int]*cell{}
-	for _, row := range rows {
-		latitude, _ := scalarFloat(row[latitudeIndex])
-		longitude, _ := scalarFloat(row[longitudeIndex])
-		longitudeOffset := longitude - bounds.West
-		if longitudeOffset < 0 {
-			longitudeOffset += 360
-		}
-		key := [2]int{min(columns-1, max(0, int(longitudeOffset/longitudeSpan*float64(columns)))), min(rowCount-1, max(0, int((latitude-bounds.South)/latitudeSpan*float64(rowCount))))}
-		item := cells[key]
-		if item == nil {
-			item = &cell{row: append([]any{}, row...)}
-			cells[key] = item
-		}
-		item.latitude += latitude
-		item.longitude += longitude
-		item.count++
-		if valueIndex >= 0 && valueIndex < len(row) {
-			if value, ok := scalarFloat(row[valueIndex]); ok {
-				item.value += value
-				item.hasValue = true
-			}
-		}
-	}
-	keys := make([][2]int, 0, len(cells))
-	for key := range cells {
-		keys = append(keys, key)
-	}
-	sort.Slice(keys, func(i, j int) bool {
-		if keys[i][1] == keys[j][1] {
-			return keys[i][0] < keys[j][0]
-		}
-		return keys[i][1] < keys[j][1]
-	})
-	out := make([][]any, 0, len(keys))
-	for _, key := range keys {
-		item := cells[key]
-		item.row[latitudeIndex] = item.latitude / float64(item.count)
-		item.row[longitudeIndex] = item.longitude / float64(item.count)
-		if item.hasValue {
-			item.row[valueIndex] = item.value
-		}
-		out = append(out, item.row)
-	}
-	return out
-}
-
-func scalarFloat(value any) (float64, bool) {
-	switch value := value.(type) {
-	case float64:
-		return value, !math.IsNaN(value) && !math.IsInf(value, 0)
-	case float32:
-		return float64(value), !math.IsNaN(float64(value)) && !math.IsInf(float64(value), 0)
-	case int:
-		return float64(value), true
-	case int64:
-		return float64(value), true
-	case int32:
-		return float64(value), true
-	}
-	return 0, false
 }
 
 func compiledDatasetSchema(base ir.VisualizationSpecBase, datasetID string) (ir.VisualizationDatasetSchema, error) {
@@ -312,30 +166,6 @@ func compiledDatasetSchema(base ir.VisualizationSpecBase, datasetID string) (ir.
 		}
 	}
 	return ir.VisualizationDatasetSchema{}, fmt.Errorf("query targets unknown dataset %q", datasetID)
-}
-
-func normalizeCompiledData(schema ir.VisualizationDatasetSchema, values []dashboard.Datum) []dashboard.Datum {
-	hasNode, hasParent := containsField(schema, "node"), containsField(schema, "parent")
-	out := make([]dashboard.Datum, len(values))
-	for index, value := range values {
-		next := dashboard.Datum{}
-		for key, item := range value {
-			if key != "selected" {
-				next[key] = item
-			}
-		}
-		if hasNode && hasParent {
-			if path, ok := next["path"].([]string); ok && len(path) > 0 {
-				next["node"] = strings.Join(path, "/")
-				if len(path) > 1 {
-					next["parent"] = strings.Join(path[:len(path)-1], "/")
-				}
-				delete(next, "path")
-			}
-		}
-		out[index] = next
-	}
-	return out
 }
 
 // TableEnvelopeFromDefinition shapes a window while retaining the exact
@@ -457,9 +287,10 @@ func EmptyEnvelopeFromDefinition(definition visualizationdefinition.Definition, 
 		SpecRevision: definition.SpecRevision, Spec: definition.Spec, DataRevision: dataRevision,
 		Selection: []ir.VisualizationSelectionEntry{}, Status: ir.VisualizationStatus{Kind: ir.VisualizationStatusKindNoData}, Diagnostics: []ir.VisualizationDiagnostic{},
 	}
-	if geographic, ok := definition.Spec.Value.(*ir.GeographicVisualizationSpec); ok && base.DataBudget.MaxRows > 20_000 {
-		if _, _, _, windowable := spatialCoordinateFields(geographic); !windowable {
-			return ir.VisualizationEnvelope{}, fmt.Errorf("compiled spatial visualization %q has no coordinate layer", definition.ID)
+	if definition.Query.Kind == visualizationdefinition.QuerySpatial && definition.Query.Spatial != nil && definition.Query.Spatial.Viewport != nil {
+		geographic, ok := definition.Spec.Value.(*ir.GeographicVisualizationSpec)
+		if !ok {
+			return ir.VisualizationEnvelope{}, fmt.Errorf("compiled spatial visualization %q is not geographic", definition.ID)
 		}
 		extent := ir.VisualizationSpatialBounds{West: -180, South: -85, East: 180, North: 85}
 		if asset := geographic.Presentation.Basemap; asset != nil && len(asset.Bounds) == 4 {
@@ -578,36 +409,6 @@ func specInteractions(spec ir.VisualizationSpec) []ir.VisualizationInteraction {
 	}
 }
 
-func runtimeShape(visual dashboard.Visual) string {
-	if visual.Shape != "" {
-		return visual.Shape
-	}
-	switch visual.Type {
-	case "kpi", "gauge":
-		return "single_value"
-	case "combo":
-		return "category_multi_measure"
-	case "waterfall":
-		return "category_delta"
-	case "histogram":
-		return "binned_measure"
-	case "tree", "sunburst", "treemap":
-		return "hierarchy"
-	case "heatmap":
-		return "matrix"
-	case "sankey", "graph":
-		return "graph"
-	case "map":
-		return "geo"
-	case "candlestick":
-		return "ohlc"
-	case "boxplot":
-		return "distribution"
-	default:
-		return "category_value"
-	}
-}
-
 func TableEnvelope(id string, table dashboard.Table, dataRevision, generation int64) (ir.VisualizationEnvelope, error) {
 	if len(table.Columns) == 0 {
 		table.Columns = []dashboard.TableColumn{{Key: "value", Label: "Value"}}
@@ -709,165 +510,6 @@ func TableEnvelope(id string, table dashboard.Table, dataRevision, generation in
 	return envelope, nil
 }
 
-func visualSpec(visual dashboard.Visual, base ir.VisualizationSpecBase, columns []string) (ir.VisualizationSpec, string, error) {
-	field := func(candidates ...string) ir.VisualizationFieldRef {
-		for _, candidate := range candidates {
-			if contains(columns, candidate) {
-				return ref(candidate)
-			}
-		}
-		if len(columns) > 0 {
-			return ref(columns[0])
-		}
-		return ref("value")
-	}
-	measureRefs := func(exclude ...string) []ir.VisualizationFieldRef {
-		out := []ir.VisualizationFieldRef{}
-		for _, column := range columns {
-			if !contains(exclude, column) {
-				out = append(out, ref(column))
-			}
-		}
-		return out
-	}
-	base.Kind = "cartesian"
-	common := ir.VisualizationPresentation{Legend: legendOption(visual.Options), ShowLabels: boolOption(visual.Options, "show_labels")}
-	switch visual.Type {
-	case "kpi":
-		base.Kind = "kpi"
-		return ir.VisualizationSpec{Value: &ir.KPIVisualizationSpec{VisualizationSpecBase: base, Kind: "kpi", Value: field("value"), Presentation: ir.KPIVisualizationPresentation{Trend: kpiTrend(visual.Options), Note: stringOption(visual.Options, "note"), Tone: toneOption(visual.Options), Thresholds: thresholdOptions(visual.Options)}}}, "html", nil
-	case "pie", "donut", "funnel":
-		base.Kind = "proportional"
-		return ir.VisualizationSpec{Value: &ir.ProportionalVisualizationSpec{VisualizationSpecBase: base, Kind: "proportional", Mark: ir.VisualizationProportionalMark(visual.Type), Category: field("label"), Value: field("value"), Series: optionalRef(columns, "series"), Presentation: ir.ProportionalVisualizationPresentation{VisualizationPresentation: common, Orientation: orientationOption(visual.Options), Rose: stringValue(visual.Options["rose_type"]) != "", CenterLabel: stringOption(visual.Options, "center_label"), LabelPosition: labelPositionOption(visual.Options), InnerRadius: floatOption(visual.Options, "inner_radius"), OuterRadius: floatOption(visual.Options, "outer_radius"), Align: stringOption(visual.Options, "align"), Sort: proportionalSortOption(visual.Options)}}}, "echarts", nil
-	case "treemap", "sunburst", "tree", "sankey", "graph":
-		base.Kind = "hierarchy"
-		spec := &ir.HierarchyVisualizationSpec{VisualizationSpecBase: base, Kind: "hierarchy", Mark: ir.VisualizationHierarchyMark(visual.Type), Node: field("node", "source", "label"), Value: optionalField(columns, "value"), Presentation: ir.HierarchyVisualizationPresentation{VisualizationPresentation: common, Orientation: orientationOption(visual.Options), InitialDepth: int32Option(visual.Options, "initial_depth"), Roam: boolOption(visual.Options, "roam"), Layout: hierarchyLayoutOption(visual.Options), Breadcrumb: boolPointerOption(visual.Options, "breadcrumb"), NodeGap: floatOption(visual.Options, "node_gap"), Curveness: floatOption(visual.Options, "curveness"), Focus: graphFocusOption(visual.Options)}}
-		spec.Parent = optionalField(columns, "parent")
-		spec.Source = optionalField(columns, "source")
-		spec.Target = optionalField(columns, "target")
-		return ir.VisualizationSpec{Value: spec}, "echarts", nil
-	case "radar", "gauge":
-		base.Kind = "polar"
-		return ir.VisualizationSpec{Value: &ir.PolarVisualizationSpec{VisualizationSpecBase: base, Kind: "polar", Mark: ir.VisualizationPolarMark(visual.Type), Category: optionalRef(columns, "label"), Value: field("value"), Series: optionalRef(columns, "series"), Presentation: ir.PolarVisualizationPresentation{VisualizationPresentation: common, Minimum: floatOption(visual.Options, "min"), Maximum: floatOption(visual.Options, "max"), ShowPointer: !falseOption(visual.Options, "show_pointer"), Area: boolPointerOption(visual.Options, "area"), ProgressWidth: floatOption(visual.Options, "progress_width"), Thresholds: thresholdOptions(visual.Options)}}}, "echarts", nil
-	case "map":
-		base.Kind = "geographic"
-		geometry, err := visualizationgeometry.Resolve("brazil_states")
-		if err != nil {
-			return ir.VisualizationSpec{}, "", err
-		}
-		join := field("name")
-		layerBase := ir.VisualizationGeographicLayerBase{ID: "states", Kind: "choropleth", Tooltip: []ir.VisualizationFieldRef{join}, Position: ir.VisualizationMapLayerPositionBelowLabels, Visibility: ir.VisualizationMapVisibility{MaximumZoom: 24}}
-		layer := ir.VisualizationGeographicLayer{Value: &ir.VisualizationChoroplethLayer{VisualizationGeographicLayerBase: layerBase, Kind: "choropleth", Geometry: geometry, Join: join, Value: optionalField(columns, "value"), Color: ir.VisualizationMapColorScale{Kind: ir.VisualizationMapColorScaleKindSequential, Palette: "blue", NullColor: "#d0d7de"}, Stroke: ir.VisualizationMapStroke{Color: "#ffffff", Width: 1.5, Opacity: 1}, Opacity: 0.82}}
-		return ir.VisualizationSpec{Value: &ir.GeographicVisualizationSpec{VisualizationSpecBase: base, Kind: "geographic", Layers: []ir.VisualizationGeographicLayer{layer}, Presentation: ir.GeographicVisualizationPresentation{VisualizationPresentation: common, Roam: boolOption(visual.Options, "roam"), Theme: ir.VisualizationMapThemeAuto, LabelDensity: ir.VisualizationMapLabelDensityNormal, Camera: ir.VisualizationMapCamera{Mode: ir.VisualizationMapCameraModeFitData, Padding: 32, MaximumZoom: 14}, Controls: ir.VisualizationMapControls{Zoom: true, Reset: true, Compass: true}}}}, "maplibre", nil
-	default:
-		mark := ir.VisualizationCartesianMark(visual.Type)
-		supported := map[ir.VisualizationCartesianMark]bool{ir.VisualizationCartesianMarkLine: true, ir.VisualizationCartesianMarkArea: true, ir.VisualizationCartesianMarkBar: true, ir.VisualizationCartesianMarkColumn: true, ir.VisualizationCartesianMarkScatter: true, ir.VisualizationCartesianMarkHistogram: true, ir.VisualizationCartesianMarkCombo: true, ir.VisualizationCartesianMarkWaterfall: true, ir.VisualizationCartesianMarkCandlestick: true, ir.VisualizationCartesianMarkBoxplot: true, ir.VisualizationCartesianMarkHeatmap: true}
-		if !supported[mark] {
-			return ir.VisualizationSpec{}, "", fmt.Errorf("unsupported visualization type %q", visual.Type)
-		}
-		x := field("label", "row", "name")
-		y := measureRefs(x.Field, "series", "selected", "positive")
-		if len(y) == 0 {
-			y = []ir.VisualizationFieldRef{field("value")}
-		}
-		presentation := ir.CartesianVisualizationPresentation{VisualizationPresentation: common, Smooth: boolOption(visual.Options, "smooth"), Stacked: boolOption(visual.Options, "stacked"), ShowSymbols: !falseOption(visual.Options, "show_symbols"), DataZoom: boolOption(visual.Options, "data_zoom"), Area: visual.Type == "area" || boolOption(visual.Options, "area"), Step: boolOption(visual.Options, "step"), Orientation: orientationPointerOption(visual.Options), LabelPosition: labelPositionOption(visual.Options), SymbolSize: floatOption(visual.Options, "symbol_size"), HistogramBins: int32Option(visual.Options, "bin_count"), ComboSeries: comboSeriesOptions(visual.Options)}
-		return ir.VisualizationSpec{Value: &ir.CartesianVisualizationSpec{VisualizationSpecBase: base, Kind: "cartesian", Mark: mark, X: x, Y: y, Series: optionalRef(columns, "series"), Presentation: presentation}}, "echarts", nil
-	}
-}
-
-func normalizedVisualData(shape string, values []dashboard.Datum) []dashboard.Datum {
-	out := make([]dashboard.Datum, len(values))
-	for index, value := range values {
-		next := dashboard.Datum{}
-		for key, item := range value {
-			if key != "selected" {
-				next[key] = item
-			}
-		}
-		if shape == "hierarchy" {
-			if path, ok := next["path"].([]string); ok && len(path) > 0 {
-				next["node"] = strings.Join(path, "/")
-				if len(path) > 1 {
-					next["parent"] = strings.Join(path[:len(path)-1], "/")
-				}
-				delete(next, "path")
-			}
-		}
-		out[index] = next
-	}
-	return out
-}
-
-func visualColumns(shape string, values []dashboard.Datum) []string {
-	preferred := map[string][]string{"single_value": {"label", "value", "series"}, "category_value": {"label", "value"}, "category_series_value": {"label", "series", "value"}, "category_multi_measure": {"label", "series", "value"}, "category_delta": {"label", "value", "start", "end", "positive"}, "binned_measure": {"label", "binStart", "binEnd", "value"}, "hierarchy": {"node", "parent", "value"}, "matrix": {"row", "column", "value"}, "graph": {"source", "target", "value"}, "geo": {"name", "value"}, "ohlc": {"label", "open", "close", "low", "high"}, "distribution": {"label", "min", "q1", "median", "q3", "max"}}[shape]
-	seen := map[string]bool{}
-	out := []string{}
-	for _, key := range preferred {
-		if len(values) == 0 {
-			out = append(out, key)
-			seen[key] = true
-			continue
-		}
-		for _, value := range values {
-			if _, ok := value[key]; ok {
-				out = append(out, key)
-				seen[key] = true
-				break
-			}
-		}
-	}
-	extras := []string{}
-	for _, value := range values {
-		for key := range value {
-			if !seen[key] {
-				seen[key] = true
-				extras = append(extras, key)
-			}
-		}
-	}
-	sort.Strings(extras)
-	return append(out, extras...)
-}
-
-func schemaFromData(columns []string, values []dashboard.Datum) ir.VisualizationDatasetSchema {
-	fields := make([]ir.VisualizationField, len(columns))
-	for index, column := range columns {
-		role := ir.VisualizationFieldRoleDimension
-		if isMeasureColumn(column) {
-			role = ir.VisualizationFieldRoleMeasure
-		}
-		fields[index] = ir.VisualizationField{ID: column, Role: role, DataType: inferType(column, values), Nullable: true, Label: title(column)}
-	}
-	return ir.VisualizationDatasetSchema{ID: primaryDataset, Fields: fields}
-}
-func inferType(column string, values []dashboard.Datum) ir.VisualizationDataType {
-	if isMeasureColumn(column) {
-		return ir.VisualizationDataTypeDecimal
-	}
-	// Derived shaping fields have a contractual type even when the compiler
-	// builds the immutable specification before query data exists.
-	if column == "positive" || column == "selected" {
-		return ir.VisualizationDataTypeBoolean
-	}
-	for _, row := range values {
-		switch row[column].(type) {
-		case bool:
-			return ir.VisualizationDataTypeBoolean
-		case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
-			return ir.VisualizationDataTypeInteger
-		case float32, float64:
-			return ir.VisualizationDataTypeDecimal
-		}
-	}
-	return ir.VisualizationDataTypeString
-}
-func isMeasureColumn(value string) bool {
-	return contains([]string{"value", "start", "end", "binStart", "binEnd", "open", "close", "low", "high", "min", "q1", "median", "q3", "max"}, value)
-}
-func interactions(visual dashboard.Visual, schema ir.VisualizationDatasetSchema) []ir.VisualizationInteraction {
-	return runtimeInteractions(visual.Interaction, schema)
-}
-
 func runtimeInteractions(config dashboard.InteractionConfig, schema ir.VisualizationDatasetSchema) []ir.VisualizationInteraction {
 	mappings := make([]ir.VisualizationInteractionMapping, 0, len(config.Mappings))
 	for _, mapping := range config.Mappings {
@@ -960,174 +602,11 @@ func defaultText(value, fallback string) string {
 	}
 	return fallback
 }
-func title(value string) string { return strings.Title(strings.ReplaceAll(value, "_", " ")) }
 func optional(value string) *string {
 	if value == "" {
 		return nil
 	}
 	return &value
-}
-func boolOption(options map[string]any, key string) bool {
-	value, _ := options[key].(bool)
-	return value
-}
-func falseOption(options map[string]any, key string) bool {
-	value, ok := options[key].(bool)
-	return ok && !value
-}
-func stringOption(options map[string]any, key string) *string {
-	value, _ := options[key].(string)
-	return optional(value)
-}
-func stringValue(value any) string { out, _ := value.(string); return out }
-func floatOption(options map[string]any, key string) *float64 {
-	switch value := options[key].(type) {
-	case float64:
-		return &value
-	case int:
-		out := float64(value)
-		return &out
-	}
-	return nil
-}
-func int32Option(options map[string]any, key string) *int32 {
-	switch value := options[key].(type) {
-	case int:
-		out := int32(value)
-		return &out
-	case int32:
-		return &value
-	case int64:
-		out := int32(value)
-		return &out
-	case float64:
-		out := int32(value)
-		return &out
-	}
-	return nil
-}
-func boolPointerOption(options map[string]any, key string) *bool {
-	value, ok := options[key].(bool)
-	if !ok {
-		return nil
-	}
-	return &value
-}
-func legendOption(options map[string]any) ir.VisualizationLegendPosition {
-	switch stringValue(options["legend"]) {
-	case "hidden":
-		return ir.VisualizationLegendPositionHidden
-	case "top":
-		return ir.VisualizationLegendPositionTop
-	case "right":
-		return ir.VisualizationLegendPositionRight
-	case "left":
-		return ir.VisualizationLegendPositionLeft
-	default:
-		return ir.VisualizationLegendPositionBottom
-	}
-}
-func orientationOption(options map[string]any) ir.VisualizationOrientation {
-	if stringValue(options["orientation"]) == "horizontal" {
-		return ir.VisualizationOrientationHorizontal
-	}
-	return ir.VisualizationOrientationVertical
-}
-func orientationPointerOption(options map[string]any) *ir.VisualizationOrientation {
-	if stringValue(options["orientation"]) == "" {
-		return nil
-	}
-	value := orientationOption(options)
-	return &value
-}
-func labelPositionOption(options map[string]any) *ir.VisualizationLabelPosition {
-	value := stringValue(options["label_position"])
-	if value == "" {
-		return nil
-	}
-	out := ir.VisualizationLabelPosition(value)
-	return &out
-}
-func hierarchyLayoutOption(options map[string]any) *ir.VisualizationHierarchyLayout {
-	value := stringValue(options["layout"])
-	if value == "" {
-		return nil
-	}
-	out := ir.VisualizationHierarchyLayout(value)
-	return &out
-}
-func graphFocusOption(options map[string]any) *ir.VisualizationGraphFocus {
-	value := stringValue(options["focus"])
-	if value == "" {
-		return nil
-	}
-	out := ir.VisualizationGraphFocus(value)
-	return &out
-}
-func proportionalSortOption(options map[string]any) *ir.VisualizationSortDirection {
-	value := stringValue(options["sort"])
-	if value == "" {
-		return nil
-	}
-	out := ir.VisualizationSortDirection(value)
-	return &out
-}
-func toneOption(options map[string]any) *ir.VisualizationTone {
-	value := stringValue(options["tone"])
-	if value == "" {
-		return nil
-	}
-	out := ir.VisualizationTone(value)
-	return &out
-}
-func thresholdOptions(options map[string]any) *[]ir.VisualizationThreshold {
-	values, ok := options["thresholds"].([]map[string]any)
-	if !ok || len(values) == 0 {
-		return nil
-	}
-	out := make([]ir.VisualizationThreshold, 0, len(values))
-	for _, value := range values {
-		threshold := floatOption(value, "value")
-		tone := stringValue(value["tone"])
-		if threshold == nil || tone == "" {
-			continue
-		}
-		out = append(out, ir.VisualizationThreshold{Value: *threshold, Tone: ir.VisualizationTone(tone)})
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return &out
-}
-func comboSeriesOptions(options map[string]any) *[]ir.VisualizationComboSeries {
-	values, ok := options["series_types"].(map[string]string)
-	if !ok || len(values) == 0 {
-		return nil
-	}
-	keys := make([]string, 0, len(values))
-	for key := range values {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	out := make([]ir.VisualizationComboSeries, len(keys))
-	for index, key := range keys {
-		axis := ir.VisualizationAxisPrimary
-		if boolOption(options, "dual_axis") && index > 0 {
-			axis = ir.VisualizationAxisSecondary
-		}
-		out[index] = ir.VisualizationComboSeries{SeriesValue: key, Mark: ir.VisualizationCartesianMark(values[key]), Axis: axis}
-	}
-	return &out
-}
-func kpiTrend(options map[string]any) ir.VisualizationKPITrend {
-	switch stringValue(options["tone"]) {
-	case "success", "positive":
-		return ir.VisualizationKPITrendPositive
-	case "danger", "negative":
-		return ir.VisualizationKPITrendNegative
-	default:
-		return ir.VisualizationKPITrendNeutral
-	}
 }
 func tableDataType(column dashboard.TableColumn, table dashboard.Table) ir.VisualizationDataType {
 	switch column.Format {

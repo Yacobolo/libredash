@@ -8,22 +8,37 @@ import (
 	"github.com/Yacobolo/libredash/internal/visualization/ir"
 )
 
-func TestVisualEnvelopeFromDefinitionKeepsCompiledSpecAndStreamRevision(t *testing.T) {
-	visual := dashboard.Visual{ID: "revenue", Type: "line", Title: "Runtime title", Shape: "category_value", Data: []dashboard.Datum{{"label": "Jan", "value": 10.5}}}
-	draft, err := VisualEnvelope(visual, 1, 1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	compiledSpec := draft.Spec
-	compiledSpec.Value.(*ir.CartesianVisualizationSpec).Title = "Compiled title"
-	definition, err := visualizationdefinition.New("revenue", compiledSpec, visualizationdefinition.QueryBinding{
+func testCartesianDefinition(t *testing.T, id string, fields []ir.VisualizationField, interactions []ir.VisualizationInteraction) visualizationdefinition.Definition {
+	t.Helper()
+	spec := ir.VisualizationSpec{Value: &ir.CartesianVisualizationSpec{
+		VisualizationSpecBase: ir.VisualizationSpecBase{
+			Kind: "cartesian", Title: "Compiled title", Datasets: []ir.VisualizationDatasetSchema{{ID: "primary", Fields: fields}},
+			DataBudget:    ir.VisualizationDataBudget{MaxRows: 100, RequiredCompleteness: ir.VisualizationCompletenessComplete},
+			Accessibility: ir.VisualizationAccessibility{Title: "Compiled title", Description: "Compiled title"}, Interactions: interactions,
+		},
+		Kind: "cartesian", Mark: ir.VisualizationCartesianMarkLine,
+		X: ir.VisualizationFieldRef{Dataset: "primary", Field: "label"}, Y: []ir.VisualizationFieldRef{{Dataset: "primary", Field: "value"}},
+	}}
+	definition, err := visualizationdefinition.New(id, spec, visualizationdefinition.QueryBinding{
 		Kind: visualizationdefinition.QueryAggregate, ModelID: "sales", DatasetID: "primary",
 		Aggregate: &visualizationdefinition.AggregateQueryBinding{Measures: []visualizationdefinition.FieldBinding{{FieldID: "revenue", Alias: "value"}}, Limit: 100},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	envelope, err := VisualEnvelopeFromDefinition(definition, visual, 9, 4)
+	return definition
+}
+
+func testCartesianFields() []ir.VisualizationField {
+	return []ir.VisualizationField{
+		{ID: "label", Role: ir.VisualizationFieldRoleDimension, DataType: ir.VisualizationDataTypeString, Nullable: true, Label: "Label"},
+		{ID: "value", Role: ir.VisualizationFieldRoleMeasure, DataType: ir.VisualizationDataTypeDecimal, Nullable: true, Label: "Value"},
+	}
+}
+
+func TestEnvelopeFromFrameKeepsCompiledSpecAndStreamRevision(t *testing.T) {
+	definition := testCartesianDefinition(t, "revenue", testCartesianFields(), nil)
+	envelope, err := EnvelopeFromFrame(definition, Frame{Columns: []string{"label", "value"}, Rows: [][]any{{"Jan", 10.5}}}, nil, 9, 4)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,58 +51,30 @@ func TestVisualEnvelopeFromDefinitionKeepsCompiledSpecAndStreamRevision(t *testi
 	}
 }
 
-func TestVisualEnvelopeFromDefinitionUsesCompiledDatasetOrdering(t *testing.T) {
-	draft, err := VisualEnvelope(dashboard.Visual{
-		ID: "revenue", Type: "line", Title: "Revenue", Shape: "category_value",
-		Data: []dashboard.Datum{{"label": "Jan", "value": 10.5}},
-	}, 1, 1)
+func TestFrameFromRecordsUsesCompiledDatasetOrdering(t *testing.T) {
+	fields := testCartesianFields()
+	fields[0], fields[1] = fields[1], fields[0]
+	definition := testCartesianDefinition(t, "revenue", fields, nil)
+	frame, err := FrameFromRecords(definition, []map[string]any{{"value": 10.5, "label": "Jan"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	compiled := draft.Spec.Value.(*ir.CartesianVisualizationSpec)
-	compiled.Datasets[0].Fields[0], compiled.Datasets[0].Fields[1] = compiled.Datasets[0].Fields[1], compiled.Datasets[0].Fields[0]
-	definition, err := visualizationdefinition.New("revenue", draft.Spec, visualizationdefinition.QueryBinding{
-		Kind: visualizationdefinition.QueryAggregate, ModelID: "sales", DatasetID: "primary",
-		Aggregate: &visualizationdefinition.AggregateQueryBinding{Measures: []visualizationdefinition.FieldBinding{{FieldID: "revenue", Alias: "value"}}, Limit: 100},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Runtime presentation metadata is deliberately contradictory. The
-	// immutable compiled schema is the only source of frame ordering.
-	envelope, err := VisualEnvelopeFromDefinition(definition, dashboard.Visual{
-		ID: "revenue", Type: "kpi", Shape: "single_value",
-		Data: []dashboard.Datum{{"value": 10.5, "label": "Jan"}},
-	}, 2, 3)
-	if err != nil {
-		t.Fatal(err)
-	}
-	state := envelope.DataState.Value.(*ir.InlineVisualizationDataState)
-	if got, want := state.Datasets[0].Columns, []string{"value", "label"}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+	if got, want := frame.Columns, []string{"value", "label"}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
 		t.Fatalf("columns = %#v, want compiled order %#v", got, want)
 	}
 }
 
-func TestVisualEnvelopeFromDefinitionProjectsSelectionAsDatumRef(t *testing.T) {
-	visual := dashboard.Visual{
-		ID: "orders", Type: "bar", Title: "Orders", Shape: "category_value",
-		Interaction: dashboard.InteractionConfig{Kind: "point_selection", Mappings: []dashboard.InteractionConfigMapping{{Field: "orders.status", Fact: "orders", Value: "label"}}},
-		Selection:   []dashboard.InteractionSelectionEntry{{Mappings: []dashboard.InteractionSelectionMapping{{Field: "orders.status", Fact: "orders", Value: "delivered"}}, Label: "Delivered"}},
-		Data:        []dashboard.Datum{{"label": "delivered", "value": 42}},
+func TestEnvelopeFromFrameProjectsSelectionAsDatumRef(t *testing.T) {
+	fact := "orders"
+	fields := testCartesianFields()
+	fields[0].Role = ir.VisualizationFieldRoleIdentity
+	interaction := ir.VisualizationInteraction{
+		ID: "point_selection", Kind: ir.VisualizationInteractionKindSelect, Mode: ir.VisualizationSelectionModeSingle, RequiresStableIdentity: true,
+		Mappings: []ir.VisualizationInteractionMapping{{Source: ir.VisualizationFieldRef{Dataset: "primary", Field: "label"}, TargetFieldID: "orders.status", TargetFactID: &fact}},
 	}
-	draft, err := VisualEnvelope(visual, 1, 1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	definition, err := visualizationdefinition.New("orders", draft.Spec, visualizationdefinition.QueryBinding{
-		Kind: visualizationdefinition.QueryAggregate, ModelID: "sales", DatasetID: "primary", Identity: []string{"label"},
-		Aggregate: &visualizationdefinition.AggregateQueryBinding{Dimensions: []visualizationdefinition.FieldBinding{{FieldID: "orders.status", Alias: "label"}}, Measures: []visualizationdefinition.FieldBinding{{FieldID: "order_count", Alias: "value"}}, Limit: 100},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	envelope, err := VisualEnvelopeFromDefinition(definition, visual, 8, 3)
+	definition := testCartesianDefinition(t, "orders", fields, []ir.VisualizationInteraction{interaction})
+	selection := []dashboard.InteractionSelectionEntry{{Mappings: []dashboard.InteractionSelectionMapping{{Field: "orders.status", Fact: "orders", Value: "delivered"}}, Label: "Delivered"}}
+	envelope, err := EnvelopeFromFrame(definition, Frame{Columns: []string{"label", "value"}, Rows: [][]any{{"delivered", 42}}}, selection, 8, 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,40 +83,12 @@ func TestVisualEnvelopeFromDefinitionProjectsSelectionAsDatumRef(t *testing.T) {
 	}
 }
 
-func TestSpatialViewportRowsSupportsAntimeridianAndRejectsInvalidCoordinates(t *testing.T) {
-	rows := [][]any{{"east", 10.0, 175.0, 1.0}, {"west", -5.0, -175.0, 2.0}, {"middle", 0.0, 0.0, 3.0}, {"invalid", 92.0, 175.0, 4.0}}
-	window, extent := spatialViewportRows(rows, 1, 2, dashboard.SpatialBounds{West: 170, South: -20, East: -170, North: 25})
-	if len(window) != 2 || window[0][0] != "east" || window[1][0] != "west" {
-		t.Fatalf("window = %#v", window)
-	}
-	if extent.West != -175 || extent.East != 175 || extent.South != -5 || extent.North != 10 {
-		t.Fatalf("extent = %#v", extent)
-	}
-}
-
-func TestAggregateSpatialRowsIsDeterministicAndBounded(t *testing.T) {
-	rows := make([][]any, 0, 20_000)
-	for index := 0; index < 20_000; index++ {
-		rows = append(rows, []any{float64(index%180) - 90, float64(index%360) - 180, 1.0})
-	}
-	bounds := dashboard.SpatialBounds{West: -180, South: -90, East: 180, North: 90}
-	first := aggregateSpatialRows(rows, 0, 1, 2, bounds, 1920, 1080, 5000)
-	second := aggregateSpatialRows(rows, 0, 1, 2, bounds, 1920, 1080, 5000)
-	if len(first) > 5000 || len(first) == 0 { t.Fatalf("aggregate feature count = %d", len(first)) }
-	if len(first) != len(second) { t.Fatalf("determinism length = %d, %d", len(first), len(second)) }
-	for index := range first {
-		for column := range first[index] {
-			if first[index][column] != second[index][column] { t.Fatalf("aggregate differs at row %d column %d", index, column) }
-		}
-	}
-}
-
-func TestChartEnvelopeUsesColumnarTypedIR(t *testing.T) {
+func TestEnvelopeFromFrameUsesColumnarTypedIR(t *testing.T) {
 	t.Parallel()
-	visual := dashboard.Visual{ID: "revenue", Type: "line", Title: "Revenue", Shape: "category_value", Renderer: "echarts", Dimensions: []string{"month"}, Measures: []string{"revenue"}, Data: []dashboard.Datum{{"label": "Jan", "value": 10.5}}}
-	envelope, err := VisualEnvelope(visual, 4, 2)
+	definition := testCartesianDefinition(t, "revenue", testCartesianFields(), nil)
+	envelope, err := EnvelopeFromFrame(definition, Frame{Columns: []string{"label", "value"}, Rows: [][]any{{"Jan", 10.5}}}, nil, 4, 2)
 	if err != nil {
-		t.Fatalf("VisualEnvelope: %v", err)
+		t.Fatalf("EnvelopeFromFrame: %v", err)
 	}
 	if envelope.RendererID != "echarts" {
 		t.Fatalf("renderer = %q", envelope.RendererID)
@@ -162,7 +121,6 @@ func TestTableEnvelopePreservesWindowIdentity(t *testing.T) {
 
 func TestTableEnvelopeOmitsUnknownCardinalityCount(t *testing.T) {
 	t.Parallel()
-
 	table := dashboard.Table{
 		Kind: "data_table", Title: "Orders", Columns: []dashboard.TableColumn{{Key: "order_id", Label: "Order", Role: "row_header"}},
 		Cardinality: dashboard.TableCardinality{Kind: dashboard.CardinalityUnknown}, AvailableRows: 10000,
@@ -178,22 +136,5 @@ func TestTableEnvelopeOmitsUnknownCardinalityCount(t *testing.T) {
 	}
 	if state.Cardinality.Count != nil {
 		t.Fatalf("unknown cardinality count = %v, want nil", *state.Cardinality.Count)
-	}
-}
-
-func TestEnvelopePreservesServerInteractionIdentity(t *testing.T) {
-	t.Parallel()
-	visual := dashboard.Visual{
-		ID: "orders", Type: "bar", Title: "Orders",
-		Interaction: dashboard.InteractionConfig{Kind: "point_selection", Toggle: true, Mappings: []dashboard.InteractionConfigMapping{{Field: "orders.status", Fact: "orders", Value: "label", Label: "label"}}},
-		Data:        []dashboard.Datum{{"label": "delivered", "value": 1}},
-	}
-	envelope, err := VisualEnvelope(visual, 1, 1)
-	if err != nil {
-		t.Fatalf("VisualEnvelope: %v", err)
-	}
-	interactions := envelope.Spec.Value.(*ir.CartesianVisualizationSpec).Interactions
-	if len(interactions) != 1 || interactions[0].ID != "point_selection" || interactions[0].Mode != ir.VisualizationSelectionModeMultiple {
-		t.Fatalf("interaction identity was not preserved: %#v", interactions)
 	}
 }

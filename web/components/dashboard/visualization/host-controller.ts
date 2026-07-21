@@ -71,10 +71,15 @@ export class RendererRegistry {
 
 export type EnvelopeValidator = (value: unknown) => value is VisualizationEnvelope
 export type VisualizationObservation = Readonly<{
-  stage: 'validation_failure' | 'stale_result_drop' | 'renderer_load' | 'mount' | 'update' | 'resize' | 'dispose' | 'adapter_error'
+  stage: 'validation_failure' | 'stale_result_drop' | 'renderer_load' | 'mount' | 'update' | 'resize' | 'dispose' | 'adapter_error' | 'adapter_observation'
   durationMs: number
   rendererID?: string
   kind?: VisualizationSpec['kind']
+  visualID?: string
+  adapterStage?: string
+  assetID?: string
+  layerID?: string
+  featureCount?: number
 }>
 export type VisualizationObserver = (observation: VisualizationObservation) => void
 

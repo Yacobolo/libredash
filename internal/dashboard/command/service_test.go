@@ -48,7 +48,7 @@ func (m fakeMetrics) Report(string) (dashboarddefinition.Definition, *semanticmo
 				}},
 			},
 			"customer_map": {
-				Type: "map",
+				Type: "map", DataBudget: reportdef.VisualDataBudget{MaxRows: 1_000_000, RequiredCompleteness: "partial"},
 				Query: reportdef.VisualQuery{
 					Dimensions: []reportdef.FieldRef{{Field: "latitude", Alias: "latitude"}, {Field: "longitude", Alias: "longitude"}, {Field: "state", Alias: "state"}},
 					Measures:   []reportdef.FieldRef{{Field: "order_count", Alias: "value"}},
@@ -72,7 +72,7 @@ func (m fakeMetrics) Report(string) (dashboarddefinition.Definition, *semanticmo
 			"latitude":  {Type: "number", Bindings: map[string]semanticmodel.DimensionBinding{"orders": {Field: "orders.latitude"}}},
 			"longitude": {Type: "number", Bindings: map[string]semanticmodel.DimensionBinding{"orders": {Field: "orders.longitude"}}},
 		},
-		Measures: map[string]semanticmodel.MetricMeasure{"order_count": {Fact: "orders"}},
+		Measures: map[string]semanticmodel.MetricMeasure{"order_count": {Fact: "orders", Aggregation: "count"}},
 	}
 	definition := dashboardfixture.Compile(authored, model)
 	if m.report != nil {

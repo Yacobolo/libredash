@@ -23,6 +23,7 @@ import (
 	"github.com/Yacobolo/libredash/internal/testutil/dashboardfixture"
 	"github.com/Yacobolo/libredash/internal/testutil/ssetest"
 	visualizationdefinition "github.com/Yacobolo/libredash/internal/visualization/definition"
+	visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
 	visualizationruntime "github.com/Yacobolo/libredash/internal/visualization/runtime"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	workspacesqlite "github.com/Yacobolo/libredash/internal/workspace/sqlite"
@@ -42,10 +43,9 @@ func (fakeMetrics) ExecuteConsumersPage(ctx context.Context, request consumer.Re
 	for _, target := range request.Targets {
 		switch target.Kind {
 		case consumer.KindVisual:
-			visual, err := fakeMetrics{}.QueryVisualPage(ctx, request.DashboardID, request.PageID, request.Filters, target.ID)
 			definition, _ := fakeMetrics{}.VisualizationDefinition(request.DashboardID, target.ID)
-			envelope, envelopeErr := visualizationruntime.VisualEnvelopeFromDefinition(definition, visual, 0, 0)
-			publish(consumer.Result{Target: target, Envelope: envelope, Err: errors.Join(err, envelopeErr)})
+			envelope, err := visualizationruntime.EnvelopeFromFrame(definition, visualizationruntime.Frame{Columns: []string{"label", "value"}, Rows: [][]any{{"delivered", 1}}}, nil, 0, 0)
+			publish(consumer.Result{Target: target, Envelope: envelope, Err: err})
 		case consumer.KindFilterOptions:
 			options, err := fakeMetrics{}.QueryFilterOptionsPage(ctx, request.DashboardID, request.PageID, []string{target.ID})
 			publish(consumer.Result{Target: target, FilterOptions: options, Err: err})
@@ -376,10 +376,13 @@ func (fakeMetrics) QueryDashboard(_ context.Context, _ string, filters dashboard
 
 func (fakeMetrics) QueryDashboardPage(_ context.Context, _ string, pageID string, filters dashboard.Filters) (dashboard.Patch, error) {
 	chartID := "orders"
-	chartTitle := "Orders"
 	if pageID == "operations" {
 		chartID = "ops_pipeline"
-		chartTitle = "Ops Pipeline"
+	}
+	definition, _ := fakeMetrics{}.VisualizationDefinition("executive-sales", chartID)
+	envelope, err := visualizationruntime.EnvelopeFromFrame(definition, visualizationruntime.Frame{Columns: []string{"label", "value"}, Rows: [][]any{{"delivered", 1}}}, nil, 0, 0)
+	if err != nil {
+		return dashboard.Patch{}, err
 	}
 	return dashboard.Patch{
 		Filters: filters.WithDefaults(),
@@ -390,32 +393,8 @@ func (fakeMetrics) QueryDashboardPage(_ context.Context, _ string, pageID string
 			Loading:     false,
 			LastUpdated: "12:00:00",
 		},
-		Visuals: map[string]dashboard.Visual{
-			chartID: {ID: chartID, Type: "bar", Shape: "category_value", Title: chartTitle, Unit: "orders", Data: []dashboard.Datum{{"label": "delivered", "value": 1}}},
-		},
+		Visuals: map[string]visualizationir.VisualizationEnvelope{chartID: envelope},
 	}, nil
-}
-
-func (fakeMetrics) QueryVisualPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualID string) (dashboard.Visual, error) {
-	patch, err := fakeMetrics{}.QueryDashboardPage(ctx, dashboardID, pageID, filters)
-	visual, ok := patch.Visuals[visualID]
-	if !ok {
-		visual = dashboard.Visual{ID: visualID, Type: "bar", Shape: "category_value", Title: visualID}
-	}
-	return visual, err
-}
-
-func (fakeMetrics) QueryVisualsPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualIDs []string) (map[string]dashboard.Visual, error) {
-	patch, err := fakeMetrics{}.QueryDashboardPage(ctx, dashboardID, pageID, filters)
-	visuals := make(map[string]dashboard.Visual, len(visualIDs))
-	for _, id := range visualIDs {
-		visual, ok := patch.Visuals[id]
-		if !ok {
-			visual = dashboard.Visual{ID: id, Type: "bar", Shape: "category_value", Title: id}
-		}
-		visuals[id] = visual
-	}
-	return visuals, err
 }
 
 func (fakeMetrics) QueryFilterOptionsPage(ctx context.Context, dashboardID, pageID string, filterIDs []string) (map[string][]dashboard.FilterOption, error) {
@@ -430,16 +409,6 @@ func (fakeMetrics) QueryFilterOptionsPage(ctx context.Context, dashboardID, page
 func (m *recordingMetrics) QueryDashboardPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters) (dashboard.Patch, error) {
 	m.pageIDs <- pageID
 	return m.fakeMetrics.QueryDashboardPage(ctx, dashboardID, pageID, filters)
-}
-
-func (m *recordingMetrics) QueryVisualPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualID string) (dashboard.Visual, error) {
-	m.pageIDs <- pageID
-	return m.fakeMetrics.QueryVisualPage(ctx, dashboardID, pageID, filters, visualID)
-}
-
-func (m *recordingMetrics) QueryVisualsPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualIDs []string) (map[string]dashboard.Visual, error) {
-	m.pageIDs <- pageID
-	return m.fakeMetrics.QueryVisualsPage(ctx, dashboardID, pageID, filters, visualIDs)
 }
 
 func (m *recordingMetrics) QueryFilterOptionsPage(ctx context.Context, dashboardID, pageID string, filterIDs []string) (map[string][]dashboard.FilterOption, error) {

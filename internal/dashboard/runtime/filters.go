@@ -413,6 +413,8 @@ func compiledQueryTableAndMeasures(query visualizationdefinition.QueryBinding) (
 		return query.Pivot.TableID, query.Pivot.Measures
 	case visualizationdefinition.QueryCustom:
 		return query.Custom.TableID, query.Custom.Fields
+	case visualizationdefinition.QuerySpatial:
+		return query.Spatial.TableID, query.Spatial.Measures
 	default:
 		return "", nil
 	}

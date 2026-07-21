@@ -136,14 +136,6 @@ func DashboardVisualSpatialWindowRequestFromDashboard(value dashboard.SpatialWin
 	}
 }
 
-func DashboardVisualFromDefinitionAtRevision(definition visualizationdefinition.Definition, value dashboard.Visual, dataRevision, generation int64) VisualizationEnvelope {
-	envelope, err := visualizationruntime.VisualEnvelopeFromDefinition(definition, value, dataRevision, generation)
-	if err != nil {
-		panic(fmt.Sprintf("compiled dashboard visualization %q reached the signal boundary with invalid data: %v", value.ID, err))
-	}
-	return visualizationEnvelope(envelope)
-}
-
 func DashboardTabularVisualFromDefinitionAtRevision(definition visualizationdefinition.Definition, value dashboard.Table, dataRevision, generation int64) VisualizationEnvelope {
 	envelope, err := visualizationruntime.TableEnvelopeFromDefinition(definition, value, dataRevision, generation)
 	if err != nil {

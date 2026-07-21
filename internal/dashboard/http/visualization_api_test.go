@@ -5,28 +5,21 @@ import (
 	"testing"
 
 	"github.com/Yacobolo/libredash/internal/dashboard"
+	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
 	visualizationdefinition "github.com/Yacobolo/libredash/internal/visualization/definition"
 	visualizationruntime "github.com/Yacobolo/libredash/internal/visualization/runtime"
+	workspacecompiler "github.com/Yacobolo/libredash/internal/workspace/compiler"
 )
 
 func TestDashboardVisualizationDescriptionContainsOnlyCompiledContract(t *testing.T) {
-	envelope, err := visualizationruntime.VisualEnvelope(dashboard.Visual{
-		ID: "revenue", Type: "line", Title: "Revenue",
-		Data: []dashboard.Datum{{"label": "July", "value": 42.0}},
-	}, 0, 0)
-	if err != nil {
-		t.Fatalf("build envelope: %v", err)
-	}
-	definition, err := visualizationdefinition.New("revenue", envelope.Spec, visualizationdefinition.QueryBinding{
-		Kind: visualizationdefinition.QueryAggregate, ModelID: "sales", DatasetID: "primary",
-		Aggregate: &visualizationdefinition.AggregateQueryBinding{
-			TableID: "orders", Dimensions: []visualizationdefinition.FieldBinding{{FieldID: "orders.month", Alias: "label"}},
-			Measures: []visualizationdefinition.FieldBinding{{FieldID: "orders.revenue", Alias: "value"}}, Limit: 1000,
-		},
+	definitions, err := workspacecompiler.CompileVisualizationDefinitions(&reportdef.Dashboard{
+		ID: "sales", SemanticModel: "sales",
+		Visuals: map[string]reportdef.Visual{"revenue": {Type: "line", Title: "Revenue", Query: reportdef.VisualQuery{Table: "orders", Dimensions: []reportdef.FieldRef{{Field: "orders.month"}}, Measures: []reportdef.FieldRef{{Field: "orders.revenue"}}}}},
 	})
 	if err != nil {
-		t.Fatalf("compile definition: %v", err)
+		t.Fatalf("compile definitions: %v", err)
 	}
+	definition := definitions["revenue"]
 	payload, err := json.Marshal(dashboardVisualizationDefinitionDTO(definition, dashboard.PageVisual{ID: "revenue-card"}))
 	if err != nil {
 		t.Fatalf("marshal description: %v", err)
