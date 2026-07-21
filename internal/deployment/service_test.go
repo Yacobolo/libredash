@@ -172,7 +172,7 @@ func (r *fakeRuntime) Prepare(_ context.Context, candidates []runtimehost.Servin
 	r.candidates = append([]runtimehost.ServingStateCandidate(nil), candidates...)
 	return r.prepared, r.prepareErr
 }
-func (r *fakeRuntime) Commit(_ Prepared, activate func() error) error {
+func (r *fakeRuntime) Activate(_ Prepared, activate func() error) error {
 	if err := activate(); err != nil {
 		return err
 	}

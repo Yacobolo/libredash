@@ -117,7 +117,7 @@ func newDuckLakeHarness(t *testing.T, opts ...func(*app.Options)) *duckLakeHarne
 		t.Fatalf("reload registry for %s: %v", initial.ID, err)
 	}
 	t.Cleanup(func() { _ = registry.Close() })
-	runtimeMetrics := app.NewDynamicRuntimeMetrics("", func(workspaceID string) app.RuntimeProvider {
+	runtimeMetrics := app.NewDynamicRuntimeMetrics("", func(workspaceID string) runtimehost.Provider {
 		return registry.ProviderForWorkspace(servingstate.WorkspaceID(workspaceID))
 	})
 	auth := app.NewAuth(accessRepo, "", app.AuthConfig{DevBypass: true})
@@ -793,7 +793,7 @@ func (h *duckLakeHarness) startReplacementRegistry(t *testing.T) {
 		t.Fatalf("reload replacement registry: %v", err)
 	}
 	h.registry = registry
-	server := app.NewWithOptions(app.NewDynamicRuntimeMetrics("", func(workspaceID string) app.RuntimeProvider {
+	server := app.NewWithOptions(app.NewDynamicRuntimeMetrics("", func(workspaceID string) runtimehost.Provider {
 		return registry.ProviderForWorkspace(servingstate.WorkspaceID(workspaceID))
 	}), app.Options{
 		Store:               h.store,

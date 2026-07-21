@@ -184,11 +184,11 @@ func testWorkspaceAsset(workspaceID workspace.WorkspaceID, servingStateID worksp
 	return workspace.NewAssetWithSourceFile(workspaceID, servingStateID, typ, key, parentID, title, description, sourceFile, payloadSchema, payload)
 }
 
-func (p testRuntimeProvider) Active(context.Context) (runtimehost.Runtime, error) {
+func (p testRuntimeProvider) Acquire(context.Context) (runtimehost.Lease, error) {
 	if p.err != nil {
 		return nil, p.err
 	}
-	return p.runtime, nil
+	return &recordingLease{runtime: p.runtime}, nil
 }
 
 func (r testWorkspaceAssetRuntime) Close() error {
@@ -199,12 +199,6 @@ func (r testWorkspaceAssetRuntime) WorkspaceAssets(string, string) ([]workspace.
 	return r.assets, r.edges, true
 }
 
-func (r *fakeReloader) Reload(context.Context) error {
-	r.prepareCalls++
-	r.commitCalls++
-	return nil
-}
-
 func (r *fakeReloader) PrepareServingState(context.Context, string) (servingstate.PreparedRuntime, error) {
 	r.prepareCalls++
 	if r.prepareErr != nil {
@@ -213,9 +207,9 @@ func (r *fakeReloader) PrepareServingState(context.Context, string) (servingstat
 	return fakePreparedRuntime{}, nil
 }
 
-func (r *fakeReloader) CommitPrepared(servingstate.PreparedRuntime) error {
+func (r *fakeReloader) ActivatePrepared(_ servingstate.PreparedRuntime, activate func() error) error {
 	r.commitCalls++
-	return nil
+	return activate()
 }
 
 type fakePreparedRuntime struct{}

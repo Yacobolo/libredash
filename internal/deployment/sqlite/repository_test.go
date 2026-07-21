@@ -13,6 +13,9 @@ import (
 
 	"github.com/Yacobolo/leapview/internal/deployment"
 	refreshpipelinesqlite "github.com/Yacobolo/leapview/internal/refreshpipeline/sqlite"
+	"github.com/Yacobolo/leapview/internal/runtimehost"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
+	servingstatesqlite "github.com/Yacobolo/leapview/internal/servingstate/sqlite"
 	"github.com/Yacobolo/leapview/internal/workspace"
 	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite"
@@ -239,6 +242,85 @@ func TestActivateDeploymentAtomicallyUpdatesAllWorkspaceAndManagedPointers(t *te
 	}
 }
 
+func TestServiceActivationKeepsDurableAndRuntimeStateConsistentWhenRetiredRuntimeCleanupFails(t *testing.T) {
+	ctx, db, repository := testRepository(t)
+	insertWorkspaceCandidate(t, ctx, db, "sales", "sales_old", "sales_new", "prod")
+	insertWorkspaceCandidate(t, ctx, db, "support", "support_old", "support_new", "prod")
+	if _, err := db.ExecContext(ctx, `UPDATE serving_states SET ducklake_snapshot_id = 1 WHERE id IN ('sales_old', 'sales_new', 'support_old', 'support_new')`); err != nil {
+		t.Fatal(err)
+	}
+	insertRuntimeArtifacts(t, ctx, db, "prod", "sales_old", "sales_new", "support_old", "support_new")
+	created := createDeployment(t, ctx, repository, "deployment_cutover", []deployment.TargetInput{
+		{WorkspaceID: "sales", ServingStateID: "sales_new"},
+		{WorkspaceID: "support", ServingStateID: "support_new"},
+	})
+	states := servingstatesqlite.NewRepository(db)
+	factory := &cutoverRuntimeFactory{runtimes: map[servingstate.ID]*cutoverRuntime{}}
+	var cleanupFailures []runtimehost.CleanupFailure
+	registry := runtimehost.NewRegistryWithFactory(runtimehost.RegistryOptions{
+		Repo: states, WorkspaceIDs: []servingstate.WorkspaceID{"sales", "support"}, Environment: "prod", Factory: factory,
+		OnCleanupFailure: func(failure runtimehost.CleanupFailure) { cleanupFailures = append(cleanupFailures, failure) },
+	})
+	if err := registry.Reload(ctx); err != nil {
+		t.Fatal(err)
+	}
+	wantCleanupErr := errors.New("retired runtime close failed")
+	factory.runtimes["sales_old"].closeErr = wantCleanupErr
+	coordinator, err := deployment.NewRegistryRuntime(registry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := deployment.New(repository, states, coordinator, emptyManagedDataResolver{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	activated, err := service.Activate(ctx, deployment.Scope{ProjectID: "project", DeploymentID: created.ID})
+	if err != nil {
+		t.Fatalf("activate deployment: %v", err)
+	}
+	if activated.Status != deployment.StatusActive {
+		t.Fatalf("deployment status = %q", activated.Status)
+	}
+	assertActiveState(t, ctx, db, "sales", "prod", "sales_new")
+	assertActiveState(t, ctx, db, "support", "prod", "support_new")
+	for _, workspaceID := range []servingstate.WorkspaceID{"sales", "support"} {
+		lease, acquireErr := registry.AcquireForWorkspace(ctx, workspaceID)
+		if acquireErr != nil {
+			t.Fatalf("acquire %s: %v", workspaceID, acquireErr)
+		}
+		wantStateID := servingstate.ID(string(workspaceID) + "_new")
+		if lease.ServingStateID() != wantStateID {
+			t.Fatalf("%s runtime state = %q, want %q", workspaceID, lease.ServingStateID(), wantStateID)
+		}
+		lease.Release()
+	}
+	if len(cleanupFailures) != 1 || !errors.Is(cleanupFailures[0].Err, wantCleanupErr) {
+		t.Fatalf("cleanup failures = %#v", cleanupFailures)
+	}
+	if err := registry.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	restarted := runtimehost.NewRegistryWithFactory(runtimehost.RegistryOptions{
+		Repo: states, WorkspaceIDs: []servingstate.WorkspaceID{"sales", "support"}, Environment: "prod", Factory: &cutoverRuntimeFactory{runtimes: map[servingstate.ID]*cutoverRuntime{}},
+	})
+	defer restarted.Close()
+	if err := restarted.Reload(ctx); err != nil {
+		t.Fatalf("reload after activation: %v", err)
+	}
+	for _, workspaceID := range []servingstate.WorkspaceID{"sales", "support"} {
+		lease, acquireErr := restarted.AcquireForWorkspace(ctx, workspaceID)
+		if acquireErr != nil {
+			t.Fatalf("acquire restarted %s: %v", workspaceID, acquireErr)
+		}
+		if lease.ServingStateID() != servingstate.ID(string(workspaceID)+"_new") {
+			t.Fatalf("restarted %s runtime state = %q", workspaceID, lease.ServingStateID())
+		}
+		lease.Release()
+	}
+}
+
 func TestActivateDeploymentRollsBackOnWorkspacePointerConflict(t *testing.T) {
 	ctx, db, repository := testRepository(t)
 	insertWorkspaceCandidate(t, ctx, db, "sales", "sales_old", "sales_new", "prod")
@@ -377,6 +459,39 @@ func insertWorkspaceCandidate(t *testing.T, ctx context.Context, db *sql.DB, wor
 		t.Fatal(err)
 	}
 	setActiveState(t, ctx, db, workspaceID, environment, oldID)
+}
+
+func insertRuntimeArtifacts(t *testing.T, ctx context.Context, db *sql.DB, environment string, stateIDs ...string) {
+	t.Helper()
+	for _, stateID := range stateIDs {
+		workspaceID := strings.TrimSuffix(strings.TrimSuffix(stateID, "_old"), "_new")
+		if _, err := db.ExecContext(ctx, `INSERT INTO serving_state_artifacts (id, serving_state_id, workspace_id, environment, digest, format, path, manifest_json) VALUES (?, ?, ?, ?, ?, 'test', ?, '{}')`,
+			"artifact_"+stateID, stateID, workspaceID, environment, "digest_"+stateID, "/tmp/"+stateID); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+type cutoverRuntimeFactory struct {
+	runtimes map[servingstate.ID]*cutoverRuntime
+}
+
+func (f *cutoverRuntimeFactory) Prepare(_ context.Context, input runtimehost.RuntimeInput) (runtimehost.Runtime, error) {
+	runtime := &cutoverRuntime{}
+	f.runtimes[input.State.ID] = runtime
+	return runtime, nil
+}
+
+type cutoverRuntime struct {
+	closeErr error
+}
+
+func (r *cutoverRuntime) Close() error { return r.closeErr }
+
+type emptyManagedDataResolver struct{}
+
+func (emptyManagedDataResolver) ResolveManagedData(context.Context, servingstate.ID) (runtimehost.ManagedDataResolution, error) {
+	return runtimehost.ManagedDataResolution{Roots: map[string]string{}}, nil
 }
 
 func insertReadyRevision(t *testing.T, ctx context.Context, db *sql.DB, collectionID, projectID, connectionName, revisionID string) {

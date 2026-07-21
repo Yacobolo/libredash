@@ -44,7 +44,7 @@ type Prepared interface {
 
 type Runtime interface {
 	Prepare(context.Context, []runtimehost.ServingStateCandidate) (Prepared, error)
-	Commit(Prepared, func() error) error
+	Activate(Prepared, func() error) error
 }
 
 type registryRuntime struct{ registry *runtimehost.Registry }
@@ -65,12 +65,12 @@ func (r registryRuntime) Prepare(ctx context.Context, candidates []runtimehost.S
 	return registryPrepared{set: set}, nil
 }
 
-func (r registryRuntime) Commit(prepared Prepared, activate func() error) error {
+func (r registryRuntime) Activate(prepared Prepared, activate func() error) error {
 	value, ok := prepared.(registryPrepared)
 	if !ok || value.set == nil {
 		return fmt.Errorf("prepared runtimes belong to a different deployment coordinator")
 	}
-	return r.registry.CommitPreparedSet(value.set, activate)
+	return r.registry.ActivatePreparedSet(value.set, activate)
 }
 
 func (p registryPrepared) Snapshots() []runtimehost.PreparedSnapshot { return p.set.Snapshots() }
@@ -161,7 +161,7 @@ func (s *Service) Activate(ctx context.Context, scope Scope) (Deployment, error)
 	}
 
 	var activated Deployment
-	err = s.runtime.Commit(prepared, func() error {
+	err = s.runtime.Activate(prepared, func() error {
 		var activateErr error
 		activated, activateErr = s.repository.ActivateDeployment(ctx, row.ID)
 		return activateErr

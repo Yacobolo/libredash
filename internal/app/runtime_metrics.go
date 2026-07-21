@@ -16,18 +16,8 @@ import (
 	"github.com/Yacobolo/leapview/internal/workspace"
 )
 
-type RuntimeProvider interface {
-	Active(ctx context.Context) (runtimehost.Runtime, error)
-}
-
-type runtimeProvider = RuntimeProvider
-
-type runtimeLeaseProvider interface {
-	Acquire(ctx context.Context) (runtimehost.Lease, error)
-}
-
 type runtimeMetrics struct {
-	provider    runtimeProvider
+	provider    runtimehost.Provider
 	workspaceID string
 }
 
@@ -40,7 +30,7 @@ type dashboardRefreshRuntime struct {
 
 type dynamicRuntimeMetrics struct {
 	defaultID string
-	factory   func(workspaceID string) RuntimeProvider
+	factory   func(workspaceID string) runtimehost.Provider
 	mu        sync.Mutex
 	metrics   map[string]QueryMetrics
 }
@@ -77,11 +67,11 @@ type semanticQueryRuntime interface {
 	PreviewSemantic(ctx context.Context, modelID string, request reportdef.RowQuery) (reportdef.QueryRows, error)
 }
 
-func NewRuntimeMetrics(provider runtimeProvider, workspaceID string) QueryMetrics {
+func NewRuntimeMetrics(provider runtimehost.Provider, workspaceID string) QueryMetrics {
 	return runtimeMetrics{provider: provider, workspaceID: workspaceID}
 }
 
-func NewDynamicRuntimeMetrics(defaultWorkspaceID string, factory func(workspaceID string) RuntimeProvider) QueryMetrics {
+func NewDynamicRuntimeMetrics(defaultWorkspaceID string, factory func(workspaceID string) runtimehost.Provider) QueryMetrics {
 	return &dynamicRuntimeMetrics{
 		defaultID: defaultWorkspaceID,
 		factory:   factory,
@@ -397,13 +387,9 @@ func (m runtimeMetrics) active(ctx context.Context) (runtimehost.Runtime, func()
 	if m.provider == nil {
 		return nil, func() {}, fmt.Errorf("runtime provider is not configured")
 	}
-	if provider, ok := m.provider.(runtimeLeaseProvider); ok {
-		lease, err := provider.Acquire(ctx)
-		if err != nil {
-			return nil, func() {}, err
-		}
-		return lease.Runtime(), lease.Release, nil
+	lease, err := m.provider.Acquire(ctx)
+	if err != nil {
+		return nil, func() {}, err
 	}
-	runtime, err := m.provider.Active(ctx)
-	return runtime, func() {}, err
+	return lease.Runtime(), lease.Release, nil
 }

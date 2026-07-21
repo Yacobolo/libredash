@@ -57,12 +57,7 @@ type MaterializeInput struct {
 
 type RuntimeHost interface {
 	PrepareServingState(ctx context.Context, servingStateID string) (servingstate.PreparedRuntime, error)
-	CommitPrepared(prepared servingstate.PreparedRuntime) error
-	Reload(ctx context.Context) error
-}
-
-type atomicRuntimeHost interface {
-	CommitPreparedWithActivation(servingstate.PreparedRuntime, func() error) error
+	ActivatePrepared(prepared servingstate.PreparedRuntime, activate func() error) error
 }
 
 type RetentionRunner interface {
@@ -301,13 +296,20 @@ func (s Service) ExecuteClaimedJob(ctx context.Context, job materialize.JobRecor
 		s.failJob(ctx, job, childRuns, candidate, err)
 		return err
 	}
-	var prepared servingstate.PreparedRuntime
-	if s.Runtime != nil {
-		prepared, err = s.Runtime.PrepareServingState(ctx, string(candidateState.ID))
-		if err != nil {
-			s.failJob(ctx, job, childRuns, candidate, err)
-			return err
-		}
+	if s.Runtime == nil {
+		err = fmt.Errorf("runtime host is required for refresh activation")
+		s.failJob(ctx, job, childRuns, candidate, err)
+		return err
+	}
+	prepared, err := s.Runtime.PrepareServingState(ctx, string(candidateState.ID))
+	if err != nil {
+		s.failJob(ctx, job, childRuns, candidate, err)
+		return err
+	}
+	if prepared == nil {
+		err = fmt.Errorf("runtime host returned a nil prepared runtime")
+		s.failJob(ctx, job, childRuns, candidate, err)
+		return err
 	}
 	now := time.Now()
 	if s.Now != nil {
@@ -318,26 +320,12 @@ func (s Service) ExecuteClaimedJob(ctx context.Context, job materialize.JobRecor
 		SnapshotID: snapshotID, ServingStateID: string(candidateState.ID), RefreshedAt: now.UTC(),
 		Source: refreshpipeline.DataVersionSourceRefresh, PipelineID: pipelineID, RunID: job.RunID,
 	}
-	if prepared != nil {
-		activate := func() error { return s.activateRefresh(ctx, candidate, dataVersion) }
-		if atomic, ok := s.Runtime.(atomicRuntimeHost); ok {
-			err = atomic.CommitPreparedWithActivation(prepared, activate)
-		} else if err = activate(); err == nil {
-			err = s.Runtime.CommitPrepared(prepared)
-		}
-		if err != nil {
-			_ = prepared.Close()
-			s.failJob(ctx, job, childRuns, candidate, err)
-			return err
-		}
-	} else {
-		if err := s.activateRefresh(ctx, candidate, dataVersion); err != nil {
-			s.failJob(ctx, job, childRuns, candidate, err)
-			return err
-		}
-		if s.Runtime != nil {
-			_ = s.Runtime.Reload(ctx)
-		}
+	activate := func() error { return s.activateRefresh(ctx, candidate, dataVersion) }
+	err = s.Runtime.ActivatePrepared(prepared, activate)
+	if err != nil {
+		_ = prepared.Close()
+		s.failJob(ctx, job, childRuns, candidate, err)
+		return err
 	}
 	if job.TargetType == materialize.TargetRefreshPipeline && s.DataVersions != nil {
 		if publisher, ok := s.Publisher.(interface {
