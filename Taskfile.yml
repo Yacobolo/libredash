@@ -208,6 +208,7 @@ tasks:
       - bun run docs:validate-diagrams
       - go run ./internal/tools/visualdocgen --check
       - go run ./internal/tools/docsitegen --check
+      - go test ./internal/site/http -run '^TestEveryRenderedDocumentationLinkResolves$' -count=1
 
   visual-docs:generate:
     desc: Compile executable visual documentation examples into browser payloads

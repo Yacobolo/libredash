@@ -412,10 +412,10 @@ func TestSiteGettingStartedRendersGuide(t *testing.T) {
 		`<summary title="Visuals"><span class="site-docs-nav-label">Visuals</span></summary>`,
 		`<ul class="site-docs-nav-tree">`,
 		`<a class="site-docs-link" href="/docs/visuals/overview" title="Overview">Overview</a>`,
-		"<h1>Get started with LeapView</h1>",
-		"<h2>Choose your starting point</h2>",
-		"<h2>What you will learn</h2>",
-		"<h2>Explore by goal</h2>",
+		`<h1 id="get-started-with-leapview">Get started with LeapView</h1>`,
+		`<h2 id="choose-your-starting-point">Choose your starting point</h2>`,
+		`<h2 id="what-you-will-learn">What you will learn</h2>`,
+		`<h2 id="explore-by-goal">Explore by goal</h2>`,
 		`href="/docs/installation"`,
 		`href="/docs/first-dashboard"`,
 		`href="/docs/guides/build"`,
@@ -545,7 +545,7 @@ func TestSiteDocumentationSupportsNestedArticleSlugs(t *testing.T) {
 		t.Fatalf("nested documentation status = %d, want %d", response.StatusCode, http.StatusOK)
 	}
 	body := readBody(t, response)
-	for _, want := range []string{"<h1>Query and interaction lifecycle</h1>", "Core concepts", "Datastar signal flow", "About this page", "Edit this page"} {
+	for _, want := range []string{`<h1 id="query-and-interaction-lifecycle">Query and interaction lifecycle</h1>`, "Core concepts", "Datastar signal flow", "About this page", "Edit this page"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("nested documentation missing %q", want)
 		}
@@ -788,7 +788,7 @@ func TestSiteAPIReferenceIsGeneratedFromOpenAPI(t *testing.T) {
 		t.Fatalf("API reference status = %d, want %d", response.StatusCode, http.StatusOK)
 	}
 	body := readBody(t, response)
-	for _, want := range []string{"<title>Workspaces</title>", "<h1>Workspaces</h1>", "Get the active asset graph", "<code>GET /api/v1/workspaces"} {
+	for _, want := range []string{"<title>Workspaces</title>", `<h1 id="workspaces">Workspaces</h1>`, "Get the active asset graph", "<code>GET /api/v1/workspaces"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("API reference missing %q:\n%s", want, body)
 		}
@@ -862,10 +862,10 @@ func TestSiteCLIReferenceGroupsSubcommandsAndRedirectsLeafPages(t *testing.T) {
 	}
 	body := readBody(t, article)
 	for _, want := range []string{
-		`<h1>leapview semantic-models</h1>`,
+		`<h1 id="leapview-semantic-models">leapview semantic-models</h1>`,
 		`<h2 id="subcommands">Subcommands</h2>`,
 		`<h3 id="query">query</h3>`,
-		`<h4>Usage</h4>`,
+		`<h4 id="usage-1">Usage</h4>`,
 		`leapview semantic-models query &lt;model&gt; &lt;dataset&gt;`,
 		`href="/docs/cli/commands/semantic-models-query.json"`,
 	} {
@@ -970,7 +970,7 @@ func TestSiteChartDocumentationArticleRendersConfiguration(t *testing.T) {
 		"<title>Line chart</title>",
 		`data-init="@get(&#39;/updates?view=visual-docs&amp;document=visuals%2Fline&#39;, {openWhenHidden: true})"`,
 		`<nav class="site-docs-breadcrumb" aria-label="Breadcrumb"><ol><li><a href="/docs/visuals/overview">Visuals</a></li><li><span aria-current="page">Line chart</span></li></ol></nav>`,
-		"<h1>Line chart</h1>",
+		`<h1 id="line-chart">Line chart</h1>`,
 		`<h2 id="site-visual-api-reference">API reference</h2>`,
 		`<table aria-labelledby="site-visual-api-reference">`,
 		`<th scope="col">Field</th><th scope="col">Type</th><th scope="col">Default</th><th scope="col">Allowed values</th><th scope="col">Description</th>`,
@@ -981,7 +981,7 @@ func TestSiteChartDocumentationArticleRendersConfiguration(t *testing.T) {
 		`<lv-site-visual-example example-id="revenue_line_step"></lv-site-visual-example>`,
 		`<div class="site-visual-key-fields" aria-label="Key fields" data-key-fields="[&#34;query.dimensions&#34;,&#34;query.measures&#34;]">`,
 		`<button type="button" class="site-visual-key-field" data-visual-key-field="options.step" aria-label="Highlight options.step in YAML"><code>options.step</code></button>`,
-		"<h2>Basic</h2>",
+		`<h2 id="basic">Basic</h2>`,
 		"type: line",
 		"visual-example=revenue_line_step",
 		`href="/docs/visuals/line"`,
@@ -995,7 +995,7 @@ func TestSiteChartDocumentationArticleRendersConfiguration(t *testing.T) {
 	if strings.Contains(body, `class="site-visual-api-summary"`) || strings.Contains(body, `class="site-visual-field-reference"`) {
 		t.Error("API reference is rendered inside a visual-specific container instead of the article's Markdown flow")
 	}
-	stepped := strings.Index(body, "<h2>Stepped line</h2>")
+	stepped := strings.Index(body, `<h2 id="stepped-line">Stepped line</h2>`)
 	api := strings.Index(body, `<h2 id="site-visual-api-reference">API reference</h2>`)
 	about := strings.Index(body, `<h2 id="site-docs-about-this-page">About this page</h2>`)
 	if stepped < 0 || api < stepped || about < api {
@@ -1043,7 +1043,7 @@ func TestSiteServesGeneratedConfigurationReferenceAndSchema(t *testing.T) {
 		t.Fatalf("project configuration status = %d, want %d", article.StatusCode, http.StatusOK)
 	}
 	body := readBody(t, article)
-	for _, want := range []string{"<h1>Project configuration</h1>", "<h2>Example</h2>", "<h2>Fields</h2>", "/docs/schemas/project.schema.json", `href="/docs/config/project"`} {
+	for _, want := range []string{`<h1 id="project-configuration">Project configuration</h1>`, `<h2 id="example">Example</h2>`, `<h2 id="fields">Fields</h2>`, "/docs/schemas/project.schema.json", `href="/docs/config/project"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("project configuration reference missing %q:\n%s", want, body)
 		}

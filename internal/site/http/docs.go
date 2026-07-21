@@ -23,7 +23,7 @@ import (
 
 var markdownRenderer = goldmark.New(
 	goldmark.WithExtensions(extension.GFM),
-	goldmark.WithParserOptions(parser.WithAttribute()),
+	goldmark.WithParserOptions(parser.WithAttribute(), parser.WithAutoHeadingID()),
 	goldmark.WithRendererOptions(renderer.WithNodeRenderers(util.Prioritized(semanticTableCellRenderer{}, 100))),
 )
 
