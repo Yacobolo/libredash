@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -19,6 +20,7 @@ import (
 	"github.com/Yacobolo/leapview/internal/api"
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	"github.com/Yacobolo/leapview/internal/platform"
+	productsearch "github.com/Yacobolo/leapview/internal/search"
 	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
 	"github.com/Yacobolo/leapview/internal/workspace"
 	"github.com/Yacobolo/leapview/pkg/pagestream"
@@ -191,6 +193,69 @@ func TestChatReferenceSearchWithoutWorkspaceSearchesVisibleWorkspaces(t *testing
 		if !strings.Contains(rec.Body.String(), want) {
 			t.Fatalf("global reference search missing %q:\n%s", want, rec.Body.String())
 		}
+	}
+}
+
+func TestChatReferenceDiscoveryOnlyReturnsAttachableAnalyticsTypes(t *testing.T) {
+	store := testStore(t)
+	seedEnvironmentAssetDeployment(t, store, "sales", servingstate.DefaultEnvironment, "Orders dashboard", "Sales Warehouse")
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, DefaultWorkspaceID: "sales"})
+
+	results, err := server.searchAgentReferences(
+		httptest.NewRequest(http.MethodGet, "/chats/references/search", nil),
+		agent.TurnContext{WorkspaceID: "sales"}, "", 50,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) == 0 {
+		t.Fatal("agent reference discovery returned no attachable results")
+	}
+	allowed := map[string]bool{"visual": true, "dashboard": true, "page": true, "measure": true, "semantic_model": true}
+	for _, result := range results {
+		if !allowed[result.Reference.Type] {
+			t.Fatalf("agent reference discovery returned non-attachable type %q: %#v", result.Reference.Type, results)
+		}
+	}
+}
+
+func TestAgentReferenceSignalBuildsCompactHierarchy(t *testing.T) {
+	tests := map[string]struct {
+		result productsearch.Result
+		want   []string
+	}{
+		"visual": {
+			result: productsearch.Result{
+				Reference: productsearch.Reference{WorkspaceID: "sales", Type: productsearch.TypeVisual, ID: "executive-sales.revenue"},
+				Workspace: productsearch.Workspace{ID: "sales", Name: "Sales"},
+				Locations: []productsearch.Location{{DashboardName: "Executive Sales", PageName: "Overview"}},
+			},
+			want: []string{"Sales", "Executive Sales", "Overview"},
+		},
+		"page": {
+			result: productsearch.Result{
+				Reference: productsearch.Reference{WorkspaceID: "sales", Type: productsearch.TypePage, ID: "executive-sales.overview"},
+				Workspace: productsearch.Workspace{ID: "sales", Name: "Sales"},
+				Locations: []productsearch.Location{{DashboardName: "Executive Sales", PageName: "Overview"}},
+			},
+			want: []string{"Sales", "Executive Sales"},
+		},
+		"measure": {
+			result: productsearch.Result{
+				Reference: productsearch.Reference{WorkspaceID: "sales", Type: productsearch.TypeMeasure, ID: "orders.revenue"},
+				Workspace: productsearch.Workspace{ID: "sales", Name: "Sales"},
+				Hierarchy: []productsearch.HierarchyItem{{Type: productsearch.TypeSemanticModel, ID: "orders", Name: "Orders"}},
+			},
+			want: []string{"Sales", "Orders"},
+		},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			got := agentReferenceSignal(test.result)
+			if !slices.Equal(got.Hierarchy, test.want) {
+				t.Fatalf("hierarchy = %#v, want %#v", got.Hierarchy, test.want)
+			}
+		})
 	}
 }
 

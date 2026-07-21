@@ -3,6 +3,7 @@ package search
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/Yacobolo/leapview/internal/access"
@@ -110,6 +111,43 @@ func TestNormalizeQueryKeepsTextualTypeTermsWhenExplicitFiltersArePresent(t *tes
 	}
 	if got.Text != "dashboard" || len(got.Types) != 1 || got.Types[0] != TypeMeasure {
 		t.Fatalf("normalized query = %#v", got)
+	}
+}
+
+func TestNormalizeQueryConstrainsResultsToAllowedTypes(t *testing.T) {
+	tests := map[string]struct {
+		query     Query
+		wantText  string
+		wantTypes []Type
+		noTypes   bool
+	}{
+		"untyped query uses allowlist": {
+			query:    Query{Text: "revenue", AllowedTypes: []Type{TypeVisual, TypeMeasure}},
+			wantText: "revenue", wantTypes: []Type{TypeMeasure, TypeVisual},
+		},
+		"implicit type intersects allowlist": {
+			query:     Query{Text: "dashboar", AllowedTypes: []Type{TypeVisual, TypeDashboard}},
+			wantTypes: []Type{TypeDashboard},
+		},
+		"disallowed implicit type returns no candidates": {
+			query:   Query{Text: "source", AllowedTypes: []Type{TypeVisual, TypeDashboard}},
+			noTypes: true,
+		},
+		"explicit public filter keeps textual type semantics": {
+			query:    Query{Text: "dashboard", Types: []Type{TypeMeasure}, AllowedTypes: []Type{TypeVisual, TypeMeasure}},
+			wantText: "dashboard", wantTypes: []Type{TypeMeasure},
+		},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			got, err := normalizeQuery(Subject{}, test.query)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Text != test.wantText || got.NoTypes != test.noTypes || !slices.Equal(got.Types, test.wantTypes) {
+				t.Fatalf("normalized query = %#v, want text=%q types=%#v noTypes=%v", got, test.wantText, test.wantTypes, test.noTypes)
+			}
+		})
 	}
 }
 

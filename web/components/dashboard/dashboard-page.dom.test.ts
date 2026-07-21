@@ -691,9 +691,9 @@ test('dashboard agent drawer carries page context and explicit visual references
       mergePatch({ agentReferenceSearch: {
         query: 'orders', requestId: 1,
         results: [
-		  { reference: { workspaceId: 'sales', type: 'visual', id: 'executive-sales.orders_chart' }, name: 'Orders by status', workspace: { id: 'sales', name: 'Sales' }, href: '/orders', locations: [{ dashboardId: 'executive-sales', pageId: 'overview', href: '/orders' }], context: ['current_page'] },
-		  { reference: { workspaceId: 'finance', type: 'visual', id: 'executive-sales.foreign_orders' }, name: 'Finance orders', description: 'From another workspace', workspace: { id: 'finance', name: 'Finance' }, href: '/finance', locations: [{ dashboardId: 'executive-sales', pageId: 'overview', href: '/finance' }], context: [] },
-		  { reference: { workspaceId: 'sales', type: 'measure', id: 'olist.order_count' }, name: 'Orders count', description: 'Across the sales workspace', workspace: { id: 'sales', name: 'Sales' }, href: '/measure', locations: [], context: ['current_workspace'] },
+		  { reference: { workspaceId: 'sales', type: 'visual', id: 'executive-sales.orders_chart' }, name: 'Orders by status', workspace: { id: 'sales', name: 'Sales' }, hierarchy: ['Sales', 'Executive Sales', 'Overview'], href: '/orders', locations: [{ dashboardId: 'executive-sales', pageId: 'overview', href: '/orders' }], context: ['current_page'] },
+		  { reference: { workspaceId: 'finance', type: 'visual', id: 'executive-sales.foreign_orders' }, name: 'Finance orders', description: 'From another workspace', workspace: { id: 'finance', name: 'Finance' }, hierarchy: ['Finance', 'Executive Sales', 'Overview'], href: '/finance', locations: [{ dashboardId: 'executive-sales', pageId: 'overview', href: '/finance' }], context: [] },
+		  { reference: { workspaceId: 'sales', type: 'measure', id: 'olist.order_count' }, name: 'Orders count', description: 'Across the sales workspace', workspace: { id: 'sales', name: 'Sales' }, hierarchy: ['Sales', 'Olist'], href: '/measure', locations: [], context: ['current_workspace'] },
         ],
       } })
       await element.updateComplete
@@ -714,9 +714,9 @@ test('dashboard agent drawer carries page context and explicit visual references
     })
     expect(groupedSearch.labels).toEqual(['On this page', 'All accessible'])
     expect(groupedSearch.options[0]).toContain('Orders')
-	expect(groupedSearch.onPage).not.toContain('Finance orders Visual · Finance · From another workspace')
-	expect(groupedSearch.accessible).toContain('Finance orders Visual · Finance · From another workspace')
-	expect(groupedSearch.options.at(-1)).toBe('Orders count Measure · Sales · Across the sales workspace')
+	expect(groupedSearch.onPage).not.toContain('Finance orders Finance › Executive Sales › Overview Visual')
+	expect(groupedSearch.accessible).toContain('Finance orders Finance › Executive Sales › Overview Visual')
+	expect(groupedSearch.options.at(-1)).toBe('Orders count Sales › Olist Measure')
 
     await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
       const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev')
@@ -776,6 +776,7 @@ test('dashboard agent drawer carries page context and explicit visual references
 		reference: { workspaceId: 'sales', type: 'visual', id: 'executive-sales.orders_chart' },
 		name: 'Orders by status',
 		workspace: { id: 'sales', name: 'sales' },
+		hierarchy: ['sales', 'Executive Sales Dashboard', 'Overview'],
 		href: '/workspaces/sales/dashboards/executive-sales/pages/overview',
 		locations: [{ dashboardId: 'executive-sales', dashboardName: 'Executive Sales Dashboard', pageId: 'overview', pageName: 'Overview', href: '/workspaces/sales/dashboards/executive-sales/pages/overview' }],
 		context: ['current_page', 'current_dashboard', 'current_workspace'],

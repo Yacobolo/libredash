@@ -411,6 +411,7 @@ model AgentReferenceSignal {
   `name`: string;
   `description`?: string;
   `workspace`: AgentReferenceWorkspaceSignal;
+	`hierarchy`: string[];
   `href`: string;
   `locations`: AgentReferenceLocationSignal[];
   `context`: string[];

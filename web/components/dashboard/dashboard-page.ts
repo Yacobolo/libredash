@@ -644,6 +644,7 @@ class LeapViewDashboardPage extends DatastarLit(LitElement) {
 			reference: { workspaceId, type: 'visual', id: `${page.dashboardId}.${component.visual}` },
 			name: component.title || visual.title || component.visual,
 			workspace: { id: workspaceId, name: workspaceId },
+			hierarchy: [workspaceId, this.agentContext?.dashboardTitle ?? page.dashboardTitle, page.pageTitle].filter(Boolean),
 			href,
 			locations: [{ dashboardId: page.dashboardId, dashboardName: this.agentContext?.dashboardTitle, pageId: page.pageId, pageName: page.pageTitle, href }],
 			context: ['current_page', 'current_dashboard', 'current_workspace'],

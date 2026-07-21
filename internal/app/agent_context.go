@@ -29,6 +29,10 @@ func (s *Server) resolveAgentTurnContext(r *http.Request, scope agent.Scope, can
 		defaultWorkspaceID := firstNonEmpty(candidate.WorkspaceID, s.defaultWorkspaceID)
 		references := make([]productsearch.Reference, 0, len(candidate.References))
 		for _, reference := range candidate.References {
+			typ := productsearch.Type(strings.ToLower(strings.TrimSpace(reference.Reference.Type)))
+			if !isAgentReferenceType(typ) {
+				continue
+			}
 			workspaceID := firstNonEmpty(reference.Reference.WorkspaceID, defaultWorkspaceID)
 			if workspaceID == "" {
 				continue
@@ -40,7 +44,7 @@ func (s *Server) resolveAgentTurnContext(r *http.Request, scope agent.Scope, can
 			}
 			references = append(references, productsearch.Reference{
 				WorkspaceID: workspaceID,
-				Type:        productsearch.Type(reference.Reference.Type),
+				Type:        typ,
 				ID:          reference.Reference.ID,
 			})
 		}

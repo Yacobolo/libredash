@@ -260,8 +260,8 @@ class ChatDrawer extends DatastarLit(LitElement) {
 		const selections = currentFilters.selections?.length ?? 0
 		const searchResults = this.referenceSearch.results ?? []
 		const pinnedSuggestions = mergeReferences(
-			this.suggestions,
 			searchResults.filter((reference) => isOnPageReference(reference, context)),
+			this.suggestions,
 		)
 		const workspaceSuggestions = searchResults.filter((reference) => !isOnPageReference(reference, context))
     const conversationHref = agent.activeConversationId

@@ -53,7 +53,7 @@ func (r *Repository) Candidates(ctx context.Context, query productsearch.Reposit
 	if r == nil || r.database == nil {
 		return nil, false, fmt.Errorf("search repository is not configured")
 	}
-	if query.NoWorkspaces || limit <= 0 {
+	if query.NoWorkspaces || query.NoTypes || limit <= 0 {
 		return []productsearch.Candidate{}, false, nil
 	}
 	if offset < 0 {
@@ -270,6 +270,7 @@ func (r *Repository) hydrateCandidate(ctx context.Context, document document, co
 	result := productsearch.Result{
 		Reference: reference, Name: firstNonEmpty(document.title, reference.ID), Description: document.description,
 		Workspace: productsearch.Workspace{ID: document.workspaceID, Name: firstNonEmpty(document.workspaceTitle, document.workspaceID)},
+		Hierarchy: ancestorHierarchy(ancestors),
 		Href:      href, Locations: locations, Context: contextTags,
 	}
 	object := securityObject(document, ancestors)
@@ -287,6 +288,21 @@ func (r *Repository) hydrateCandidate(ctx context.Context, document document, co
 		Result: result, Object: object, LocationObjects: locationObjects,
 		RequireLocation: document.assetType == "visual" || document.assetType == "filter",
 	}, nil
+}
+
+func ancestorHierarchy(ancestors []document) []productsearch.HierarchyItem {
+	out := make([]productsearch.HierarchyItem, 0, len(ancestors))
+	for index := len(ancestors) - 1; index >= 0; index-- {
+		ancestor := ancestors[index]
+		if ancestor.assetType == "catalog" {
+			continue
+		}
+		out = append(out, productsearch.HierarchyItem{
+			Type: publicType(ancestor.assetType), ID: publicID(ancestor),
+			Name: firstNonEmpty(ancestor.title, publicID(ancestor)),
+		})
+	}
+	return out
 }
 
 func (r *Repository) ancestors(ctx context.Context, value document) ([]document, error) {

@@ -13,6 +13,7 @@ import {
   normalizeReferenceLimit,
   normalizedReferenceQuery,
   referenceIcon,
+	referenceHierarchy,
   referenceIdentity,
   referenceKindLabel,
   uniqueReferences,
@@ -185,28 +186,30 @@ class ChatComposer extends LitElement {
 		}
 
 		.mention-copy {
-			display: flex;
+			display: grid;
 			min-width: 0;
 			align-items: baseline;
+			grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) 88px;
 			gap: var(--lv-space-sm);
 		}
 
 		.mention-title,
-		.mention-description {
+		.mention-hierarchy,
+		.mention-type {
 			overflow: hidden;
 			text-overflow: ellipsis;
 			white-space: nowrap;
 		}
 
-		.mention-description {
+		.mention-hierarchy,
+		.mention-type {
 			min-width: 0;
-			flex: 1 1 auto;
 			color: var(--lv-fg-muted);
 			font-size: var(--lv-font-size-caption);
 		}
 
-		.mention-title {
-			flex: 0 1 auto;
+		.mention-type {
+			text-align: right;
 		}
 
 		.mention-status {
@@ -509,12 +512,13 @@ class ChatComposer extends LitElement {
 
 	private renderMentionOption(reference: ChatContextReference, index: number) {
 		const kindLabel = referenceKindLabel(reference.reference.type)
+		const hierarchy = referenceHierarchy(reference).join(' › ')
 		return html`
 			<button
 				type="button"
 				class="mention-option"
 				role="option"
-				aria-label=${`${reference.name}, ${kindLabel}${reference.description ? `, ${reference.description}` : ''}`}
+				aria-label=${[reference.name, hierarchy, kindLabel].filter(Boolean).join(', ')}
 				aria-selected=${String(index === this.mentionIndex)}
 				data-active=${String(index === this.mentionIndex)}
 				@mousedown=${(event: MouseEvent) => event.preventDefault()}
@@ -523,7 +527,8 @@ class ChatComposer extends LitElement {
 				<span class="mention-icon" aria-hidden="true">${referenceIcon(reference.reference.type)}</span>
 				<span class="mention-copy">
 					<span class="mention-title">${reference.name}</span>
-					<span class="mention-description">${kindLabel} · ${reference.workspace.name}${reference.description ? ` · ${reference.description}` : ''}</span>
+					<span class="mention-hierarchy">${hierarchy}</span>
+					<span class="mention-type">${kindLabel}</span>
 				</span>
 			</button>
 		`

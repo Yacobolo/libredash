@@ -10,6 +10,24 @@ import (
 	uisignals "github.com/Yacobolo/leapview/internal/ui/signals"
 )
 
+var agentReferenceTypes = []productsearch.Type{
+	productsearch.TypeVisual,
+	productsearch.TypeDashboard,
+	productsearch.TypePage,
+	productsearch.TypeMeasure,
+	productsearch.TypeSemanticModel,
+}
+
+func isAgentReferenceType(typ productsearch.Type) bool {
+	switch typ {
+	case productsearch.TypeVisual, productsearch.TypeDashboard, productsearch.TypePage,
+		productsearch.TypeMeasure, productsearch.TypeSemanticModel:
+		return true
+	default:
+		return false
+	}
+}
+
 func (s *Server) searchAgentReferences(r *http.Request, context agent.TurnContext, query string, limit int) ([]uisignals.AgentReferenceSignal, error) {
 	if s.search == nil {
 		return nil, errors.New("search is not configured")
@@ -20,6 +38,7 @@ func (s *Server) searchAgentReferences(r *http.Request, context agent.TurnContex
 	}
 	page, err := s.search.Search(r.Context(), subject, productsearch.Query{
 		Text: strings.TrimSpace(query), Environment: string(s.requestServingEnvironment(r)), Limit: limit,
+		AllowedTypes: agentReferenceTypes,
 		Context: productsearch.SearchContext{
 			WorkspaceID: strings.TrimSpace(context.WorkspaceID),
 			DashboardID: strings.TrimSpace(context.DashboardID),
@@ -52,8 +71,40 @@ func agentReferenceSignal(result productsearch.Result) uisignals.AgentReferenceS
 		Reference: uisignals.AgentReferenceKeySignal{WorkspaceID: result.Reference.WorkspaceID, Type: string(result.Reference.Type), ID: result.Reference.ID},
 		Name:      result.Name, Description: uisignals.Optional(result.Description),
 		Workspace: uisignals.AgentReferenceWorkspaceSignal{ID: result.Workspace.ID, Name: result.Workspace.Name},
+		Hierarchy: agentReferenceHierarchy(result),
 		Href:      result.Href, Locations: locations, Context: contextTags,
 	}
+}
+
+func agentReferenceHierarchy(result productsearch.Result) []string {
+	hierarchy := make([]string, 0, 3)
+	if name := strings.TrimSpace(result.Workspace.Name); name != "" {
+		hierarchy = append(hierarchy, name)
+	}
+	appendName := func(name string) {
+		name = strings.TrimSpace(name)
+		if name != "" && (len(hierarchy) == 0 || hierarchy[len(hierarchy)-1] != name) {
+			hierarchy = append(hierarchy, name)
+		}
+	}
+	switch result.Reference.Type {
+	case productsearch.TypeVisual:
+		if len(result.Locations) > 0 {
+			appendName(result.Locations[0].DashboardName)
+			appendName(result.Locations[0].PageName)
+		}
+	case productsearch.TypePage:
+		if len(result.Locations) > 0 {
+			appendName(result.Locations[0].DashboardName)
+		}
+	case productsearch.TypeMeasure:
+		for _, ancestor := range result.Hierarchy {
+			if ancestor.Type == productsearch.TypeSemanticModel {
+				appendName(ancestor.Name)
+			}
+		}
+	}
+	return hierarchy
 }
 
 func agentTurnReference(result productsearch.Result) agent.TurnReference {

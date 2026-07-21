@@ -114,13 +114,22 @@ const (
 )
 
 type Result struct {
-	Reference   Reference    `json:"reference"`
-	Name        string       `json:"name"`
-	Description string       `json:"description,omitempty"`
-	Workspace   Workspace    `json:"workspace"`
-	Href        string       `json:"href"`
-	Locations   []Location   `json:"locations"`
-	Context     []ContextTag `json:"context"`
+	Reference   Reference       `json:"reference"`
+	Name        string          `json:"name"`
+	Description string          `json:"description,omitempty"`
+	Workspace   Workspace       `json:"workspace"`
+	Hierarchy   []HierarchyItem `json:"-"`
+	Href        string          `json:"href"`
+	Locations   []Location      `json:"locations"`
+	Context     []ContextTag    `json:"context"`
+}
+
+// HierarchyItem is an internal projection of a result's navigable ancestors.
+// Public search transports remain free to expose their own stable result shape.
+type HierarchyItem struct {
+	Type Type
+	ID   string
+	Name string
 }
 
 type Page struct {
@@ -139,9 +148,13 @@ type Query struct {
 	Environment string
 	Workspaces  []string
 	Types       []Type
-	Context     SearchContext
-	Limit       int
-	Cursor      string
+	// AllowedTypes constrains product-owned search surfaces without changing the
+	// meaning of a caller-supplied Types filter. It is intentionally not exposed
+	// by the public API.
+	AllowedTypes []Type
+	Context      SearchContext
+	Limit        int
+	Cursor       string
 }
 
 // Subject is the authenticated search caller. Restricted workspace IDs are
@@ -163,6 +176,7 @@ type RepositoryQuery struct {
 	Types        []Type
 	Context      SearchContext
 	NoWorkspaces bool
+	NoTypes      bool
 }
 
 type Candidate struct {
@@ -379,24 +393,28 @@ func normalizeQuery(subject Subject, query Query) (RepositoryQuery, error) {
 			workspaces = filtered
 		}
 	}
-	types := append([]Type(nil), query.Types...)
-	seenTypes := map[Type]struct{}{}
-	normalizedTypes := make([]Type, 0, len(types))
-	for _, typ := range types {
-		typ = Type(strings.ToLower(strings.TrimSpace(string(typ))))
-		if _, ok := validTypes[typ]; !ok {
-			return RepositoryQuery{}, fmt.Errorf("unknown search type %q", typ)
-		}
-		if _, duplicate := seenTypes[typ]; duplicate {
-			continue
-		}
-		seenTypes[typ] = struct{}{}
-		normalizedTypes = append(normalizedTypes, typ)
+	normalizedTypes, err := normalizeTypes(query.Types)
+	if err != nil {
+		return RepositoryQuery{}, err
 	}
-	sort.Slice(normalizedTypes, func(i, j int) bool { return normalizedTypes[i] < normalizedTypes[j] })
+	allowedTypes, err := normalizeTypes(query.AllowedTypes)
+	if err != nil {
+		return RepositoryQuery{}, err
+	}
 	text := strings.TrimSpace(query.Text)
+	typeOperator := false
 	if len(normalizedTypes) == 0 {
 		text, normalizedTypes = implicitTypeFilters(text)
+		typeOperator = len(normalizedTypes) > 0
+	}
+	noTypes := false
+	if len(allowedTypes) > 0 {
+		if len(normalizedTypes) == 0 && !typeOperator {
+			normalizedTypes = allowedTypes
+		} else {
+			normalizedTypes = intersectTypes(normalizedTypes, allowedTypes)
+			noTypes = len(normalizedTypes) == 0
+		}
 	}
 	context := query.Context
 	context.WorkspaceID = strings.TrimSpace(context.WorkspaceID)
@@ -406,7 +424,40 @@ func normalizeQuery(subject Subject, query Query) (RepositoryQuery, error) {
 		Text: text, Environment: strings.TrimSpace(query.Environment),
 		Workspaces: workspaces, Types: normalizedTypes, Context: context,
 		NoWorkspaces: subject.Restricted && len(workspaces) == 0,
+		NoTypes:      noTypes,
 	}, nil
+}
+
+func normalizeTypes(values []Type) ([]Type, error) {
+	seen := map[Type]struct{}{}
+	out := make([]Type, 0, len(values))
+	for _, typ := range values {
+		typ = Type(strings.ToLower(strings.TrimSpace(string(typ))))
+		if _, ok := validTypes[typ]; !ok {
+			return nil, fmt.Errorf("unknown search type %q", typ)
+		}
+		if _, duplicate := seen[typ]; duplicate {
+			continue
+		}
+		seen[typ] = struct{}{}
+		out = append(out, typ)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out, nil
+}
+
+func intersectTypes(left, right []Type) []Type {
+	allowed := make(map[Type]struct{}, len(right))
+	for _, typ := range right {
+		allowed[typ] = struct{}{}
+	}
+	out := make([]Type, 0, len(left))
+	for _, typ := range left {
+		if _, ok := allowed[typ]; ok {
+			out = append(out, typ)
+		}
+	}
+	return out
 }
 
 func implicitTypeFilters(text string) (string, []Type) {

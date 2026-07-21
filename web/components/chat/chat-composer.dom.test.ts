@@ -184,6 +184,7 @@ test('composer searches for and attaches typed @ references with spaces', async 
         href: '/workspaces/sales/dashboards/executive-sales/pages/overview',
         locations: [],
         context: [],
+		hierarchy: ['Sales', 'Executive Sales', 'Overview'],
       }
       element.suggestions = [reference]
       await element.updateComplete
@@ -210,7 +211,7 @@ test('composer searches for and attaches typed @ references with spaces', async 
 
     expect(result).toEqual({
       searches: ['orders by'],
-      optionText: 'Orders Visual · Sales · Overview · Executive Sales',
+      optionText: 'Orders Sales › Executive Sales › Overview Visual',
       draftAfterReference: 'Compare',
       submitted: {
         input: 'Compare this with last month',
@@ -222,6 +223,7 @@ test('composer searches for and attaches typed @ references with spaces', async 
           href: '/workspaces/sales/dashboards/executive-sales/pages/overview',
           locations: [],
           context: [],
+		  hierarchy: ['Sales', 'Executive Sales', 'Overview'],
         }],
       },
     })
@@ -300,6 +302,8 @@ test('mention picker opens immediately, renders compact rows, and scrolls with k
       const picker = root.querySelector('.mention-picker') as HTMLElement
       const firstOption = root.querySelector('.mention-option') as HTMLElement
       const copy = root.querySelector('.mention-copy') as HTMLElement
+	  const hierarchy = root.querySelector('.mention-hierarchy') as HTMLElement
+	  const type = root.querySelector('.mention-type') as HTMLElement
       const initialScrollTop = picker.scrollTop
       for (let index = 0; index < 7; index += 1) {
         textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, composed: true }))
@@ -314,6 +318,9 @@ test('mention picker opens immediately, renders compact rows, and scrolls with k
         immediate,
         optionHeight: Math.round(firstOption.getBoundingClientRect().height),
         copyDisplay: getComputedStyle(copy).display,
+		hierarchyText: hierarchy.textContent?.trim(),
+		typeText: type.textContent?.trim(),
+		descriptionVisible: Boolean(root.querySelector('.mention-description')),
         scrolled: picker.scrollTop > initialScrollTop,
         activeText: active.textContent?.replace(/\s+/g, ' ').trim(),
         activeVisible: activeBox.top >= pickerBox.top && activeBox.bottom <= pickerBox.bottom,
@@ -322,7 +329,10 @@ test('mention picker opens immediately, renders compact rows, and scrolls with k
 
     expect(result.immediate).toEqual({ visible: true, busy: 'true', status: 'Searching…' })
     expect(result.optionHeight).toBeLessThanOrEqual(32)
-    expect(result.copyDisplay).toBe('flex')
+    expect(result.copyDisplay).toBe('grid')
+	expect(result.hierarchyText).toBe('Sales')
+	expect(result.typeText).toBe('Visual')
+	expect(result.descriptionVisible).toBe(false)
     expect(result.scrolled).toBe(true)
     expect(result.activeText).toContain('Result 8')
     expect(result.activeVisible).toBe(true)
@@ -385,11 +395,11 @@ test('mention picker ignores search responses from an older request', async () =
       { query: 'orders', requestId: 1 },
       { query: 'revenue', requestId: 2 },
     ])
-	expect(result.firstVisible).toBe('Orders Visual · Sales')
+	expect(result.firstVisible).toBe('Orders Sales Visual')
     expect(result.staleVisible).toBe('')
     expect(result.staleStatus).toBe('Searching…')
-	expect(result.currentVisible).toBe('Revenue Measure · Sales')
-	expect(result.afterLateStale).toBe('Revenue Measure · Sales')
+	expect(result.currentVisible).toBe('Revenue Sales Measure')
+	expect(result.afterLateStale).toBe('Revenue Sales Measure')
   } finally {
     await page.close()
   }
@@ -404,12 +414,13 @@ test('mention picker pins on-page results above deduplicated accessible results'
       const onPage = {
 		reference: { workspaceId: 'sales', type: 'visual', id: 'orders-on-page' },
 		name: 'Orders on this page', description: 'Overview', workspace: { id: 'sales', name: 'Sales' },
+		hierarchy: ['Sales', 'Executive Sales', 'Overview'],
 		href: '/overview', locations: [{ dashboardId: 'executive-sales', pageId: 'overview', href: '/overview' }], context: ['current_page'],
       }
       element.pinnedSuggestions = [onPage]
       element.suggestions = [
         onPage,
-		{ reference: { workspaceId: 'sales', type: 'measure', id: 'orders-workspace' }, name: 'Orders workspace measure', description: 'Sales model', workspace: { id: 'sales', name: 'Sales' }, href: '/measure', locations: [], context: [] },
+		{ reference: { workspaceId: 'sales', type: 'measure', id: 'orders-workspace' }, name: 'Orders workspace measure', description: 'Sales model', workspace: { id: 'sales', name: 'Sales' }, hierarchy: ['Sales', 'Sales model'], href: '/measure', locations: [], context: [] },
       ]
       await element.updateComplete
       const textarea = element.shadowRoot.querySelector('textarea') as HTMLTextAreaElement
@@ -425,7 +436,7 @@ test('mention picker pins on-page results above deduplicated accessible results'
     })
 
     expect(result.labels).toEqual(['On this page', 'All accessible'])
-	expect(result.options).toEqual(['Orders on this page Visual · Sales · Overview', 'Orders workspace measure Measure · Sales · Sales model'])
+	expect(result.options).toEqual(['Orders on this page Sales › Executive Sales › Overview Visual', 'Orders workspace measure Sales › Sales model Measure'])
   } finally {
     await page.close()
   }

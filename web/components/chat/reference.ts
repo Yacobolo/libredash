@@ -55,8 +55,23 @@ export function matchesReferenceQuery(reference: AgentReferenceSignal, query: st
     .split(/[^\p{L}\p{N}_]+/u)
     .filter((token) => token !== '' && !mentionStopWords.has(token))
   if (tokens.length === 0) return true
-  const haystack = `${reference.name} ${reference.description ?? ''} ${reference.reference.type} ${reference.workspace.name}`.toLocaleLowerCase()
+  const haystack = `${reference.name} ${reference.description ?? ''} ${reference.reference.type} ${referenceHierarchy(reference).join(' ')}`.toLocaleLowerCase()
   return tokens.every((token) => haystack.includes(token))
+}
+
+export function referenceHierarchy(reference: AgentReferenceSignal): string[] {
+	const projected = (reference.hierarchy ?? []).map((part) => part.trim()).filter(Boolean)
+	if (projected.length > 0) return projected
+
+	const hierarchy = [reference.workspace.name.trim()].filter(Boolean)
+	const location = reference.locations[0]
+	if (reference.reference.type === 'page' || reference.reference.type === 'visual') {
+		if (location?.dashboardName?.trim()) hierarchy.push(location.dashboardName.trim())
+	}
+	if (reference.reference.type === 'visual' && location?.pageName?.trim()) {
+		hierarchy.push(location.pageName.trim())
+	}
+	return hierarchy
 }
 
 export function isOnPageReference(reference: AgentReferenceSignal, context: AgentContextSignal | null): boolean {

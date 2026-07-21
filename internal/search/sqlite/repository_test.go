@@ -235,3 +235,42 @@ func TestRepositorySearchUsesFTSAndHydratesEveryVisualLocation(t *testing.T) {
 		t.Fatalf("visual context = %#v, want current page", visual.Context)
 	}
 }
+
+func TestRepositoryHydratesMeasureSemanticModelHierarchy(t *testing.T) {
+	ctx := context.Background()
+	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "leapview.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	db := store.SQLDB()
+	if _, err := db.ExecContext(ctx, `
+		INSERT INTO workspaces (id, title, description) VALUES ('sales', 'Sales', '');
+		INSERT INTO serving_states (id, workspace_id, environment, status, source) VALUES ('active', 'sales', 'dev', 'active', 'publish');
+		INSERT INTO assets (
+			snapshot_id, logical_asset_id, workspace_id, serving_state_id, asset_type, asset_key,
+			parent_logical_asset_id, title, description, payload_schema, payload_json, content_hash
+		) VALUES
+			('catalog', 'catalog:sales', 'sales', 'active', 'catalog', 'sales', '', 'Sales', '', 'catalog.v1', '{}', 'catalog'),
+			('model', 'semantic_model:sales.orders', 'sales', 'active', 'semantic_model', 'sales.orders', 'catalog:sales', 'Orders', '', 'semantic_model.v1', '{}', 'model'),
+			('measure', 'measure:sales.orders.revenue', 'sales', 'active', 'measure', 'sales.orders.revenue', 'semantic_model:sales.orders', 'Revenue', '', 'measure.v1', '{}', 'measure');
+		INSERT INTO workspace_active_serving_states (workspace_id, environment, serving_state_id) VALUES ('sales', 'dev', 'active');
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	repository := searchsqlite.New(db)
+	rows, _, err := repository.Candidates(ctx, productsearch.RepositoryQuery{
+		Text: "revenue", Environment: "dev", Types: []productsearch.Type{productsearch.TypeMeasure},
+	}, 0, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("measure candidates = %#v", rows)
+	}
+	hierarchy := rows[0].Result.Hierarchy
+	if len(hierarchy) != 1 || hierarchy[0].Type != productsearch.TypeSemanticModel || hierarchy[0].Name != "Orders" {
+		t.Fatalf("measure hierarchy = %#v, want Orders semantic model", hierarchy)
+	}
+}

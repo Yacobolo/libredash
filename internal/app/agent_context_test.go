@@ -36,6 +36,25 @@ func TestResolveChatTurnReferencesUsesAuthorizedSearchMetadata(t *testing.T) {
 	}
 }
 
+func TestResolveChatTurnReferencesRejectsNonAttachableTypes(t *testing.T) {
+	store := testStore(t)
+	seedEnvironmentAssetDeployment(t, store, "test", servingstate.DefaultEnvironment, "Orders dashboard", "Warehouse")
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, DefaultWorkspaceID: "test"})
+	resolved, err := server.resolveAgentTurnContext(httptest.NewRequest("GET", "/chats/new", nil), agent.Scope{DevAuthBypass: true}, agent.TurnContext{
+		Surface: "chat",
+		References: []agent.TurnReference{
+			{Reference: agent.TurnReferenceKey{WorkspaceID: "test", Type: "source", ID: "dev.orders"}},
+			{Reference: agent.TurnReferenceKey{WorkspaceID: "test", Type: "dashboard", ID: "dev-dashboard"}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resolved.References) != 1 || resolved.References[0].Reference.Type != "dashboard" {
+		t.Fatalf("resolved non-attachable context = %#v", resolved.References)
+	}
+}
+
 func TestResolveChatTurnReferencesAppliesCredentialToReferenceWorkspace(t *testing.T) {
 	store := testStore(t)
 	seedEnvironmentAssetDeployment(t, store, "test", servingstate.DefaultEnvironment, "Orders dashboard", "Warehouse")
