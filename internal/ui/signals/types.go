@@ -200,6 +200,13 @@ func ChatTranscriptItem(item agent.ChatTranscriptItem) ChatTranscriptItemSignal 
 		RunID:          optionalValue(item.RunID),
 		CreatedAt:      optionalValue(item.CreatedAt),
 	}
+	if len(item.References) > 0 {
+		references := make([]AgentReferenceSignal, 0, len(item.References))
+		for _, reference := range item.References {
+			references = append(references, agentReferenceSignalFromTurn(reference))
+		}
+		out.References = &references
+	}
 	if item.Artifact != nil {
 		out.Artifact = &ChatArtifactSignal{
 			Type:    item.Artifact.Type,
@@ -208,6 +215,58 @@ func ChatTranscriptItem(item agent.ChatTranscriptItem) ChatTranscriptItemSignal 
 		}
 	}
 	return out
+}
+
+func agentReferenceSignalFromTurn(reference agent.TurnReference) AgentReferenceSignal {
+	locations := make([]AgentReferenceLocationSignal, 0, len(reference.Locations))
+	for _, location := range reference.Locations {
+		locations = append(locations, AgentReferenceLocationSignal{
+			DashboardID:   optionalValue(location.DashboardID),
+			DashboardName: optionalValue(location.DashboardName),
+			PageID:        optionalValue(location.PageID),
+			PageName:      optionalValue(location.PageName),
+			Href:          location.Href,
+		})
+	}
+	hierarchy := append([]string(nil), reference.Hierarchy...)
+	if len(hierarchy) == 0 {
+		hierarchy = referenceHierarchyFromTurn(reference)
+	}
+	return AgentReferenceSignal{
+		Reference: AgentReferenceKeySignal{
+			WorkspaceID: reference.Reference.WorkspaceID,
+			Type:        reference.Reference.Type,
+			ID:          reference.Reference.ID,
+		},
+		Name:        reference.Name,
+		Description: optionalValue(reference.Description),
+		Workspace:   AgentReferenceWorkspaceSignal{ID: reference.Workspace.ID, Name: reference.Workspace.Name},
+		Hierarchy:   hierarchy,
+		Href:        reference.Href,
+		Locations:   locations,
+		Context:     append([]string(nil), reference.Context...),
+	}
+}
+
+func referenceHierarchyFromTurn(reference agent.TurnReference) []string {
+	hierarchy := make([]string, 0, 3)
+	appendUnique := func(value string) {
+		value = strings.TrimSpace(value)
+		if value != "" && (len(hierarchy) == 0 || hierarchy[len(hierarchy)-1] != value) {
+			hierarchy = append(hierarchy, value)
+		}
+	}
+	appendUnique(reference.Workspace.Name)
+	if len(reference.Locations) > 0 {
+		location := reference.Locations[0]
+		if reference.Reference.Type == "page" || reference.Reference.Type == "visual" {
+			appendUnique(location.DashboardName)
+		}
+		if reference.Reference.Type == "visual" {
+			appendUnique(location.PageName)
+		}
+	}
+	return hierarchy
 }
 
 func DashboardInitialEnvelope(clientID, streamInstanceID string, catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model, pages []dashboard.Page, activePage dashboard.Page, initialFilters dashboard.Filters) DashboardEnvelope {

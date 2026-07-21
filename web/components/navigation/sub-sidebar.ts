@@ -93,7 +93,7 @@ class SubSidebar extends LitElement {
     }
 
     :host([data-collapsed]) {
-      --lv-sub-sidebar-width: var(--lv-sub-sidebar-width-collapsed);
+      --lv-sub-sidebar-width: var(--lv-page-rail-width-collapsed);
       z-index: var(--zIndex-sticky);
       overflow: visible;
     }

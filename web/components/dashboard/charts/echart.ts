@@ -257,6 +257,7 @@ class ChartVisual extends LitElement {
             <span class="unit">${payload.unit ?? ''}</span>
           </div>
           <div class="visual-actions">
+            <slot name="agent-action"></slot>
             <button class="icon-action" type="button" aria-label="Expand visual" title="Expand visual" @click=${() => this.runAction('focus')}>${visualMenuIcon('focus')}</button>
             <details class="options">
               <summary aria-label="Visual options" title="Visual options">${lucideIcon(EllipsisVertical)}</summary>
@@ -393,7 +394,7 @@ class KPICard extends LitElement {
   @property({ type: Object }) visual: ChartPayload | null = null
   @property({ type: String, attribute: 'visual-id' }) visualId = ''
 
-  static styles = css`
+  static styles = [visualActionStyles, css`
     :host {
       display: block;
       min-width: 0;
@@ -429,6 +430,21 @@ class KPICard extends LitElement {
       font-size: var(--lv-font-size-caption);
       font-weight: var(--lv-font-weight-strong);
       text-transform: uppercase;
+    }
+
+    .kpi-header {
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--base-size-8);
+    }
+
+    .kpi-header .label {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .value {
@@ -479,7 +495,7 @@ class KPICard extends LitElement {
       }
     }
 
-  `
+  `]
 
   render() {
     const payload = this.payload
@@ -488,7 +504,10 @@ class KPICard extends LitElement {
     const note = String(payload.options?.note || '')
     return html`
       <article class="kpi ${tone}">
-        <div class="label">${payload.title || stringValue(point, 'label') || 'Metric'}</div>
+        <div class="kpi-header">
+          <div class="label">${payload.title || stringValue(point, 'label') || 'Metric'}</div>
+          <div class="visual-actions"><slot name="agent-action"></slot></div>
+        </div>
         <div class="value">${formatKPIValue(numberValue(point, 'value'), payload.format, payload.unit)}</div>
         <div class="note">${note}</div>
       </article>

@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	nethttp "net/http"
 	"net/url"
@@ -23,6 +24,12 @@ type chatTurnCommandSignals struct {
 type chatReferenceSearchSignals struct {
 	AgentReferenceSearch ui.AgentReferenceSearchSignal `json:"agentReferenceSearch"`
 	AgentContext         agent.TurnContext             `json:"agentContext"`
+}
+
+type chatRestoreSignals struct {
+	Agent struct {
+		ActiveConversationID string `json:"activeConversationId"`
+	} `json:"agent"`
 }
 
 const maxChatReferenceSearchResults = 24
@@ -80,6 +87,37 @@ func (h *Handler) ChatConversation(w nethttp.ResponseWriter, r *nethttp.Request)
 		h.options.QueueMissingTitle(r.Context(), scope, conversationID, chatClientID(r))
 	}
 	h.renderChat(w, r, "conversation", h.chatSignalWith(r.Context(), scope, conversationID, state.Transcript, state.Artifacts, "", h.options.Service.ConversationRunning(conversationID)))
+}
+
+// ChatRestore is the Datastar adapter for restoring an embedded chat. The
+// browser supplies only a conversation identifier; the service reloads and
+// authorizes all transcript state before it is returned.
+func (h *Handler) ChatRestore(w nethttp.ResponseWriter, r *nethttp.Request) {
+	scope := h.chatScope(r)
+	signals := chatRestoreSignals{}
+	if err := pagestream.ReadSignals(r, &signals); err != nil {
+		nethttp.Error(w, err.Error(), nethttp.StatusBadRequest)
+		return
+	}
+
+	signal := h.chatSignal(r.Context(), scope, "", "", false)
+	conversationID := strings.TrimSpace(signals.Agent.ActiveConversationID)
+	if conversationID != "" && h.options.Service != nil && h.options.Service.Enabled() && scope.PrincipalID != "" {
+		state, err := h.options.Service.ConversationTranscriptState(r.Context(), scope, conversationID)
+		switch {
+		case err == nil:
+			signal = h.chatSignalWith(r.Context(), scope, conversationID, state.Transcript, state.Artifacts, "", h.options.Service.ConversationRunning(conversationID))
+		case errors.Is(err, sql.ErrNoRows), errors.Is(err, agent.ErrNotFound):
+			// An absent or unauthorized conversation restores to a blank state so
+			// callers cannot distinguish those cases.
+		default:
+			nethttp.Error(w, err.Error(), nethttp.StatusInternalServerError)
+			return
+		}
+	}
+
+	updates := pagestream.NewSignalStream(w, r)
+	_ = updates.Patch(chatSignalPatch(signal, true))
 }
 
 func (h *Handler) ChatTurn(w nethttp.ResponseWriter, r *nethttp.Request) {
@@ -262,7 +300,8 @@ func (h *Handler) runChatTurn(w nethttp.ResponseWriter, r *nethttp.Request, serv
 		return
 	}
 	_, _ = h.options.ExecuteStartedChatTurn(r.Context(), service, scope, started, ChatTurnExecution{
-		LiveConversations: h.chatConversations(r.Context(), scope),
+		EmitInitialRunning: true,
+		LiveConversations:  h.chatConversations(r.Context(), scope),
 		Emit: func(signal ui.ChatViewState) error {
 			return updates.Patch(chatSignalPatch(signal, embedded))
 		},

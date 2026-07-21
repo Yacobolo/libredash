@@ -510,6 +510,7 @@ model ChatTranscriptItemSignal {
   `kind`: string;
   `markdown`?: string;
   `name`?: string;
+  `references`?: AgentReferenceSignal[];
   `resultFormat`?: string;
   `resultJson`?: string;
   `resultSummary`?: string;

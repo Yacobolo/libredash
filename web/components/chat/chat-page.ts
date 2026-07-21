@@ -5,7 +5,7 @@ import { DatastarLit } from '../shared/datastar-lit'
 import { checkSignalContract } from '../shared/signal-contract'
 import '../dashboard/visual-modal'
 import './chat-thread'
-import { type ChatReferencesChangeDetail, defaultAgentReferenceLimit } from './reference'
+import { type ChatReferencesChangeDetail, defaultAgentReferenceLimit, latestAcceptedRunId } from './reference'
 import './chat-composer'
 import './chat-list'
 
@@ -299,6 +299,7 @@ class LeapViewChatPage extends DatastarLit(LitElement) {
         .suggestions=${this.referenceSearch.results ?? []}
         .suggestionQuery=${this.referenceSearch.query}
         .suggestionRequestId=${this.referenceSearch.requestId}
+		.acceptedRunId=${latestAcceptedRunId(this.agent.transcript ?? [])}
         @lv-chat-references-change=${this.referencesChanged}
       ></lv-chat-composer>
     `

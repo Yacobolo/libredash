@@ -110,6 +110,7 @@ func Page(clientID, csrfToken string, catalog dashboard.Catalog, report reportde
 	reloadAction := uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/reload", "runtime", "filters.controls")
 	filtersUpdate := "$filters = evt.detail.filters; $urlParams = evt.detail.urlParams; window.DatastarURLSync && window.DatastarURLSync.replace($urlParams); " + visualReset
 	agentTurn := "$agent.composer.value = evt.detail.input; $agentContext.references = evt.detail.references; $agentContext.filters = $filters; $agentContext.generation = $status.generation; " + uiactions.Post("/chats/turns", "agent", "agentContext")
+	agentRestore := "$agent.activeConversationId = evt.detail.conversationId; " + uiactions.Get("/chats/restore", "agent")
 	return pagestream.RenderPage(pagestream.PageSpec{
 		Title:             brand.Name,
 		DatastarScriptURL: datastarScriptURL(),
@@ -141,6 +142,7 @@ func Page(clientID, csrfToken string, catalog dashboard.Catalog, report reportde
 					g.Attr("page-id", activePage.ID),
 					g.Attr("data-indicator", "agentTurnPending"),
 					g.Attr("data-on:lv-chat-submit", agentTurn),
+					g.Attr("data-on:lv-chat-restore", agentRestore),
 					g.Attr("data-on:lv-chat-new", "$agent.activeConversationId = ''; $agent.transcript = []; $agent.composer.value = ''; $agentVisuals = {}"),
 					g.Attr("data-on:lv-filters-change", filtersUpdate+reloadAction),
 					g.Attr("data-on:lv-filters-reset", filtersUpdate+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/reset-filters", "runtime")),

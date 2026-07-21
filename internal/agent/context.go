@@ -30,6 +30,7 @@ type TurnReference struct {
 	Name        string                  `json:"name,omitempty"`
 	Description string                  `json:"description,omitempty"`
 	Workspace   TurnReferenceWorkspace  `json:"workspace"`
+	Hierarchy   []string                `json:"hierarchy,omitempty"`
 	Href        string                  `json:"href,omitempty"`
 	Locations   []TurnReferenceLocation `json:"locations,omitempty"`
 	Context     []string                `json:"context,omitempty"`
@@ -86,6 +87,13 @@ func (c TurnContext) normalized() TurnContext {
 		ref.Description = strings.TrimSpace(ref.Description)
 		ref.Workspace.ID = strings.TrimSpace(ref.Workspace.ID)
 		ref.Workspace.Name = strings.TrimSpace(ref.Workspace.Name)
+		hierarchy := make([]string, 0, len(ref.Hierarchy))
+		for _, part := range ref.Hierarchy {
+			if part = strings.TrimSpace(part); part != "" {
+				hierarchy = append(hierarchy, part)
+			}
+		}
+		ref.Hierarchy = hierarchy
 		ref.Href = strings.TrimSpace(ref.Href)
 		ref.ComponentID = strings.TrimSpace(ref.ComponentID)
 		ref.VisualID = strings.TrimSpace(ref.VisualID)

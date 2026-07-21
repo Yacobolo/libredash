@@ -123,6 +123,7 @@ func agentTurnReference(result productsearch.Result) agent.TurnReference {
 		Reference: agent.TurnReferenceKey{WorkspaceID: result.Reference.WorkspaceID, Type: string(result.Reference.Type), ID: result.Reference.ID},
 		Name:      result.Name, Description: result.Description,
 		Workspace: agent.TurnReferenceWorkspace{ID: result.Workspace.ID, Name: result.Workspace.Name},
+		Hierarchy: agentReferenceHierarchy(result),
 		Href:      result.Href, Locations: locations, Context: contextTags,
 	}
 	parts := strings.Split(result.Reference.ID, ".")

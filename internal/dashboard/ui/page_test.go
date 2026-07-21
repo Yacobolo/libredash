@@ -131,6 +131,17 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 			t.Fatalf("agent command segment = %q, must not post heavy signal %q", agentSegment, forbidden)
 		}
 	}
+	agentRestoreSegment := renderedAttrSegment(showcase, "data-on:lv-chat-restore")
+	for _, expected := range []string{"/chats/restore", "evt.detail.conversationId", "filterSignals", "agent"} {
+		if !strings.Contains(agentRestoreSegment, expected) {
+			t.Fatalf("agent restore segment = %q, want %q", agentRestoreSegment, expected)
+		}
+	}
+	for _, forbidden := range []string{"agentContext", "visuals", "agentVisuals", "filterOptions", "componentStatus"} {
+		if strings.Contains(agentRestoreSegment, forbidden) {
+			t.Fatalf("agent restore segment = %q, must not send unrelated signal %q", agentRestoreSegment, forbidden)
+		}
+	}
 	showcaseSignals := html.UnescapeString(jsonString(BootstrapSignals("client", "stream-instance", dashboard.Catalog{}, report, model, report.Pages, report.Pages[0], dashboard.Filters{})))
 	for _, expected := range []string{`"agent":{`, `"agentContext":{`, `"surface":"dashboard"`, `"agentVisuals":{}`} {
 		if !strings.Contains(showcaseSignals, expected) {

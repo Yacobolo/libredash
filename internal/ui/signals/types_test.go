@@ -4,10 +4,29 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Yacobolo/leapview/internal/agent"
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 )
+
+func TestChatTranscriptItemsProjectsTurnReferences(t *testing.T) {
+	items := ChatTranscriptItems([]agent.ChatTranscriptItem{{
+		ID: "user_1", Kind: "user", Text: "Explain this", References: []agent.TurnReference{{
+			Reference: agent.TurnReferenceKey{WorkspaceID: "sales", Type: "visual", ID: "executive-sales.revenue"},
+			Name:      "Revenue by month", Workspace: agent.TurnReferenceWorkspace{ID: "sales", Name: "Sales"},
+			Hierarchy: []string{"Sales", "Executive Sales", "Overview"}, Href: "/overview",
+		}},
+	}})
+
+	if len(items) != 1 || items[0].References == nil || len(*items[0].References) != 1 {
+		t.Fatalf("turn reference signal = %#v", items)
+	}
+	reference := (*items[0].References)[0]
+	if reference.Name != "Revenue by month" || reference.Reference.Type != "visual" || reference.Href != "/overview" {
+		t.Fatalf("turn reference signal = %#v", reference)
+	}
+}
 
 func TestDashboardInitialEnvelopeValidatesPageScopedPayloads(t *testing.T) {
 	report := testDashboardReport()

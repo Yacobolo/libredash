@@ -157,7 +157,7 @@ func TestServicePromptPersistsRunEventsMessagesAndTranscript(t *testing.T) {
 	}
 }
 
-func TestServicePromptUsesStructuredTurnContextWithoutExposingItInUserTranscript(t *testing.T) {
+func TestServicePromptPersistsResolvedTurnContextWhileKeepingVisibleTextClean(t *testing.T) {
 	ctx := context.Background()
 	store := openAgentAppStore(t, ctx)
 	defer store.Close()
@@ -186,7 +186,11 @@ func TestServicePromptUsesStructuredTurnContextWithoutExposingItInUserTranscript
 			Filters: map[string]any{
 				"controls": map[string]any{"country": map[string]any{"type": "multi_select", "values": []string{"DK"}}},
 			},
-			References: []TurnReference{{Reference: TurnReferenceKey{WorkspaceID: "sales", Type: "visual", ID: "executive.revenue_by_region"}, ComponentID: "revenue-card", VisualID: "revenue_by_region", Name: "Revenue by region", VisualType: "bar"}},
+			References: []TurnReference{{
+				Reference: TurnReferenceKey{WorkspaceID: "sales", Type: "visual", ID: "executive.revenue_by_region"},
+				Name:      "Revenue by region", Workspace: TurnReferenceWorkspace{ID: "sales", Name: "Sales"},
+				Hierarchy: []string{"Sales", "Executive Sales", "Overview"}, ComponentID: "revenue-card", VisualID: "revenue_by_region", VisualType: "bar",
+			}},
 		},
 	})
 	if err != nil {
@@ -214,6 +218,19 @@ func TestServicePromptUsesStructuredTurnContextWithoutExposingItInUserTranscript
 	}
 	if strings.Contains(messages[0].ContentText, "executive-sales") || strings.Contains(messages[0].ContentText, "revenue_by_region") {
 		t.Fatalf("visible user message leaked turn context: %#v", messages[0])
+	}
+	if !strings.Contains(messages[0].ContentJSON, `"turn_context"`) || !strings.Contains(messages[0].ContentJSON, `"Revenue by region"`) {
+		t.Fatalf("resolved context was not persisted with user turn: %s", messages[0].ContentJSON)
+	}
+	transcript, err := service.ConversationTranscript(ctx, scope, conversation.ID)
+	if err != nil {
+		t.Fatalf("conversation transcript: %v", err)
+	}
+	if len(transcript) == 0 || len(transcript[0].References) != 1 || transcript[0].References[0].Name != "Revenue by region" {
+		t.Fatalf("visible turn reference projection = %#v", transcript)
+	}
+	if transcript[0].References[0].VisualID != "" || transcript[0].References[0].ComponentID != "" {
+		t.Fatalf("visible turn reference exposed model-only enrichment: %#v", transcript[0].References[0])
 	}
 }
 

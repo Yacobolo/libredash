@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/Yacobolo/leapview/internal/access"
@@ -120,6 +121,11 @@ func (s *Server) resolveDashboardTurnContext(ctx context.Context, scope agent.Sc
 	if err != nil {
 		return agent.TurnContext{}, err
 	}
+	catalog := metrics.Catalog()
+	workspaceName := strings.TrimSpace(catalog.Workspace.Title)
+	if workspaceName == "" {
+		workspaceName = workspaceID
+	}
 	return agent.TurnContext{
 		Surface:        "dashboard",
 		WorkspaceID:    workspaceID,
@@ -130,7 +136,10 @@ func (s *Server) resolveDashboardTurnContext(ctx context.Context, scope agent.Sc
 		ModelID:        metrics.ModelIDForDashboard(report.ID),
 		Generation:     candidate.Generation,
 		Filters:        filterMap,
-		References:     resolveDashboardTurnReferences(candidate.References, report.ID, page, report.Visuals, report.Tables),
+		References: resolveDashboardTurnReferences(candidate.References, dashboardTurnReferenceContext{
+			Workspace:   agent.TurnReferenceWorkspace{ID: workspaceID, Name: workspaceName},
+			DashboardID: report.ID, DashboardTitle: report.Title, Page: page,
+		}, report.Visuals, report.Tables),
 	}, nil
 }
 
@@ -179,9 +188,21 @@ func turnContextFilters(filters dashboard.Filters) (map[string]any, error) {
 	return out, nil
 }
 
-func resolveDashboardTurnReferences(candidates []agent.TurnReference, dashboardID string, page dashboard.Page, visuals map[string]reportdef.Visual, tables map[string]reportdef.TableVisual) []agent.TurnReference {
+type dashboardTurnReferenceContext struct {
+	Workspace      agent.TurnReferenceWorkspace
+	DashboardID    string
+	DashboardTitle string
+	Page           dashboard.Page
+}
+
+func resolveDashboardTurnReferences(candidates []agent.TurnReference, context dashboardTurnReferenceContext, visuals map[string]reportdef.Visual, tables map[string]reportdef.TableVisual) []agent.TurnReference {
 	resolved := make([]agent.TurnReference, 0, min(len(candidates), agent.MaxTurnReferences))
 	seen := map[string]struct{}{}
+	href := "/workspaces/" + url.PathEscape(context.Workspace.ID) + "/dashboards/" + url.PathEscape(context.DashboardID) + "/pages/" + url.PathEscape(context.Page.ID)
+	location := agent.TurnReferenceLocation{
+		DashboardID: context.DashboardID, DashboardName: context.DashboardTitle,
+		PageID: context.Page.ID, PageName: context.Page.Title, Href: href,
+	}
 	for _, candidate := range candidates {
 		if len(resolved) == agent.MaxTurnReferences {
 			break
@@ -189,11 +210,14 @@ func resolveDashboardTurnReferences(candidates []agent.TurnReference, dashboardI
 		if strings.ToLower(strings.TrimSpace(candidate.Reference.Type)) != "visual" {
 			continue
 		}
-		visualID := lastSearchReferencePart(candidate.Reference.ID)
-		if visualID == "" || candidate.Reference.ID != dashboardID+"."+visualID {
+		if strings.TrimSpace(candidate.Reference.WorkspaceID) != context.Workspace.ID {
 			continue
 		}
-		for _, component := range page.Visuals {
+		visualID := lastSearchReferencePart(candidate.Reference.ID)
+		if visualID == "" || candidate.Reference.ID != context.DashboardID+"."+visualID {
+			continue
+		}
+		for _, component := range context.Page.Visuals {
 			if component.Visual != visualID && component.Table != visualID {
 				continue
 			}
@@ -208,10 +232,11 @@ func resolveDashboardTurnReferences(candidates []agent.TurnReference, dashboardI
 			resolved = append(resolved, agent.TurnReference{
 				Reference:   candidate.Reference,
 				Name:        title,
-				Workspace:   candidate.Workspace,
-				Href:        candidate.Href,
-				Locations:   candidate.Locations,
-				Context:     candidate.Context,
+				Workspace:   context.Workspace,
+				Hierarchy:   []string{context.Workspace.Name, context.DashboardTitle, context.Page.Title},
+				Href:        href,
+				Locations:   []agent.TurnReferenceLocation{location},
+				Context:     []string{"current_page", "current_dashboard", "current_workspace"},
 				ComponentID: component.ID,
 				VisualID:    visualID,
 				VisualType:  visualType,

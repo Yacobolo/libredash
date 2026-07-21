@@ -26,7 +26,7 @@ class LeapViewFilterDock extends LitElement {
 
     aside {
       display: grid;
-      width: var(--lv-dashboard-filter-width);
+      width: var(--lv-page-rail-width-collapsed);
       box-sizing: border-box;
       min-width: 0;
       min-height: 0;

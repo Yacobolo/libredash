@@ -103,6 +103,7 @@ func (s *Service) StartPrompt(ctx context.Context, input PromptInput) (*StartedP
 	if err := s.appendMessage(ctx, PromptInput{
 		Scope:          input.Scope,
 		ConversationID: input.ConversationID,
+		Context:        input.Context,
 	}, run.ID, userMessage); err != nil {
 		_ = s.finishRun(ctx, input, run.ID, RunStatusFailed, "", agentcore.Usage{}, err)
 		return nil, err
@@ -381,7 +382,7 @@ func (s *Service) appendMessage(ctx context.Context, input PromptInput, runID st
 		RunID:          runID,
 		Role:           platformRole(message.Role),
 		ContentText:    contentText,
-		ContentJSON:    messageContentJSON(message),
+		ContentJSON:    messageContentJSON(message, input.Context),
 		ToolCallID:     message.ToolCallID,
 		ToolName:       message.ToolName,
 		IsError:        message.IsError,

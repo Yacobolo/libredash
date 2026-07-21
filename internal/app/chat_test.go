@@ -606,6 +606,62 @@ func TestChatConversationRouteLoadsOwnedEventsAndRejectsOtherPrincipal(t *testin
 	}
 }
 
+func TestDashboardChatRestoreHydratesOnlyAnOwnedConversation(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+	owner, token := chatPrincipalAndToken(t, ctx, store)
+	other := testPrincipal(t, ctx, store, "restore-other@example.com", "Restore Other", "viewer")
+	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
+	service := agent.NewService(fakeMetrics{}, testAgentRepository(store), agent.Config{APIKey: "key", Model: "fake-model"})
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, Agent: service, DefaultWorkspaceID: "test"})
+
+	owned, err := service.CreateConversation(ctx, agent.Scope{WorkspaceID: "test", PrincipalID: owner.ID}, "Owned restore")
+	if err != nil {
+		t.Fatalf("create owned conversation: %v", err)
+	}
+	if _, err := testAgentRepository(store).AppendMessage(ctx, agent.MessageInput{
+		PrincipalID: owner.ID, ConversationID: owned.ID, Role: agent.MessageRoleUser, ContentText: "Persisted dashboard question",
+	}); err != nil {
+		t.Fatalf("append owned message: %v", err)
+	}
+	hidden, err := service.CreateConversation(ctx, agent.Scope{WorkspaceID: "test", PrincipalID: other.ID}, "Hidden restore")
+	if err != nil {
+		t.Fatalf("create hidden conversation: %v", err)
+	}
+
+	restore := func(conversationID string) *httptest.ResponseRecorder {
+		t.Helper()
+		signals, _ := json.Marshal(map[string]any{"agent": map[string]any{"activeConversationId": conversationID}})
+		req := httptest.NewRequest(http.MethodGet, "/chats/restore?datastar="+url.QueryEscape(string(signals)), nil)
+		req.Header.Set("Accept", "text/event-stream")
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		server.Routes().ServeHTTP(rec, req)
+		return rec
+	}
+
+	ownedRestore := restore(owned.ID)
+	if ownedRestore.Code != http.StatusOK {
+		t.Fatalf("owned restore status=%d body=%s", ownedRestore.Code, ownedRestore.Body.String())
+	}
+	for _, want := range []string{`"activeConversationId":"` + owned.ID + `"`, "Persisted dashboard question", `"agentVisuals"`} {
+		if !strings.Contains(ownedRestore.Body.String(), want) {
+			t.Fatalf("owned restore missing %q:\n%s", want, ownedRestore.Body.String())
+		}
+	}
+
+	hiddenRestore := restore(hidden.ID)
+	if hiddenRestore.Code != http.StatusOK {
+		t.Fatalf("hidden restore status=%d body=%s", hiddenRestore.Code, hiddenRestore.Body.String())
+	}
+	if strings.Contains(hiddenRestore.Body.String(), hidden.ID) || strings.Contains(hiddenRestore.Body.String(), "Hidden restore") {
+		t.Fatalf("hidden restore leaked another principal's conversation:\n%s", hiddenRestore.Body.String())
+	}
+	if !strings.Contains(hiddenRestore.Body.String(), `"activeConversationId":""`) {
+		t.Fatalf("hidden restore did not clear the stale active conversation:\n%s", hiddenRestore.Body.String())
+	}
+}
+
 func TestChatConversationRouteLoadsArtifactSignalsOutsideTranscript(t *testing.T) {
 	ctx := context.Background()
 	store := testStore(t)

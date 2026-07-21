@@ -232,6 +232,57 @@ test('composer searches for and attaches typed @ references with spaces', async 
   }
 })
 
+test('composer consumes attachments only after a user turn is accepted', async () => {
+  const page = await browser.newPage({ viewport: { width: 800, height: 600 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => customElements.get('lv-chat-composer'))
+    const result = await page.locator('lv-chat-composer').evaluate(async (element: any) => {
+      const reference = {
+        reference: { workspaceId: 'sales', type: 'visual', id: 'executive-sales.revenue' },
+        name: 'Revenue by month',
+        workspace: { id: 'sales', name: 'Sales' },
+        hierarchy: ['Sales', 'Executive Sales', 'Overview'],
+        href: '/workspaces/sales/dashboards/executive-sales/pages/overview',
+        locations: [],
+        context: ['current_page'],
+      }
+      element.acceptedRunId = 'run_previous'
+      await element.updateComplete
+	  element.references = [reference]
+	  await element.updateComplete
+      const textarea = element.shadowRoot.querySelector('textarea') as HTMLTextAreaElement
+      textarea.value = 'Why did revenue fall?'
+      textarea.dispatchEvent(new InputEvent('input', { bubbles: true }))
+      const changes: any[] = []
+      element.addEventListener('lv-chat-references-change', (event: CustomEvent) => changes.push(event.detail.references))
+      textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      await element.updateComplete
+      const afterSubmit = { draft: textarea.value, references: element.references.length, changes: changes.length }
+
+      // A rejected request returns no newly persisted user run.
+      element.value = ''
+      await element.updateComplete
+      const afterRejected = { draft: textarea.value, references: element.references.length, changes: changes.length }
+
+      // The persisted user message identifies the accepted turn before model completion.
+      element.acceptedRunId = 'run_new'
+      await element.updateComplete
+      return {
+        afterSubmit,
+        afterRejected,
+        afterAccepted: { draft: textarea.value, references: element.references.length, changes },
+      }
+    })
+
+    expect(result.afterSubmit).toEqual({ draft: 'Why did revenue fall?', references: 1, changes: 0 })
+    expect(result.afterRejected).toEqual({ draft: 'Why did revenue fall?', references: 1, changes: 0 })
+    expect(result.afterAccepted).toEqual({ draft: '', references: 0, changes: [[]] })
+  } finally {
+    await page.close()
+  }
+})
+
 test('composer distinguishes matching reference IDs from different workspaces', async () => {
   const page = await browser.newPage({ viewport: { width: 800, height: 600 } })
   try {

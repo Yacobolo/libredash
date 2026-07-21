@@ -114,25 +114,40 @@ func TestResolveAgentTurnContextRejectsExcessReferences(t *testing.T) {
 }
 
 func TestResolveDashboardTurnReferencesUsesCompiledMetadata(t *testing.T) {
-	page := dashboard.Page{Visuals: []dashboard.PageVisual{
+	page := dashboard.Page{ID: "overview", Title: "Overview", Visuals: []dashboard.PageVisual{
 		{ID: "orders-chart", Visual: "orders_chart"},
 		{ID: "orders-table", Table: "orders", Title: "Recent orders"},
 	}}
 	resolved := resolveDashboardTurnReferences([]agent.TurnReference{
-		{Reference: agent.TurnReferenceKey{WorkspaceID: "test", Type: "visual", ID: "executive-sales.orders_chart"}, Name: "Ignore browser title", VisualType: "script"},
+		{Reference: agent.TurnReferenceKey{WorkspaceID: "test", Type: "visual", ID: "executive-sales.orders_chart"}, Name: "Ignore browser title", VisualType: "script", Href: "javascript:alert(1)", Hierarchy: []string{"Forged"}},
 		{Reference: agent.TurnReferenceKey{WorkspaceID: "test", Type: "visual", ID: "executive-sales.orders"}, Name: "Ignore browser table title"},
 		{Reference: agent.TurnReferenceKey{WorkspaceID: "test", Type: "visual", ID: "executive-sales.secret"}, Name: "Not on page"},
 		{Reference: agent.TurnReferenceKey{WorkspaceID: "test", Type: "visual", ID: "other.orders_chart"}, Name: "Wrong dashboard"},
-	}, "executive-sales", page, map[string]reportdef.Visual{
+		{Reference: agent.TurnReferenceKey{WorkspaceID: "other", Type: "visual", ID: "executive-sales.orders_chart"}, Name: "Wrong workspace"},
+	}, dashboardTurnReferenceContext{
+		Workspace:   agent.TurnReferenceWorkspace{ID: "test", Name: "Test workspace"},
+		DashboardID: "executive-sales", DashboardTitle: "Executive Sales", Page: page,
+	}, map[string]reportdef.Visual{
 		"orders_chart": {Title: "Orders by status", Type: "bar"},
 		"secret":       {Title: "Secret", Type: "line"},
 	}, map[string]reportdef.TableVisual{
 		"orders": {Title: "Orders", Kind: "table"},
 	})
 
+	wantReference := func(id, componentID, visualID, name, visualType string) agent.TurnReference {
+		href := "/workspaces/test/dashboards/executive-sales/pages/overview"
+		return agent.TurnReference{
+			Reference:   agent.TurnReferenceKey{WorkspaceID: "test", Type: "visual", ID: id},
+			ComponentID: componentID, VisualID: visualID, Name: name, VisualType: visualType,
+			Workspace: agent.TurnReferenceWorkspace{ID: "test", Name: "Test workspace"},
+			Hierarchy: []string{"Test workspace", "Executive Sales", "Overview"}, Href: href,
+			Locations: []agent.TurnReferenceLocation{{DashboardID: "executive-sales", DashboardName: "Executive Sales", PageID: "overview", PageName: "Overview", Href: href}},
+			Context:   []string{"current_page", "current_dashboard", "current_workspace"},
+		}
+	}
 	want := []agent.TurnReference{
-		{Reference: agent.TurnReferenceKey{WorkspaceID: "test", Type: "visual", ID: "executive-sales.orders_chart"}, ComponentID: "orders-chart", VisualID: "orders_chart", Name: "Orders by status", VisualType: "bar"},
-		{Reference: agent.TurnReferenceKey{WorkspaceID: "test", Type: "visual", ID: "executive-sales.orders"}, ComponentID: "orders-table", VisualID: "orders", Name: "Recent orders", VisualType: "table"},
+		wantReference("executive-sales.orders_chart", "orders-chart", "orders_chart", "Orders by status", "bar"),
+		wantReference("executive-sales.orders", "orders-table", "orders", "Recent orders", "table"),
 	}
 	if len(resolved) != len(want) {
 		t.Fatalf("resolved references = %#v, want %#v", resolved, want)

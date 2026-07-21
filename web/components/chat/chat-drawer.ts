@@ -17,6 +17,7 @@ import {
   type ChatReferencesChangeDetail,
   defaultAgentReferenceLimit,
   isOnPageReference,
+	latestAcceptedRunId,
   mergeReferences,
   normalizeReferenceLimit,
   referenceIdentity,
@@ -39,6 +40,7 @@ class ChatDrawer extends DatastarLit(LitElement) {
   static styles = css`
     :host {
       display: block;
+      box-sizing: border-box;
       width: 0;
       min-width: 0;
       height: 100svh;
@@ -307,6 +309,7 @@ class ChatDrawer extends DatastarLit(LitElement) {
           .suggestions=${workspaceSuggestions}
           .suggestionQuery=${this.referenceSearch.query}
           .suggestionRequestId=${this.referenceSearch.requestId}
+			.acceptedRunId=${latestAcceptedRunId(agent.transcript ?? [])}
           @lv-chat-references-change=${this.referencesChanged}
         ></lv-chat-composer>
       </aside>

@@ -415,12 +415,12 @@
     --lv-workspace-detail-max-width: var(--container-workspace-detail);
     --lv-login-panel-width: var(--container-login-panel);
     --lv-lineage-graph-height: var(--spacing-inspector-panel);
-    --lv-dashboard-filter-width: calc(var(--control-large-size) + var(--base-size-4));
     --lv-dashboard-filter-open-width: var(--overlay-width-small);
+    --lv-dashboard-agent-width: calc(var(--base-size-128) * 3 + var(--base-size-36));
     --lv-sidebar-width-expanded: calc(var(--base-size-128) + var(--base-size-80) + var(--base-size-40));
     --lv-sidebar-width-collapsed: var(--base-size-48);
+    --lv-page-rail-width-collapsed: calc(var(--base-size-40) - var(--base-size-2));
     --lv-sub-sidebar-width-expanded: calc(var(--base-size-128) + var(--base-size-16));
-    --lv-sub-sidebar-width-collapsed: calc(var(--base-size-40) - var(--base-size-2));
     --lv-spinner-size-sm: calc(var(--base-size-8) + var(--base-size-2));
     --lv-spinner-size-md: var(--base-size-16);
     --lv-spinner-duration: 1800ms;

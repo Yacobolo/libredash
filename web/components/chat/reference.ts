@@ -1,5 +1,5 @@
 import { BarChart3, Boxes, Columns3, Database, File, Filter, LayoutDashboard, PanelsTopLeft, Plug, Search, Sigma, Table2 } from 'lucide'
-import type { AgentContextSignal, AgentReferenceSignal } from '../../generated/signals'
+import type { AgentContextSignal, AgentReferenceSignal, ChatTranscriptItemSignal } from '../../generated/signals'
 import { lucideIcon } from '../shared/lucide-icons'
 
 export type ChatContextReference = AgentReferenceSignal
@@ -14,6 +14,14 @@ export interface ChatReferencesChangeDetail {
 }
 
 export const defaultAgentReferenceLimit = 12
+
+export function latestAcceptedRunId(transcript: ChatTranscriptItemSignal[]): string {
+	for (let index = transcript.length - 1; index >= 0; index -= 1) {
+		const item = transcript[index]
+		if (item?.kind === 'user' && item.runId?.trim()) return item.runId.trim()
+	}
+	return ''
+}
 
 export function normalizeReferenceLimit(limit: number | null | undefined): number {
   return Number.isFinite(limit) && Number(limit) > 0

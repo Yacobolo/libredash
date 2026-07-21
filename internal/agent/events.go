@@ -118,7 +118,7 @@ func messageEnvelope(conversationID string, row Message) EventEnvelope {
 	}
 }
 
-func messageContentJSON(message agentcore.Message) string {
+func messageContentJSON(message agentcore.Message, context *TurnContext) string {
 	payload := map[string]any{
 		"role":            message.Role,
 		"content":         message.Content,
@@ -129,6 +129,10 @@ func messageContentJSON(message agentcore.Message) string {
 		"is_error":        message.IsError,
 		"finish_reason":   message.FinishReason,
 		"usage":           message.Usage,
+	}
+	if message.Role == agentcore.RoleUser && context != nil {
+		normalized := context.normalized()
+		payload["turn_context"] = normalized
 	}
 	return metadataJSON(payload)
 }

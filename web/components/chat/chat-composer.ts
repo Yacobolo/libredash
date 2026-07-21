@@ -33,6 +33,7 @@ class ChatComposer extends LitElement {
   @property({ type: Number, attribute: 'reference-limit' }) referenceLimit = defaultAgentReferenceLimit
   @property({ type: String, attribute: false }) suggestionQuery = ''
   @property({ type: Number, attribute: false }) suggestionRequestId = 0
+	@property({ type: String, attribute: false }) acceptedRunId = ''
   @state() private draft = ''
 	@state() private mentionIndex = 0
 	@state() private mentionSearchPending = false
@@ -43,6 +44,7 @@ class ChatComposer extends LitElement {
 	private acceptedSuggestionRequestId = 0
   private resizeObserver?: ResizeObserver
   private observedWidth = -1
+	private acceptedRunInitialized = false
 
   static styles = css`
     :host {
@@ -332,10 +334,18 @@ class ChatComposer extends LitElement {
     }
   `
 
+	protected willUpdate(changed: Map<string, unknown>) {
+		if (!changed.has('acceptedRunId')) return
+		if (this.acceptedRunInitialized && this.acceptedRunId !== changed.get('acceptedRunId')) {
+			this.consumeAcceptedTurn()
+		}
+		this.acceptedRunInitialized = true
+	}
+
   updated(changed: Map<string, unknown>) {
     if (changed.has('value')) {
-      this.draft = this.value || ''
-      void this.updateComplete.then(() => this.resizeTextarea())
+		if (this.value) this.draft = this.value
+		void this.updateComplete.then(() => this.resizeTextarea())
     }
 		if (
 			(changed.has('suggestions') || changed.has('suggestionQuery') || changed.has('suggestionRequestId'))
@@ -487,6 +497,16 @@ class ChatComposer extends LitElement {
     if (this.disabled || this.pending || input === '') return
     emitDomainEvent(this, domainEvents.chatSubmit, { input, references: this.references })
   }
+
+	private consumeAcceptedTurn() {
+		this.draft = ''
+		this.references = []
+		this.mentionIndex = 0
+		this.mentionSearchPending = false
+		this.lastSearchQuery = null
+		this.notifyReferences()
+		void this.updateComplete.then(() => this.resizeTextarea())
+	}
 
 	private mentionSuggestions(): ChatContextReference[] {
 		const groups = this.mentionSuggestionGroups()
