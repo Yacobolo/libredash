@@ -48,7 +48,7 @@ func TestCompileProjectLoadsDashboardPublicationsAndDependencyClosure(t *testing
 
 func TestCompileProjectPublicationClosureIncludesDerivedMetricAndItsMeasures(t *testing.T) {
 	files := minimalProjectFiles(map[string]string{
-		"workspaces/sales/workspace.yaml": workspaceYAMLWithPublications("sales"),
+		"workspaces/sales/workspace.yaml":            workspaceYAMLWithPublications("sales"),
 		"workspaces/sales/publications/website.yaml": dashboardPublicationYAML("sales", "website", "executive-sales", "overview", nil),
 		"workspaces/sales/semantic-models/sales.yaml": `
 apiVersion: leapview.dev/v1
@@ -115,6 +115,41 @@ spec:
 		if !containsString(closure, want) {
 			t.Fatalf("dependency closure = %v, missing %q", closure, want)
 		}
+	}
+}
+
+func TestCompileProjectPublicationClosureExcludesUnusedSemanticAssets(t *testing.T) {
+	files := minimalProjectFiles(map[string]string{
+		"workspaces/sales/workspace.yaml":            workspaceYAMLWithPublications("sales"),
+		"workspaces/sales/publications/website.yaml": dashboardPublicationYAML("sales", "website", "executive-sales", "overview", nil),
+		"workspaces/sales/semantic-models/sales.yaml": `
+apiVersion: leapview.dev/v1
+kind: SemanticModel
+metadata:
+  workspace: sales
+  name: sales
+spec:
+  tables:
+    - orders
+  measures:
+    order_count:
+      fact: orders
+      aggregation: count
+      empty: zero
+    unused_revenue:
+      fact: orders
+      aggregation: count
+      empty: zero
+`,
+	})
+
+	compiled, err := CompileProject(writeProjectFixture(t, files), Options{ServingStateID: "dep_public_least_privilege"})
+	if err != nil {
+		t.Fatalf("CompileProject() error = %v", err)
+	}
+	closure := compiled.Workspaces["sales"].Definition.Publications["website"].DependencyAssetIDs
+	if containsString(closure, "measure:sales.sales.unused_revenue") {
+		t.Fatalf("dependency closure includes unused semantic asset: %v", closure)
 	}
 }
 
@@ -188,6 +223,31 @@ spec:
 	if subject.Kind != "dashboard_publication" || subject.Publication != "website" {
 		t.Fatalf("subject = %#v", subject)
 	}
+}
+
+func TestCompileProjectRejectsDashboardPublicationGrantSubject(t *testing.T) {
+	files := minimalProjectFiles(map[string]string{
+		"workspaces/sales/workspace.yaml":            workspaceYAMLWithPublicationsAndAccess("sales"),
+		"workspaces/sales/publications/website.yaml": dashboardPublicationYAML("sales", "website", "executive-sales", "overview", nil),
+		"workspaces/sales/access/public-grant.yaml": `
+apiVersion: leapview.dev/v1
+kind: Grant
+metadata:
+  workspace: sales
+  name: public-query
+spec:
+  object:
+    type: semantic_model
+    id: sales
+  subject:
+    kind: dashboard_publication
+    publication: website
+  privilege: QUERY_DATA
+`,
+	})
+
+	_, err := CompileProject(writeProjectFixture(t, files), Options{ServingStateID: "dep_public_grant"})
+	assertCompileErrorContains(t, err, "dashboard_publication")
 }
 
 func containsString(values []string, want string) bool {

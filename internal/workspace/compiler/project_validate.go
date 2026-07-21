@@ -192,6 +192,9 @@ func validateWorkspaceAccess(workspaceProject *WorkspaceProject) error {
 	}
 	for name, grant := range workspaceProject.AccessGrants {
 		path := workspaceProject.AccessPaths["Grant:"+name]
+		if grant.Subject.Kind == string(access.SubjectDashboardPublication) {
+			return resourceError(path, "grant:"+workspaceProject.ID+"."+name, "spec.subject.kind", "Grant %q.%q dashboard_publication subjects are only supported by DataPolicy", workspaceProject.ID, name)
+		}
 		if err := validateWorkspaceObjectRef(path, "grant:"+workspaceProject.ID+"."+name, "Grant", workspaceProject.ID, name, grant.Object); err != nil {
 			return err
 		}

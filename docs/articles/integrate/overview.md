@@ -53,4 +53,4 @@ Design integrations to:
 
 Prefer `leapview deploy` over manually creating and activating deployment candidates. Prefer dashboard or semantic query endpoints over building SQL from catalog metadata.
 
-Start with [API quickstart](/docs/guides/integrate/api-quickstart), [Headless BI queries](/docs/guides/integrate/headless-bi), [Agent integrations](/docs/guides/integrate/agent), or [Connect an MCP host](/docs/guides/integrate/mcp).
+Start with [API quickstart](/docs/guides/integrate/api-quickstart), [Headless BI queries](/docs/guides/integrate/headless-bi), [Public and embedded dashboards](/docs/guides/integrate/public-dashboards), [Agent integrations](/docs/guides/integrate/agent), or [Connect an MCP host](/docs/guides/integrate/mcp).

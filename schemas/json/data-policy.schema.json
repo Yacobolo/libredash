@@ -3,7 +3,11 @@
     "#APIVersion": {
       "const": "leapview.dev/v1"
     },
-    "#AccessSubject": {
+    "#AnyObject": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "#DataPolicySubject": {
       "additionalProperties": false,
       "properties": {
         "displayName": {
@@ -33,10 +37,6 @@
       "required": [
         "kind"
       ],
-      "type": "object"
-    },
-    "#AnyObject": {
-      "additionalProperties": true,
       "type": "object"
     },
     "#Metadata": {
@@ -126,7 +126,7 @@
           ]
         },
         "subject": {
-          "$ref": "#/$defs/%23AccessSubject"
+          "$ref": "#/$defs/%23DataPolicySubject"
         }
       },
       "required": [

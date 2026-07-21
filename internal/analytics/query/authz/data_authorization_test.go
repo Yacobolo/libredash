@@ -179,6 +179,129 @@ func TestGovernDashboardCountUsesAuthorizationProjectionPolicies(t *testing.T) {
 	}
 }
 
+func TestResolvedDependencyObjectsIncludesRowQueryFilterFields(t *testing.T) {
+	model := governanceTestModel()
+	metrics := New(semanticModelMetrics{model: model}, Options{DefaultWorkspaceID: "test"})
+	_, physicalObjects, err := metrics.resolvedDependencyObjects(dataquery.Query{
+		WorkspaceID: "test", ModelID: model.Name, Kind: dataquery.KindSemanticRows, Target: "ratings",
+		Fields:  []dataquery.Field{{Field: "ratings.rating"}},
+		Filters: []dataquery.Filter{{Field: "ratings.status", Operator: "equals", Values: []any{"published"}}},
+	}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !containsObject(physicalObjects, access.SecurableColumn, "activity/ratings/status") {
+		t.Fatalf("physical dependencies = %#v, want ratings/status", physicalObjects)
+	}
+}
+
+func TestPublicationQueryFailsClosedWhenAuditIdentityIsMissing(t *testing.T) {
+	ctx := context.Background()
+	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "leapview.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	if err := workspacesqlite.NewRepository(store.SQLDB()).Ensure(ctx, workspace.EnsureInput{ID: "test", Title: "Test"}); err != nil {
+		t.Fatal(err)
+	}
+	model := governanceTestModel()
+	metrics := New(semanticModelMetrics{model: model}, Options{Repo: accesssqlite.NewRepository(store.SQLDB()), DefaultWorkspaceID: "test"})
+	ctx = WithDashboardPublicationCapability(ctx, DashboardPublicationCapability{
+		WorkspaceID: "test", Publication: "website", Dashboard: "dashboard", ModelID: model.Name,
+		DependencyAssetIDs: []string{
+			"dashboard:test.dashboard", "semantic_model:test.activity", "semantic_table:test.activity.ratings",
+			"field:test.activity.ratings.rating",
+		},
+	})
+	_, transform, err := metrics.GovernDataQuery(ctx, dataquery.Query{
+		WorkspaceID: "test", Surface: dataquery.SurfacePublicDashboard, Operation: dataquery.OperationDashboardRows,
+		ModelID: model.Name, Kind: dataquery.KindSemanticRows, Target: "ratings", Fields: []dataquery.Field{{Field: "ratings.rating"}},
+	})
+	if err != nil {
+		t.Fatalf("govern public query: %v", err)
+	}
+	result := dataquery.Result{Status: dataquery.StatusSuccess}
+	if err := transform(&result, nil); err == nil {
+		t.Fatal("publication query succeeded without a durable audit identity")
+	}
+}
+
+func TestPublicationQueryAppliesGlobalAndPublicationPoliciesAndPersistsAudit(t *testing.T) {
+	ctx := context.Background()
+	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "leapview.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	if err := workspacesqlite.NewRepository(store.SQLDB()).Ensure(ctx, workspace.EnsureInput{ID: "test", Title: "Test"}); err != nil {
+		t.Fatal(err)
+	}
+	repo := accesssqlite.NewRepository(store.SQLDB())
+	principalID := access.DashboardPublicationSubjectID("test", "website")
+	if _, err := repo.UpsertPrincipal(ctx, access.PrincipalInput{ID: principalID, DisplayName: "website", Kind: access.PrincipalKindDashboardPublication}); err != nil {
+		t.Fatal(err)
+	}
+	model := governanceTestModel()
+	modelObject := access.ItemObject(access.SecurableSemanticModel, "test", model.Name)
+	dataset := access.ItemObjectWithParent(access.SecurableDataset, "test", model.Name+"/ratings", modelObject)
+	rating := access.ItemObjectWithParent(access.SecurableColumn, "test", model.Name+"/ratings/rating", dataset)
+	for _, object := range []access.ObjectRef{modelObject, dataset, rating} {
+		if _, err := repo.UpsertSecurableObject(ctx, object, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := repo.UpsertDataPolicy(ctx, access.DataPolicyInput{
+		Object: dataset, PolicyType: "row_filter", ExpressionJSON: `{"field":"ratings.status","operator":"equals","values":["published"]}`,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.UpsertDataPolicy(ctx, access.DataPolicyInput{
+		Object: rating, SubjectType: access.SubjectDashboardPublication, SubjectID: principalID,
+		PolicyType: "column_mask", ExpressionJSON: `{"field":"ratings.rating","mask":"null"}`,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	metrics := New(semanticModelMetrics{model: model}, Options{Repo: repo, DefaultWorkspaceID: "test"})
+	ctx = WithDashboardPublicationCapability(ctx, DashboardPublicationCapability{
+		WorkspaceID: "test", Publication: "website", Dashboard: "dashboard", ModelID: model.Name,
+		DependencyAssetIDs: []string{
+			"dashboard:test.dashboard", "semantic_model:test.activity", "semantic_table:test.activity.ratings",
+			"field:test.activity.ratings.rating", "field:test.activity.ratings.status",
+		},
+	})
+	governed, transform, err := metrics.GovernDataQuery(ctx, dataquery.Query{
+		WorkspaceID: "test", Surface: dataquery.SurfacePublicDashboard, Operation: dataquery.OperationDashboardRows,
+		ModelID: model.Name, Kind: dataquery.KindSemanticRows, Target: "ratings", Fields: []dataquery.Field{{Field: "ratings.rating"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(governed.Filters) != 1 || governed.Filters[0].Field != "ratings.status" {
+		t.Fatalf("publication row filters = %#v", governed.Filters)
+	}
+	if len(governed.ColumnMasks) != 1 || governed.ColumnMasks[0].Field != "ratings.rating" {
+		t.Fatalf("publication column masks = %#v", governed.ColumnMasks)
+	}
+	result := dataquery.Result{Status: dataquery.StatusSuccess}
+	if err := transform(&result, nil); err != nil {
+		t.Fatal(err)
+	}
+	events, err := repo.ListAuditEvents(ctx, access.AuditEventFilter{WorkspaceID: "test", PrincipalID: principalID})
+	if err != nil || len(events) != 1 || events[0].Action != "data_query.executed" {
+		t.Fatalf("publication audit events = %#v error=%v", events, err)
+	}
+}
+
+func containsObject(objects []access.ObjectRef, typ access.SecurableType, id string) bool {
+	for _, object := range objects {
+		if object.Type == typ && object.ObjectID == id {
+			return true
+		}
+	}
+	return false
+}
+
 func governanceTestModel() *semanticmodel.Model {
 	return &semanticmodel.Model{
 		Name: "activity",

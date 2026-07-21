@@ -28,11 +28,11 @@ type resolvedPublicDashboard struct {
 }
 
 func (s *Server) resolvePublicDashboard(ctx context.Context, publicID string) (resolvedPublicDashboard, error) {
-	if s.publicationRepo == nil {
+	if s.publicationService == nil {
 		return resolvedPublicDashboard{}, publication.ErrNotFound
 	}
-	row, err := s.publicationRepo.GetByPublicID(ctx, strings.TrimSpace(publicID))
-	if err != nil || row.Status() != publication.StatusActive {
+	row, err := s.publicationService.ResolvePublic(ctx, strings.TrimSpace(publicID))
+	if err != nil {
 		return resolvedPublicDashboard{}, publication.ErrNotFound
 	}
 	metrics, ok := s.metricsForWorkspace(row.WorkspaceID)
@@ -106,7 +106,8 @@ func (s *Server) publicDashboardUpdates(w http.ResponseWriter, r *http.Request) 
 		presentation = reportui.PresentationPublic
 	}
 	streamID := lddatastar.StreamID(clientID, resolved.publication.Dashboard, pageID, streamInstanceID)
-	ctx, unregister := s.publicationStreams.Register(r.Context(), resolved.publication.ID, streamID, resolved.publication.ServingStateID)
+	version := publicationStreamVersion{PublicID: resolved.publication.PublicID, ServingStateID: resolved.publication.ServingStateID}
+	ctx, unregister := s.publicationStreams.Register(r.Context(), resolved.publication.ID, streamID, version)
 	defer unregister()
 	streamFinished := s.telemetry.publicStreamStarted(presentation)
 	defer streamFinished()
@@ -167,7 +168,8 @@ func (s *Server) publicDashboardHTTP(resolved resolvedPublicDashboard) dashboard
 			return fmt.Errorf("public command requires stream identity")
 		}
 		streamID := lddatastar.StreamID(signals.Runtime.ClientID, request.DashboardID, request.PageID, signals.Runtime.StreamInstanceID)
-		if !s.publicationStreams.Active(resolved.publication.ID, streamID, resolved.publication.ServingStateID) {
+		version := publicationStreamVersion{PublicID: resolved.publication.PublicID, ServingStateID: resolved.publication.ServingStateID}
+		if !s.publicationStreams.Active(resolved.publication.ID, streamID, version) {
 			return fmt.Errorf("public command stream is not active")
 		}
 		return nil
@@ -217,4 +219,5 @@ func setPublicDashboardSecurityHeaders(header http.Header, presentation string, 
 	header.Set("Referrer-Policy", "no-referrer")
 	header.Set("X-Robots-Tag", "noindex")
 	header.Set("X-Content-Type-Options", "nosniff")
+	header.Set("Cache-Control", "no-store")
 }

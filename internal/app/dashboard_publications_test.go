@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Yacobolo/leapview/internal/access"
 	"github.com/Yacobolo/leapview/internal/dashboard"
@@ -52,6 +53,9 @@ func TestPublicDashboardDocumentsAreAnonymousAndRouteAware(t *testing.T) {
 	}
 	if public.Header().Get("Referrer-Policy") != "no-referrer" || public.Header().Get("X-Robots-Tag") != "noindex" {
 		t.Fatalf("public privacy headers = %v", public.Header())
+	}
+	if public.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("public Cache-Control = %q, want no-store", public.Header().Get("Cache-Control"))
 	}
 
 	embed := httptest.NewRecorder()
@@ -157,6 +161,27 @@ func TestEmbedWithNoAllowedOriginsOmitsLegacyFrameHeaderAndDeniesFraming(t *test
 	}
 }
 
+func TestPublicDashboardDocumentsUseDedicatedRateLimitBucket(t *testing.T) {
+	store := testStore(t)
+	seedActivePublication(t, store, "opaque-public-id-12345678901234")
+	server := NewWithOptions(fakeMetrics{}, Options{
+		Store: store, DefaultWorkspaceID: "test-workspace",
+		RateLimits: RateLimitConfig{Enabled: true, PublicPageLimit: 1, PublicPageWindow: time.Minute},
+	})
+	handler := server.Routes()
+	path := "/public/dashboards/opaque-public-id-12345678901234"
+	request := func() int {
+		recorder := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.RemoteAddr = "192.0.2.10:1234"
+		handler.ServeHTTP(recorder, req)
+		return recorder.Code
+	}
+	if first, second := request(), request(); first != http.StatusOK || second != http.StatusTooManyRequests {
+		t.Fatalf("public page rate limit statuses = %d, %d", first, second)
+	}
+}
+
 func TestDashboardPublicationManagementAPIRequiresAndReplaysIdempotencyKeys(t *testing.T) {
 	store := testStore(t)
 	seedActivePublication(t, store, "opaque-public-id-12345678901234")
@@ -209,7 +234,8 @@ func TestPublicCommandsRequireMatchingLiveStreamAndSuspensionCancelsIt(t *testin
 	}
 	clientID, instanceID, pageID := "client-a", "stream-a", "overview"
 	streamID := lddatastar.StreamID(clientID, resolved.publication.Dashboard, pageID, instanceID)
-	streamContext, unregister := server.publicationStreams.Register(context.Background(), resolved.publication.ID, streamID, resolved.publication.ServingStateID)
+	version := publicationStreamVersion{PublicID: resolved.publication.PublicID, ServingStateID: resolved.publication.ServingStateID}
+	streamContext, unregister := server.publicationStreams.Register(context.Background(), resolved.publication.ID, streamID, version)
 	defer unregister()
 	guard := server.publicDashboardHTTP(resolved).CommandGuard
 	request := command.Request{DashboardID: resolved.publication.Dashboard, ModelID: resolved.modelID, PageID: pageID}

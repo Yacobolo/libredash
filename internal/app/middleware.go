@@ -15,14 +15,20 @@ import (
 const DefaultMaxRequestBodyBytes int64 = 128 << 20
 
 type RateLimitConfig struct {
-	Enabled       bool
-	UseRealIP     bool
-	AuthLimit     int
-	AuthWindow    time.Duration
-	APILimit      int
-	APIWindow     time.Duration
-	UpdatesLimit  int
-	UpdatesWindow time.Duration
+	Enabled             bool
+	UseRealIP           bool
+	AuthLimit           int
+	AuthWindow          time.Duration
+	APILimit            int
+	APIWindow           time.Duration
+	UpdatesLimit        int
+	UpdatesWindow       time.Duration
+	PublicPageLimit     int
+	PublicPageWindow    time.Duration
+	PublicCommandLimit  int
+	PublicCommandWindow time.Duration
+	PublicStreamLimit   int
+	PublicStreamWindow  time.Duration
 }
 
 type SecurityHeadersConfig struct {
@@ -41,14 +47,20 @@ func DefaultRequestBodyLimitConfig() RequestBodyLimitConfig {
 
 func ProductionRateLimitConfig() RateLimitConfig {
 	return RateLimitConfig{
-		Enabled:       true,
-		UseRealIP:     false,
-		AuthLimit:     20,
-		AuthWindow:    time.Minute,
-		APILimit:      120,
-		APIWindow:     time.Minute,
-		UpdatesLimit:  120,
-		UpdatesWindow: time.Minute,
+		Enabled:             true,
+		UseRealIP:           false,
+		AuthLimit:           20,
+		AuthWindow:          time.Minute,
+		APILimit:            120,
+		APIWindow:           time.Minute,
+		UpdatesLimit:        120,
+		UpdatesWindow:       time.Minute,
+		PublicPageLimit:     120,
+		PublicPageWindow:    time.Minute,
+		PublicCommandLimit:  600,
+		PublicCommandWindow: time.Minute,
+		PublicStreamLimit:   60,
+		PublicStreamWindow:  time.Minute,
 	}
 }
 
@@ -162,7 +174,29 @@ func (c RateLimitConfig) updatesMiddleware() func(http.Handler) http.Handler {
 	return c.middleware(c.UpdatesLimit, c.UpdatesWindow)
 }
 
+func (c RateLimitConfig) publicPageMiddleware(telemetry *httpTelemetry) func(http.Handler) http.Handler {
+	return c.publicMiddleware(c.PublicPageLimit, c.PublicPageWindow, telemetry, "page")
+}
+
+func (c RateLimitConfig) publicCommandMiddleware(telemetry *httpTelemetry) func(http.Handler) http.Handler {
+	return c.publicMiddleware(c.PublicCommandLimit, c.PublicCommandWindow, telemetry, "command")
+}
+
+func (c RateLimitConfig) publicStreamMiddleware(telemetry *httpTelemetry) func(http.Handler) http.Handler {
+	return c.publicMiddleware(c.PublicStreamLimit, c.PublicStreamWindow, telemetry, "stream")
+}
+
 func (c RateLimitConfig) middleware(limit int, window time.Duration) func(http.Handler) http.Handler {
+	return c.middlewareWithRejection(limit, window, nil)
+}
+
+func (c RateLimitConfig) publicMiddleware(limit int, window time.Duration, telemetry *httpTelemetry, family string) func(http.Handler) http.Handler {
+	return c.middlewareWithRejection(limit, window, func() {
+		telemetry.publicRateLimitObserved(family)
+	})
+}
+
+func (c RateLimitConfig) middlewareWithRejection(limit int, window time.Duration, rejected func()) func(http.Handler) http.Handler {
 	if !c.Enabled || limit <= 0 || window <= 0 {
 		return passthrough
 	}
@@ -173,6 +207,9 @@ func (c RateLimitConfig) middleware(limit int, window time.Duration) func(http.H
 	return httprate.Limit(limit, window,
 		httprate.WithKeyFuncs(keyFunc, httprate.KeyByEndpoint),
 		httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) {
+			if rejected != nil {
+				rejected()
+			}
 			writeMiddlewareError(w, r, http.StatusTooManyRequests, "RATE_LIMITED", "The request rate limit was exceeded")
 		}),
 	)

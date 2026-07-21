@@ -19,14 +19,10 @@
           "enum": [
             "principal",
             "group",
-            "service_principal",
-            "dashboard_publication"
+            "service_principal"
           ]
         },
         "principalId": {
-          "$ref": "#/$defs/%23ResourceID"
-        },
-        "publication": {
           "$ref": "#/$defs/%23ResourceID"
         }
       },

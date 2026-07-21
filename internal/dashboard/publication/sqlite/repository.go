@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Yacobolo/leapview/internal/access"
 	"github.com/Yacobolo/leapview/internal/dashboard/publication"
 )
 
@@ -185,6 +186,9 @@ func ReconcileTx(ctx context.Context, tx *sql.Tx, input publication.ReconcileInp
 	if input.ProjectID == "" || input.WorkspaceID == "" || input.ServingStateID == "" {
 		return fmt.Errorf("publication reconciliation requires project, workspace, and serving state")
 	}
+	if err := disableSupersededProjectPublications(ctx, tx, input); err != nil {
+		return err
+	}
 	rows, err := tx.QueryContext(ctx, `SELECT id, name, configured, configuration_digest FROM dashboard_publications WHERE project_id = ? AND workspace_id = ?`, input.ProjectID, input.WorkspaceID)
 	if err != nil {
 		return err
@@ -227,6 +231,11 @@ func ReconcileTx(ctx context.Context, tx *sql.Tx, input publication.ReconcileInp
 	sort.Strings(names)
 	for _, name := range names {
 		compiled := input.Publications[name]
+		principalID := access.DashboardPublicationSubjectID(input.WorkspaceID, name)
+		if _, err := tx.ExecContext(ctx, `INSERT INTO principals (id, display_name, kind) VALUES (?, ?, ?)
+ON CONFLICT(id) DO UPDATE SET display_name = excluded.display_name, kind = excluded.kind, updated_at = CURRENT_TIMESTAMP`, principalID, name, access.PrincipalKindDashboardPublication); err != nil {
+			return fmt.Errorf("reconcile publication principal %q: %w", name, err)
+		}
 		origins, err := json.Marshal(compiled.AllowedOrigins)
 		if err != nil {
 			return err
@@ -261,6 +270,34 @@ func ReconcileTx(ctx context.Context, tx *sql.Tx, input publication.ReconcileInp
 			return err
 		}
 		if err := insertEvent(ctx, tx, id, "configured", input.ActorID, input.ServingStateID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func disableSupersededProjectPublications(ctx context.Context, tx *sql.Tx, input publication.ReconcileInput) error {
+	rows, err := tx.QueryContext(ctx, `SELECT id FROM dashboard_publications WHERE workspace_id = ? AND project_id <> ? AND configured = 1`, input.WorkspaceID, input.ProjectID)
+	if err != nil {
+		return err
+	}
+	ids := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	for _, id := range ids {
+		if _, err := tx.ExecContext(ctx, `UPDATE dashboard_publications SET configured = 0, active_serving_state_id = NULL, disabled_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, id); err != nil {
+			return err
+		}
+		if err := insertEvent(ctx, tx, id, "disabled", input.ActorID, input.ServingStateID); err != nil {
 			return err
 		}
 	}

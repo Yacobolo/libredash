@@ -42,7 +42,7 @@ func (s *Server) adminHTTPHandler() adminhttp.Handler {
 }
 
 func (s *Server) mutateAdminPublication(r *http.Request, command uisignals.AdminPublicationCommand) error {
-	if s.publicationRepo == nil {
+	if s.publicationService == nil {
 		return publication.ErrNotFound
 	}
 	principal, ok := currentPrincipal(s, r)
@@ -64,21 +64,7 @@ func (s *Server) mutateAdminPublication(r *http.Request, command uisignals.Admin
 			}
 		}
 	}
-	var row publication.Publication
-	var err error
-	switch command.Action {
-	case "suspend":
-		row, err = s.publicationRepo.Suspend(r.Context(), command.WorkspaceID, command.Publication, principal.ID)
-	case "resume":
-		row, err = s.publicationRepo.Resume(r.Context(), command.WorkspaceID, command.Publication, principal.ID)
-	case "rotate":
-		row, err = s.publicationRepo.Rotate(r.Context(), command.WorkspaceID, command.Publication, principal.ID)
-	default:
-		return publication.ErrConflict
-	}
-	if err == nil && (command.Action == "suspend" || command.Action == "rotate") {
-		s.publicationStreams.ClosePublication(row.ID)
-	}
+	_, err := s.publicationService.Mutate(r.Context(), command.WorkspaceID, command.Publication, principal.ID, publication.Action(command.Action))
 	return err
 }
 

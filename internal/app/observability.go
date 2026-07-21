@@ -28,6 +28,7 @@ type httpTelemetry struct {
 	publicDashboardDocuments      *prometheus.CounterVec
 	publicDashboardStreams        *prometheus.GaugeVec
 	publicDashboardCommands       *prometheus.CounterVec
+	publicDashboardRateLimits     *prometheus.CounterVec
 	handlerOpts                   promhttp.HandlerOpts
 }
 
@@ -91,6 +92,10 @@ func newHTTPTelemetry() *httpTelemetry {
 			Name: "leapview_public_dashboard_commands_total",
 			Help: "Anonymous dashboard command attempts.",
 		}, []string{"command", "outcome"}),
+		publicDashboardRateLimits: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "leapview_public_dashboard_rate_limit_rejections_total",
+			Help: "Anonymous dashboard requests rejected by public traffic family.",
+		}, []string{"family"}),
 		handlerOpts: promhttp.HandlerOpts{EnableOpenMetrics: true},
 	}
 	registry.MustRegister(
@@ -107,6 +112,7 @@ func newHTTPTelemetry() *httpTelemetry {
 		telemetry.publicDashboardDocuments,
 		telemetry.publicDashboardStreams,
 		telemetry.publicDashboardCommands,
+		telemetry.publicDashboardRateLimits,
 	)
 	return telemetry
 }
@@ -210,6 +216,18 @@ func (t *httpTelemetry) publicCommandObserved(command, outcome string) {
 		outcome = "rejected"
 	}
 	t.publicDashboardCommands.WithLabelValues(command, outcome).Inc()
+}
+
+func (t *httpTelemetry) publicRateLimitObserved(family string) {
+	if t == nil {
+		return
+	}
+	switch family {
+	case "page", "command", "stream":
+	default:
+		family = "unknown"
+	}
+	t.publicDashboardRateLimits.WithLabelValues(family).Inc()
 }
 
 func dashboardCommandLabel(value string) string {

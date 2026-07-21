@@ -3,8 +3,11 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
 
+	"github.com/Yacobolo/leapview/internal/access"
+	accesssqlite "github.com/Yacobolo/leapview/internal/access/sqlite"
 	"github.com/Yacobolo/leapview/internal/dashboard/publication"
 	"github.com/Yacobolo/leapview/internal/platform"
 	"github.com/Yacobolo/leapview/internal/workspace"
@@ -25,6 +28,19 @@ func TestReconcilePreservesPublicIDAcrossCutoverRemovalAndReAdd(t *testing.T) {
 		ProjectID: "site", WorkspaceID: "visuals", ServingStateID: "state_1", ActorID: "owner",
 		Publications: map[string]workspace.DashboardPublication{"website": testCompiledPublication("digest-1")},
 	})
+	var principalKind, principalName string
+	if err := db.QueryRowContext(ctx, `SELECT kind, display_name FROM principals WHERE id = ?`, access.DashboardPublicationSubjectID("visuals", "website")).Scan(&principalKind, &principalName); err != nil {
+		t.Fatalf("publication principal: %v", err)
+	}
+	if principalKind != string(access.PrincipalKindDashboardPublication) || principalName != "website" {
+		t.Fatalf("publication principal = kind %q name %q", principalKind, principalName)
+	}
+	if err := access.PersistAuditEvent(ctx, accesssqlite.NewRepository(db), access.AuditEventInput{
+		WorkspaceID: "visuals", PrincipalID: access.DashboardPublicationSubjectID("visuals", "website"),
+		Action: "data_query.executed", TargetType: "dashboard_publication", TargetID: "website", Status: "success",
+	}); err != nil {
+		t.Fatalf("publication audit event: %v", err)
+	}
 	first := mustGetPublication(t, repo, ctx, "visuals", "website")
 	if len(first.PublicID) != 32 || first.Status() != publication.StatusActive {
 		t.Fatalf("first = %#v, status=%s", first, first.Status())
@@ -115,6 +131,45 @@ func TestResumeFailsWhilePublicationIsAbsentFromConfiguration(t *testing.T) {
 	reconcilePublications(t, ctx, db, publication.ReconcileInput{ProjectID: "site", WorkspaceID: "visuals", ServingStateID: "state_2", Publications: map[string]workspace.DashboardPublication{}})
 	if _, err := repo.Resume(ctx, "visuals", "website", "admin"); err != publication.ErrConflict {
 		t.Fatalf("Resume() error = %v", err)
+	}
+}
+
+func TestReconcileDisablesPublicationsFromThePreviouslyActiveProject(t *testing.T) {
+	ctx := context.Background()
+	store, err := platform.Open(ctx, t.TempDir()+"/platform.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	db := store.SQLDB()
+	seedPublicationWorkspace(t, db)
+	if _, err := db.Exec(`INSERT INTO serving_states (id, workspace_id, project_id, environment, status, source) VALUES ('state_other', 'visuals', 'other-site', 'prod', 'validated', 'publish')`); err != nil {
+		t.Fatal(err)
+	}
+	repo := NewRepository(db)
+	reconcilePublications(t, ctx, db, publication.ReconcileInput{
+		ProjectID: "site", WorkspaceID: "visuals", ServingStateID: "state_1",
+		Publications: map[string]workspace.DashboardPublication{"website": testCompiledPublication("site-digest")},
+	})
+	prior := mustGetPublication(t, repo, ctx, "visuals", "website")
+
+	reconcilePublications(t, ctx, db, publication.ReconcileInput{
+		ProjectID: "other-site", WorkspaceID: "visuals", ServingStateID: "state_other",
+		Publications: map[string]workspace.DashboardPublication{"website": testCompiledPublication("other-digest")},
+	})
+	current := mustGetPublication(t, repo, ctx, "visuals", "website")
+	if current.ProjectID != "other-site" || current.Status() != publication.StatusActive {
+		t.Fatalf("current publication = %#v status=%s", current, current.Status())
+	}
+	if _, err := repo.GetByPublicID(ctx, prior.PublicID); !errors.Is(err, publication.ErrNotFound) {
+		t.Fatalf("prior project public id error = %v, want not found", err)
+	}
+	var configured int
+	if err := db.QueryRowContext(ctx, `SELECT configured FROM dashboard_publications WHERE project_id = 'site' AND workspace_id = 'visuals' AND name = 'website'`).Scan(&configured); err != nil {
+		t.Fatal(err)
+	}
+	if configured != 0 {
+		t.Fatalf("prior project configured = %d, want 0", configured)
 	}
 }
 

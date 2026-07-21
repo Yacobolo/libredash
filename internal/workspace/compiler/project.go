@@ -91,9 +91,13 @@ func CompileProject(projectPath string, opts Options) (CompiledProject, error) {
 }
 
 func compilePublicationClosures(definition *workspace.Definition, graph workspace.AssetGraph) error {
-	adjacent := make(map[workspace.AssetID][]workspace.AssetID, len(graph.Assets))
+	types := make(map[workspace.AssetID]workspace.AssetType, len(graph.Assets))
+	for _, asset := range graph.Assets {
+		types[asset.ID] = asset.Type
+	}
+	adjacent := make(map[workspace.AssetID][]workspace.AssetEdge, len(graph.Assets))
 	for _, edge := range graph.Edges {
-		adjacent[edge.FromAssetID] = append(adjacent[edge.FromAssetID], edge.ToAssetID)
+		adjacent[edge.FromAssetID] = append(adjacent[edge.FromAssetID], edge)
 	}
 	for name, publication := range definition.Publications {
 		root := workspace.NewAssetID(workspace.AssetTypeDashboard, definition.Catalog.Workspace.ID+"."+publication.Dashboard)
@@ -102,7 +106,11 @@ func compilePublicationClosures(definition *workspace.Definition, graph workspac
 		for len(queue) > 0 {
 			current := queue[0]
 			queue = queue[1:]
-			for _, next := range adjacent[current] {
+			for _, edge := range adjacent[current] {
+				if edge.Type == workspace.AssetEdgeContains && (types[current] == workspace.AssetTypeSemanticModel || types[current] == workspace.AssetTypeSemanticTable) {
+					continue
+				}
+				next := edge.ToAssetID
 				if _, ok := seen[next]; ok {
 					continue
 				}

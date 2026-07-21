@@ -381,6 +381,13 @@ func ExtractLineage(workspaceID workspace.WorkspaceID, servingStateID workspace.
 					return workspace.AssetGraph{}, err
 				}
 			}
+			for _, interaction := range []reportdef.SelectionInteraction{visual.Interaction.PointSelection, visual.Interaction.RowSelection} {
+				for _, mapping := range interaction.Mappings {
+					if err := addFieldUse(visualID, mapping.Field, workspace.AssetEdgeFiltersField); err != nil {
+						return workspace.AssetGraph{}, err
+					}
+				}
+			}
 		}
 		for _, tableName := range sortedMapKeys(report.Tables) {
 			table := report.Tables[tableName]

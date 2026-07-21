@@ -1,0 +1,66 @@
+package publication
+
+import (
+	"context"
+	"fmt"
+)
+
+type Action string
+
+const (
+	ActionSuspend Action = "suspend"
+	ActionResume  Action = "resume"
+	ActionRotate  Action = "rotate"
+)
+
+type ServiceRepository interface {
+	GetByPublicID(context.Context, string) (Publication, error)
+	Suspend(context.Context, string, string, string) (Publication, error)
+	Resume(context.Context, string, string, string) (Publication, error)
+	Rotate(context.Context, string, string, string) (Publication, error)
+}
+
+type Service struct {
+	repository ServiceRepository
+	revoke     func(string)
+}
+
+func NewService(repository ServiceRepository, revoke func(string)) *Service {
+	return &Service{repository: repository, revoke: revoke}
+}
+
+func (s *Service) ResolvePublic(ctx context.Context, publicID string) (Publication, error) {
+	if s == nil || s.repository == nil {
+		return Publication{}, ErrNotFound
+	}
+	row, err := s.repository.GetByPublicID(ctx, publicID)
+	if err != nil || row.Status() != StatusActive {
+		return Publication{}, ErrNotFound
+	}
+	return row, nil
+}
+
+func (s *Service) Mutate(ctx context.Context, workspaceID, name, actorID string, action Action) (Publication, error) {
+	if s == nil || s.repository == nil {
+		return Publication{}, ErrNotFound
+	}
+	var row Publication
+	var err error
+	switch action {
+	case ActionSuspend:
+		row, err = s.repository.Suspend(ctx, workspaceID, name, actorID)
+	case ActionResume:
+		row, err = s.repository.Resume(ctx, workspaceID, name, actorID)
+	case ActionRotate:
+		row, err = s.repository.Rotate(ctx, workspaceID, name, actorID)
+	default:
+		return Publication{}, fmt.Errorf("%w: unsupported publication action %q", ErrConflict, action)
+	}
+	if err != nil {
+		return Publication{}, err
+	}
+	if s.revoke != nil && (action == ActionSuspend || action == ActionRotate) {
+		s.revoke(row.ID)
+	}
+	return row, nil
+}

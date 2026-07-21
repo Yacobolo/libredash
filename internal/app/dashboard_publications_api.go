@@ -40,18 +40,15 @@ func (a apiGenAdapter) SuspendDashboardPublication(w http.ResponseWriter, r *htt
 		return
 	}
 	actor := publicationActor(r)
-	row, err := a.server.publicationRepo.Suspend(r.Context(), workspaceID, name, actor)
-	if !a.writePublicationMutation(w, r, row, err) {
-		return
-	}
-	a.server.publicationStreams.ClosePublication(row.ID)
+	row, err := a.server.publicationService.Mutate(r.Context(), workspaceID, name, actor, publication.ActionSuspend)
+	a.writePublicationMutation(w, r, row, err)
 }
 
 func (a apiGenAdapter) ResumeDashboardPublication(w http.ResponseWriter, r *http.Request, workspaceID, name string, _ apigenapi.GenResumeDashboardPublicationHeaders) {
 	if !a.publicationMutationsAvailable(w, r) {
 		return
 	}
-	row, err := a.server.publicationRepo.Resume(r.Context(), workspaceID, name, publicationActor(r))
+	row, err := a.server.publicationService.Mutate(r.Context(), workspaceID, name, publicationActor(r), publication.ActionResume)
 	a.writePublicationMutation(w, r, row, err)
 }
 
@@ -59,15 +56,12 @@ func (a apiGenAdapter) RotateDashboardPublication(w http.ResponseWriter, r *http
 	if !a.publicationMutationsAvailable(w, r) {
 		return
 	}
-	row, err := a.server.publicationRepo.Rotate(r.Context(), workspaceID, name, publicationActor(r))
-	if !a.writePublicationMutation(w, r, row, err) {
-		return
-	}
-	a.server.publicationStreams.ClosePublication(row.ID)
+	row, err := a.server.publicationService.Mutate(r.Context(), workspaceID, name, publicationActor(r), publication.ActionRotate)
+	a.writePublicationMutation(w, r, row, err)
 }
 
 func (a apiGenAdapter) publicationMutationsAvailable(w http.ResponseWriter, r *http.Request) bool {
-	if a.server.publicationRepo != nil {
+	if a.server.publicationService != nil {
 		return true
 	}
 	writeAPIProblem(w, r, http.StatusNotFound, "PUBLICATION_NOT_FOUND", "Dashboard publication not found", nil)

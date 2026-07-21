@@ -33,18 +33,21 @@ func (s *Server) Routes() http.Handler {
 	mux.Get("/api/openapi.json", s.openAPIDescription)
 	mux.Get("/api/docs", s.publicDocs)
 	mux.Group(func(r chi.Router) {
-		r.Use(s.rateLimits.apiMiddleware())
+		r.Use(s.rateLimits.publicPageMiddleware(s.telemetry))
 		r.Get("/public/dashboards/{publicId}", s.publicDashboardDocument(reportui.PresentationPublic))
 		r.Get("/public/dashboards/{publicId}/pages/{page}", s.publicDashboardDocument(reportui.PresentationPublic))
 		r.Get("/embed/dashboards/{publicId}", s.publicDashboardDocument(reportui.PresentationEmbed))
 		r.Get("/embed/dashboards/{publicId}/pages/{page}", s.publicDashboardDocument(reportui.PresentationEmbed))
+	})
+	mux.Group(func(r chi.Router) {
+		r.Use(s.rateLimits.publicCommandMiddleware(s.telemetry))
 		r.Post("/public/dashboards/{publicId}/commands/reload", s.publicDashboardCommand("reload", func(h dashboardhttp.Handler, w http.ResponseWriter, r *http.Request) { h.Reload(w, r) }))
 		r.Post("/public/dashboards/{publicId}/commands/reset-filters", s.publicDashboardCommand("reset_filters", func(h dashboardhttp.Handler, w http.ResponseWriter, r *http.Request) { h.ResetFilters(w, r) }))
 		r.Post("/public/dashboards/{publicId}/commands/select", s.publicDashboardCommand("select", func(h dashboardhttp.Handler, w http.ResponseWriter, r *http.Request) { h.Select(w, r) }))
 		r.Post("/public/dashboards/{publicId}/commands/clear-selection", s.publicDashboardCommand("clear_selection", func(h dashboardhttp.Handler, w http.ResponseWriter, r *http.Request) { h.ClearSelection(w, r) }))
 		r.Post("/public/dashboards/{publicId}/commands/visual-window", s.publicDashboardCommand("visual_window", func(h dashboardhttp.Handler, w http.ResponseWriter, r *http.Request) { h.VisualWindow(w, r) }))
 	})
-	mux.With(s.rateLimits.updatesMiddleware()).Get("/public/dashboards/{publicId}/updates", s.publicDashboardUpdates)
+	mux.With(s.rateLimits.publicStreamMiddleware(s.telemetry)).Get("/public/dashboards/{publicId}/updates", s.publicDashboardUpdates)
 	if s.pageStreamTrace != nil {
 		mux.Get("/__dev/pagestream/traces", s.pageStreamTraces)
 		mux.Get("/__dev/pagestream/signals", s.pageStreamSignals)

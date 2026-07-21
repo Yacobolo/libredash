@@ -331,6 +331,7 @@ tasks:
       - cmd/leapview/**/*.go
       - internal/cli/**/*.go
       - internal/configschema/**/*.go
+      - internal/configschema/**/*.cue
       - internal/dashboard/report/**/*.go
       - internal/semantic/**/*.go
       - internal/tools/schemadocgen/**/*.go

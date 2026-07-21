@@ -19,6 +19,7 @@ import (
 	asyncjobsqlite "github.com/Yacobolo/leapview/internal/asyncjob/sqlite"
 	cursorsigningsqlite "github.com/Yacobolo/leapview/internal/cursorsigning/sqlite"
 	dashboardhttp "github.com/Yacobolo/leapview/internal/dashboard/http"
+	"github.com/Yacobolo/leapview/internal/dashboard/publication"
 	publicationsqlite "github.com/Yacobolo/leapview/internal/dashboard/publication/sqlite"
 	dashboardstream "github.com/Yacobolo/leapview/internal/dashboard/stream"
 	deploymenthttp "github.com/Yacobolo/leapview/internal/deployment/http"
@@ -87,6 +88,7 @@ type Server struct {
 	dashboardRefreshes              *dashboardstream.Registry
 	publicationStreams              *publicationStreamRegistry
 	publicationRepo                 *publicationsqlite.Repository
+	publicationService              *publication.Service
 	store                           *platform.Store
 	servingStateRepo                servingStateRepository
 	managedDataBindingRepo          manageddatabinding.Repository
@@ -132,6 +134,7 @@ type Server struct {
 	managedDataExpirer              managedDataUploadExpirer
 	managedDataExpireInterval       time.Duration
 	managedDataMaintenanceStarted   bool
+	publicationMonitorStarted       bool
 	refreshPipelineSchedulerStarted bool
 	apiIdempotencyMu                sync.Mutex
 	apiIdempotency                  map[string]*apiIdempotencyRecord
@@ -261,6 +264,7 @@ func NewWithOptions(metrics QueryMetrics, options Options) *Server {
 		server.apiIdempotencyStore = apiidempotencysqlite.NewStore(options.Store.SQLDB())
 		server.refreshPipelineRepo = refreshpipelinesqlite.NewRepository(options.Store.SQLDB())
 		server.publicationRepo = publicationsqlite.NewRepository(options.Store.SQLDB())
+		server.publicationService = publication.NewService(server.publicationRepo, server.publicationStreams.ClosePublication)
 		if err := cursorsigningsqlite.Configure(context.Background(), options.Store.SQLDB()); err != nil {
 			server.logger.ErrorContext(context.Background(), "configure cursor signing failed", "error", err)
 		}
@@ -363,12 +367,19 @@ func (s *Server) StartBackgroundJobs(ctx context.Context) {
 	if startManagedDataMaintenance {
 		s.managedDataMaintenanceStarted = true
 	}
+	startPublicationMonitor := s.publicationRepo != nil && !s.publicationMonitorStarted
+	if startPublicationMonitor {
+		s.publicationMonitorStarted = true
+	}
 	s.backgroundMu.Unlock()
 	s.dispatchQueuedRefreshJobs(backgroundCtx)
 	s.dispatchQueuedAsyncJobs(backgroundCtx)
 	s.startRefreshPipelineScheduler(backgroundCtx)
 	if startManagedDataMaintenance {
 		s.startManagedDataMaintenance(backgroundCtx)
+	}
+	if startPublicationMonitor {
+		s.startPublicationMonitor(backgroundCtx)
 	}
 }
 
@@ -401,6 +412,7 @@ func (s *Server) StopBackgroundJobs(ctx context.Context) error {
 		s.backgroundCancel = nil
 		s.backgroundStopping = false
 		s.managedDataMaintenanceStarted = false
+		s.publicationMonitorStarted = false
 		s.refreshPipelineSchedulerStarted = false
 		s.backgroundMu.Unlock()
 		return nil
