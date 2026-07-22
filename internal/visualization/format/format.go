@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/visualization/ir"
+	"github.com/Yacobolo/leapview/internal/visualization/ir"
 )
 
 type localeData struct{ decimal, group, currencySpace string }

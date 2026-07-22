@@ -4,7 +4,7 @@ LeapView is a Go monolith with explicit generated contracts and focused browser 
 
 ## Server domains
 
-`cmd/libredash` starts the application and CLI. Packages under `internal/` own access, administration, agents, analytics, configuration, dashboards, deployments, execution, managed data, query audit, serving state, storage, workspaces, and UI composition.
+`cmd/leapview` starts the application and CLI. Packages under `internal/` own access, administration, agents, analytics, configuration, dashboards, deployments, execution, managed data, query audit, serving state, storage, workspaces, and UI composition.
 
 Transport packages parse HTTP or Datastar commands and call domain services. Domain services validate authorization and lifecycle invariants. Repository and storage adapters implement SQLite, DuckLake, object storage, filesystem, and external connector behavior.
 

@@ -6,11 +6,11 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	dashboardstream "github.com/Yacobolo/libredash/internal/dashboard/stream"
-	uisignals "github.com/Yacobolo/libredash/internal/ui/signals"
-	visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
-	"github.com/Yacobolo/libredash/pkg/pagestream"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	dashboardstream "github.com/Yacobolo/leapview/internal/dashboard/stream"
+	uisignals "github.com/Yacobolo/leapview/internal/ui/signals"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
+	"github.com/Yacobolo/leapview/pkg/pagestream"
 )
 
 func DashboardID(r *http.Request, signals dashboard.Signals, defaultID string) string {

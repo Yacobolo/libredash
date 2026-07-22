@@ -7,7 +7,7 @@ import (
 )
 
 func TestConfigValidateUsesServeProfile(t *testing.T) {
-	t.Setenv("LIBREDASH_PRODUCTION", "")
+	t.Setenv("LEAPVIEW_PRODUCTION", "")
 	cmd := configCommand()
 	var output bytes.Buffer
 	cmd.SetOut(&output)
@@ -22,13 +22,13 @@ func TestConfigValidateUsesServeProfile(t *testing.T) {
 
 func TestConfigValidateDoesNotExposeSecretValues(t *testing.T) {
 	secret := "short-secret-value"
-	t.Setenv("LIBREDASH_PRODUCTION", "1")
-	t.Setenv("LIBREDASH_LOCAL_AUTH", "1")
-	t.Setenv("LIBREDASH_ALLOWED_HOSTS", "libredash.example.com")
-	t.Setenv("LIBREDASH_PUBLIC_URL", "https://libredash.example.com")
-	t.Setenv("LIBREDASH_COOKIE_SECURE", "true")
-	t.Setenv("LIBREDASH_CSRF_KEY", secret)
-	t.Setenv("LIBREDASH_METRICS_BEARER_TOKEN", "0123456789abcdef0123456789abcdef")
+	t.Setenv("LEAPVIEW_PRODUCTION", "1")
+	t.Setenv("LEAPVIEW_LOCAL_AUTH", "1")
+	t.Setenv("LEAPVIEW_ALLOWED_HOSTS", "leapview.example.com")
+	t.Setenv("LEAPVIEW_PUBLIC_URL", "https://leapview.example.com")
+	t.Setenv("LEAPVIEW_COOKIE_SECURE", "true")
+	t.Setenv("LEAPVIEW_CSRF_KEY", secret)
+	t.Setenv("LEAPVIEW_METRICS_BEARER_TOKEN", "0123456789abcdef0123456789abcdef")
 	cmd := configCommand()
 	cmd.SetArgs([]string{"validate"})
 	err := cmd.Execute()
@@ -41,7 +41,7 @@ func TestConfigValidateDoesNotExposeSecretValues(t *testing.T) {
 }
 
 func TestConfigValidateProductionFlagAppliesProductionRules(t *testing.T) {
-	t.Setenv("LIBREDASH_PRODUCTION", "")
+	t.Setenv("LEAPVIEW_PRODUCTION", "")
 	cmd := configCommand()
 	cmd.SetArgs([]string{"validate", "--production"})
 	if err := cmd.Execute(); err == nil {

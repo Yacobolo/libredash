@@ -37,7 +37,7 @@ func TestProductionGoEnvironmentReadsAreCataloged(t *testing.T) {
 				return true
 			}
 			name, _ := strconv.Unquote(literal.Value)
-			if strings.HasPrefix(name, "LIBREDASH_") {
+			if strings.HasPrefix(name, "LEAPVIEW_") {
 				if _, ok := known[name]; !ok {
 					t.Errorf("%s reads uncataloged environment variable %s", path, name)
 				}
@@ -53,7 +53,7 @@ func TestProductionGoEnvironmentReadsAreCataloged(t *testing.T) {
 
 func TestOperationalEnvironmentReferencesAreCataloged(t *testing.T) {
 	known := knownSettings()
-	pattern := regexp.MustCompile(`\bLIBREDASH_[A-Z0-9_]+\b`)
+	pattern := regexp.MustCompile(`\bLEAPVIEW_[A-Z0-9_]+\b`)
 	root := filepath.Join("..", "..")
 	paths := []string{"README.md", "Taskfile.yml", "Dockerfile", ".env.example", "docs", "scripts", "deploy", "dashboards"}
 	for _, relative := range paths {
@@ -69,7 +69,7 @@ func TestOperationalEnvironmentReferencesAreCataloged(t *testing.T) {
 				return
 			}
 			for _, name := range pattern.FindAllString(string(body), -1) {
-				if strings.HasPrefix(name, "LIBREDASH_TEST_") || strings.HasPrefix(name, "LIBREDASH_QUACK_TEST_") {
+				if strings.HasPrefix(name, "LEAPVIEW_TEST_") || strings.HasPrefix(name, "LEAPVIEW_QUACK_TEST_") {
 					continue
 				}
 				if _, ok := known[name]; !ok {

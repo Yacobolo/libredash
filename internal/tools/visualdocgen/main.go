@@ -16,17 +16,17 @@ import (
 	"sort"
 	"strings"
 
-	dashboardadapter "github.com/Yacobolo/libredash/internal/analytics/duckdb/dashboardadapter"
-	"github.com/Yacobolo/libredash/internal/configschema"
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	dashboarddefinition "github.com/Yacobolo/libredash/internal/dashboard/definition"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
-	dashboardruntime "github.com/Yacobolo/libredash/internal/dashboard/runtime"
-	"github.com/Yacobolo/libredash/internal/visualdocs"
-	visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
-	visualizationruntime "github.com/Yacobolo/libredash/internal/visualization/runtime"
-	"github.com/Yacobolo/libredash/internal/workspace"
-	workspacecompiler "github.com/Yacobolo/libredash/internal/workspace/compiler"
+	dashboardadapter "github.com/Yacobolo/leapview/internal/analytics/duckdb/dashboardadapter"
+	"github.com/Yacobolo/leapview/internal/configschema"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	dashboardruntime "github.com/Yacobolo/leapview/internal/dashboard/runtime"
+	"github.com/Yacobolo/leapview/internal/visualdocs"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
+	visualizationruntime "github.com/Yacobolo/leapview/internal/visualization/runtime"
+	"github.com/Yacobolo/leapview/internal/workspace"
+	workspacecompiler "github.com/Yacobolo/leapview/internal/workspace/compiler"
 	"gopkg.in/yaml.v3"
 )
 
@@ -58,7 +58,7 @@ type visualExampleReference = visualdocs.ExampleReference
 
 func main() {
 	docsDir := flag.String("docs", "docs/visuals", "visual documentation directory")
-	project := flag.String("project", "internal/tools/visualdocgen/testdata/project/libredash.yaml", "fixture project")
+	project := flag.String("project", "internal/tools/visualdocgen/testdata/project/leapview.yaml", "fixture project")
 	data := flag.String("data", "internal/tools/visualdocgen/testdata/data", "fixture managed-data root")
 	out := flag.String("out", "docs/visuals/examples.gen.json", "generated artifact")
 	check := flag.Bool("check", false, "verify the generated artifact is current")
@@ -154,7 +154,7 @@ func generateVisualExamples(docsDir, projectPath, dataRoot string) (visualExampl
 		return visualExamplesArtifact{}, err
 	}
 
-	runtimeDir, err := os.MkdirTemp("", "libredash-visual-docs-*")
+	runtimeDir, err := os.MkdirTemp("", "leapview-visual-docs-*")
 	if err != nil {
 		return visualExamplesArtifact{}, err
 	}
@@ -757,7 +757,7 @@ func validateVisualExampleContract(id, filename string, node yaml.Node) error {
 		return err
 	}
 	resource := map[string]any{
-		"apiVersion": "libredash.dev/v1",
+		"apiVersion": "leapview.dev/v1",
 		"kind":       "Dashboard",
 		"metadata":   map[string]any{"name": "visual-doc-example"},
 		"spec": map[string]any{

@@ -39,4 +39,4 @@ using TypeSpec.OpenAPI;
     #{ kind: "response_serialization", statusCode: 500, code: "INTERNAL_ERROR", publicDetail: "Internal server error." },
   ],
 })
-namespace LibreDashAPI;
+namespace LeapViewAPI;

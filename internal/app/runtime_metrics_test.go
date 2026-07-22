@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	"github.com/Yacobolo/libredash/internal/dashboard/consumer"
-	"github.com/Yacobolo/libredash/internal/runtimehost"
-	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	"github.com/Yacobolo/leapview/internal/dashboard/consumer"
+	"github.com/Yacobolo/leapview/internal/runtimehost"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
 )
 
 func TestRuntimeMetricsQueryDashboardUsesRuntimeLease(t *testing.T) {

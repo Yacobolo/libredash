@@ -57,8 +57,8 @@ test('ECharts interactions translate stable IR field mappings without renderer r
   })
   expect(interactionCommandForRow(envelope, 'primary', [{ forged: true }, 42])).toBeUndefined()
   const option = echartsOption(envelope) as any
-  expect(option.dataset.source).toEqual([['status', 'count', '__ld_selected'], ['delivered', 42, true]])
-  expect(option.visualMap.dimension).toBe('__ld_selected')
+  expect(option.dataset.source).toEqual([['status', 'count', '__lv_selected'], ['delivered', 42, true]])
+  expect(option.visualMap.dimension).toBe('__lv_selected')
 })
 
 test('ECharts gives selectable line and area rows reliable hit targets at either symbol setting', () => {
@@ -229,7 +229,7 @@ test('ECharts constructs deterministic nested hierarchy data and honors layout p
   const option = echartsOption(envelope, defaultRendererContext) as any
   expect(option.series[0].id).toBe('series:hierarchy:tree')
   expect(option.series[0].orient).toBe('LR')
-  expect(option.series[0].data).toEqual([{ name: 'root', value: 10, __ld_dataset: 'primary', __ld_row_index: 0, children: [{ name: 'child', value: 4, __ld_dataset: 'primary', __ld_row_index: 1 }] }])
+  expect(option.series[0].data).toEqual([{ name: 'root', value: 10, __lv_dataset: 'primary', __lv_row_index: 0, children: [{ name: 'child', value: 4, __lv_dataset: 'primary', __lv_row_index: 1 }] }])
 })
 
 test('ECharts hierarchy source nodes select only when their compiled identity tuple is complete', () => {
@@ -258,7 +258,7 @@ test('ECharts hierarchy source nodes select only when their compiled identity tu
     ],
   })
   const option = echartsOption(envelope, defaultRendererContext) as any
-  expect(option.series[0].data[0].children[0]).toMatchObject({ __ld_dataset: 'primary', __ld_row_index: 1 })
+  expect(option.series[0].data[0].children[0]).toMatchObject({ __lv_dataset: 'primary', __lv_row_index: 1 })
 })
 
 test('ECharts network links retain source-row selection while aggregate nodes stay silent', () => {
@@ -276,8 +276,8 @@ test('ECharts network links retain source-row selection while aggregate nodes st
     mappings: [{ field: 'orders.category', value: 'A' }, { field: 'orders.status', value: 'B' }],
   })
   const option = echartsOption(envelope, defaultRendererContext) as any
-  expect(option.series[0].links[0]).toMatchObject({ __ld_dataset: 'primary', __ld_row_index: 0 })
-  expect(option.series[0].data[0].__ld_dataset).toBeUndefined()
+  expect(option.series[0].links[0]).toMatchObject({ __lv_dataset: 'primary', __lv_row_index: 0 })
+  expect(option.series[0].data[0].__lv_dataset).toBeUndefined()
 })
 
 test('ECharts incremental plans preserve interaction state and do not resend data for context changes', () => {
@@ -359,7 +359,7 @@ test('ECharts honors proportional presentation and hierarchy/network layout', ()
 
   const graph = echartsOption(networkFixture('graph'), defaultRendererContext) as any
   expect(graph.series[0]).toMatchObject({ id: 'series:hierarchy:graph', type: 'graph', layout: 'circular', roam: true })
-  expect(graph.series[0].links[0]).toMatchObject({ source: 'A', target: 'B', __ld_dataset: 'primary', __ld_row_index: 0 })
+  expect(graph.series[0].links[0]).toMatchObject({ source: 'A', target: 'B', __lv_dataset: 'primary', __lv_row_index: 0 })
   const sankey = echartsOption(networkFixture('sankey'), defaultRendererContext) as any
   expect(sankey.series[0]).toMatchObject({ id: 'series:hierarchy:sankey', type: 'sankey', orient: 'vertical', nodeGap: 18 })
 

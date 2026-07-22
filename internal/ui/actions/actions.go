@@ -14,7 +14,7 @@ func Patch(path string, signalPaths ...string) string {
 }
 
 func request(method, path string, signalPaths []string) string {
-	options := "headers: window.LibreDashCommand.headers()"
+	options := "headers: window.LeapViewCommand.headers()"
 	if len(signalPaths) > 0 {
 		patterns := make([]string, 0, len(signalPaths))
 		for _, signalPath := range signalPaths {

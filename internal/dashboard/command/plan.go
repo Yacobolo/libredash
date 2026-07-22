@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	"github.com/Yacobolo/libredash/internal/dashboard/consumer"
-	dashboarddefinition "github.com/Yacobolo/libredash/internal/dashboard/definition"
-	"github.com/Yacobolo/libredash/internal/dashboard/report"
-	visualizationdefinition "github.com/Yacobolo/libredash/internal/visualization/definition"
-	visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	"github.com/Yacobolo/leapview/internal/dashboard/consumer"
+	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
+	"github.com/Yacobolo/leapview/internal/dashboard/report"
+	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 )
 
 type TargetKind = consumer.Kind

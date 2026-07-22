@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"sort"
 
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	"github.com/Yacobolo/libredash/internal/dashboard/report"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	"github.com/Yacobolo/leapview/internal/dashboard/report"
 )
 
 func FilterAppliesToTarget(d *report.Dashboard, model *semanticmodel.Model, filter report.FilterDefinition, targetKind, targetID string) (bool, error) {

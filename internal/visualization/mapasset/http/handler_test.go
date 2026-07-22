@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	visualizationmapasset "github.com/Yacobolo/libredash/internal/visualization/mapasset"
+	visualizationmapasset "github.com/Yacobolo/leapview/internal/visualization/mapasset"
 )
 
 func TestCacheHandlerServesRealImmutableByteRanges(t *testing.T) {
@@ -52,7 +52,7 @@ func TestCacheHandlerRejectsMutablePathsAndMutationMethods(t *testing.T) {
 	handler := CacheHandler(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { called = true }))
 
 	mutable := httptest.NewRecorder()
-	handler.ServeHTTP(mutable, httptest.NewRequest(http.MethodGet, "/map-assets/libredash-streets/basemap.pmtiles", nil))
+	handler.ServeHTTP(mutable, httptest.NewRequest(http.MethodGet, "/map-assets/leapview-streets/basemap.pmtiles", nil))
 	if mutable.Code != http.StatusNotFound || mutable.Header().Get("Cache-Control") != "no-store" || called {
 		t.Fatalf("mutable request = status %d headers %#v called %v", mutable.Code, mutable.Header(), called)
 	}

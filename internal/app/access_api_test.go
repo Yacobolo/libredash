@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/access"
-	accesssqlite "github.com/Yacobolo/libredash/internal/access/sqlite"
-	"github.com/Yacobolo/libredash/internal/platform"
+	"github.com/Yacobolo/leapview/internal/access"
+	accesssqlite "github.com/Yacobolo/leapview/internal/access/sqlite"
+	"github.com/Yacobolo/leapview/internal/platform"
 )
 
 func TestAPITokenWorkspaceAndPrivilegeAllowlistAreEnforced(t *testing.T) {

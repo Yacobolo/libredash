@@ -13,14 +13,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/access"
-	"github.com/Yacobolo/libredash/internal/agent"
-	agentconfig "github.com/Yacobolo/libredash/internal/agent/config"
-	"github.com/Yacobolo/libredash/internal/api"
-	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
-	"github.com/Yacobolo/libredash/internal/ui"
-	agentcore "github.com/Yacobolo/libredash/pkg/agent"
-	"github.com/Yacobolo/libredash/pkg/pagestream"
+	"github.com/Yacobolo/leapview/internal/access"
+	"github.com/Yacobolo/leapview/internal/agent"
+	agentconfig "github.com/Yacobolo/leapview/internal/agent/config"
+	"github.com/Yacobolo/leapview/internal/api"
+	apigenapi "github.com/Yacobolo/leapview/internal/api/gen"
+	"github.com/Yacobolo/leapview/internal/ui"
+	agentcore "github.com/Yacobolo/leapview/pkg/agent"
+	"github.com/Yacobolo/leapview/pkg/pagestream"
 	"github.com/go-chi/chi/v5"
 )
 

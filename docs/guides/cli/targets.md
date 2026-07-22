@@ -3,7 +3,7 @@
 Use an explicit target and environment for production-like plans and deployments. Keep local development, staging, and production targets separate.
 
 ```sh
-libredash plan --project dashboards/libredash.yaml \
+leapview plan --project dashboards/leapview.yaml \
   --target https://dash.staging.example.com \
   --environment staging
 ```

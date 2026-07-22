@@ -48,7 +48,7 @@ class ReportCanvas extends LitElement {
       height: 100%;
       min-width: 0;
       min-height: 0;
-      background: var(--ld-report-canvas-bg);
+      background: var(--lv-report-canvas-bg);
     }
 
     .viewport {
@@ -86,7 +86,7 @@ class ReportCanvas extends LitElement {
       height: calc(var(--report-canvas-height) * 1px);
       transform: scale(var(--report-canvas-scale));
       transform-origin: top left;
-      background: var(--ld-report-page-bg);
+      background: var(--lv-report-page-bg);
     }
 
     ::slotted([data-canvas-visual]) {
@@ -169,7 +169,7 @@ class ReportCanvas extends LitElement {
 
   connectedCallback(): void {
     super.connectedCallback()
-    document.addEventListener('ld-report-zoom-command', this.onZoomCommand as EventListener)
+    document.addEventListener('lv-report-zoom-command', this.onZoomCommand as EventListener)
     this.resizeObserver = new ResizeObserver(() => this.updateScale())
     this.updateComplete.then(() => {
       this.resizeObserver?.observe(this)
@@ -180,7 +180,7 @@ class ReportCanvas extends LitElement {
   }
 
   disconnectedCallback(): void {
-    document.removeEventListener('ld-report-zoom-command', this.onZoomCommand as EventListener)
+    document.removeEventListener('lv-report-zoom-command', this.onZoomCommand as EventListener)
     this.resizeObserver?.disconnect()
     super.disconnectedCallback()
   }
@@ -322,7 +322,7 @@ class ReportCanvas extends LitElement {
   }
 
   private emitZoomState(): void {
-    this.dispatchEvent(new CustomEvent('ld-report-zoom-state', {
+    this.dispatchEvent(new CustomEvent('lv-report-zoom-state', {
       detail: { mode: this.presentationMode, scale: this.scale },
       bubbles: true,
       composed: true,
@@ -364,7 +364,7 @@ class ReportZoom extends LitElement {
   static styles = css`
     :host {
       display: inline-block;
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
       font-family: var(--fontStack-system);
     }
 
@@ -381,9 +381,9 @@ class ReportZoom extends LitElement {
       height: 28px;
       place-items: center;
       border: 0;
-      border-radius: var(--ld-radius-default);
+      border-radius: var(--lv-radius-default);
       background: transparent;
-      color: var(--ld-fg-muted);
+      color: var(--lv-fg-muted);
       cursor: pointer;
       padding: 0;
       font: inherit;
@@ -391,14 +391,14 @@ class ReportZoom extends LitElement {
 
     button:hover,
     button:focus-visible {
-      background: var(--ld-bg-panel-muted);
-      color: var(--ld-fg-default);
+      background: var(--lv-bg-panel-muted);
+      color: var(--lv-fg-default);
       outline: 0;
     }
 
     button[aria-pressed='true'] {
       background: var(--bgColor-accent-muted);
-      color: var(--ld-fg-link);
+      color: var(--lv-fg-link);
     }
 
     svg {
@@ -422,8 +422,8 @@ class ReportZoom extends LitElement {
 
     input::-webkit-slider-runnable-track {
       height: 4px;
-      border-radius: var(--ld-radius-full);
-      background: var(--ld-line-muted);
+      border-radius: var(--lv-radius-full);
+      background: var(--lv-line-muted);
     }
 
     input::-webkit-slider-thumb {
@@ -431,23 +431,23 @@ class ReportZoom extends LitElement {
       width: 12px;
       height: 12px;
       margin-top: -4px;
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-full);
-      background: var(--ld-fg-muted);
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-full);
+      background: var(--lv-fg-muted);
     }
 
     input::-moz-range-track {
       height: 4px;
-      border-radius: var(--ld-radius-full);
-      background: var(--ld-line-muted);
+      border-radius: var(--lv-radius-full);
+      background: var(--lv-line-muted);
     }
 
     input::-moz-range-thumb {
       width: 12px;
       height: 12px;
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-full);
-      background: var(--ld-fg-muted);
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-full);
+      background: var(--lv-fg-muted);
     }
 
     input:focus-visible {
@@ -455,12 +455,12 @@ class ReportZoom extends LitElement {
     }
 
     input:focus-visible::-webkit-slider-thumb {
-      outline: var(--ld-border-width-focus) solid var(--ld-line-accent-muted);
+      outline: var(--lv-border-width-focus) solid var(--lv-line-accent-muted);
       outline-offset: 2px;
     }
 
     input:focus-visible::-moz-range-thumb {
-      outline: var(--ld-border-width-focus) solid var(--ld-line-accent-muted);
+      outline: var(--lv-border-width-focus) solid var(--lv-line-accent-muted);
       outline-offset: 2px;
     }
 
@@ -469,15 +469,15 @@ class ReportZoom extends LitElement {
       min-width: 0;
       margin-inline: 6px;
       padding-inline: 10px;
-      border-inline: var(--ld-border-muted);
+      border-inline: var(--lv-border-muted);
     }
 
     .percent {
       min-width: 38px;
-      color: var(--ld-fg-muted);
+      color: var(--lv-fg-muted);
       text-align: center;
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-strong);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-strong);
       white-space: nowrap;
     }
 
@@ -485,8 +485,8 @@ class ReportZoom extends LitElement {
       width: auto;
       min-width: 32px;
       padding-inline: 7px;
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-strong);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-strong);
     }
 
     @media (max-width: 700px) {
@@ -498,11 +498,11 @@ class ReportZoom extends LitElement {
 
   connectedCallback(): void {
     super.connectedCallback()
-    document.addEventListener('ld-report-zoom-state', this.onZoomState as EventListener)
+    document.addEventListener('lv-report-zoom-state', this.onZoomState as EventListener)
   }
 
   disconnectedCallback(): void {
-    document.removeEventListener('ld-report-zoom-state', this.onZoomState as EventListener)
+    document.removeEventListener('lv-report-zoom-state', this.onZoomState as EventListener)
     super.disconnectedCallback()
   }
 
@@ -512,7 +512,7 @@ class ReportZoom extends LitElement {
   }
 
   private command(detail: ZoomCommand): void {
-    this.dispatchEvent(new CustomEvent('ld-report-zoom-command', {
+    this.dispatchEvent(new CustomEvent('lv-report-zoom-command', {
       detail,
       bubbles: true,
       composed: true,
@@ -562,15 +562,15 @@ function parseCanvasNumber(value: string | undefined, fallback: number): number 
   return Number.isFinite(parsed) ? parsed : fallback
 }
 
-customElements.define('ld-report-canvas', ReportCanvas)
-customElements.define('ld-report-zoom', ReportZoom)
+customElements.define('lv-report-canvas', ReportCanvas)
+customElements.define('lv-report-zoom', ReportZoom)
 
 function zoomStorageKey(): string {
-  return `libredash-report-zoom:${location.pathname}`
+  return `leapview-report-zoom:${location.pathname}`
 }
 
 function zoomScaleStorageKey(): string {
-  return `libredash-report-zoom-scale:${location.pathname}`
+  return `leapview-report-zoom-scale:${location.pathname}`
 }
 
 function storedZoomMode(): ZoomMode {

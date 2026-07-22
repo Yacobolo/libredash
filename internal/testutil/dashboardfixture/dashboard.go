@@ -3,10 +3,10 @@ package dashboardfixture
 import (
 	"fmt"
 
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	dashboarddefinition "github.com/Yacobolo/libredash/internal/dashboard/definition"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
-	workspacecompiler "github.com/Yacobolo/libredash/internal/workspace/compiler"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	workspacecompiler "github.com/Yacobolo/leapview/internal/workspace/compiler"
 )
 
 // Compile crosses the same authoring-to-serving boundary as production. Test

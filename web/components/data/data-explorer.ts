@@ -59,9 +59,9 @@ class DataExplorerPage extends DatastarLit(LitElement) {
       display: block;
       min-width: 0;
       min-height: 100svh;
-      color: var(--ld-fg-default);
-      background: var(--ld-bg-app);
-      font-family: var(--ld-font-family-ui, var(--fontStack-system));
+      color: var(--lv-fg-default);
+      background: var(--lv-bg-app);
+      font-family: var(--lv-font-family-ui, var(--fontStack-system));
     }
 
     .route {
@@ -77,9 +77,9 @@ class DataExplorerPage extends DatastarLit(LitElement) {
       grid-template-columns: minmax(0, 1fr) auto;
       gap: var(--base-size-12);
       align-items: center;
-      border-bottom: var(--ld-border-muted);
+      border-bottom: var(--lv-border-muted);
       padding: var(--base-size-12) var(--base-size-16);
-      background: var(--ld-bg-app);
+      background: var(--lv-bg-app);
     }
 
     h1,
@@ -91,21 +91,21 @@ class DataExplorerPage extends DatastarLit(LitElement) {
 
     h1 {
       overflow: hidden;
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: var(--ld-font-size-title-sm);
-      font-weight: var(--ld-font-weight-strong);
-      line-height: var(--ld-line-height-compact);
+      font-size: var(--lv-font-size-title-sm);
+      font-weight: var(--lv-font-weight-strong);
+      line-height: var(--lv-line-height-compact);
     }
 
     .detail {
       margin-top: var(--base-size-4);
       overflow: hidden;
-      color: var(--ld-fg-muted);
+      color: var(--lv-fg-muted);
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: var(--ld-font-size-body-sm);
+      font-size: var(--lv-font-size-body-sm);
     }
 
     .explorer {
@@ -126,27 +126,27 @@ class DataExplorerPage extends DatastarLit(LitElement) {
     .browser {
       display: grid;
       grid-template-rows: auto minmax(0, 1fr);
-      border-right: var(--ld-border-muted);
-      background: var(--ld-bg-panel);
+      border-right: var(--lv-border-muted);
+      background: var(--lv-bg-panel);
     }
 
     .search {
       position: relative;
       padding: var(--base-size-12);
-      border-bottom: var(--ld-border-muted);
+      border-bottom: var(--lv-border-muted);
     }
 
     .search input {
       width: 100%;
       min-width: 0;
       height: var(--control-medium-size);
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-control);
-      color: var(--ld-fg-default);
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-control);
+      color: var(--lv-fg-default);
       padding: 0 var(--base-size-8) 0 var(--base-size-32);
       font: inherit;
-      font-size: var(--ld-font-size-body-sm);
+      font-size: var(--lv-font-size-body-sm);
     }
 
     .search-icon {
@@ -154,7 +154,7 @@ class DataExplorerPage extends DatastarLit(LitElement) {
       left: var(--base-size-20);
       top: 50%;
       display: grid;
-      color: var(--ld-fg-muted);
+      color: var(--lv-fg-muted);
       transform: translateY(-50%);
     }
 
@@ -173,13 +173,13 @@ class DataExplorerPage extends DatastarLit(LitElement) {
       grid-template-columns: 1rem 1rem minmax(0, 1fr) auto;
       gap: var(--base-size-6);
       align-items: center;
-      border-radius: var(--ld-radius-default);
+      border-radius: var(--lv-radius-default);
       padding: var(--base-size-6) var(--base-size-8);
-      color: var(--ld-fg-muted);
+      color: var(--lv-fg-muted);
       cursor: pointer;
       list-style: none;
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
       text-transform: uppercase;
     }
 
@@ -192,7 +192,7 @@ class DataExplorerPage extends DatastarLit(LitElement) {
     }
 
     summary em {
-      color: var(--ld-fg-subtle);
+      color: var(--lv-fg-subtle);
       font-style: normal;
     }
 
@@ -210,9 +210,9 @@ class DataExplorerPage extends DatastarLit(LitElement) {
       gap: var(--base-size-8);
       align-items: center;
       border: 0;
-      border-radius: var(--ld-radius-default);
+      border-radius: var(--lv-radius-default);
       background: transparent;
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
       padding: var(--base-size-8);
       text-align: left;
       cursor: pointer;
@@ -221,13 +221,13 @@ class DataExplorerPage extends DatastarLit(LitElement) {
 
     .object-button:hover,
     .object-button:focus-visible {
-      background: var(--ld-bg-control-hover);
+      background: var(--lv-bg-control-hover);
       outline: 0;
     }
 
     .object-button.is-selected {
-      background: var(--ld-bg-accent-muted);
-      color: var(--ld-fg-accent);
+      background: var(--lv-bg-accent-muted);
+      color: var(--lv-fg-accent);
     }
 
     .object-button strong,
@@ -239,25 +239,25 @@ class DataExplorerPage extends DatastarLit(LitElement) {
     }
 
     .object-button strong {
-      font-size: var(--ld-font-size-body-sm);
-      font-weight: var(--ld-font-weight-medium);
+      font-size: var(--lv-font-size-body-sm);
+      font-weight: var(--lv-font-weight-medium);
     }
 
     .object-button small {
       margin-top: var(--base-size-2);
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
     }
 
     .object-button span:last-child {
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
     }
 
     .main {
       display: grid;
       grid-template-rows: auto minmax(0, 1fr);
-      background: var(--ld-bg-app);
+      background: var(--lv-bg-app);
     }
 
     .selected-header {
@@ -265,7 +265,7 @@ class DataExplorerPage extends DatastarLit(LitElement) {
       grid-template-columns: minmax(0, 1fr) auto;
       gap: var(--base-size-12);
       align-items: center;
-      border-bottom: var(--ld-border-muted);
+      border-bottom: var(--lv-border-muted);
       padding: var(--base-size-12) var(--base-size-16);
     }
 
@@ -280,8 +280,8 @@ class DataExplorerPage extends DatastarLit(LitElement) {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: var(--ld-font-size-title-sm);
-      line-height: var(--ld-line-height-compact);
+      font-size: var(--lv-font-size-title-sm);
+      line-height: var(--lv-line-height-compact);
     }
 
     .badges {
@@ -292,13 +292,13 @@ class DataExplorerPage extends DatastarLit(LitElement) {
     }
 
     .badge {
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-full);
-      background: var(--ld-bg-panel-muted);
-      color: var(--ld-fg-muted);
+      border: var(--lv-border-muted);
+      border-radius: var(--lv-radius-full);
+      background: var(--lv-bg-panel-muted);
+      color: var(--lv-fg-muted);
       padding: var(--base-size-2) var(--base-size-8);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
     }
 
     .icon-button {
@@ -306,16 +306,16 @@ class DataExplorerPage extends DatastarLit(LitElement) {
       width: var(--control-medium-size);
       height: var(--control-medium-size);
       place-items: center;
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-control);
-      color: var(--ld-fg-default);
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-control);
+      color: var(--lv-fg-default);
       cursor: pointer;
     }
 
     .icon-button:hover,
     .icon-button:focus-visible {
-      background: var(--ld-bg-control-hover);
+      background: var(--lv-bg-control-hover);
       outline: 0;
     }
 
@@ -327,15 +327,15 @@ class DataExplorerPage extends DatastarLit(LitElement) {
       overflow: hidden;
     }
 
-    ld-data-preview-table {
+    lv-data-preview-table {
       min-height: 0;
     }
 
     .sql-panel {
       max-height: 14rem;
       overflow: auto;
-      border-top: var(--ld-border-muted);
-      background: var(--ld-bg-panel);
+      border-top: var(--lv-border-muted);
+      background: var(--lv-bg-panel);
       padding: var(--base-size-12) var(--base-size-16);
     }
 
@@ -343,16 +343,16 @@ class DataExplorerPage extends DatastarLit(LitElement) {
       margin: 0;
       white-space: pre-wrap;
       word-break: break-word;
-      color: var(--ld-fg-muted);
+      color: var(--lv-fg-muted);
       font-family: var(--fontStack-monospace);
-      font-size: var(--ld-font-size-caption);
-      line-height: var(--ld-line-height-default);
+      font-size: var(--lv-font-size-caption);
+      line-height: var(--lv-line-height-default);
     }
 
     .empty {
-      color: var(--ld-fg-muted);
+      color: var(--lv-fg-muted);
       padding: var(--base-size-16);
-      font-size: var(--ld-font-size-body-sm);
+      font-size: var(--lv-font-size-body-sm);
     }
 
     @media (max-width: 760px) {
@@ -498,11 +498,11 @@ class DataExplorerPage extends DatastarLit(LitElement) {
         </button>
       </header>
       <div class="content">
-        <ld-data-preview-table
+        <lv-data-preview-table
           .preview=${preview}
           .command=${command}
-          @ld-data-preview-table-command=${(event: CustomEvent<Partial<DataExplorerCommand>>) => this.emitCommand(event.detail)}
-        ></ld-data-preview-table>
+          @lv-data-preview-table-command=${(event: CustomEvent<Partial<DataExplorerCommand>>) => this.emitCommand(event.detail)}
+        ></lv-data-preview-table>
         ${this.showSQL ? html`<section class="sql-panel" aria-label="Generated SQL"><pre>${preview.sql || 'No SQL is available for this preview.'}</pre></section>` : nothing}
       </div>
     `
@@ -527,7 +527,7 @@ class DataExplorerPage extends DatastarLit(LitElement) {
     if (partial.workspaceId !== undefined || partial.objectKey !== undefined) {
       replaceDataExplorerURL(next)
     }
-    this.dispatchEvent(new CustomEvent('ld-data-explorer-command', { bubbles: true, composed: true, detail: next }))
+    this.dispatchEvent(new CustomEvent('lv-data-explorer-command', { bubbles: true, composed: true, detail: next }))
   }
 }
 
@@ -622,10 +622,10 @@ function label(value: unknown): string {
   return String(value)
 }
 
-if (!customElements.get('ld-data-explorer')) customElements.define('ld-data-explorer', DataExplorerPage)
+if (!customElements.get('lv-data-explorer')) customElements.define('lv-data-explorer', DataExplorerPage)
 
 declare global {
   interface HTMLElementTagNameMap {
-    'ld-data-explorer': DataExplorerPage
+    'lv-data-explorer': DataExplorerPage
   }
 }

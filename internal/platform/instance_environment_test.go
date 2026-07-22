@@ -9,7 +9,7 @@ import (
 
 func TestBindInstanceEnvironmentPersistsAndRejectsChanges(t *testing.T) {
 	ctx := context.Background()
-	store, err := Open(ctx, filepath.Join(t.TempDir(), "libredash.db"))
+	store, err := Open(ctx, filepath.Join(t.TempDir(), "leapview.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,7 +27,7 @@ func TestBindInstanceEnvironmentPersistsAndRejectsChanges(t *testing.T) {
 
 func TestBindInstanceEnvironmentRejectsConflictingActiveState(t *testing.T) {
 	ctx := context.Background()
-	store, err := Open(ctx, filepath.Join(t.TempDir(), "libredash.db"))
+	store, err := Open(ctx, filepath.Join(t.TempDir(), "leapview.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +48,7 @@ func TestBindInstanceEnvironmentRejectsConflictingActiveState(t *testing.T) {
 
 func TestBindInstanceEnvironmentRejectsConflictingManagedDataPointer(t *testing.T) {
 	ctx := context.Background()
-	store, err := Open(ctx, filepath.Join(t.TempDir(), "libredash.db"))
+	store, err := Open(ctx, filepath.Join(t.TempDir(), "leapview.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

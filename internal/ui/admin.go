@@ -5,11 +5,11 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	uiactions "github.com/Yacobolo/libredash/internal/ui/actions"
-	uisignals "github.com/Yacobolo/libredash/internal/ui/signals"
-	workspaceview "github.com/Yacobolo/libredash/internal/workspace"
-	"github.com/Yacobolo/libredash/pkg/pagestream"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	uiactions "github.com/Yacobolo/leapview/internal/ui/actions"
+	uisignals "github.com/Yacobolo/leapview/internal/ui/signals"
+	workspaceview "github.com/Yacobolo/leapview/internal/workspace"
+	"github.com/Yacobolo/leapview/pkg/pagestream"
 	g "maragu.dev/gomponents"
 	h "maragu.dev/gomponents/html"
 )
@@ -159,17 +159,17 @@ func AdminPage(catalog dashboard.Catalog, active, roleLabel string, data AdminDa
 	}
 	if active == "storage" {
 		adminAttrs = append(adminAttrs,
-			g.Attr("data-on:ld-storage-table-select", "$adminStorageCommand = evt.detail; "+uiactions.Post("/admin/storage/select-table")),
+			g.Attr("data-on:lv-storage-table-select", "$adminStorageCommand = evt.detail; "+uiactions.Post("/admin/storage/select-table")),
 		)
 	}
 	if active == "agent" {
 		adminAttrs = append(adminAttrs,
-			g.Attr("data-on:ld-agent-system-prompt-save", "$adminAgentCommand = evt.detail; "+uiactions.Patch("/admin/agent/config")),
+			g.Attr("data-on:lv-agent-system-prompt-save", "$adminAgentCommand = evt.detail; "+uiactions.Patch("/admin/agent/config")),
 		)
 	}
 	if active == "queries" {
 		adminAttrs = append(adminAttrs,
-			g.Attr("data-on:ld-query-history-command", "$adminQueryHistoryCommand = evt.detail; evt.detail.action == 'select_detail' ? ($adminQueryDetail = {eventId: evt.detail.eventId, loading: true, error: ''}) : evt.detail.action == 'close_detail' ? ($adminQueryDetail = {eventId: '', loading: false, error: ''}) : ($adminQueryHistory.loading = true, $adminQueryHistory.error = ''); "+uiactions.Post("/admin/queries/command")),
+			g.Attr("data-on:lv-query-history-command", "$adminQueryHistoryCommand = evt.detail; evt.detail.action == 'select_detail' ? ($adminQueryDetail = {eventId: evt.detail.eventId, loading: true, error: ''}) : evt.detail.action == 'close_detail' ? ($adminQueryDetail = {eventId: '', loading: false, error: ''}) : ($adminQueryHistory.loading = true, $adminQueryHistory.error = ''); "+uiactions.Post("/admin/queries/command")),
 		)
 	}
 	return pagestream.RenderPage(pagestream.PageSpec{
@@ -190,8 +190,8 @@ func AdminPage(catalog dashboard.Catalog, active, roleLabel string, data AdminDa
 		MainAttrs:  []g.Node{h.Class(appRootClass)},
 		UpdatesURL: adminUpdatesURL,
 		Body: []g.Node{
-			g.El("ld-app-shell",
-				g.El("ld-admin-page", adminAttrs...),
+			g.El("lv-app-shell",
+				g.El("lv-admin-page", adminAttrs...),
 			),
 			inspectorElement(),
 		},
@@ -438,7 +438,7 @@ func adminSidebarSignal(active string) uisignals.SubSidebarSignal {
 		Label:       "Admin",
 		RailLabel:   "Admin",
 		AriaLabel:   "Admin navigation",
-		StorageKey:  "libredash-admin-sidebar-collapsed",
+		StorageKey:  "leapview-admin-sidebar-collapsed",
 		ActiveID:    active,
 		Numbered:    false,
 		Collapsible: false,

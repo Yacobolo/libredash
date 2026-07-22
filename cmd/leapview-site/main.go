@@ -14,12 +14,12 @@ import (
 	"syscall"
 	"time"
 
-	sitehttp "github.com/Yacobolo/libredash/internal/site/http"
+	sitehttp "github.com/Yacobolo/leapview/internal/site/http"
 )
 
 func main() {
 	address := flag.String("addr", ":8081", "listen address")
-	baseURLFlag := flag.String("base-url", os.Getenv("LIBREDASH_SITE_BASE_URL"), "externally visible site origin (or LIBREDASH_SITE_BASE_URL)")
+	baseURLFlag := flag.String("base-url", os.Getenv("LEAPVIEW_SITE_BASE_URL"), "externally visible site origin (or LEAPVIEW_SITE_BASE_URL)")
 	flag.Parse()
 
 	baseURL, err := parseBaseURL(*baseURLFlag)

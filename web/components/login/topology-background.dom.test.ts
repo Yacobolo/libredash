@@ -58,7 +58,7 @@ test('topology background renders and animates without external requests', async
   try {
     await page.goto(baseURL)
     await page.waitForFunction(() => {
-      const host = document.querySelector('ld-topology-background')
+      const host = document.querySelector('lv-topology-background')
       const canvas = host?.shadowRoot?.querySelector('canvas') as HTMLCanvasElement | null
       if (!canvas || canvas.width === 0 || canvas.height === 0) return false
       const pixels = canvas.getContext('2d')?.getImageData(0, 0, canvas.width, canvas.height).data
@@ -79,7 +79,7 @@ test('topology background renders and animates without external requests', async
 }, 20_000)
 
 async function canvasDataURL(page: import('@playwright/test').Page): Promise<string> {
-  return page.locator('ld-topology-background').evaluate((host) => {
+  return page.locator('lv-topology-background').evaluate((host) => {
     const canvas = host.shadowRoot?.querySelector('canvas') as HTMLCanvasElement | null
     if (!canvas) throw new Error('topology canvas is missing')
     return canvas.toDataURL()
@@ -93,12 +93,12 @@ function testDocument(): string {
       <head>
         <style>
           html, body { margin: 0; width: 100%; height: 100%; }
-          :root { --ld-accent: #0969da; --bgColor-accent-emphasis: #0969da; --ld-topology-bg: #0d1117; --bgColor-inverse: #0d1117; }
-          ld-topology-background { position: fixed; inset: 0; }
+          :root { --lv-accent: #0969da; --bgColor-accent-emphasis: #0969da; --lv-topology-bg: #0d1117; --bgColor-inverse: #0d1117; }
+          lv-topology-background { position: fixed; inset: 0; }
         </style>
       </head>
       <body>
-        <ld-topology-background></ld-topology-background>
+        <lv-topology-background></lv-topology-background>
         <script type="module" src="/topology-background-under-test.js"></script>
       </body>
     </html>

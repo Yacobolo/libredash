@@ -3,7 +3,7 @@ set -euo pipefail
 
 archive="${1:?backup archive is required}"
 backup_dir="$(dirname -- "$archive")"
-restic_env=/etc/libredash/restic.env
+restic_env=/etc/leapview/restic.env
 
 if [[ -s "$restic_env" ]]; then
   command -v restic >/dev/null 2>&1 || { printf 'restic.env is configured but restic is unavailable\n' >&2; exit 1; }
@@ -12,11 +12,11 @@ if [[ -s "$restic_env" ]]; then
   source "$restic_env"
   set +a
   restic snapshots >/dev/null 2>&1 || restic init
-  restic backup "$archive" "$archive.sha256" --tag libredash
-  restic forget --tag libredash --keep-daily 7 --keep-weekly 4 --keep-monthly 12 --prune
+  restic backup "$archive" "$archive.sha256" --tag leapview
+  restic forget --tag leapview --keep-daily 7 --keep-weekly 4 --keep-monthly 12 --prune
 fi
 
-find "$backup_dir" -maxdepth 1 -type f -name 'libredash-*.tar.gz' -print \
+find "$backup_dir" -maxdepth 1 -type f -name 'leapview-*.tar.gz' -print \
   | sort -r \
   | awk 'NR > 7' \
   | while IFS= read -r stale; do

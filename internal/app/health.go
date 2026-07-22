@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	dashboarddefinition "github.com/Yacobolo/libredash/internal/dashboard/definition"
-	"github.com/Yacobolo/libredash/internal/workspace"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
+	"github.com/Yacobolo/leapview/internal/workspace"
 )
 
 type healthResponse struct {

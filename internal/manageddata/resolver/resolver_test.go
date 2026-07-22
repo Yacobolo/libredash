@@ -15,11 +15,11 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/manageddata"
-	"github.com/Yacobolo/libredash/internal/manageddata/runtimeview"
-	"github.com/Yacobolo/libredash/internal/manageddata/storage"
-	"github.com/Yacobolo/libredash/internal/manageddata/storage/filesystem"
-	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
+	"github.com/Yacobolo/leapview/internal/manageddata"
+	"github.com/Yacobolo/leapview/internal/manageddata/runtimeview"
+	"github.com/Yacobolo/leapview/internal/manageddata/storage"
+	"github.com/Yacobolo/leapview/internal/manageddata/storage/filesystem"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
 )
 
 func TestResolveManagedDataJoinsAndMaterializesMultipleBindingsDeterministically(t *testing.T) {

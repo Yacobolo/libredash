@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/dataquery"
+	"github.com/Yacobolo/leapview/internal/dataquery"
 )
 
 func TestServiceQueuesReadsAndRejectsWhenFull(t *testing.T) {

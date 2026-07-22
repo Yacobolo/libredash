@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       image_digest:
-        description: Immutable LibreDash image reference
+        description: Immutable LeapView image reference
         required: true
         type: string
 
@@ -24,9 +24,9 @@ jobs:
     env:
       TF_IN_AUTOMATION: "true"
       TF_VAR_hcloud_token: ${{ secrets.HCLOUD_TOKEN }}
-      TF_VAR_name: libredash-ci-${{ github.run_id }}
-      TF_VAR_admin_email: ci-${{ github.run_id }}@libredash.local
-      TF_VAR_libredash_image: ${{ inputs.image_digest }}
+      TF_VAR_name: leapview-ci-${{ github.run_id }}
+      TF_VAR_admin_email: ci-${{ github.run_id }}@leapview.local
+      TF_VAR_leapview_image: ${{ inputs.image_digest }}
       TF_VAR_ssh_allowed_cidrs: '["203.0.113.10/32"]'
 
     steps:
@@ -41,10 +41,10 @@ jobs:
 
       - name: Restrict SSH to this runner
         run: |
-          ssh-keygen -q -t ed25519 -N '' -f "$RUNNER_TEMP/libredash-ci"
+          ssh-keygen -q -t ed25519 -N '' -f "$RUNNER_TEMP/leapview-ci"
           runner_ip="$(curl -4fsS https://api.ipify.org)"
           [[ "$runner_ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          echo "TF_VAR_ssh_public_key_path=$RUNNER_TEMP/libredash-ci.pub" >> "$GITHUB_ENV"
+          echo "TF_VAR_ssh_public_key_path=$RUNNER_TEMP/leapview-ci.pub" >> "$GITHUB_ENV"
           echo "TF_VAR_ssh_allowed_cidrs=[\"$runner_ip/32\"]" >> "$GITHUB_ENV"
 
       - name: Initialize Terraform
@@ -66,7 +66,7 @@ jobs:
         run: |
           server_ip="$(terraform output -raw server_ipv4)"
           for _ in $(seq 1 90); do
-            if ssh -i "$RUNNER_TEMP/libredash-ci" -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 root@"$server_ip" 'cloud-init status --wait'; then
+            if ssh -i "$RUNNER_TEMP/leapview-ci" -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 root@"$server_ip" 'cloud-init status --wait'; then
               exit 0
             fi
             sleep 5
@@ -89,20 +89,20 @@ jobs:
           done
           if [[ "$public_ready" != "true" ]]; then
             echo "Public HTTPS did not become ready" >&2
-            ssh -i "$RUNNER_TEMP/libredash-ci" root@"$server_ip" 'libredashctl status' || true
-            ssh -i "$RUNNER_TEMP/libredash-ci" root@"$server_ip" 'libredashctl logs caddy' || true
+            ssh -i "$RUNNER_TEMP/leapview-ci" root@"$server_ip" 'leapviewctl status' || true
+            ssh -i "$RUNNER_TEMP/leapview-ci" root@"$server_ip" 'leapviewctl logs caddy' || true
             exit 1
           fi
           curl -fsS -L "$url/" >/dev/null
-          ssh -i "$RUNNER_TEMP/libredash-ci" root@"$server_ip" 'libredashctl status'
+          ssh -i "$RUNNER_TEMP/leapview-ci" root@"$server_ip" 'leapviewctl status'
 
       - name: Consume first-login credentials
         working-directory: deploy/hetzner
         run: |
           server_ip="$(terraform output -raw server_ipv4)"
-          credentials="$(ssh -i "$RUNNER_TEMP/libredash-ci" root@"$server_ip" 'libredashctl first-login')"
+          credentials="$(ssh -i "$RUNNER_TEMP/leapview-ci" root@"$server_ip" 'leapviewctl first-login')"
           jq -e '.email and .temporaryPassword and .publisherToken and .publisherTokenExpiresAt' <<<"$credentials" >/dev/null
-          if ssh -i "$RUNNER_TEMP/libredash-ci" root@"$server_ip" 'libredashctl first-login'; then
+          if ssh -i "$RUNNER_TEMP/leapview-ci" root@"$server_ip" 'leapviewctl first-login'; then
             echo "first-login credentials were retrievable more than once" >&2
             exit 1
           fi
@@ -111,9 +111,9 @@ jobs:
         working-directory: deploy/hetzner
         run: |
           server_ip="$(terraform output -raw server_ipv4)"
-          archive="$(ssh -i "$RUNNER_TEMP/libredash-ci" root@"$server_ip" 'libredashctl backup')"
-          ssh -i "$RUNNER_TEMP/libredash-ci" root@"$server_ip" "libredashctl restore '$archive'"
-          ssh -i "$RUNNER_TEMP/libredash-ci" root@"$server_ip" 'libredashctl status'
+          archive="$(ssh -i "$RUNNER_TEMP/leapview-ci" root@"$server_ip" 'leapviewctl backup')"
+          ssh -i "$RUNNER_TEMP/leapview-ci" root@"$server_ip" "leapviewctl restore '$archive'"
+          ssh -i "$RUNNER_TEMP/leapview-ci" root@"$server_ip" 'leapviewctl status'
 
       - name: Destroy ephemeral deployment
         if: always()

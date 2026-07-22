@@ -3,9 +3,9 @@ package runtime
 import (
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	visualizationdefinition "github.com/Yacobolo/libredash/internal/visualization/definition"
-	"github.com/Yacobolo/libredash/internal/visualization/ir"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
+	"github.com/Yacobolo/leapview/internal/visualization/ir"
 )
 
 func testCartesianDefinition(t *testing.T, id string, fields []ir.VisualizationField, interactions []ir.VisualizationInteraction) visualizationdefinition.Definition {

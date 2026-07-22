@@ -4,8 +4,8 @@ import (
 	"net/url"
 	"sort"
 
-	"github.com/Yacobolo/libredash/internal/access/http/mcpoauth"
-	"github.com/Yacobolo/libredash/internal/brand"
+	"github.com/Yacobolo/leapview/internal/access/http/mcpoauth"
+	"github.com/Yacobolo/leapview/internal/brand"
 	g "maragu.dev/gomponents"
 	c "maragu.dev/gomponents/components"
 	h "maragu.dev/gomponents/html"

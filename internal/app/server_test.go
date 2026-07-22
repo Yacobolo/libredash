@@ -11,24 +11,24 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/analytics/materialize"
-	materializesqlite "github.com/Yacobolo/libredash/internal/analytics/materialize/sqlite"
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	semanticquery "github.com/Yacobolo/libredash/internal/analytics/query"
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	"github.com/Yacobolo/libredash/internal/dashboard/consumer"
-	dashboarddefinition "github.com/Yacobolo/libredash/internal/dashboard/definition"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
-	"github.com/Yacobolo/libredash/internal/dataquery"
-	"github.com/Yacobolo/libredash/internal/testutil/dashboardfixture"
-	"github.com/Yacobolo/libredash/internal/testutil/ssetest"
-	visualizationdefinition "github.com/Yacobolo/libredash/internal/visualization/definition"
-	visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
-	visualizationmapasset "github.com/Yacobolo/libredash/internal/visualization/mapasset"
-	mapassethttp "github.com/Yacobolo/libredash/internal/visualization/mapasset/http"
-	visualizationruntime "github.com/Yacobolo/libredash/internal/visualization/runtime"
-	"github.com/Yacobolo/libredash/internal/workspace"
-	workspacesqlite "github.com/Yacobolo/libredash/internal/workspace/sqlite"
+	"github.com/Yacobolo/leapview/internal/analytics/materialize"
+	materializesqlite "github.com/Yacobolo/leapview/internal/analytics/materialize/sqlite"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	semanticquery "github.com/Yacobolo/leapview/internal/analytics/query"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	"github.com/Yacobolo/leapview/internal/dashboard/consumer"
+	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	"github.com/Yacobolo/leapview/internal/dataquery"
+	"github.com/Yacobolo/leapview/internal/testutil/dashboardfixture"
+	"github.com/Yacobolo/leapview/internal/testutil/ssetest"
+	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
+	visualizationmapasset "github.com/Yacobolo/leapview/internal/visualization/mapasset"
+	mapassethttp "github.com/Yacobolo/leapview/internal/visualization/mapasset/http"
+	visualizationruntime "github.com/Yacobolo/leapview/internal/visualization/runtime"
+	"github.com/Yacobolo/leapview/internal/workspace"
+	workspacesqlite "github.com/Yacobolo/leapview/internal/workspace/sqlite"
 )
 
 func fieldRefs(fields ...string) []reportdef.FieldRef {
@@ -429,13 +429,13 @@ func TestPageRouteRendersRequestedYamlPage(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
 	body := renderedWithBootstrap(t, server, rec.Body.String(), "")
-	if !strings.Contains(body, `<ld-app-shell`) || !strings.Contains(body, `<ld-dashboard-page`) {
+	if !strings.Contains(body, `<lv-app-shell`) || !strings.Contains(body, `<lv-dashboard-page`) {
 		t.Fatalf("report page did not render app shell and dashboard route root:\n%s", body)
 	}
-	if strings.Contains(body, `<ld-report-sidebar`) {
+	if strings.Contains(body, `<lv-report-sidebar`) {
 		t.Fatalf("report page still rendered report sidebar:\n%s", body)
 	}
-	if strings.Contains(body, `<ld-sub-sidebar`) || strings.Contains(body, `<ld-report-canvas`) || strings.Contains(body, `<ld-echart`) || strings.Contains(body, `<ld-report-table`) {
+	if strings.Contains(body, `<lv-sub-sidebar`) || strings.Contains(body, `<lv-report-canvas`) || strings.Contains(body, `<lv-echart`) || strings.Contains(body, `<lv-report-table`) {
 		t.Fatalf("report page rendered dashboard product internals below route root:\n%s", body)
 	}
 	if !strings.Contains(body, `"compact":true`) {
@@ -510,7 +510,7 @@ func TestPageRouteSeedsOperationsPageFiltersFromURL(t *testing.T) {
 }
 
 func TestHTMLRoutesIncludeSelfHostedDatastarRuntimeAndDevInspector(t *testing.T) {
-	t.Setenv("LIBREDASH_PRODUCTION", "")
+	t.Setenv("LEAPVIEW_PRODUCTION", "")
 	for _, path := range []string{
 		"/login",
 		"/",
@@ -531,7 +531,7 @@ func TestHTMLRoutesIncludeSelfHostedDatastarRuntimeAndDevInspector(t *testing.T)
 }
 
 func TestHTMLRoutesOmitDatastarInspectorInProduction(t *testing.T) {
-	t.Setenv("LIBREDASH_PRODUCTION", "1")
+	t.Setenv("LEAPVIEW_PRODUCTION", "1")
 	for _, path := range []string{
 		"/login",
 		"/",
@@ -566,7 +566,7 @@ func TestHTMLRoutesOmitDatastarInspectorInProduction(t *testing.T) {
 }
 
 func TestHTMLRoutesHonorConfiguredStaticAssetVersion(t *testing.T) {
-	t.Setenv("LIBREDASH_ASSET_VERSION", "prod-build-123")
+	t.Setenv("LEAPVIEW_ASSET_VERSION", "prod-build-123")
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 
@@ -586,8 +586,8 @@ func TestHTMLRoutesHonorConfiguredStaticAssetVersion(t *testing.T) {
 
 func TestStaticAssetsCacheOnlyCurrentVersionedURLs(t *testing.T) {
 	t.Chdir("../..")
-	t.Setenv("LIBREDASH_PRODUCTION", "")
-	t.Setenv("LIBREDASH_ASSET_VERSION", "prod-build-123")
+	t.Setenv("LEAPVIEW_PRODUCTION", "")
+	t.Setenv("LEAPVIEW_ASSET_VERSION", "prod-build-123")
 	handler := New(fakeMetrics{}).Routes()
 
 	for _, tc := range []struct {
@@ -624,7 +624,7 @@ func TestStaticAssetsCacheOnlyCurrentVersionedURLs(t *testing.T) {
 		})
 	}
 
-	t.Setenv("LIBREDASH_ASSET_VERSION", "")
+	t.Setenv("LEAPVIEW_ASSET_VERSION", "")
 	req := httptest.NewRequest(http.MethodGet, "/static/login-background-loader.js?v=dev", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -637,8 +637,8 @@ func TestStaticAssetsCacheOnlyCurrentVersionedURLs(t *testing.T) {
 }
 
 func TestStaticAssetCacheHeaderClasses(t *testing.T) {
-	t.Setenv("LIBREDASH_PRODUCTION", "")
-	t.Setenv("LIBREDASH_ASSET_VERSION", "prod-build-123")
+	t.Setenv("LEAPVIEW_PRODUCTION", "")
+	t.Setenv("LEAPVIEW_ASSET_VERSION", "prod-build-123")
 	handler := staticAssetCache(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -701,7 +701,7 @@ func TestMapAssetCacheIsImmutableAndRangeCapable(t *testing.T) {
 	handler := mapassethttp.CacheHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusPartialContent)
 	}))
-	request := httptest.NewRequest(http.MethodGet, "/map-assets/libredash-streets/archives/"+visualizationmapasset.ArchiveSHA256+"/basemap.pmtiles", nil)
+	request := httptest.NewRequest(http.MethodGet, "/map-assets/leapview-streets/archives/"+visualizationmapasset.ArchiveSHA256+"/basemap.pmtiles", nil)
 	request.Header.Set("Range", "bytes=0-126")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
@@ -720,7 +720,7 @@ func TestMapAssetCacheRejectsUnversionedPaths(t *testing.T) {
 	handler := mapassethttp.CacheHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("unversioned request reached asset filesystem")
 	}))
-	request := httptest.NewRequest(http.MethodGet, "/map-assets/libredash-streets/basemap.pmtiles", nil)
+	request := httptest.NewRequest(http.MethodGet, "/map-assets/leapview-streets/basemap.pmtiles", nil)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusNotFound {
@@ -760,7 +760,7 @@ func TestHomeRouteRendersDashboardCatalog(t *testing.T) {
 	}
 	body := renderedWithBootstrap(t, server, rec.Body.String(), "")
 	rendered := body
-	if !strings.Contains(rendered, `<ld-app-shell`) || !strings.Contains(rendered, `<ld-catalog-page`) {
+	if !strings.Contains(rendered, `<lv-app-shell`) || !strings.Contains(rendered, `<lv-catalog-page`) {
 		t.Fatalf("home did not mount catalog route root:\n%s", rendered)
 	}
 	if !strings.Contains(rendered, `/static/catalog-page.js`) {
@@ -788,7 +788,7 @@ func TestHomeRouteRendersDashboardCatalog(t *testing.T) {
 	if !strings.Contains(rendered, `"id":"chat"`) || !strings.Contains(rendered, `"href":"/chats"`) {
 		t.Fatalf("home sidebar did not render global chat navigation:\n%s", body)
 	}
-	if strings.Contains(rendered, `<ld-sub-sidebar`) {
+	if strings.Contains(rendered, `<lv-sub-sidebar`) {
 		t.Fatalf("dashboard catalog should not render sub sidebar:\n%s", body)
 	}
 }
@@ -846,7 +846,7 @@ func TestLoginRouteRendersAzureADLogin(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
 	body := renderedWithBootstrap(t, server, rec.Body.String(), "")
-	if !strings.Contains(body, `<ld-login-page`) {
+	if !strings.Contains(body, `<lv-login-page`) {
 		t.Fatalf("login page did not mount login route root:\n%s", body)
 	}
 	if !strings.Contains(body, `background-module-src="/static/topology-background.js`) {
@@ -855,7 +855,7 @@ func TestLoginRouteRendersAzureADLogin(t *testing.T) {
 	if !strings.Contains(body, `Sign in with Azure Active Directory`) {
 		t.Fatalf("login page did not seed Azure AD provider label:\n%s", body)
 	}
-	if strings.Contains(body, `data-init__delay`) || strings.Contains(body, `libredash-login-background-init`) {
+	if strings.Contains(body, `data-init__delay`) || strings.Contains(body, `leapview-login-background-init`) {
 		t.Fatalf("login page still uses Datastar for lazy background init:\n%s", body)
 	}
 	if !strings.Contains(body, `/static/login-background-loader.js`) {

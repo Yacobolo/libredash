@@ -9,9 +9,9 @@ import (
 	nethttp "net/http"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/analytics/materialize"
-	"github.com/Yacobolo/libredash/internal/api"
-	"github.com/Yacobolo/libredash/internal/servingstate"
+	"github.com/Yacobolo/leapview/internal/analytics/materialize"
+	"github.com/Yacobolo/leapview/internal/api"
+	"github.com/Yacobolo/leapview/internal/servingstate"
 	"github.com/go-chi/chi/v5"
 )
 

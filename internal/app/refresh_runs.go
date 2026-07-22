@@ -6,13 +6,13 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/access"
-	"github.com/Yacobolo/libredash/internal/analytics/materialize"
-	materializehttp "github.com/Yacobolo/libredash/internal/analytics/materialize/http"
-	materializesqlite "github.com/Yacobolo/libredash/internal/analytics/materialize/sqlite"
-	"github.com/Yacobolo/libredash/internal/execution"
-	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
-	"github.com/Yacobolo/libredash/internal/workspace/refresh"
+	"github.com/Yacobolo/leapview/internal/access"
+	"github.com/Yacobolo/leapview/internal/analytics/materialize"
+	materializehttp "github.com/Yacobolo/leapview/internal/analytics/materialize/http"
+	materializesqlite "github.com/Yacobolo/leapview/internal/analytics/materialize/sqlite"
+	"github.com/Yacobolo/leapview/internal/execution"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
+	"github.com/Yacobolo/leapview/internal/workspace/refresh"
 )
 
 func (s *Server) refreshRunHTTP() materializehttp.Handler {

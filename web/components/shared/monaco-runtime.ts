@@ -56,7 +56,7 @@ function registerLanguages(): void {
 function registerThemeListener(): void {
   if (themeListenerRegistered) return
   themeListenerRegistered = true
-  document.addEventListener('libredash-theme-applied', applyTheme)
+  document.addEventListener('leapview-theme-applied', applyTheme)
 }
 
 function applyTheme(): void {
@@ -95,7 +95,7 @@ function darkPanelBackground(): string {
   scope.append(probe)
   ;(document.body || document.documentElement).append(scope)
   try {
-    return cssColorToken(probe, '--ld-bg-panel')
+    return cssColorToken(probe, '--lv-bg-panel')
   } finally {
     scope.remove()
   }

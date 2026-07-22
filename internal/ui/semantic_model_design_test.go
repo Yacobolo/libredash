@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	workspaceview "github.com/Yacobolo/libredash/internal/workspace"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	workspaceview "github.com/Yacobolo/leapview/internal/workspace"
 )
 
 func TestSemanticModelDesignWorkspaceVocabulary(t *testing.T) {
@@ -57,7 +57,7 @@ func TestSemanticModelDesignDetailsVocabulary(t *testing.T) {
 }
 
 func semanticDesignUIFixtures() (workspaceview.WorkspaceView, dashboard.Catalog, []workspaceview.AssetView, WorkspaceAccessResponse) {
-	workspace := workspaceview.WorkspaceView{ID: "libredash", Title: "LeapView Workspace", Description: "Local BI workspace."}
+	workspace := workspaceview.WorkspaceView{ID: "leapview", Title: "LeapView Workspace", Description: "Local BI workspace."}
 	catalog := dashboard.Catalog{Workspace: dashboard.CatalogWorkspace{ID: workspace.ID, Title: workspace.Title, Description: workspace.Description}}
 	assets := []workspaceview.AssetView{
 		{

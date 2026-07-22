@@ -3,31 +3,31 @@ package cli
 import (
 	"testing"
 
-	cligen "github.com/Yacobolo/libredash/internal/cli/gen"
+	cligen "github.com/Yacobolo/leapview/internal/cli/gen"
 )
 
 func TestAPIGenOperationURLUsesGeneratedContracts(t *testing.T) {
-	u, err := apiOperationURL("https://libredash.example/", "rollbackDeployment", map[string]string{"project": "sales project", "deployment": "deploy 1"}, nil)
+	u, err := apiOperationURL("https://leapview.example/", "rollbackDeployment", map[string]string{"project": "sales project", "deployment": "deploy 1"}, nil)
 	if err != nil {
 		t.Fatalf("operation URL: %v", err)
 	}
-	if u != "https://libredash.example/api/v1/projects/sales%20project/deployments/deploy%201/rollback" {
+	if u != "https://leapview.example/api/v1/projects/sales%20project/deployments/deploy%201/rollback" {
 		t.Fatalf("url = %q", u)
 	}
 
-	u, err = apiOperationURL("https://libredash.example", "finalizeRelease", map[string]string{"project": "demo project", "release": "release 1"}, nil)
+	u, err = apiOperationURL("https://leapview.example", "finalizeRelease", map[string]string{"project": "demo project", "release": "release 1"}, nil)
 	if err != nil {
 		t.Fatalf("operation URL: %v", err)
 	}
-	if u != "https://libredash.example/api/v1/projects/demo%20project/releases/release%201/finalize" {
+	if u != "https://leapview.example/api/v1/projects/demo%20project/releases/release%201/finalize" {
 		t.Fatalf("url = %q", u)
 	}
 
-	u, err = apiOperationURL("https://libredash.example", "queryDashboardPage", map[string]string{"workspace": "demo", "dashboard": "sales dash", "page": "overview"}, nil)
+	u, err = apiOperationURL("https://leapview.example", "queryDashboardPage", map[string]string{"workspace": "demo", "dashboard": "sales dash", "page": "overview"}, nil)
 	if err != nil {
 		t.Fatalf("operation URL: %v", err)
 	}
-	if u != "https://libredash.example/api/v1/workspaces/demo/dashboards/sales%20dash/pages/overview/query" {
+	if u != "https://leapview.example/api/v1/workspaces/demo/dashboards/sales%20dash/pages/overview/query" {
 		t.Fatalf("url = %q", u)
 	}
 }

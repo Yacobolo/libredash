@@ -27,7 +27,7 @@ For an order-grain table, joining raw order items directly would duplicate order
 Create `dashboards/workspaces/sales/models/orders.yaml`:
 
 ```yaml
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: ModelTable
 metadata:
   workspace: sales
@@ -85,7 +85,7 @@ spec:
 Then validate the project:
 
 ```sh
-libredash validate --project dashboards/libredash.yaml
+leapview validate --project dashboards/leapview.yaml
 ```
 
 Validation checks configuration shape and references. Data-level correctness requires a materialization or preview against actual source data.

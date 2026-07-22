@@ -18,7 +18,7 @@ Use this package when an application already owns:
 - persistence or audit history, if needed
 
 Do not use it as a standalone agent platform. The harness has no filesystem,
-shell, browser, SQL, HTTP, MCP, or LibreDash-specific tools.
+shell, browser, SQL, HTTP, MCP, or LeapView-specific tools.
 
 ## Basic Flow
 
@@ -39,7 +39,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/Yacobolo/libredash/pkg/agent"
+	"github.com/Yacobolo/leapview/pkg/agent"
 )
 
 type DashboardService interface {
@@ -259,7 +259,7 @@ Keep these outside `pkg/agent`:
 
 - OpenAI, DeepSeek, or gateway SDK configuration
 - API keys, auth, rate limiting, and billing policy
-- LibreDash-specific tools and prompts
+- LeapView-specific tools and prompts
 - durable transcript persistence
 - approval workflows
 - raw filesystem, shell, browser, SQL, or network tools

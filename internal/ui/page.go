@@ -5,11 +5,11 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/brand"
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	"github.com/Yacobolo/libredash/internal/staticasset"
-	uisignals "github.com/Yacobolo/libredash/internal/ui/signals"
-	"github.com/Yacobolo/libredash/pkg/pagestream"
+	"github.com/Yacobolo/leapview/internal/brand"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	"github.com/Yacobolo/leapview/internal/staticasset"
+	uisignals "github.com/Yacobolo/leapview/internal/ui/signals"
+	"github.com/Yacobolo/leapview/pkg/pagestream"
 	g "maragu.dev/gomponents"
 	h "maragu.dev/gomponents/html"
 )
@@ -110,7 +110,7 @@ func LoginPage(options ...LoginPageOptions) g.Node {
 		MainAttrs:  []g.Node{h.Class(appRootClass)},
 		UpdatesURL: loginUpdatesURL,
 		Body: []g.Node{
-			g.El("ld-login-page", g.Attr("background-module-src", staticAsset("/static/topology-background.js"))),
+			g.El("lv-login-page", g.Attr("background-module-src", staticAsset("/static/topology-background.js"))),
 			inspectorElement(),
 		},
 	})
@@ -191,8 +191,8 @@ func catalogPageDocument(catalog dashboard.Catalog, page uisignals.CatalogPageSi
 		MainAttrs:  []g.Node{h.Class(appRootClass)},
 		UpdatesURL: catalogUpdatesURL,
 		Body: []g.Node{
-			g.El("ld-app-shell",
-				g.El("ld-catalog-page",
+			g.El("lv-app-shell",
+				g.El("lv-catalog-page",
 					g.Attr("slot", "page"),
 				),
 			),

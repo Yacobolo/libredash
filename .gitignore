@@ -1,7 +1,7 @@
 .DS_Store
 .playwright-cli/
 .data/
-.libredash/
+.leapview/
 .task/
 .tmp/
 .venv/

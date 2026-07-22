@@ -16,28 +16,28 @@ import (
 	"testing"
 	"time"
 
-	accesssqlite "github.com/Yacobolo/libredash/internal/access/sqlite"
-	analyticsduckdb "github.com/Yacobolo/libredash/internal/analytics/duckdb"
-	analyticsmaterialize "github.com/Yacobolo/libredash/internal/analytics/materialize"
-	analyticsmaterializesqlite "github.com/Yacobolo/libredash/internal/analytics/materialize/sqlite"
-	"github.com/Yacobolo/libredash/internal/api"
-	"github.com/Yacobolo/libredash/internal/app"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
-	dashboardruntime "github.com/Yacobolo/libredash/internal/dashboard/runtime"
-	"github.com/Yacobolo/libredash/internal/dataquery"
-	"github.com/Yacobolo/libredash/internal/execution"
-	"github.com/Yacobolo/libredash/internal/manageddata"
-	manageddatasqlite "github.com/Yacobolo/libredash/internal/manageddata/sqlite"
-	"github.com/Yacobolo/libredash/internal/platform"
-	"github.com/Yacobolo/libredash/internal/queryaudit"
-	queryauditsqlite "github.com/Yacobolo/libredash/internal/queryaudit/sqlite"
-	"github.com/Yacobolo/libredash/internal/runtimehost"
-	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
-	servingstatefs "github.com/Yacobolo/libredash/internal/servingstate/filesystem"
-	servingstatesqlite "github.com/Yacobolo/libredash/internal/servingstate/sqlite"
-	storagemaintenance "github.com/Yacobolo/libredash/internal/storage/maintenance"
-	"github.com/Yacobolo/libredash/internal/workspace"
-	workspacesqlite "github.com/Yacobolo/libredash/internal/workspace/sqlite"
+	accesssqlite "github.com/Yacobolo/leapview/internal/access/sqlite"
+	analyticsduckdb "github.com/Yacobolo/leapview/internal/analytics/duckdb"
+	analyticsmaterialize "github.com/Yacobolo/leapview/internal/analytics/materialize"
+	analyticsmaterializesqlite "github.com/Yacobolo/leapview/internal/analytics/materialize/sqlite"
+	"github.com/Yacobolo/leapview/internal/api"
+	"github.com/Yacobolo/leapview/internal/app"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	dashboardruntime "github.com/Yacobolo/leapview/internal/dashboard/runtime"
+	"github.com/Yacobolo/leapview/internal/dataquery"
+	"github.com/Yacobolo/leapview/internal/execution"
+	"github.com/Yacobolo/leapview/internal/manageddata"
+	manageddatasqlite "github.com/Yacobolo/leapview/internal/manageddata/sqlite"
+	"github.com/Yacobolo/leapview/internal/platform"
+	"github.com/Yacobolo/leapview/internal/queryaudit"
+	queryauditsqlite "github.com/Yacobolo/leapview/internal/queryaudit/sqlite"
+	"github.com/Yacobolo/leapview/internal/runtimehost"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
+	servingstatefs "github.com/Yacobolo/leapview/internal/servingstate/filesystem"
+	servingstatesqlite "github.com/Yacobolo/leapview/internal/servingstate/sqlite"
+	storagemaintenance "github.com/Yacobolo/leapview/internal/storage/maintenance"
+	"github.com/Yacobolo/leapview/internal/workspace"
+	workspacesqlite "github.com/Yacobolo/leapview/internal/workspace/sqlite"
 	_ "github.com/duckdb/duckdb-go/v2"
 )
 
@@ -61,11 +61,11 @@ func newDuckLakeHarness(t *testing.T, opts ...func(*app.Options)) *duckLakeHarne
 	homeDir := t.TempDir()
 	dataDir := filepath.Join(homeDir, "source")
 	artifactDir := filepath.Join(homeDir, "artifacts")
-	duckDBDir := filepath.Join(homeDir, ".libredash", "duckdb")
-	runtimeDir := filepath.Join(homeDir, ".libredash", "runtime")
-	dataPath := filepath.Join(homeDir, ".libredash", "data")
-	platformDBPath := filepath.Join(homeDir, ".libredash", "libredash.db")
-	catalogPath := filepath.Join(homeDir, ".libredash", "ducklake", "catalog.sqlite")
+	duckDBDir := filepath.Join(homeDir, ".leapview", "duckdb")
+	runtimeDir := filepath.Join(homeDir, ".leapview", "runtime")
+	dataPath := filepath.Join(homeDir, ".leapview", "data")
+	platformDBPath := filepath.Join(homeDir, ".leapview", "leapview.db")
+	catalogPath := filepath.Join(homeDir, ".leapview", "ducklake", "catalog.sqlite")
 	for _, dir := range []string{dataDir, artifactDir, duckDBDir, runtimeDir, dataPath, filepath.Dir(platformDBPath), filepath.Dir(catalogPath)} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatalf("create harness dir %s: %v", dir, err)
@@ -498,7 +498,7 @@ func TestAdminStorageReflectsDuckLakeAfterCleanup(t *testing.T) {
 	if err := os.MkdirAll(legacyDir, 0o755); err != nil {
 		t.Fatalf("create legacy dir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(legacyDir, "libredash-stale.duckdb"), []byte("legacy"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(legacyDir, "leapview-stale.duckdb"), []byte("legacy"), 0o644); err != nil {
 		t.Fatalf("write legacy duckdb file: %v", err)
 	}
 	body := h.getAuthenticatedHydrated(t, "/admin/storage")
@@ -507,7 +507,7 @@ func TestAdminStorageReflectsDuckLakeAfterCleanup(t *testing.T) {
 			t.Fatalf("admin storage missing %q:\n%s", want, body)
 		}
 	}
-	if strings.Contains(body, "libredash-stale.duckdb") {
+	if strings.Contains(body, "leapview-stale.duckdb") {
 		t.Fatalf("admin storage exposed legacy duckdb artifact:\n%s", body)
 	}
 }

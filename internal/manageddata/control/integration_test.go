@@ -12,18 +12,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/manageddata"
-	"github.com/Yacobolo/libredash/internal/manageddata/control"
-	managedsqlite "github.com/Yacobolo/libredash/internal/manageddata/sqlite"
-	"github.com/Yacobolo/libredash/internal/manageddata/storage"
-	"github.com/Yacobolo/libredash/internal/manageddata/storage/filesystem"
+	"github.com/Yacobolo/leapview/internal/manageddata"
+	"github.com/Yacobolo/leapview/internal/manageddata/control"
+	managedsqlite "github.com/Yacobolo/leapview/internal/manageddata/sqlite"
+	"github.com/Yacobolo/leapview/internal/manageddata/storage"
+	"github.com/Yacobolo/leapview/internal/manageddata/storage/filesystem"
 	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite"
 )
 
 func TestFilesystemAndSQLiteConcurrentFinalizeIsAtomicIdempotentAndDetectsLoss(t *testing.T) {
 	ctx := t.Context()
-	database, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "libredash.db")+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(10000)")
+	database, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "leapview.db")+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(10000)")
 	if err != nil {
 		t.Fatal(err)
 	}

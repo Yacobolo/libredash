@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/asyncjob"
+	"github.com/Yacobolo/leapview/internal/asyncjob"
 )
 
 func TestBackgroundLifecycleReclaimsPersistedAPIJobs(t *testing.T) {

@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
-	storagemaintenance "github.com/Yacobolo/libredash/internal/storage/maintenance"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
+	storagemaintenance "github.com/Yacobolo/leapview/internal/storage/maintenance"
 )
 
 type leasedSnapshotProvider interface {

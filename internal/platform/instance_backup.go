@@ -13,13 +13,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/securefs"
+	"github.com/Yacobolo/leapview/internal/securefs"
 	securejoin "github.com/cyphar/filepath-securejoin"
 )
 
 const (
-	instanceBackupManifestName = "libredash-backup.json"
-	instanceBackupDBName       = "libredash.db"
+	instanceBackupManifestName = "leapview-backup.json"
+	instanceBackupDBName       = "leapview.db"
 	instanceBackupVersion      = 1
 	instanceRestoreDirMode     = securefs.PrivateDirMode
 	instanceRestoreFileMode    = securefs.PrivateFileMode
@@ -71,7 +71,7 @@ func BackupInstance(ctx context.Context, options InstanceBackupOptions) error {
 	if err := os.MkdirAll(filepath.Dir(outAbs), 0o755); err != nil {
 		return err
 	}
-	tmpArchive, err := os.CreateTemp(filepath.Dir(outAbs), ".libredash-instance-backup-*.tar.gz")
+	tmpArchive, err := os.CreateTemp(filepath.Dir(outAbs), ".leapview-instance-backup-*.tar.gz")
 	if err != nil {
 		return err
 	}
@@ -118,7 +118,7 @@ func writeInstanceBackup(ctx context.Context, homeDir, dbPath string, out io.Wri
 	if err := os.MkdirAll(parent, 0o755); err != nil {
 		return err
 	}
-	tmpDir, err := os.MkdirTemp(parent, ".libredash-instance-backup-*")
+	tmpDir, err := os.MkdirTemp(parent, ".leapview-instance-backup-*")
 	if err != nil {
 		return err
 	}
@@ -140,7 +140,7 @@ func writeInstanceBackup(ctx context.Context, homeDir, dbPath string, out io.Wri
 	tw := tar.NewWriter(gzw)
 	manifest := instanceBackupManifest{
 		Version:   instanceBackupVersion,
-		Kind:      "libredash-instance",
+		Kind:      "leapview-instance",
 		CreatedAt: time.Now().UTC(),
 		DBPath:    instanceBackupDBName,
 	}
@@ -314,7 +314,7 @@ func restoreInstanceFromReader(ctx context.Context, options InstanceRestoreOptio
 	if err := os.MkdirAll(parent, 0o755); err != nil {
 		return err
 	}
-	tmpRestore, err := os.MkdirTemp(parent, ".libredash-restore-*")
+	tmpRestore, err := os.MkdirTemp(parent, ".leapview-restore-*")
 	if err != nil {
 		return err
 	}
@@ -361,7 +361,7 @@ func restoreInstanceFromReader(ctx context.Context, options InstanceRestoreOptio
 
 	oldTarget := ""
 	if exists {
-		oldTarget = filepath.Join(parent, ".libredash-restore-old-"+time.Now().UTC().Format("20060102150405.000000000"))
+		oldTarget = filepath.Join(parent, ".leapview-restore-old-"+time.Now().UTC().Format("20060102150405.000000000"))
 		if err := os.Rename(targetAbs, oldTarget); err != nil {
 			return err
 		}
@@ -455,7 +455,7 @@ func extractInstanceBackupReader(ctx context.Context, archive io.Reader, targetD
 		if name == "." || filepath.IsAbs(name) || strings.HasPrefix(name, ".."+string(filepath.Separator)) || name == ".." {
 			return fmt.Errorf("instance backup contains unsafe path %q", header.Name)
 		}
-		if strings.HasPrefix(filepath.ToSlash(name), ".libredash-restore-old-") {
+		if strings.HasPrefix(filepath.ToSlash(name), ".leapview-restore-old-") {
 			return fmt.Errorf("instance backup contains reserved path %q", header.Name)
 		}
 		target, err := securejoin.SecureJoin(targetDir, name)
@@ -538,7 +538,7 @@ func validateInstanceBackupManifest(path string) error {
 	if err := json.Unmarshal(bytes, &manifest); err != nil {
 		return fmt.Errorf("read instance backup manifest: %w", err)
 	}
-	if manifest.Kind != "libredash-instance" {
+	if manifest.Kind != "leapview-instance" {
 		return fmt.Errorf("instance backup manifest kind = %q", manifest.Kind)
 	}
 	if manifest.Version != instanceBackupVersion {

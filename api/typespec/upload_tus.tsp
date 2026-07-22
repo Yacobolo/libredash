@@ -1,7 +1,7 @@
 using Http;
 using TypeSpec.OpenAPI;
 
-namespace LibreDashAPI.ManagedData;
+namespace LeapViewAPI.ManagedData;
 
 @minLength(1)
 @maxLength(160)

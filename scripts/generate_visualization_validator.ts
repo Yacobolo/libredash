@@ -22,7 +22,7 @@ const schema = { ...document, $ref: '#/$defs/VisualizationEnvelope' }
 const ajv = new Ajv2020({ allErrors: true, code: { source: true, esm: true }, strict: true })
 addFormats(ajv)
 ajv.addKeyword('x-apigen-contracts')
-ajv.addKeyword('x-libredash-contract-role')
+ajv.addKeyword('x-leapview-contract-role')
 const validate = ajv.compile(schema)
 const source = standaloneCode(ajv, validate)
 await Bun.write(outputPath, `// Code generated from api/visualization/main.tsp. DO NOT EDIT.\n// @ts-nocheck\n${source}\n`)

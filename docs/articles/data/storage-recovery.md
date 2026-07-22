@@ -10,14 +10,14 @@ DuckLake owns analytical table schemas, snapshots, changesets, statistics, and p
 
 Managed-data storage owns staged source objects and immutable revision manifests. Runtime extraction directories and temporary files are caches or work areas and should be reconstructable.
 
-Do not back up only `libredash.db` and assume the rest can always be reconstructed. The control-plane pointer without its referenced DuckLake catalog and Parquet files is incomplete. Likewise, copied Parquet files without the catalog metadata do not form a recoverable analytical state.
+Do not back up only `leapview.db` and assume the rest can always be reconstructed. The control-plane pointer without its referenced DuckLake catalog and Parquet files is incomplete. Likewise, copied Parquet files without the catalog metadata do not form a recoverable analytical state.
 
 ## Local-backend backup
 
 Create a coordinated instance archive:
 
 ```sh
-libredash admin backup --out /srv/backups/libredash-backup.tar
+leapview admin backup --out /srv/backups/leapview-backup.tar
 ```
 
 Use `--database-only` only for a deliberately limited operation; it is not a complete analytical instance backup. Record the application version, configuration, storage backend, archive checksum, and creation time with the backup.
@@ -47,8 +47,8 @@ Practice restores on a schedule. A backup that has never been restored is an unt
 Stop serving traffic or enter the supported maintenance boundary before replacing an instance. Restore from a validated archive and ask the command to preserve the current instance first:
 
 ```sh
-libredash admin restore \
-  --from /srv/backups/libredash-backup.tar \
+leapview admin restore \
+  --from /srv/backups/leapview-backup.tar \
   --current-out /srv/backups/pre-restore.tar \
   --confirm
 ```

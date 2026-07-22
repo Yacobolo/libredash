@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 )
 
 func TestProjectScalarFromCompleteGroupedAtomicMeasures(t *testing.T) {

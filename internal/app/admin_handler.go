@@ -4,11 +4,11 @@ import (
 	"context"
 	"net/http"
 
-	adminhttp "github.com/Yacobolo/libredash/internal/admin/http"
-	adminstorage "github.com/Yacobolo/libredash/internal/admin/storage"
-	"github.com/Yacobolo/libredash/internal/api"
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	"github.com/Yacobolo/libredash/pkg/pagestream"
+	adminhttp "github.com/Yacobolo/leapview/internal/admin/http"
+	adminstorage "github.com/Yacobolo/leapview/internal/admin/storage"
+	"github.com/Yacobolo/leapview/internal/api"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	"github.com/Yacobolo/leapview/pkg/pagestream"
 )
 
 func (s *Server) adminHTTPHandler() adminhttp.Handler {

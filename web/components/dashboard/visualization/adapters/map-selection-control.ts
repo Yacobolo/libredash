@@ -20,10 +20,10 @@ export class MapSelectionControl {
     this.#dispatch = dispatch
     this.element = document.createElement('div')
     this.element.dataset.mapSelectionControl = ''
-    this.element.style.cssText = 'position:absolute;left:8px;top:8px;z-index:3;font:12px/1.4 var(--ld-font-family-ui,system-ui)'
+    this.element.style.cssText = 'position:absolute;left:8px;top:8px;z-index:3;font:12px/1.4 var(--lv-font-family-ui,system-ui)'
 
     const style = document.createElement('style')
-    style.textContent = '.ld-map-selection-option:focus-visible{outline:2px solid var(--ld-line-accent,#0969da);outline-offset:-2px;background:var(--ld-accent-subtle,#ddf4ff)}'
+    style.textContent = '.lv-map-selection-option:focus-visible{outline:2px solid var(--lv-line-accent,#0969da);outline-offset:-2px;background:var(--lv-accent-subtle,#ddf4ff)}'
 
     this.#button = document.createElement('button')
     this.#button.type = 'button'
@@ -33,16 +33,16 @@ export class MapSelectionControl {
     styleButton(this.#button)
 
     this.#panel = document.createElement('div')
-    this.#panel.id = `ld-map-selection-${++nextControlID}`
+    this.#panel.id = `lv-map-selection-${++nextControlID}`
     this.#button.setAttribute('aria-controls', this.#panel.id)
     this.#panel.hidden = true
-    this.#panel.style.cssText = 'margin-top:4px;width:min(280px,calc(100vw - 32px));max-height:min(320px,70vh);padding:8px;border:1px solid var(--ld-line-default,#d0d7de);border-radius:8px;background:var(--ld-bg-panel,#fff);box-shadow:0 8px 24px rgba(31,35,40,.16);color:var(--ld-fg-default,#1f2328)'
+    this.#panel.style.cssText = 'margin-top:4px;width:min(280px,calc(100vw - 32px));max-height:min(320px,70vh);padding:8px;border:1px solid var(--lv-line-default,#d0d7de);border-radius:8px;background:var(--lv-bg-panel,#fff);box-shadow:0 8px 24px rgba(31,35,40,.16);color:var(--lv-fg-default,#1f2328)'
 
     this.#search = document.createElement('input')
     this.#search.type = 'search'
     this.#search.placeholder = 'Search map data'
     this.#search.setAttribute('aria-label', 'Search map data')
-    this.#search.style.cssText = 'box-sizing:border-box;width:100%;height:30px;padding:4px 8px;border:1px solid var(--ld-line-default,#d0d7de);border-radius:6px;background:var(--ld-bg-panel,#fff);color:inherit;font:inherit'
+    this.#search.style.cssText = 'box-sizing:border-box;width:100%;height:30px;padding:4px 8px;border:1px solid var(--lv-line-default,#d0d7de);border-radius:6px;background:var(--lv-bg-panel,#fff);color:inherit;font:inherit'
 
     this.#listbox = document.createElement('div')
     this.#listbox.setAttribute('role', 'listbox')
@@ -103,19 +103,19 @@ export class MapSelectionControl {
     if (options.length === 0) {
       const empty = document.createElement('div')
       empty.textContent = 'No matching map data'
-      empty.style.cssText = 'padding:8px;color:var(--ld-fg-muted,#57606a)'
+      empty.style.cssText = 'padding:8px;color:var(--lv-fg-muted,#57606a)'
       this.#listbox.append(empty)
       return
     }
     options.forEach((option, index) => {
       const item = document.createElement('div')
       item.dataset.optionIndex = String(index)
-      item.className = 'ld-map-selection-option'
+      item.className = 'lv-map-selection-option'
       item.setAttribute('role', 'option')
       item.setAttribute('aria-selected', String(option.selected))
       item.tabIndex = index === this.#activeIndex ? 0 : -1
       item.textContent = option.label
-      item.style.cssText = `cursor:pointer;padding:6px 8px;border-radius:5px;outline:none;${option.selected ? 'background:var(--ld-accent-subtle,#ddf4ff);font-weight:600' : ''}`
+      item.style.cssText = `cursor:pointer;padding:6px 8px;border-radius:5px;outline:none;${option.selected ? 'background:var(--lv-accent-subtle,#ddf4ff);font-weight:600' : ''}`
       this.#listbox.append(item)
     })
   }
@@ -174,5 +174,5 @@ export class MapSelectionControl {
 }
 
 function styleButton(button: HTMLButtonElement): void {
-  button.style.cssText = 'min-height:30px;padding:4px 9px;border:1px solid var(--ld-line-default,#d0d7de);border-radius:6px;background:var(--ld-bg-panel,#fff);color:var(--ld-fg-default,#1f2328);font:inherit;font-weight:600;cursor:pointer;box-shadow:0 1px 2px rgba(31,35,40,.08)'
+  button.style.cssText = 'min-height:30px;padding:4px 9px;border:1px solid var(--lv-line-default,#d0d7de);border-radius:6px;background:var(--lv-bg-panel,#fff);color:var(--lv-fg-default,#1f2328);font:inherit;font-weight:600;cursor:pointer;box-shadow:0 1px 2px rgba(31,35,40,.08)'
 }

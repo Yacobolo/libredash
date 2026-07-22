@@ -3,7 +3,7 @@ package definition
 import (
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/visualization/ir"
+	"github.com/Yacobolo/leapview/internal/visualization/ir"
 )
 
 func TestDefinitionValidateRejectsRendererAndQueryMismatches(t *testing.T) {

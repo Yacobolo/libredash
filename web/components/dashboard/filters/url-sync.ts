@@ -124,7 +124,7 @@ async function bindSignalPopstate(): Promise<void> {
       dispose = null
     })
   } catch (error) {
-    console.error('LibreDash URL sync failed to bind Datastar signals', error)
+    console.error('LeapView URL sync failed to bind Datastar signals', error)
   }
 }
 
@@ -134,7 +134,7 @@ const datastarURLSync = {
   replace,
 }
 
-const libreDashFilterURL = {
+const leapViewFilterURL = {
   fromParams(config: FilterConfig, filters: FiltersSignal, params: URLParamsShape): FiltersSignal {
     return filtersFromURLParams(config, filters, params)
   },
@@ -143,12 +143,12 @@ const libreDashFilterURL = {
 declare global {
   interface Window {
     DatastarURLSync?: typeof datastarURLSync
-    LibreDashFilterURL?: typeof libreDashFilterURL
+    LeapViewFilterURL?: typeof leapViewFilterURL
   }
 }
 
 window.DatastarURLSync = datastarURLSync
-window.LibreDashFilterURL = libreDashFilterURL
+window.LeapViewFilterURL = leapViewFilterURL
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => void bindSignalPopstate(), { once: true })

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/cursorsigning"
+	"github.com/Yacobolo/leapview/internal/cursorsigning"
 )
 
 type pageResponse struct {

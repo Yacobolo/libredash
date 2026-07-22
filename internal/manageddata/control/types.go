@@ -6,7 +6,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/manageddata"
+	"github.com/Yacobolo/leapview/internal/manageddata"
 )
 
 var (

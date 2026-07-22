@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/visualization/ir"
+	"github.com/Yacobolo/leapview/internal/visualization/ir"
 )
 
 type fixture struct {

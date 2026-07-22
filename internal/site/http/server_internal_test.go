@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/analytics/connectors"
+	"github.com/Yacobolo/leapview/internal/analytics/connectors"
 )
 
 func TestHomepageFeaturedIntegrationsExistInTheConnectorRegistry(t *testing.T) {
@@ -71,7 +71,7 @@ func TestSiteUnknownRouteReturnsNotFound(t *testing.T) {
 }
 
 func TestSiteArticlePublishesSearchAndSocialMetadata(t *testing.T) {
-	baseURL, err := url.Parse("https://docs.libredash.dev")
+	baseURL, err := url.Parse("https://docs.leapview.dev")
 	if err != nil {
 		t.Fatalf("parse base URL: %v", err)
 	}
@@ -90,10 +90,10 @@ func TestSiteArticlePublishesSearchAndSocialMetadata(t *testing.T) {
 	}
 	for _, want := range []string{
 		`<meta name="description" content="` + document.summary + `">`,
-		`<link rel="canonical" href="https://docs.libredash.dev/docs/introduction">`,
+		`<link rel="canonical" href="https://docs.leapview.dev/docs/introduction">`,
 		`<meta property="og:title" content="` + document.title + `">`,
 		`<meta property="og:type" content="article">`,
-		`<meta property="og:url" content="https://docs.libredash.dev/docs/introduction">`,
+		`<meta property="og:url" content="https://docs.leapview.dev/docs/introduction">`,
 		`<meta name="twitter:card" content="summary">`,
 		`<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">`,
 	} {
@@ -104,7 +104,7 @@ func TestSiteArticlePublishesSearchAndSocialMetadata(t *testing.T) {
 }
 
 func TestSitePublishesSitemapAndRobots(t *testing.T) {
-	baseURL, err := url.Parse("https://docs.libredash.dev")
+	baseURL, err := url.Parse("https://docs.leapview.dev")
 	if err != nil {
 		t.Fatalf("parse base URL: %v", err)
 	}
@@ -121,10 +121,10 @@ func TestSitePublishesSitemapAndRobots(t *testing.T) {
 		t.Fatalf("sitemap content type = %q", got)
 	}
 	for _, want := range []string{
-		"https://docs.libredash.dev/",
-		"https://docs.libredash.dev/visuals",
-		"https://docs.libredash.dev/docs",
-		"https://docs.libredash.dev/docs/introduction",
+		"https://docs.leapview.dev/",
+		"https://docs.leapview.dev/visuals",
+		"https://docs.leapview.dev/docs",
+		"https://docs.leapview.dev/docs/introduction",
 	} {
 		if !strings.Contains(sitemap, "<loc>"+want+"</loc>") {
 			t.Errorf("sitemap missing %q:\n%s", want, sitemap)
@@ -143,7 +143,7 @@ func TestSitePublishesSitemapAndRobots(t *testing.T) {
 	for _, want := range []string{
 		"User-agent: *",
 		"Disallow: /docs/search",
-		"Sitemap: https://docs.libredash.dev/sitemap.xml",
+		"Sitemap: https://docs.leapview.dev/sitemap.xml",
 	} {
 		if !strings.Contains(robots, want) {
 			t.Errorf("robots.txt missing %q:\n%s", want, robots)
@@ -329,7 +329,7 @@ func TestSiteHomeRendersPageStreamDocument(t *testing.T) {
 		`/static/site.css`,
 		`/static/site-page.js`,
 		`<meta name="view-transition" content="same-origin">`,
-		`<ld-site-flow-background class="site-hero-background" aria-hidden="true"></ld-site-flow-background>`,
+		`<lv-site-flow-background class="site-hero-background" aria-hidden="true"></lv-site-flow-background>`,
 		`<section id="main-content" class="site-hero">`,
 		`<div class="site-hero-layout">`,
 		`<img class="site-product-screenshot site-product-screenshot-light" src="/static/product-dashboard-light.png"`,
@@ -340,17 +340,17 @@ func TestSiteHomeRendersPageStreamDocument(t *testing.T) {
 		`<div class="site-proof-strip">`,
 		`<svg class="site-stack-edges site-stack-edges-desktop"`,
 		`<li class="site-stack-stage site-stack-node site-stack-product-node">`,
-		`<ld-brand-mark large="" aria-hidden="true"></ld-brand-mark>`,
-		`<ld-site-feature-icon name="dashboard" aria-hidden="true"></ld-site-feature-icon>`,
-		`<ld-site-feature-icon name="git-branch" aria-hidden="true"></ld-site-feature-icon>`,
+		`<lv-brand-mark large="" aria-hidden="true"></lv-brand-mark>`,
+		`<lv-site-feature-icon name="dashboard" aria-hidden="true"></lv-site-feature-icon>`,
+		`<lv-site-feature-icon name="git-branch" aria-hidden="true"></lv-site-feature-icon>`,
 		`<section id="product" class="site-workflow">`,
 		`<article class="site-workflow-artifact">`,
-		`apiVersion: libredash.dev/v1`,
+		`apiVersion: leapview.dev/v1`,
 		`<ol class="site-stack-flow" aria-label="How LeapView connects to your data stack">`,
 		`<section class="site-interfaces-section">`,
 		`One model. Two ways to explore.`,
 		`<article class="site-interface-card">`,
-		`<ld-site-feature-icon name="agent" aria-hidden="true"></ld-site-feature-icon>`,
+		`<lv-site-feature-icon name="agent" aria-hidden="true"></lv-site-feature-icon>`,
 		`<a class="site-interface-link" href="/docs/guides/integrate/agent">Explore agent integrations</a>`,
 		`<span class="site-stack-integration-label">PostgreSQL</span>`,
 		`<section class="site-trust-section">`,
@@ -358,7 +358,7 @@ func TestSiteHomeRendersPageStreamDocument(t *testing.T) {
 		`<section class="site-cta">`,
 		`<footer class="site-footer" role="contentinfo">`,
 		`<header class="site-header">`,
-		`<ld-site-theme-toggle></ld-site-theme-toggle>`,
+		`<lv-site-theme-toggle></lv-site-theme-toggle>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("home page missing %q:\n%s", want, body)
@@ -386,7 +386,7 @@ func TestSiteVisualsRendersPageStreamShowcase(t *testing.T) {
 	for _, want := range []string{
 		"<title>LeapView visual showcase</title>",
 		`data-init="@get(&#39;/updates?view=visuals&#39;, {openWhenHidden: true})"`,
-		"<ld-site-visual-showcase>",
+		"<lv-site-visual-showcase>",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("charts page missing %q:\n%s", want, body)
@@ -410,10 +410,10 @@ func TestSiteGettingStartedRendersGuide(t *testing.T) {
 	body := readBody(t, response)
 	for _, want := range []string{
 		"<title>Get started with LeapView</title>",
-		`<ld-site-docs-drawer-toggle></ld-site-docs-drawer-toggle>`,
+		`<lv-site-docs-drawer-toggle></lv-site-docs-drawer-toggle>`,
 		`<nav class="site-docs-breadcrumb" aria-label="Breadcrumb"><ol><li><a href="/docs/introduction">Start here</a></li><li><span aria-current="page">Getting started</span></li></ol></nav>`,
 		`<button class="site-docs-drawer-backdrop" type="button" aria-label="Close documentation menu" aria-hidden="true" tabindex="-1" data-site-docs-drawer-close="true"></button>`,
-		`<ld-site-markdown-copy`,
+		`<lv-site-markdown-copy`,
 		`<article id="main-content" class="site-docs-article">`,
 		`<aside class="site-docs-sidebar" id="site-docs-sidebar">`,
 		`<a class="site-docs-link site-docs-link-current" href="/docs/getting-started" title="Get started with LeapView" aria-current="page">Get started with LeapView</a>`,
@@ -431,7 +431,7 @@ func TestSiteGettingStartedRendersGuide(t *testing.T) {
 		"<h2>Bootstrap the workspace</h2>",
 		"task bootstrap",
 		"task dev",
-		"libredash.yaml",
+		"leapview.yaml",
 		"workspaces/",
 	} {
 		if !strings.Contains(body, want) {
@@ -465,12 +465,12 @@ func TestSiteCLIGuideUsesDeployCommand(t *testing.T) {
 		t.Fatalf("deploy guide status = %d, want %d", response.StatusCode, http.StatusOK)
 	}
 	body := readBody(t, response)
-	for _, want := range []string{"Validate, plan, and deploy", "libredash deploy --project dashboards/libredash.yaml"} {
+	for _, want := range []string{"Validate, plan, and deploy", "leapview deploy --project dashboards/leapview.yaml"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("deploy guide missing %q:\n%s", want, body)
 		}
 	}
-	if strings.Contains(body, "libredash publish") {
+	if strings.Contains(body, "leapview publish") {
 		t.Errorf("deploy guide contains nonexistent publish command:\n%s", body)
 	}
 }
@@ -715,9 +715,9 @@ func TestSiteServesMachineDocumentationArtifacts(t *testing.T) {
 		{path: "/docs/api/operations.json", contentType: "application/json", contains: []string{`"schemaVersion": 1`, `"operationId": "listWorkspaces"`}},
 		{path: "/docs/api/operations/listWorkspaces.json", contentType: "application/json", contains: []string{`"operationId": "listWorkspaces"`, `"method": "GET"`, `"schemas": {`, `"WorkspaceListResponse": {`}},
 		{path: "/docs/api/operations/listWorkspaces.md", contentType: "text/markdown", contains: []string{"# List workspaces", "`GET /api/v1/workspaces`", "USE_WORKSPACE"}},
-		{path: "/docs/cli/commands/deploy.json", contentType: "application/json", contains: []string{`"id": "deploy"`, `"usage": "libredash deploy`}},
-		{path: "/docs/cli/commands/deploy.md", contentType: "text/markdown", contains: []string{"# libredash deploy", "## Usage"}},
-		{path: "/docs/cli/commands/semantic-models-query.md", contentType: "text/markdown", contains: []string{"# libredash semantic-models query", "## Usage", "## Behavior", "--body-json"}},
+		{path: "/docs/cli/commands/deploy.json", contentType: "application/json", contains: []string{`"id": "deploy"`, `"usage": "leapview deploy`}},
+		{path: "/docs/cli/commands/deploy.md", contentType: "text/markdown", contains: []string{"# leapview deploy", "## Usage"}},
+		{path: "/docs/cli/commands/semantic-models-query.md", contentType: "text/markdown", contains: []string{"# leapview semantic-models query", "## Usage", "## Behavior", "--body-json"}},
 	}
 	for _, test := range tests {
 		t.Run(test.path, func(t *testing.T) {
@@ -756,10 +756,10 @@ func TestSiteCLIReferenceGroupsSubcommandsAndRedirectsLeafPages(t *testing.T) {
 	}
 	body := readBody(t, article)
 	for _, want := range []string{
-		`<h1>libredash semantic-models</h1>`,
+		`<h1>leapview semantic-models</h1>`,
 		`<h2 id="subcommands">Subcommands</h2>`,
 		`<h2 id="query">query</h2>`,
-		`libredash semantic-models query &lt;model&gt; &lt;dataset&gt;`,
+		`leapview semantic-models query &lt;model&gt; &lt;dataset&gt;`,
 		`href="/docs/cli/commands/semantic-models-query.json"`,
 	} {
 		if !strings.Contains(body, want) {
@@ -787,7 +787,7 @@ func TestSiteDocumentationMCPTools(t *testing.T) {
 	defer server.Close()
 
 	initialize := postMCP(t, server.URL, `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}`)
-	for _, want := range []string{`"protocolVersion":"2025-11-25"`, `"name":"libredash-docs"`} {
+	for _, want := range []string{`"protocolVersion":"2025-11-25"`, `"name":"leapview-docs"`} {
 		if !strings.Contains(initialize, want) {
 			t.Errorf("initialize response missing %q:\n%s", want, initialize)
 		}
@@ -869,9 +869,9 @@ func TestSiteChartDocumentationArticleRendersConfiguration(t *testing.T) {
 		`<th scope="col">Field</th><th scope="col">Type</th><th scope="col">Default</th><th scope="col">Allowed values</th><th scope="col">Description</th>`,
 		`<code>presentation.step</code>`,
 		`<code>boolean</code>`,
-		`<ld-site-visual-example example-id="revenue_line"></ld-site-visual-example>`,
-		`<ld-site-visual-example example-id="revenue_line_status"></ld-site-visual-example>`,
-		`<ld-site-visual-example example-id="revenue_line_step"></ld-site-visual-example>`,
+		`<lv-site-visual-example example-id="revenue_line"></lv-site-visual-example>`,
+		`<lv-site-visual-example example-id="revenue_line_status"></lv-site-visual-example>`,
+		`<lv-site-visual-example example-id="revenue_line_step"></lv-site-visual-example>`,
 		`<div class="site-visual-key-fields" aria-label="Key fields" data-key-fields="[&#34;query.dimensions&#34;,&#34;query.measures&#34;]">`,
 		`<button type="button" class="site-visual-key-field" data-visual-key-field="presentation.step" aria-label="Highlight presentation.step in YAML"><code>presentation.step</code></button>`,
 		"<h2>Basic</h2>",
@@ -917,7 +917,7 @@ func TestSiteEveryVisualTypeHasDocumentation(t *testing.T) {
 		if !strings.Contains(body, "visual-example=") {
 			t.Errorf("%s documentation has no executable configuration block", document.slug)
 		}
-		if !strings.Contains(body, `<ld-site-visual-example example-id="`) {
+		if !strings.Contains(body, `<lv-site-visual-example example-id="`) {
 			t.Errorf("%s documentation has no live visual example", document.slug)
 		}
 	}

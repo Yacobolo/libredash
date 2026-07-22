@@ -3,7 +3,7 @@
 LeapView exposes the same governed BI tool catalog used by its built-in agent through a tools-only MCP endpoint. The endpoint belongs to each LeapView deployment:
 
 ```text
-${LIBREDASH_PUBLIC_URL}/mcp
+${LEAPVIEW_PUBLIC_URL}/mcp
 ```
 
 For example, a deployment whose public URL is `https://bi.example.com` exposes MCP at `https://bi.example.com/mcp`. `https://leapview.dev` hosts the LeapView website and documentation; it is not a shared MCP gateway for independently deployed instances.
@@ -15,15 +15,15 @@ LeapView implements stateless Streamable HTTP 2025-11-25. It exposes tools, not 
 Configure the deployment's exact externally reachable HTTPS origin:
 
 ```sh
-LIBREDASH_PUBLIC_URL=https://bi.example.com
-LIBREDASH_ALLOWED_HOSTS=bi.example.com
+LEAPVIEW_PUBLIC_URL=https://bi.example.com
+LEAPVIEW_ALLOWED_HOSTS=bi.example.com
 ```
 
 The origin must have no path, query, fragment, or credentials. Reverse proxies must preserve the public scheme and host. The resulting OAuth resource and audience are exactly `https://bi.example.com/mcp`; changing the public URL creates a different resource identity.
 
 An interactive user needs browser authentication and permission to use the agent. Grant `USE_AGENT` through at least one workspace the principal may access. Each tool call then checks the selected workspace and the tool's resource privileges and data policies. A workspace is not encoded in the MCP connection URL; workspace-aware tools require an explicit `workspace` argument.
 
-The MCP endpoint is independent of `LIBREDASH_AGENT_MODEL` and `LIBREDASH_AGENT_API_KEY`. External MCP hosts can use LeapView when the built-in model is disabled.
+The MCP endpoint is independent of `LEAPVIEW_AGENT_MODEL` and `LEAPVIEW_AGENT_API_KEY`. External MCP hosts can use LeapView when the built-in model is disabled.
 
 ## Connect Claude
 
@@ -78,9 +78,9 @@ Pass the returned access token to the MCP transport as `Authorization: Bearer <a
 
 ## Use an external authorization server
 
-Set `LIBREDASH_MCP_OAUTH_ISSUER_URL` to delegate MCP authorization to an organization-wide issuer. The issuer must publish OpenID Connect discovery and sign JWT access tokens with:
+Set `LEAPVIEW_MCP_OAUTH_ISSUER_URL` to delegate MCP authorization to an organization-wide issuer. The issuer must publish OpenID Connect discovery and sign JWT access tokens with:
 
-- an audience exactly equal to `${LIBREDASH_PUBLIC_URL}/mcp`;
+- an audience exactly equal to `${LEAPVIEW_PUBLIC_URL}/mcp`;
 - a subject that LeapView can map to an existing principal;
 - an `mcp:use` scope.
 
@@ -90,7 +90,7 @@ LeapView still performs live RBAC and data-policy checks for every tool call. In
 
 | Symptom | What to check |
 | --- | --- |
-| The client cannot discover OAuth | Confirm public DNS and TLS, then fetch both well-known URLs. Verify `LIBREDASH_PUBLIC_URL` exactly matches the connection origin. |
+| The client cannot discover OAuth | Confirm public DNS and TLS, then fetch both well-known URLs. Verify `LEAPVIEW_PUBLIC_URL` exactly matches the connection origin. |
 | Sign-in loops or returns to the wrong host | Check reverse-proxy scheme and host handling, allowed hosts, secure cookies, and registered browser-auth callback URLs. |
 | MCP returns `401` | Acquire a fresh OAuth token with `mcp:use` and the exact MCP resource. Do not substitute a LeapView API token. |
 | MCP returns `403` before a tool runs | Grant the principal `USE_AGENT` through an allowed workspace. |

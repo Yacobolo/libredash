@@ -2,7 +2,7 @@
 
 Status: draft
 
-Target package: `github.com/Yacobolo/libredash/pkg/agent`
+Target package: `github.com/Yacobolo/leapview/pkg/agent`
 
 ## Recommended Decisions
 
@@ -16,7 +16,7 @@ Target package: `github.com/Yacobolo/libredash/pkg/agent`
 
 `pkg/agent` provides an embedded, framework-light agent runtime for Go applications. It owns the agent loop, turn lifecycle, OpenAI-compatible tool dispatch, automatic transcript compaction, event streaming, cancellation, and in-memory transcript state. It does not own product-specific tools, UI, memory stores, durable workflow engines, or ambient machine capabilities.
 
-The package is designed for LibreDash first, but it must be generic enough to lift into another Go project without bringing LibreDash dependencies with it. It is not trying to become a complete standalone agent platform like `pi`; it is a reusable harness for applications that already have services, permissions, data models, and UI flows.
+The package is designed for LeapView first, but it must be generic enough to lift into another Go project without bringing LeapView dependencies with it. It is not trying to become a complete standalone agent platform like `pi`; it is a reusable harness for applications that already have services, permissions, data models, and UI flows.
 
 ## Design Principles
 
@@ -49,7 +49,7 @@ The package is designed for LibreDash first, but it must be generic enough to li
 - No active-tool filtering in V1. The `Tools` slice is the active tool set.
 - No general hook system in V1.
 - No product-specific memory implementation. The host can compose extra context into the system prompt or user input before calling the harness.
-- No parsing of LibreDash dashboard/model YAML inside the generic package.
+- No parsing of LeapView dashboard/model YAML inside the generic package.
 
 ## Reference Takeaways
 
@@ -225,7 +225,7 @@ Implementation note: keep the model streaming callback narrower than the full ag
 
 ### Tool Definition
 
-Tools are declarative specs plus executable handlers supplied by the host. In LibreDash, handlers should be thin wrappers around application services such as catalog loading, semantic model inspection, query planning, dashboard draft creation, or deployment APIs.
+Tools are declarative specs plus executable handlers supplied by the host. In LeapView, handlers should be thin wrappers around application services such as catalog loading, semantic model inspection, query planning, dashboard draft creation, or deployment APIs.
 
 Required fields:
 
@@ -326,9 +326,9 @@ The goal is to help the model repair its next call rather than strand the run on
 
 The only V1 configuration boundary is Go structs. This is the only place concrete functions, service handles, model clients, and event sinks can be wired safely.
 
-Do not add YAML/JSON profile support to `pkg/agent` in V1. If LibreDash later wants an app-level YAML profile, that loader should live outside the generic harness and should produce the same Go struct as hand-written code.
+Do not add YAML/JSON profile support to `pkg/agent` in V1. If LeapView later wants an app-level YAML profile, that loader should live outside the generic harness and should produce the same Go struct as hand-written code.
 
-The host application maps services and tools to concrete Go runtime adapters. For LibreDash, dashboard-as-code YAML can define product behavior, but agent runtime wiring remains in Go.
+The host application maps services and tools to concrete Go runtime adapters. For LeapView, dashboard-as-code YAML can define product behavior, but agent runtime wiring remains in Go.
 
 ## Transcript and Model Context
 
@@ -407,7 +407,7 @@ Event requirements:
 - Tool completion events may reflect actual completion order, but tool-result messages are appended in assistant tool-call order.
 - Event emission is best-effort. The harness calls `Emit(ctx, event)` synchronously at harness boundaries, but sink errors must not break agent execution. Provider streaming should still use a narrow delta path so subscribers do not block provider reads indefinitely.
 
-LibreDash can bridge these events to Datastar SSE patches.
+LeapView can bridge these events to Datastar SSE patches.
 
 ## Tool Execution Policy
 
@@ -421,7 +421,7 @@ Execution is one-way:
 - Append all tool-result messages in the assistant's original tool-call order.
 - Continue the loop with the next model call.
 
-This keeps service reads fast while preserving deterministic transcript order. Tool handlers must be concurrency-safe. Tools that mutate important state should return proposed changes and let the LibreDash application apply them through a separate approved workflow.
+This keeps service reads fast while preserving deterministic transcript order. Tool handlers must be concurrency-safe. Tools that mutate important state should return proposed changes and let the LeapView application apply them through a separate approved workflow.
 
 Normal tool failures must not cancel sibling tool calls. Only context cancellation or fatal harness errors should stop the batch. Every requested tool call should produce exactly one tool-result message.
 
@@ -556,9 +556,9 @@ Recommended for V1:
 - `golang.org/x/sync/errgroup`: bounded parallel tool execution with context cancellation. Use `SetLimit(MaxConcurrentTools)`. Do not return ordinary tool failures from goroutines; collect them into tool-result messages so sibling tools still complete.
 - `github.com/santhosh-tekuri/jsonschema/v6`: JSON Schema validation for tool arguments. This avoids maintaining a partial schema validator while still keeping schemas OpenAI-compatible.
 
-Recommended outside `pkg/agent` for LibreDash wiring:
+Recommended outside `pkg/agent` for LeapView wiring:
 
-- `github.com/openai/openai-go`: concrete OpenAI-compatible provider adapter. Use it in LibreDash application code or a future adapter package, not in the core harness.
+- `github.com/openai/openai-go`: concrete OpenAI-compatible provider adapter. Use it in LeapView application code or a future adapter package, not in the core harness.
 - `github.com/openai/openai-go/option.WithBaseURL`: configure OpenAI-compatible providers such as DeepSeek, gateways, or local endpoints.
 
 Possible later:
@@ -573,9 +573,9 @@ Avoid in core V1:
 - Tokenizer packages unless token estimates prove too rough.
 - Generic event bus packages.
 
-## LibreDash Integration Direction
+## LeapView Integration Direction
 
-LibreDash should define the first concrete agent as a BI workspace assistant.
+LeapView should define the first concrete agent as a BI workspace assistant.
 
 Likely host-owned tools:
 
@@ -589,12 +589,12 @@ Likely host-owned tools:
 - `suggest_filter`
 - `create_dashboard_draft`
 
-These tools belong in LibreDash application packages, not in `pkg/agent`. They should expose curated actions over LibreDash services rather than raw filesystem, SQL, or network access.
+These tools belong in LeapView application packages, not in `pkg/agent`. They should expose curated actions over LeapView services rather than raw filesystem, SQL, or network access.
 
 Likely UI flow:
 
 - A report page opens an agent panel.
-- User messages go to a LibreDash route.
+- User messages go to a LeapView route.
 - Route calls a configured `pkg/agent` harness.
 - Harness events stream into Datastar signals.
 - Tool handlers use existing semantic/dashboard/data services.
@@ -602,7 +602,7 @@ Likely UI flow:
 
 ## Package File Structure
 
-All generic harness code lives under `pkg/agent`. LibreDash-specific tools, prompts, routes, Datastar bindings, and service wiring live outside this package.
+All generic harness code lives under `pkg/agent`. LeapView-specific tools, prompts, routes, Datastar bindings, and service wiring live outside this package.
 
 Proposed V1 structure:
 
@@ -658,7 +658,7 @@ Test focus:
 - `compaction_test.go`: keep-last-turn boundaries, no split tool results, proactive compaction, context-overflow retry, summary replacement, no-tools summary request.
 - `events_test.go`: event order, event payload IDs, severity, and correlation metadata.
 
-V1 should keep one package namespace, `agent`, and avoid subpackages. Optional future adapters such as OpenAI SDK wiring should live outside the core first, likely in LibreDash `internal/`, until the generic boundary proves stable.
+V1 should keep one package namespace, `agent`, and avoid subpackages. Optional future adapters such as OpenAI SDK wiring should live outside the core first, likely in LeapView `internal/`, until the generic boundary proves stable.
 
 ## First Implementation Milestones
 
@@ -670,11 +670,11 @@ V1 should keep one package namespace, `agent`, and avoid subpackages. Optional f
 6. Add bounded parallel tool execution with deterministic result ordering.
 7. Add automatic keep-last-N-turns compaction, proactive budget checks, and one context-overflow compaction retry.
 8. Add limits for max turns, max tool calls, max concurrent tools, per-tool timeout, result size, and context window.
-9. Wire a LibreDash-specific agent package outside the generic core.
+9. Wire a LeapView-specific agent package outside the generic core.
 
 ## Post-V1 Candidates
 
-Add only when the embedded LibreDash agent proves it needs them:
+Add only when the embedded LeapView agent proves it needs them:
 
 - durable session store and resume
 - approval gates inside the harness
@@ -685,6 +685,6 @@ Add only when the embedded LibreDash agent proves it needs them:
 ## Resolved V1 Decisions
 
 - Package name: use `pkg/agent`.
-- OpenAI SDK adapter: keep it outside `pkg/agent` for V1. LibreDash can own the first adapter in `internal/`, using `openai-go` and `option.WithBaseURL` for OpenAI-compatible endpoints.
+- OpenAI SDK adapter: keep it outside `pkg/agent` for V1. LeapView can own the first adapter in `internal/`, using `openai-go` and `option.WithBaseURL` for OpenAI-compatible endpoints.
 - Tool input schemas: expose schemas as `json.RawMessage` in public definitions and compile them internally with `github.com/santhosh-tekuri/jsonschema/v6`.
-- First BI tool set: define it outside the generic package and start with the smallest useful read/action surface for the embedded LibreDash assistant.
+- First BI tool set: define it outside the generic package and start with the smallest useful read/action surface for the embedded LeapView assistant.

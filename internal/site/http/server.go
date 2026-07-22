@@ -13,9 +13,9 @@ import (
 	"os"
 	"strings"
 
-	mapassethttp "github.com/Yacobolo/libredash/internal/visualization/mapasset/http"
-	"github.com/Yacobolo/libredash/pkg/pagestream"
-	siteassets "github.com/Yacobolo/libredash/site"
+	mapassethttp "github.com/Yacobolo/leapview/internal/visualization/mapasset/http"
+	"github.com/Yacobolo/leapview/pkg/pagestream"
+	siteassets "github.com/Yacobolo/leapview/site"
 )
 
 // Options configures public URLs and production behavior for the site handler.

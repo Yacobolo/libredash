@@ -16,7 +16,7 @@ func TestResolveReturnsImmutableSameOriginManifest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if asset.ID != "libredash-streets" || asset.StyleURL[0] != '/' || asset.ArchiveURL[0] != '/' || len(asset.ArchiveDigest) != 71 {
+	if asset.ID != "leapview-streets" || asset.StyleURL[0] != '/' || asset.ArchiveURL[0] != '/' || len(asset.ArchiveDigest) != 71 {
 		t.Fatalf("asset = %#v", asset)
 	}
 	styleDigest := strings.TrimPrefix(asset.StyleDigest, "sha256:")
@@ -78,7 +78,7 @@ func TestVerifierCachesUnchangedFilesAndDetectsRuntimeCorruption(t *testing.T) {
 	root := t.TempDir()
 	contents := []byte("verified map package")
 	digest := fmt.Sprintf("%x", sha256.Sum256(contents))
-	file := File{Path: "libredash-streets/test/asset.bin", Digest: digest}
+	file := File{Path: "leapview-streets/test/asset.bin", Digest: digest}
 	name := filepath.Join(root, filepath.FromSlash(file.Path))
 	if err := os.MkdirAll(filepath.Dir(name), 0o755); err != nil {
 		t.Fatal(err)
@@ -135,7 +135,7 @@ func TestContentAddressedURLPathRejectsLegacyAndForgedPaths(t *testing.T) {
 			t.Errorf("trusted path rejected: %q", path)
 		}
 	}
-	for _, path := range []string{"/map-assets/libredash-streets/style.json", "/map-assets/libredash-streets/basemap.pmtiles", "/map-assets/other/" + strings.Repeat("a", 64) + "/style.json", "/map-assets/libredash-streets/../../secret"} {
+	for _, path := range []string{"/map-assets/leapview-streets/style.json", "/map-assets/leapview-streets/basemap.pmtiles", "/map-assets/other/" + strings.Repeat("a", 64) + "/style.json", "/map-assets/leapview-streets/../../secret"} {
 		if IsContentAddressedURLPath(path) {
 			t.Errorf("untrusted path accepted: %q", path)
 		}

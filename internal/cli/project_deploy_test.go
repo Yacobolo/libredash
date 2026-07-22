@@ -15,14 +15,14 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/api"
-	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
-	servingstatefs "github.com/Yacobolo/libredash/internal/servingstate/filesystem"
-	visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
+	"github.com/Yacobolo/leapview/internal/api"
+	apigenapi "github.com/Yacobolo/leapview/internal/api/gen"
+	servingstatefs "github.com/Yacobolo/leapview/internal/servingstate/filesystem"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 )
 
 func TestDeployPreparesCompleteProjectBeforeOneAtomicActivation(t *testing.T) {
-	projectPath := filepath.Join("..", "..", "dashboards", "libredash.yaml")
+	projectPath := filepath.Join("..", "..", "dashboards", "leapview.yaml")
 	revision := "sha256:" + strings.Repeat("a", 64)
 	workspaces := []string{"operations", "sales", "visuals"}
 	var mu sync.Mutex
@@ -41,12 +41,12 @@ func TestDeployPreparesCompleteProjectBeforeOneAtomicActivation(t *testing.T) {
 			writeCLIJSON(t, w, apigenapi.CapabilitiesResponse{ApiVersion: "v1", BuildVersion: "test", Environment: "prod", Authentication: []apigenapi.AuthenticationMode{apigenapi.AuthenticationModeBearer}, QueryFormats: []apigenapi.QueryFormat{apigenapi.QueryFormatApplicationJson}, UploadProtocols: []apigenapi.UploadProtocol{apigenapi.UploadProtocolTus}, Visualization: apigenapi.VisualizationCapabilities{SchemaVersion: visualizationir.CurrentSchemaVersion, Renderers: []apigenapi.VisualizationRendererCapability{}}})
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/active-asset-graph"):
 			writeCLIJSON(t, w, activeGraphResponse(nil, nil))
-		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/projects/libredash-showcase/releases":
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/projects/leapview-showcase/releases":
 			var request apigenapi.ReleaseCreateRequest
 			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 				t.Fatal(err)
 			}
-			writeCLIJSON(t, w, apigenapi.ReleaseResponse{Id: "release-1", ProjectId: "libredash-showcase", ProjectDigest: request.ProjectDigest, Status: apigenapi.ReleaseStatusDraft, CreatedBy: "test", CreatedAt: "2026-01-01T00:00:00Z", Workspaces: request.Workspaces, Connections: request.Connections})
+			writeCLIJSON(t, w, apigenapi.ReleaseResponse{Id: "release-1", ProjectId: "leapview-showcase", ProjectDigest: request.ProjectDigest, Status: apigenapi.ReleaseStatusDraft, CreatedBy: "test", CreatedAt: "2026-01-01T00:00:00Z", Workspaces: request.Workspaces, Connections: request.Connections})
 		case r.Method == http.MethodPut && strings.HasSuffix(r.URL.Path, "/artifact"):
 			pins, digest := readManagedDataPinsFromUpload(t, r.Body)
 			if len(pins) != 1 || pins["olist"] != revision {
@@ -55,17 +55,17 @@ func TestDeployPreparesCompleteProjectBeforeOneAtomicActivation(t *testing.T) {
 			artifactDigests[workspaceID] = digest
 			writeCLIJSON(t, w, apigenapi.ReleaseArtifactResponse{ReleaseId: "release-1", WorkspaceId: workspaceID, Digest: digest, SizeBytes: 1})
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/releases/release-1/finalize"):
-			writeCLIJSON(t, w, apigenapi.ReleaseResponse{Id: "release-1", ProjectId: "libredash-showcase", ProjectDigest: "ready", Status: apigenapi.ReleaseStatusValidating, CreatedBy: "test", CreatedAt: "2026-01-01T00:00:00Z", Workspaces: []apigenapi.ReleaseWorkspaceManifest{}, Connections: []apigenapi.ReleaseConnectionPin{}})
-		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/projects/libredash-showcase/releases/release-1":
-			writeCLIJSON(t, w, apigenapi.ReleaseResponse{Id: "release-1", ProjectId: "libredash-showcase", ProjectDigest: "ready", Status: apigenapi.ReleaseStatusReady, CreatedBy: "test", CreatedAt: "2026-01-01T00:00:00Z", Workspaces: []apigenapi.ReleaseWorkspaceManifest{}, Connections: []apigenapi.ReleaseConnectionPin{}})
-		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/projects/libredash-showcase/deployments":
+			writeCLIJSON(t, w, apigenapi.ReleaseResponse{Id: "release-1", ProjectId: "leapview-showcase", ProjectDigest: "ready", Status: apigenapi.ReleaseStatusValidating, CreatedBy: "test", CreatedAt: "2026-01-01T00:00:00Z", Workspaces: []apigenapi.ReleaseWorkspaceManifest{}, Connections: []apigenapi.ReleaseConnectionPin{}})
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/projects/leapview-showcase/releases/release-1":
+			writeCLIJSON(t, w, apigenapi.ReleaseResponse{Id: "release-1", ProjectId: "leapview-showcase", ProjectDigest: "ready", Status: apigenapi.ReleaseStatusReady, CreatedBy: "test", CreatedAt: "2026-01-01T00:00:00Z", Workspaces: []apigenapi.ReleaseWorkspaceManifest{}, Connections: []apigenapi.ReleaseConnectionPin{}})
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/projects/leapview-showcase/deployments":
 			writeCLIJSON(t, w, map[string]any{
-				"id": "deployment-1", "projectId": "libredash-showcase", "releaseId": "release-1", "environment": "prod", "status": "queued", "createdBy": "test", "createdAt": "2026-01-01T00:00:00Z",
+				"id": "deployment-1", "projectId": "leapview-showcase", "releaseId": "release-1", "environment": "prod", "status": "queued", "createdBy": "test", "createdAt": "2026-01-01T00:00:00Z",
 				"targets": []any{}, "connections": []any{},
 			})
-		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/projects/libredash-showcase/deployments/deployment-1":
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/projects/leapview-showcase/deployments/deployment-1":
 			writeCLIJSON(t, w, map[string]any{
-				"id": "deployment-1", "projectId": "libredash-showcase", "releaseId": "release-1", "environment": "prod", "status": "active", "createdBy": "test", "createdAt": "2026-01-01T00:00:00Z",
+				"id": "deployment-1", "projectId": "leapview-showcase", "releaseId": "release-1", "environment": "prod", "status": "active", "createdBy": "test", "createdAt": "2026-01-01T00:00:00Z",
 				"targets": []any{}, "connections": []any{},
 			})
 		default:
@@ -87,7 +87,7 @@ func TestDeployPreparesCompleteProjectBeforeOneAtomicActivation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("runDeploy() error = %v", err)
 	}
-	if strings.Contains(out.String(), "secret-token") || !strings.Contains(out.String(), "deployed libredash-showcase release=release-1 deployment=deployment-1 environment=prod status=active") {
+	if strings.Contains(out.String(), "secret-token") || !strings.Contains(out.String(), "deployed leapview-showcase release=release-1 deployment=deployment-1 environment=prod status=active") {
 		t.Fatalf("output = %q", out.String())
 	}
 	assertSequenceContainsInOrder(t, sequence, []string{
@@ -95,12 +95,12 @@ func TestDeployPreparesCompleteProjectBeforeOneAtomicActivation(t *testing.T) {
 		"GET /api/v1/capabilities",
 		"GET /api/v1/workspaces/operations/active-asset-graph",
 		"GET /api/v1/workspaces/sales/active-asset-graph",
-		"POST /api/v1/projects/libredash-showcase/releases",
-		"PUT /api/v1/projects/libredash-showcase/releases/release-1/workspaces/operations/artifact",
-		"POST /api/v1/projects/libredash-showcase/releases/release-1/finalize",
-		"GET /api/v1/projects/libredash-showcase/releases/release-1",
-		"POST /api/v1/projects/libredash-showcase/deployments",
-		"GET /api/v1/projects/libredash-showcase/deployments/deployment-1",
+		"POST /api/v1/projects/leapview-showcase/releases",
+		"PUT /api/v1/projects/leapview-showcase/releases/release-1/workspaces/operations/artifact",
+		"POST /api/v1/projects/leapview-showcase/releases/release-1/finalize",
+		"GET /api/v1/projects/leapview-showcase/releases/release-1",
+		"POST /api/v1/projects/leapview-showcase/deployments",
+		"GET /api/v1/projects/leapview-showcase/deployments/deployment-1",
 	})
 	for _, workspaceID := range workspaces {
 		if artifactDigests[workspaceID] == "" {
@@ -116,7 +116,7 @@ func TestDeployRejectsIncompleteManagedRevisionSetBeforeNetworkAccess(t *testing
 	defer server.Close()
 
 	err := runDeploy(context.Background(), deployRequest{
-		ProjectPath: filepath.Join("..", "..", "dashboards", "libredash.yaml"),
+		ProjectPath: filepath.Join("..", "..", "dashboards", "leapview.yaml"),
 		Revisions:   map[string]string{},
 		Target:      server.URL,
 		Token:       "token",

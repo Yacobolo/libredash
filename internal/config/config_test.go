@@ -7,19 +7,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/configspec"
+	"github.com/Yacobolo/leapview/internal/configspec"
 )
 
 func TestLoadRejectsMalformedExecutionConfiguration(t *testing.T) {
-	t.Setenv("LIBREDASH_EXEC_MAX_RUNNING_READS", "many")
+	t.Setenv("LEAPVIEW_EXEC_MAX_RUNNING_READS", "many")
 	if _, err := Load(); err == nil {
 		t.Fatal("Load() accepted malformed execution concurrency")
-	} else if !strings.Contains(err.Error(), "LIBREDASH_EXEC_MAX_RUNNING_READS") {
+	} else if !strings.Contains(err.Error(), "LEAPVIEW_EXEC_MAX_RUNNING_READS") {
 		t.Fatalf("Load() error does not name the environment variable: %v", err)
 	}
 
-	t.Setenv("LIBREDASH_EXEC_MAX_RUNNING_READS", "4")
-	t.Setenv("LIBREDASH_EXEC_READ_TIMEOUT", "eventually")
+	t.Setenv("LEAPVIEW_EXEC_MAX_RUNNING_READS", "4")
+	t.Setenv("LEAPVIEW_EXEC_READ_TIMEOUT", "eventually")
 	if _, err := Load(); err == nil {
 		t.Fatal("Load() accepted malformed execution timeout")
 	}
@@ -30,9 +30,9 @@ func TestLoadRejectsMalformedTypedValues(t *testing.T) {
 		name  string
 		value string
 	}{
-		{name: "LIBREDASH_PRODUCTION", value: "sometimes"},
-		{name: "LIBREDASH_EXEC_MAX_QUEUED_WRITES", value: "several"},
-		{name: "LIBREDASH_EXEC_JOB_LEASE_TIMEOUT", value: "later"},
+		{name: "LEAPVIEW_PRODUCTION", value: "sometimes"},
+		{name: "LEAPVIEW_EXEC_MAX_QUEUED_WRITES", value: "several"},
+		{name: "LEAPVIEW_EXEC_JOB_LEASE_TIMEOUT", value: "later"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			t.Setenv(test.name, test.value)
@@ -54,7 +54,7 @@ func TestListenAddressUsesExplicitLeapViewSetting(t *testing.T) {
 		t.Fatalf("ListenAddr() with only legacy aliases = %q, want default", got)
 	}
 
-	t.Setenv("LIBREDASH_ADDR", "127.0.0.1:9001")
+	t.Setenv("LEAPVIEW_ADDR", "127.0.0.1:9001")
 	cfg, err = Load()
 	if err != nil {
 		t.Fatal(err)
@@ -66,8 +66,8 @@ func TestListenAddressUsesExplicitLeapViewSetting(t *testing.T) {
 
 func TestManagedDataDefaultsUnderConfiguredHome(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("LIBREDASH_HOME", home)
-	t.Setenv("LIBREDASH_MANAGED_DATA_DIR", "")
+	t.Setenv("LEAPVIEW_HOME", home)
+	t.Setenv("LEAPVIEW_MANAGED_DATA_DIR", "")
 	cfg, err := Load()
 	if err != nil {
 		t.Fatal(err)
@@ -108,10 +108,10 @@ func TestGeneratedEnvironmentExampleValidates(t *testing.T) {
 }
 
 func TestLoadIncludesExecutionConfiguration(t *testing.T) {
-	t.Setenv("LIBREDASH_EXEC_MAX_RUNNING_READS", "7")
-	t.Setenv("LIBREDASH_EXEC_MAX_QUEUED_READS", "9")
-	t.Setenv("LIBREDASH_EXEC_READ_QUEUE_TIMEOUT", "11s")
-	t.Setenv("LIBREDASH_EXEC_READ_TIMEOUT", "13s")
+	t.Setenv("LEAPVIEW_EXEC_MAX_RUNNING_READS", "7")
+	t.Setenv("LEAPVIEW_EXEC_MAX_QUEUED_READS", "9")
+	t.Setenv("LEAPVIEW_EXEC_READ_QUEUE_TIMEOUT", "11s")
+	t.Setenv("LEAPVIEW_EXEC_READ_TIMEOUT", "13s")
 
 	cfg, err := Load()
 	if err != nil {
@@ -127,11 +127,11 @@ func TestLoadIncludesExecutionConfiguration(t *testing.T) {
 }
 
 func TestDuckLakeCatalogPathDefaultsOutsidePlatformDB(t *testing.T) {
-	cfg := Config{HomeDir: "/var/lib/libredash"}
-	if got, want := cfg.DBPath(), "/var/lib/libredash/libredash.db"; got != want {
+	cfg := Config{HomeDir: "/var/lib/leapview"}
+	if got, want := cfg.DBPath(), "/var/lib/leapview/leapview.db"; got != want {
 		t.Fatalf("DBPath = %q, want %q", got, want)
 	}
-	if got, want := cfg.DuckLakeCatalogPath(), "/var/lib/libredash/ducklake/catalog.sqlite"; got != want {
+	if got, want := cfg.DuckLakeCatalogPath(), "/var/lib/leapview/ducklake/catalog.sqlite"; got != want {
 		t.Fatalf("DuckLakeCatalogPath = %q, want %q", got, want)
 	}
 	if cfg.DuckLakeCatalogPath() == cfg.DBPath() {
@@ -140,7 +140,7 @@ func TestDuckLakeCatalogPathDefaultsOutsidePlatformDB(t *testing.T) {
 }
 
 func TestDuckLakeCatalogPathHonorsExplicitPath(t *testing.T) {
-	cfg := Config{HomeDir: "/var/lib/libredash", DuckLakeCatalog: "/mnt/catalog.sqlite"}
+	cfg := Config{HomeDir: "/var/lib/leapview", DuckLakeCatalog: "/mnt/catalog.sqlite"}
 	if got, want := cfg.DuckLakeCatalogPath(), "/mnt/catalog.sqlite"; got != want {
 		t.Fatalf("DuckLakeCatalogPath = %q, want %q", got, want)
 	}
@@ -213,9 +213,9 @@ func TestValidateProductionAuthRejectsInvalidOIDCProviderID(t *testing.T) {
 func TestValidateProductionAuthAllowsLocalAuth(t *testing.T) {
 	cfg := Config{
 		Production:         true,
-		PublicURL:          "https://libredash.example.com",
+		PublicURL:          "https://leapview.example.com",
 		LocalAuth:          true,
-		AllowedHosts:       "libredash.example.com",
+		AllowedHosts:       "leapview.example.com",
 		CSRFKey:            "0123456789abcdef0123456789abcdef",
 		MetricsBearerToken: "0123456789abcdef0123456789abcdef",
 	}
@@ -313,7 +313,7 @@ func TestValidateProductionAuthRequiresStrongSCIMBearerWhenConfigured(t *testing
 	cfg := Config{
 		Production:         true,
 		APITokenOnlyAuth:   true,
-		AllowedHosts:       "libredash.example.com",
+		AllowedHosts:       "leapview.example.com",
 		CSRFKey:            "0123456789abcdef0123456789abcdef",
 		SCIMBearerToken:    "short",
 		MetricsBearerToken: "0123456789abcdef0123456789abcdef",
@@ -323,7 +323,7 @@ func TestValidateProductionAuthRequiresStrongSCIMBearerWhenConfigured(t *testing
 	}
 
 	cfg.SCIMBearerToken = "0123456789abcdef0123456789abcdef"
-	cfg.PublicURL = "https://libredash.example.com"
+	cfg.PublicURL = "https://leapview.example.com"
 	if err := cfg.ValidateProductionAuth(); err != nil {
 		t.Fatalf("strong SCIM bearer token rejected: %v", err)
 	}
@@ -333,7 +333,7 @@ func TestValidateProductionAuthRequiresStrongMetricsBearerWhenConfigured(t *test
 	cfg := Config{
 		Production:         true,
 		APITokenOnlyAuth:   true,
-		AllowedHosts:       "libredash.example.com",
+		AllowedHosts:       "leapview.example.com",
 		CSRFKey:            "0123456789abcdef0123456789abcdef",
 		MetricsBearerToken: "short",
 	}
@@ -342,7 +342,7 @@ func TestValidateProductionAuthRequiresStrongMetricsBearerWhenConfigured(t *test
 	}
 
 	cfg.MetricsBearerToken = "0123456789abcdef0123456789abcdef"
-	cfg.PublicURL = "https://libredash.example.com"
+	cfg.PublicURL = "https://leapview.example.com"
 	if err := cfg.ValidateProductionAuth(); err != nil {
 		t.Fatalf("strong metrics bearer token rejected: %v", err)
 	}
@@ -356,10 +356,10 @@ func TestValidateProductionAuthRequiresAllowedHostForAPITokenOnly(t *testing.T) 
 		MetricsBearerToken: "0123456789abcdef0123456789abcdef",
 	}
 	if err := cfg.ValidateProductionAuth(); err == nil {
-		t.Fatal("expected API-token-only production to require LIBREDASH_ALLOWED_HOSTS")
+		t.Fatal("expected API-token-only production to require LEAPVIEW_ALLOWED_HOSTS")
 	}
 
-	cfg.PublicURL = "https://libredash.example.com"
+	cfg.PublicURL = "https://leapview.example.com"
 	if err := cfg.ValidateProductionAuth(); err != nil {
 		t.Fatalf("production public URL rejected: %v", err)
 	}
@@ -367,19 +367,19 @@ func TestValidateProductionAuthRequiresAllowedHostForAPITokenOnly(t *testing.T) 
 
 func TestValidateProductionAuthRejectsMissingOrInsecurePublicURL(t *testing.T) {
 	cfg := Config{
-		Production: true, APITokenOnlyAuth: true, AllowedHosts: "libredash.example.com",
+		Production: true, APITokenOnlyAuth: true, AllowedHosts: "leapview.example.com",
 		CSRFKey: "0123456789abcdef0123456789abcdef", MetricsBearerToken: "0123456789abcdef0123456789abcdef",
 	}
 	if err := cfg.ValidateProductionAuth(); err == nil {
 		t.Fatal("expected missing public URL to fail production validation")
 	}
-	cfg.PublicURL = "http://libredash.example.com"
+	cfg.PublicURL = "http://leapview.example.com"
 	if err := cfg.ValidateProductionAuth(); err == nil {
 		t.Fatal("expected insecure public URL to fail production validation")
 	}
 	for _, invalid := range []string{
-		"https://user@libredash.example.com", "https://libredash.example.com/base",
-		"https://libredash.example.com?tenant=one", "https://libredash.example.com/#fragment",
+		"https://user@leapview.example.com", "https://leapview.example.com/base",
+		"https://leapview.example.com?tenant=one", "https://leapview.example.com/#fragment",
 	} {
 		cfg.PublicURL = invalid
 		if err := cfg.ValidateProductionAuth(); err == nil {
@@ -390,7 +390,7 @@ func TestValidateProductionAuthRejectsMissingOrInsecurePublicURL(t *testing.T) {
 
 func TestValidateProductionAuthRejectsInsecureExternalMCPOAuthIssuer(t *testing.T) {
 	cfg := Config{
-		Production: true, APITokenOnlyAuth: true, PublicURL: "https://libredash.example.com",
+		Production: true, APITokenOnlyAuth: true, PublicURL: "https://leapview.example.com",
 		MCPOAuthIssuerURL: "http://identity.example.com", CSRFKey: "0123456789abcdef0123456789abcdef",
 		MetricsBearerToken: "0123456789abcdef0123456789abcdef",
 	}

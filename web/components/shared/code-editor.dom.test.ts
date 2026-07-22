@@ -48,7 +48,7 @@ test('code editor initializes Monaco, syncs values, emits changes, and disposes'
   const page = await browser.newPage({ viewport: { width: 900, height: 700 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-code-editor'))
+    await page.waitForFunction(() => customElements.get('lv-code-editor'))
 
     const state = await page.evaluate(async () => {
       const waitFor = async (predicate: () => boolean, timeoutMs = 5000): Promise<void> => {
@@ -58,12 +58,12 @@ test('code editor initializes Monaco, syncs values, emits changes, and disposes'
           await new Promise((resolve) => setTimeout(resolve, 20))
         }
       }
-      const element = document.createElement('ld-code-editor') as any
+      const element = document.createElement('lv-code-editor') as any
       element.value = '# Initial prompt'
       element.language = 'markdown'
       element.ariaLabel = 'System prompt'
       const changes: unknown[] = []
-      element.addEventListener('ld-code-editor-change', (event: CustomEvent) => changes.push(event.detail))
+      element.addEventListener('lv-code-editor-change', (event: CustomEvent) => changes.push(event.detail))
       document.body.append(element)
       await element.updateComplete
       await waitFor(() => Boolean(element.editor))
@@ -80,7 +80,7 @@ test('code editor initializes Monaco, syncs values, emits changes, and disposes'
       const cursorWidth = getComputedStyle(root.querySelector('.cursors-layer > .cursor')!).width
       const activeLineNumberColor = getComputedStyle(root.querySelector('.line-numbers.active-line-number')!).color
       document.documentElement.style.colorScheme = 'dark'
-      document.dispatchEvent(new CustomEvent('libredash-theme-applied', { detail: { mode: 'dark', resolvedMode: 'dark' } }))
+      document.dispatchEvent(new CustomEvent('leapview-theme-applied', { detail: { mode: 'dark', resolvedMode: 'dark' } }))
       await waitFor(() => getComputedStyle(monacoSurface!).backgroundColor === 'rgb(13, 17, 23)')
       const darkMonacoBackground = getComputedStyle(monacoSurface!).backgroundColor
       const darkGutterBackground = getComputedStyle(root.querySelector('.margin')!).backgroundColor
@@ -153,7 +153,7 @@ test('code editor initializes Monaco from value attribute', async () => {
   const page = await browser.newPage({ viewport: { width: 900, height: 700 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-code-editor'))
+    await page.waitForFunction(() => customElements.get('lv-code-editor'))
 
     const state = await page.evaluate(async () => {
       const waitFor = async (predicate: () => boolean, timeoutMs = 5000): Promise<void> => {
@@ -163,7 +163,7 @@ test('code editor initializes Monaco from value attribute', async () => {
           await new Promise((resolve) => setTimeout(resolve, 20))
         }
       }
-      const element = document.createElement('ld-code-editor') as any
+      const element = document.createElement('lv-code-editor') as any
       element.setAttribute('value', 'Attribute seeded prompt')
       element.language = 'markdown'
       document.body.append(element)
@@ -199,9 +199,9 @@ function testDocument(): string {
       <head>
         <style>
           html, body { margin: 0; min-height: 100%; }
-          body { --fontStack-system: system-ui; --ld-bg-panel: #fff; --ld-bg-panel-muted: #f6f8fa; --ld-bg-accent-muted: #ddf4ff; --ld-fg-default: #24292f; --ld-fg-muted: #57606a; --ld-fg-accent: #0969da; --ld-icon-muted: #57606a; --ld-border-muted: 1px solid #d8dee4; --ld-radius-default: 6px; --base-size-8: 8px; --base-size-16: 16px; --ld-font-size-caption: 12px; --ld-font-size-body-sm: 14px; --ld-font-weight-medium: 500; --ld-line-height-relaxed: 1.55; }
-          [data-color-mode='dark'] { --ld-bg-panel: #0d1117; }
-          ld-code-editor { display: block; width: 760px; margin: 24px; }
+          body { --fontStack-system: system-ui; --lv-bg-panel: #fff; --lv-bg-panel-muted: #f6f8fa; --lv-bg-accent-muted: #ddf4ff; --lv-fg-default: #24292f; --lv-fg-muted: #57606a; --lv-fg-accent: #0969da; --lv-icon-muted: #57606a; --lv-border-muted: 1px solid #d8dee4; --lv-radius-default: 6px; --base-size-8: 8px; --base-size-16: 16px; --lv-font-size-caption: 12px; --lv-font-size-body-sm: 14px; --lv-font-weight-medium: 500; --lv-line-height-relaxed: 1.55; }
+          [data-color-mode='dark'] { --lv-bg-panel: #0d1117; }
+          lv-code-editor { display: block; width: 760px; margin: 24px; }
         </style>
       </head>
       <body>

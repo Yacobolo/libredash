@@ -9,7 +9,7 @@ Application delivery changes the LeapView binary or OCI image, browser assets, r
 Build an immutable artifact in CI from a reviewed commit. Pin the artifact by digest or another immutable identifier in deployment configuration. Validate production environment requirements before the process is allowed to serve traffic:
 
 ```sh
-libredash config validate --production
+leapview config validate --production
 ```
 
 An application release should not modify project YAML as a side effect. When a release changes resource schemas, publish explicit migration instructions and update projects through their normal delivery workflow.
@@ -19,18 +19,18 @@ An application release should not modify project YAML as a side effect. When a r
 Project delivery changes connections, sources, workspaces, model tables, semantic models, dashboards, access resources, and managed-data revision pins. The normal flow is:
 
 ```sh
-libredash validate --project dashboards/libredash.yaml
+leapview validate --project dashboards/leapview.yaml
 
-libredash plan \
-  --project dashboards/libredash.yaml \
-  --target "$LIBREDASH_TARGET" \
-  --token "$LIBREDASH_API_TOKEN" \
+leapview plan \
+  --project dashboards/leapview.yaml \
+  --target "$LEAPVIEW_TARGET" \
+  --token "$LEAPVIEW_API_TOKEN" \
   --environment prod
 
-libredash deploy \
-  --project dashboards/libredash.yaml \
-  --target "$LIBREDASH_TARGET" \
-  --token "$LIBREDASH_API_TOKEN" \
+leapview deploy \
+  --project dashboards/leapview.yaml \
+  --target "$LEAPVIEW_TARGET" \
+  --token "$LEAPVIEW_API_TOKEN" \
   --environment prod
 ```
 

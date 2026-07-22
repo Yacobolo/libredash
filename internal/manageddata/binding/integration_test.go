@@ -7,20 +7,20 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/deployment"
-	deploymentsqlite "github.com/Yacobolo/libredash/internal/deployment/sqlite"
-	"github.com/Yacobolo/libredash/internal/manageddata"
-	manageddatasqlite "github.com/Yacobolo/libredash/internal/manageddata/sqlite"
-	"github.com/Yacobolo/libredash/internal/platform"
-	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
-	servingstatesqlite "github.com/Yacobolo/libredash/internal/servingstate/sqlite"
-	"github.com/Yacobolo/libredash/internal/workspace"
-	workspacesqlite "github.com/Yacobolo/libredash/internal/workspace/sqlite"
+	"github.com/Yacobolo/leapview/internal/deployment"
+	deploymentsqlite "github.com/Yacobolo/leapview/internal/deployment/sqlite"
+	"github.com/Yacobolo/leapview/internal/manageddata"
+	manageddatasqlite "github.com/Yacobolo/leapview/internal/manageddata/sqlite"
+	"github.com/Yacobolo/leapview/internal/platform"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
+	servingstatesqlite "github.com/Yacobolo/leapview/internal/servingstate/sqlite"
+	"github.com/Yacobolo/leapview/internal/workspace"
+	workspacesqlite "github.com/Yacobolo/leapview/internal/workspace/sqlite"
 )
 
 func TestBinderPinsRevisionAfterEnvironmentPointerChanges(t *testing.T) {
 	ctx := context.Background()
-	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "libredash.db"))
+	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "leapview.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

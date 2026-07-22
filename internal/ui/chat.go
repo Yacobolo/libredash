@@ -1,11 +1,11 @@
 package ui
 
 import (
-	"github.com/Yacobolo/libredash/internal/brand"
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	uiactions "github.com/Yacobolo/libredash/internal/ui/actions"
-	uisignals "github.com/Yacobolo/libredash/internal/ui/signals"
-	"github.com/Yacobolo/libredash/pkg/pagestream"
+	"github.com/Yacobolo/leapview/internal/brand"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	uiactions "github.com/Yacobolo/leapview/internal/ui/actions"
+	uisignals "github.com/Yacobolo/leapview/internal/ui/signals"
+	"github.com/Yacobolo/leapview/pkg/pagestream"
 	g "maragu.dev/gomponents"
 	h "maragu.dev/gomponents/html"
 )
@@ -30,13 +30,13 @@ func ChatPage(catalog dashboard.Catalog, workspaceID, csrfToken, roleLabel, view
 		MainAttrs:  []g.Node{h.Class(appRootClass)},
 		UpdatesURL: chatUpdatesURL,
 		Body: []g.Node{
-			g.El("ld-app-shell",
-				g.El("ld-chat-page",
+			g.El("lv-app-shell",
+				g.El("lv-chat-page",
 					g.Attr("slot", "page"),
 					g.Attr("workspace-id", workspaceID),
 					g.Attr("view", view),
 					g.Attr("data-indicator", "agentTurnPending"),
-					g.Attr("data-on:ld-chat-submit", "$agent.composer.value = evt.detail.input; "+uiactions.Post(chatBasePath+"/turns")),
+					g.Attr("data-on:lv-chat-submit", "$agent.composer.value = evt.detail.input; "+uiactions.Post(chatBasePath+"/turns")),
 				),
 			),
 			inspectorElement(),

@@ -20,7 +20,7 @@ const themeLabels: Record<ThemeMode, string> = {
   dark: 'Dark theme',
 }
 
-class LibreDashLoginPage extends DatastarLit(LitElement) {
+class LeapViewLoginPage extends DatastarLit(LitElement) {
   private themeMode: ThemeMode = currentThemeMode()
   private readonly handleThemeApplied = (event: Event) => {
     const detail = (event as CustomEvent<{ mode?: string }>).detail
@@ -38,22 +38,22 @@ class LibreDashLoginPage extends DatastarLit(LitElement) {
       place-items: center;
       place-content: center;
       overflow: hidden;
-      background: var(--ld-bg-app);
-      color: var(--ld-fg-default);
-      font-family: var(--ld-font-family-ui, var(--fontStack-system));
+      background: var(--lv-bg-app);
+      color: var(--lv-fg-default);
+      font-family: var(--lv-font-family-ui, var(--fontStack-system));
       padding: var(--base-size-24);
       box-sizing: border-box;
     }
 
-    ld-topology-background,
+    lv-topology-background,
     .scrim {
       position: absolute;
       inset: 0;
     }
 
-    ld-topology-background {
+    lv-topology-background {
       display: block;
-      background: var(--ld-bg-app);
+      background: var(--lv-bg-app);
     }
 
     .scrim {
@@ -71,18 +71,18 @@ class LibreDashLoginPage extends DatastarLit(LitElement) {
       width: var(--control-medium-size);
       height: var(--control-medium-size);
       place-items: center;
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-control);
-      color: var(--ld-fg-muted);
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-control);
+      color: var(--lv-fg-muted);
       cursor: pointer;
       box-shadow: var(--shadow-resting-small);
     }
 
     .theme:hover,
     .theme:focus-visible {
-      background: var(--ld-bg-control-hover);
-      color: var(--ld-fg-default);
+      background: var(--lv-bg-control-hover);
+      color: var(--lv-fg-default);
       outline: 0;
     }
 
@@ -94,12 +94,12 @@ class LibreDashLoginPage extends DatastarLit(LitElement) {
       position: relative;
       z-index: var(--zIndex-modal, 30);
       display: grid;
-      width: min(100%, var(--ld-login-panel-width));
+      width: min(100%, var(--lv-login-panel-width));
       justify-items: center;
       gap: var(--base-size-20);
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-panel);
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-panel);
       padding: var(--base-size-24);
       text-align: center;
       box-shadow: var(--shadow-resting-medium, var(--shadow-resting-small));
@@ -108,10 +108,10 @@ class LibreDashLoginPage extends DatastarLit(LitElement) {
 
     h1 {
       margin: 0;
-      color: var(--ld-fg-default);
-      font-size: var(--ld-font-size-title-md);
-      font-weight: var(--ld-font-weight-strong);
-      line-height: var(--ld-line-height-compact);
+      color: var(--lv-fg-default);
+      font-size: var(--lv-font-size-title-md);
+      font-weight: var(--lv-font-weight-strong);
+      line-height: var(--lv-line-height-compact);
     }
 
     .brand-lockup {
@@ -120,8 +120,8 @@ class LibreDashLoginPage extends DatastarLit(LitElement) {
       gap: var(--base-size-12);
     }
 
-    .brand-lockup ld-brand-mark {
-      --ld-brand-mark-size: var(--base-size-32);
+    .brand-lockup lv-brand-mark {
+      --lv-brand-mark-size: var(--base-size-32);
     }
 
     .provider {
@@ -131,26 +131,26 @@ class LibreDashLoginPage extends DatastarLit(LitElement) {
       grid-template-columns: auto minmax(0, 1fr);
       align-items: center;
       gap: var(--base-size-12);
-      border: var(--borderWidth-default) solid var(--ld-button-border-rest);
-      border-radius: var(--ld-button-radius);
-      background: var(--ld-button-bg-rest);
-      color: var(--ld-button-fg-rest);
+      border: var(--borderWidth-default) solid var(--lv-button-border-rest);
+      border-radius: var(--lv-button-radius);
+      background: var(--lv-button-bg-rest);
+      color: var(--lv-button-fg-rest);
       cursor: pointer;
-      padding: 0 var(--ld-button-padding-inline-spacious);
+      padding: 0 var(--lv-button-padding-inline-spacious);
       font: inherit;
-      font-size: var(--ld-font-size-body-md);
-      font-weight: var(--ld-font-weight-medium);
-      box-shadow: var(--ld-button-shadow-resting);
+      font-size: var(--lv-font-size-body-md);
+      font-weight: var(--lv-font-weight-medium);
+      box-shadow: var(--lv-button-shadow-resting);
       text-decoration: none;
       box-sizing: border-box;
     }
 
     .provider:hover,
     .provider:focus-visible {
-      border-color: var(--ld-button-border-hover);
-      background: var(--ld-button-bg-hover);
-      outline: var(--focus-outline, var(--ld-border-default));
-      outline-color: var(--borderColor-accent-emphasis, var(--ld-line-accent));
+      border-color: var(--lv-button-border-hover);
+      background: var(--lv-button-bg-hover);
+      outline: var(--focus-outline, var(--lv-border-default));
+      outline-color: var(--borderColor-accent-emphasis, var(--lv-line-accent));
       outline-offset: var(--focus-outline-offset, var(--base-size-2));
     }
 
@@ -163,10 +163,10 @@ class LibreDashLoginPage extends DatastarLit(LitElement) {
       gap: 1px;
     }
 
-    .provider-mark span:nth-child(1) { background: var(--ld-fg-danger); }
-    .provider-mark span:nth-child(2) { background: var(--ld-fg-success); }
-    .provider-mark span:nth-child(3) { background: var(--ld-accent); }
-    .provider-mark span:nth-child(4) { background: var(--ld-fg-warning); }
+    .provider-mark span:nth-child(1) { background: var(--lv-fg-danger); }
+    .provider-mark span:nth-child(2) { background: var(--lv-fg-success); }
+    .provider-mark span:nth-child(3) { background: var(--lv-accent); }
+    .provider-mark span:nth-child(4) { background: var(--lv-fg-warning); }
 
     form {
       display: grid;
@@ -178,27 +178,27 @@ class LibreDashLoginPage extends DatastarLit(LitElement) {
       display: grid;
       gap: var(--base-size-6);
       text-align: left;
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
     }
 
     input {
       width: 100%;
       min-height: var(--control-large-size);
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-control);
-      color: var(--ld-fg-default);
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-control);
+      color: var(--lv-fg-default);
       padding: 0 var(--base-size-12);
       font: inherit;
-      font-size: var(--ld-font-size-body-md);
+      font-size: var(--lv-font-size-body-md);
       box-sizing: border-box;
     }
 
     input:focus {
-      outline: var(--focus-outline, var(--ld-border-default));
-      outline-color: var(--borderColor-accent-emphasis, var(--ld-line-accent));
+      outline: var(--focus-outline, var(--lv-border-default));
+      outline-color: var(--borderColor-accent-emphasis, var(--lv-line-accent));
       outline-offset: var(--focus-outline-offset, var(--base-size-2));
     }
 
@@ -207,21 +207,21 @@ class LibreDashLoginPage extends DatastarLit(LitElement) {
       min-height: var(--control-xlarge-size);
       width: 100%;
       place-items: center;
-      border: var(--borderWidth-default) solid var(--ld-button-accent-border-rest);
-      border-radius: var(--ld-button-radius);
-      background: var(--ld-button-accent-bg-rest);
-      color: var(--ld-button-accent-fg-rest);
+      border: var(--borderWidth-default) solid var(--lv-button-accent-border-rest);
+      border-radius: var(--lv-button-radius);
+      background: var(--lv-button-accent-bg-rest);
+      color: var(--lv-button-accent-fg-rest);
       cursor: pointer;
-      padding: 0 var(--ld-button-padding-inline-spacious);
+      padding: 0 var(--lv-button-padding-inline-spacious);
       font: inherit;
-      font-size: var(--ld-font-size-body-md);
-      font-weight: var(--ld-font-weight-medium);
-      box-shadow: var(--ld-button-shadow-resting);
+      font-size: var(--lv-font-size-body-md);
+      font-weight: var(--lv-font-weight-medium);
+      box-shadow: var(--lv-button-shadow-resting);
     }
 
     .divider {
       width: 100%;
-      border-top: var(--ld-border-muted);
+      border-top: var(--lv-border-muted);
     }
 
     @media (max-width: 520px) {
@@ -239,11 +239,11 @@ class LibreDashLoginPage extends DatastarLit(LitElement) {
   connectedCallback(): void {
     super.connectedCallback()
     this.themeMode = currentThemeMode()
-    document.addEventListener('libredash-theme-applied', this.handleThemeApplied)
+    document.addEventListener('leapview-theme-applied', this.handleThemeApplied)
   }
 
   disconnectedCallback(): void {
-    document.removeEventListener('libredash-theme-applied', this.handleThemeApplied)
+    document.removeEventListener('leapview-theme-applied', this.handleThemeApplied)
     super.disconnectedCallback()
   }
 
@@ -263,10 +263,10 @@ class LibreDashLoginPage extends DatastarLit(LitElement) {
     const ssoAuth = page?.ssoAuth ?? true
     const mustChangePassword = page?.mustChangePassword ?? false
     return html`
-      <ld-topology-background
+      <lv-topology-background
         data-login-background
         data-module-src=${page?.backgroundModuleSrc ?? this.backgroundModuleSrc}
-      ></ld-topology-background>
+      ></lv-topology-background>
       <div class="scrim" aria-hidden="true"></div>
       <button
         class="theme"
@@ -283,7 +283,7 @@ class LibreDashLoginPage extends DatastarLit(LitElement) {
       </button>
       <section class="panel" aria-label="${leapViewBrandName} login">
         <div class="brand-lockup">
-          <ld-brand-mark aria-hidden="true"></ld-brand-mark>
+          <lv-brand-mark aria-hidden="true"></lv-brand-mark>
           <h1>${page?.title ?? leapViewBrandName}</h1>
         </div>
         ${mustChangePassword ? html`
@@ -328,7 +328,7 @@ class LibreDashLoginPage extends DatastarLit(LitElement) {
     const mode = nextThemeMode[this.themeMode]
     this.themeMode = mode
     this.requestUpdate()
-    document.dispatchEvent(new CustomEvent('libredash-theme-change', { detail: { mode } }))
+    document.dispatchEvent(new CustomEvent('leapview-theme-change', { detail: { mode } }))
   }
 
   private get backgroundModuleSrc(): string {
@@ -336,11 +336,11 @@ class LibreDashLoginPage extends DatastarLit(LitElement) {
   }
 }
 
-if (!customElements.get('ld-login-page')) customElements.define('ld-login-page', LibreDashLoginPage)
+if (!customElements.get('lv-login-page')) customElements.define('lv-login-page', LeapViewLoginPage)
 
 function currentThemeMode(): ThemeMode {
   try {
-    return normalizeThemeMode(localStorage.getItem('libredash-color-mode'))
+    return normalizeThemeMode(localStorage.getItem('leapview-color-mode'))
   } catch {
     const colorMode = document.documentElement.dataset.colorMode
     return colorMode === 'light' || colorMode === 'dark' ? colorMode : 'system'

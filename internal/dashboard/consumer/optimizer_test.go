@@ -3,8 +3,8 @@ package consumer
 import (
 	"testing"
 
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	"github.com/Yacobolo/libredash/internal/dataquery"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	"github.com/Yacobolo/leapview/internal/dataquery"
 )
 
 func TestOptimizerGroupsSemanticConsumersWithoutPresentationShapes(t *testing.T) {

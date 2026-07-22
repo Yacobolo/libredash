@@ -31,7 +31,7 @@ Use the agent when a user benefits from iterative question/answer and can valida
 
 ## MCP
 
-Use the deployment-specific `${LIBREDASH_PUBLIC_URL}/mcp` endpoint to make the same governed BI tools available in Claude or another remote MCP host. MCP is tools-only and does not expose LeapView conversations, prompts, resources, or unrestricted SQL. Interactive clients use OAuth discovery and consent; automated workloads exchange a service-principal credential for an audience-bound MCP access token.
+Use the deployment-specific `${LEAPVIEW_PUBLIC_URL}/mcp` endpoint to make the same governed BI tools available in Claude or another remote MCP host. MCP is tools-only and does not expose LeapView conversations, prompts, resources, or unrestricted SQL. Interactive clients use OAuth discovery and consent; automated workloads exchange a service-principal credential for an audience-bound MCP access token.
 
 ## Identity and scope
 
@@ -51,6 +51,6 @@ Design integrations to:
 - avoid logging tokens or sensitive analytical payloads;
 - tolerate active deployment changes by rediscovering resource metadata when needed.
 
-Prefer `libredash deploy` over manually creating and activating deployment candidates. Prefer dashboard or semantic query endpoints over building SQL from catalog metadata.
+Prefer `leapview deploy` over manually creating and activating deployment candidates. Prefer dashboard or semantic query endpoints over building SQL from catalog metadata.
 
 Start with [API quickstart](/docs/guides/integrate/api-quickstart), [Headless BI queries](/docs/guides/integrate/headless-bi), [Agent integrations](/docs/guides/integrate/agent), or [Connect an MCP host](/docs/guides/integrate/mcp).

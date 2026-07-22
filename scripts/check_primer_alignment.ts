@@ -32,33 +32,33 @@ const excludedPathParts = [
   `${path.sep}web${path.sep}vendor${path.sep}`,
 ];
 const runtimeTokenNames = new Set([
-  "--ld-cell-bar-color",
-  "--ld-cell-bar-width",
-  "--ld-cell-bg-color",
-  "--ld-cell-bg-fade",
-  "--ld-group-head-height",
-  "--ld-head-top",
-  "--ld-pin-left",
-  "--ld-resize-guide-x",
-  "--ld-row-height",
-  "--ld-table-columns",
-  "--ld-table-width",
-  "--ld-windowed-resize-guide-x",
-  "--ld-windowed-row-height",
-  "--ld-windowed-table-columns",
-  "--ld-windowed-table-width",
+  "--lv-cell-bar-color",
+  "--lv-cell-bar-width",
+  "--lv-cell-bg-color",
+  "--lv-cell-bg-fade",
+  "--lv-group-head-height",
+  "--lv-head-top",
+  "--lv-pin-left",
+  "--lv-resize-guide-x",
+  "--lv-row-height",
+  "--lv-table-columns",
+  "--lv-table-width",
+  "--lv-windowed-resize-guide-x",
+  "--lv-windowed-row-height",
+  "--lv-windowed-table-columns",
+  "--lv-windowed-table-width",
   "--report-canvas-height",
   "--report-canvas-scale",
   "--report-canvas-width",
 ]);
 const checkedTokenPattern =
-  /^--(?:site|ld|base|motion|control|controlStack|border|borderColor|zIndex|shadow|fgColor|bgColor|data|label|button|overlay|text|fontStack|stack|selection|card|dashboard|report|color|spacing|container|radius|duration|ease|breakpoint|outline|focus)-/;
-const standardStateTokenPattern = /^--ld-bg-(?:hover|control-hover|control-active|selected)$/;
+  /^--(?:site|lv|base|motion|control|controlStack|border|borderColor|zIndex|shadow|fgColor|bgColor|data|label|button|overlay|text|fontStack|stack|selection|card|dashboard|report|color|spacing|container|radius|duration|ease|breakpoint|outline|focus)-/;
+const standardStateTokenPattern = /^--lv-bg-(?:hover|control-hover|control-active|selected)$/;
 const standardStateSelectorPattern = /(?:\[aria-pressed=['"]true['"]\]|:focus-visible|:focus(?![-\w])|\.day\.in-range)/;
 const standardButtonContractSelectorPattern =
   /(?:\.icon-action|\.options\s+summary|\.visual-options\s+summary|\.menu\s+button|button\.header-button|\.collapse-button|\.theme-button|\.storage-(?:table-button|breadcrumb-button|schema-table-link))/;
 const directButtonStylingPattern =
-  /(?:\b(?:min-height|width|height|padding)\s*:\s*[^;]*var\(--control-|\bborder\s*:\s*0\b|\bbackground\s*:\s*(?:transparent|var\(--(?:control|ld-bg-panel-muted|ld-bg-control-hover))|\boutline\s*:\s*0\b)/;
+  /(?:\b(?:min-height|width|height|padding)\s*:\s*[^;]*var\(--control-|\bborder\s*:\s*0\b|\bbackground\s*:\s*(?:transparent|var\(--(?:control|lv-bg-panel-muted|lv-bg-control-hover))|\boutline\s*:\s*0\b)/;
 
 async function listFiles(root: string, relativeDir: string): Promise<string[]> {
   const absoluteDir = path.join(root, relativeDir);
@@ -156,7 +156,7 @@ function scanCssForValueViolations(file: string, css: string, violations: Primer
   const uncommented = stripCssComments(css);
 
   for (const match of uncommented.matchAll(/#[0-9a-fA-F]{3,8}\b|\b(?:rgba?|hsla?)\(/g)) {
-    addViolation(violations, file, uncommented, match.index ?? 0, "raw-color", "Use a Primer or LibreDash semantic token instead of a raw color.");
+    addViolation(violations, file, uncommented, match.index ?? 0, "raw-color", "Use a Primer or LeapView semantic token instead of a raw color.");
   }
 
   for (const match of uncommented.matchAll(/var\(\s*(--[A-Za-z0-9_-]+)\s*,\s*(#[0-9a-fA-F]{3,8}\b|\b(?:rgba?|hsla?)\(|[0-9.]+(?:px|rem|em|ms|s)\b|white\b|black\b|transparent\b)/g)) {
@@ -165,7 +165,7 @@ function scanCssForValueViolations(file: string, css: string, violations: Primer
     addViolation(violations, file, uncommented, match.index ?? 0, "raw-var-fallback", `Use a central token fallback for ${tokenName}, not a raw design value.`);
   }
 
-  for (const match of uncommented.matchAll(/(--ld-bg-[A-Za-z0-9_-]+)\s*:\s*([^;]*color-mix\([^;]+);/g)) {
+  for (const match of uncommented.matchAll(/(--lv-bg-[A-Za-z0-9_-]+)\s*:\s*([^;]*color-mix\([^;]+);/g)) {
     const tokenName = match[1];
     if (!standardStateTokenPattern.test(tokenName)) continue;
     addViolation(violations, file, uncommented, match.index ?? 0, "standard-state-color-mix", `${tokenName} is a standard UI state token; map it directly to Primer control tokens.`);
@@ -177,7 +177,7 @@ function scanCssForValueViolations(file: string, css: string, violations: Primer
     addViolation(violations, file, uncommented, match.index ?? 0, "standard-state-color-mix", "Standard pressed, focus, and date-range states must use Primer state tokens instead of color-mix().");
   }
 
-  for (const match of uncommented.matchAll(/(--ld-asset-[A-Za-z0-9_-]+)\s*:\s*([^;]+);/g)) {
+  for (const match of uncommented.matchAll(/(--lv-asset-[A-Za-z0-9_-]+)\s*:\s*([^;]+);/g)) {
     const tokenName = match[1];
     const value = match[2] ?? "";
     if (!value.includes("color-mix(") && !value.includes("--data-")) continue;
@@ -186,16 +186,16 @@ function scanCssForValueViolations(file: string, css: string, violations: Primer
 
   for (const match of uncommented.matchAll(/var\(\s*(--button-primary-[A-Za-z0-9_-]+)/g)) {
     const tokenName = match[1];
-    addViolation(violations, file, uncommented, match.index ?? 0, "primer-primary-button-token", `${tokenName} is Primer's success-colored primary button token; use LibreDash accent button aliases instead.`);
+    addViolation(violations, file, uncommented, match.index ?? 0, "primer-primary-button-token", `${tokenName} is Primer's success-colored primary button token; use LeapView accent button aliases instead.`);
   }
 
   for (const match of uncommented.matchAll(/([^{}]+)\{([^{}]+)\}/g)) {
     const selector = match[1] ?? "";
     const body = match[2] ?? "";
     if (!standardButtonContractSelectorPattern.test(selector)) continue;
-    if (body.includes("--ld-button-")) continue;
+    if (body.includes("--lv-button-")) continue;
     if (!directButtonStylingPattern.test(body)) continue;
-    addViolation(violations, file, uncommented, match.index ?? 0, "button-contract", "Standard button selectors must use LibreDash --ld-button-* aliases instead of direct control sizing, transparent backgrounds, or outline resets.");
+    addViolation(violations, file, uncommented, match.index ?? 0, "button-contract", "Standard button selectors must use LeapView --lv-button-* aliases instead of direct control sizing, transparent backgrounds, or outline resets.");
   }
 }
 
@@ -211,14 +211,14 @@ function scanCssForTokenViolations(
   for (const match of uncommented.matchAll(/(--base-size-[A-Za-z0-9_-]+)\s*:/g)) {
     const tokenName = match[1];
     if (primerDefinitions.has(tokenName)) continue;
-    addViolation(violations, file, uncommented, match.index ?? 0, "local-primer-token", `${tokenName} extends the Primer base-size namespace locally; use an --ld-* alias.`);
+    addViolation(violations, file, uncommented, match.index ?? 0, "local-primer-token", `${tokenName} extends the Primer base-size namespace locally; use an --lv-* alias.`);
   }
 
   for (const tokenName of tokenReferences(uncommented)) {
     if (!checkedTokenPattern.test(tokenName) || runtimeTokenNames.has(tokenName)) continue;
     if (allDefinitions.has(tokenName)) continue;
     const index = uncommented.indexOf(tokenName);
-    addViolation(violations, file, uncommented, index, "undefined-token", `${tokenName} is referenced but is not defined by Primer or the LibreDash token layer.`);
+    addViolation(violations, file, uncommented, index, "undefined-token", `${tokenName} is referenced but is not defined by Primer or the LeapView token layer.`);
   }
 }
 

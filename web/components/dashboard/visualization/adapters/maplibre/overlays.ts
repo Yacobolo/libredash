@@ -8,7 +8,7 @@ export type RenderedFeatureLocator = Readonly<{ layer?: { id?: string }; propert
 export function mapTooltipEntries(envelope: VisualizationEnvelope, features: readonly RenderedFeatureLocator[], context: RendererContext = defaultRendererContext): Array<{ label: string; value: string }> {
   if (envelope.spec.kind !== 'geographic') return []
   for (const feature of features) {
-    const datasetID = feature.properties?.__ld_dataset, rowIndex = feature.properties?.__ld_row_index, layerID = feature.properties?.__ld_layer_id
+    const datasetID = feature.properties?.__lv_dataset, rowIndex = feature.properties?.__lv_row_index, layerID = feature.properties?.__lv_layer_id
     if (typeof datasetID !== 'string' || typeof rowIndex !== 'number' || !Number.isInteger(rowIndex) || rowIndex < 0 || typeof layerID !== 'string') continue
     const dataset = geographicDataset(envelope, datasetID)
     const layer = envelope.spec.layers.find((candidate) => candidate.id === layerID)

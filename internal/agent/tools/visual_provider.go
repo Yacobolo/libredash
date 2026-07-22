@@ -9,14 +9,14 @@ import (
 	"io"
 	"strings"
 
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
-	"github.com/Yacobolo/libredash/internal/dataquery"
-	visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
-	visualizationruntime "github.com/Yacobolo/libredash/internal/visualization/runtime"
-	workspacecompiler "github.com/Yacobolo/libredash/internal/workspace/compiler"
-	agentcore "github.com/Yacobolo/libredash/pkg/agent"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	"github.com/Yacobolo/leapview/internal/dataquery"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
+	visualizationruntime "github.com/Yacobolo/leapview/internal/visualization/runtime"
+	workspacecompiler "github.com/Yacobolo/leapview/internal/workspace/compiler"
+	agentcore "github.com/Yacobolo/leapview/pkg/agent"
 )
 
 const (

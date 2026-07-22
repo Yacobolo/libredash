@@ -10,10 +10,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	"github.com/Yacobolo/libredash/internal/dataquery"
-	"github.com/Yacobolo/libredash/internal/queryaudit"
-	visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	"github.com/Yacobolo/leapview/internal/dataquery"
+	"github.com/Yacobolo/leapview/internal/queryaudit"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 )
 
 func newPublicAPIRequest(method, target string, body io.Reader) *http.Request {

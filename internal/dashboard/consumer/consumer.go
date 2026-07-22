@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 )
 
 type Kind string

@@ -13,15 +13,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/access"
-	accesssqlite "github.com/Yacobolo/libredash/internal/access/sqlite"
-	"github.com/Yacobolo/libredash/internal/config"
-	"github.com/Yacobolo/libredash/internal/instancelock"
-	"github.com/Yacobolo/libredash/internal/platform"
-	"github.com/Yacobolo/libredash/internal/securefs"
-	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
-	servingstatesqlite "github.com/Yacobolo/libredash/internal/servingstate/sqlite"
-	storagemaintenance "github.com/Yacobolo/libredash/internal/storage/maintenance"
+	"github.com/Yacobolo/leapview/internal/access"
+	accesssqlite "github.com/Yacobolo/leapview/internal/access/sqlite"
+	"github.com/Yacobolo/leapview/internal/config"
+	"github.com/Yacobolo/leapview/internal/instancelock"
+	"github.com/Yacobolo/leapview/internal/platform"
+	"github.com/Yacobolo/leapview/internal/securefs"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
+	servingstatesqlite "github.com/Yacobolo/leapview/internal/servingstate/sqlite"
+	storagemaintenance "github.com/Yacobolo/leapview/internal/storage/maintenance"
 	"github.com/spf13/cobra"
 )
 
@@ -310,13 +310,13 @@ func initialAdminEmail(cfg config.Config) (string, error) {
 	email := strings.TrimSpace(cfg.BootstrapEmail)
 	if email == "" {
 		if cfg.Production {
-			return "", fmt.Errorf("production instance initialization requires LIBREDASH_BOOTSTRAP_ADMIN_EMAIL")
+			return "", fmt.Errorf("production instance initialization requires LEAPVIEW_BOOTSTRAP_ADMIN_EMAIL")
 		}
 		email = "admin@localhost"
 	}
 	parsed, err := mail.ParseAddress(email)
 	if err != nil || parsed.Address == "" {
-		return "", fmt.Errorf("instance initialization requires a valid LIBREDASH_BOOTSTRAP_ADMIN_EMAIL")
+		return "", fmt.Errorf("instance initialization requires a valid LEAPVIEW_BOOTSTRAP_ADMIN_EMAIL")
 	}
 	return parsed.Address, nil
 }
@@ -330,7 +330,7 @@ func runAdminBackup(ctx context.Context, opts *rootOptions, out io.Writer) error
 	cfg := config.MustLoad()
 	if stream && opts.databaseOnly {
 		var err error
-		backupPath, err = unusedTemporaryPathIn(filepath.Dir(cfg.HomeDir), "libredash-backup-*.db")
+		backupPath, err = unusedTemporaryPathIn(filepath.Dir(cfg.HomeDir), "leapview-backup-*.db")
 		if err != nil {
 			return err
 		}
@@ -392,7 +392,7 @@ func runAdminRestore(ctx context.Context, opts *rootOptions, in io.Reader, out i
 			return fmt.Errorf("admin restore --from - requires standard input")
 		}
 		var err error
-		restorePath, err = copyReaderToTemporaryFile(in, filepath.Dir(cfg.HomeDir), "libredash-restore-*.db")
+		restorePath, err = copyReaderToTemporaryFile(in, filepath.Dir(cfg.HomeDir), "leapview-restore-*.db")
 		if err != nil {
 			return err
 		}
@@ -404,7 +404,7 @@ func runAdminRestore(ctx context.Context, opts *rootOptions, in io.Reader, out i
 	restoreBefore := opts.restoreBefore
 	if restoreBefore == "-" {
 		var err error
-		restoreBefore, err = unusedTemporaryPathIn(filepath.Dir(cfg.HomeDir), "libredash-current-backup-*.tar.gz")
+		restoreBefore, err = unusedTemporaryPathIn(filepath.Dir(cfg.HomeDir), "leapview-current-backup-*.tar.gz")
 		if err != nil {
 			return err
 		}
@@ -558,7 +558,7 @@ func validateFullInstanceArchiveLayout(cfg config.Config) error {
 		}
 		rel, err := filepath.Rel(homeAbs, pathAbs)
 		if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			return fmt.Errorf("full instance backup/restore requires %s path inside LIBREDASH_HOME; got %s outside %s", label, path, cfg.HomeDir)
+			return fmt.Errorf("full instance backup/restore requires %s path inside LEAPVIEW_HOME; got %s outside %s", label, path, cfg.HomeDir)
 		}
 	}
 	return nil

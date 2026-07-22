@@ -64,13 +64,13 @@ for (const viewport of [
     const page = await browser.newPage({ viewport })
     try {
       await page.goto(baseURL)
-      await page.waitForFunction(() => customElements.get('ld-workspace-page') && customElements.get('ld-record-table'))
-      await page.locator('ld-workspace-page').evaluate((element: any) => element.updateComplete)
+      await page.waitForFunction(() => customElements.get('lv-workspace-page') && customElements.get('lv-record-table'))
+      await page.locator('lv-workspace-page').evaluate((element: any) => element.updateComplete)
       const workspaceState = await page.evaluate(() => {
-        const workspace = document.querySelector('ld-workspace-page') as any
+        const workspace = document.querySelector('lv-workspace-page') as any
         const workspacePage = workspace.shadowRoot.querySelector('.page') as HTMLElement
         const workspaceToolbar = workspace.shadowRoot.querySelector('.toolbar') as HTMLElement
-        const workspaceRecordTable = workspace.shadowRoot.querySelector('ld-record-table') as HTMLElement
+        const workspaceRecordTable = workspace.shadowRoot.querySelector('lv-record-table') as HTMLElement
         const workspaceGlyph = workspace.shadowRoot.querySelector('.record-entity-icon') as HTMLElement
         const workspaceDashboardGlyph = workspace.shadowRoot.querySelector('.record-icon-dashboard') as HTMLElement
         const workspaceRowActionIcon = workspace.shadowRoot.querySelector('.record-actions svg') as SVGElement
@@ -88,7 +88,7 @@ for (const viewport of [
           workspaceTableVariant: workspaceRecordTable.getAttribute('variant'),
           workspaceTableHeaders: Array.from(workspaceRecordTable.querySelectorAll('thead th button span:first-child')).map((header) => header.textContent?.trim()),
           workspaceTableHeaderBackground: getComputedStyle(workspaceRecordTable.querySelector('thead th') as HTMLElement).backgroundColor,
-          workspaceHasAccess: Boolean(workspace.shadowRoot.querySelector('ld-workspace-access-control')),
+          workspaceHasAccess: Boolean(workspace.shadowRoot.querySelector('lv-workspace-access-control')),
           workspaceIsStyled: getComputedStyle(workspacePage).paddingTop !== '0px',
           workspacePageCentered: isMobile || Math.abs((workspacePageRect.left + workspacePageRect.width / 2) - window.innerWidth / 2) <= 1,
           workspacePageConstrained: isMobile || Math.round(workspacePageRect.width) < window.innerWidth,
@@ -105,7 +105,7 @@ for (const viewport of [
       })
 
       expect(workspaceState).toEqual({
-        workspaceTitle: 'LibreDash Workspace',
+        workspaceTitle: 'LeapView Workspace',
         workspaceHasAsset: true,
         workspaceTableVariant: 'primary',
         workspaceTableHeaders: ['Name', 'Type', 'Key', 'Actions'],
@@ -126,10 +126,10 @@ for (const viewport of [
       })
 
       await page.goto(`${baseURL}/connections`)
-      await page.waitForFunction(() => customElements.get('ld-connections-page') && customElements.get('ld-record-table'))
-      await page.locator('ld-connections-page').evaluate((element: any) => element.updateComplete)
+      await page.waitForFunction(() => customElements.get('lv-connections-page') && customElements.get('lv-record-table'))
+      await page.locator('lv-connections-page').evaluate((element: any) => element.updateComplete)
       const connectionsState = await page.evaluate(() => {
-        const connections = document.querySelector('ld-connections-page') as any
+        const connections = document.querySelector('lv-connections-page') as any
         const connectionsPage = connections.shadowRoot.querySelector('.page') as HTMLElement
         const connectionsPageRect = connectionsPage.getBoundingClientRect()
         const isMobile = window.innerWidth <= 720
@@ -150,22 +150,22 @@ for (const viewport of [
       })
 
       await page.goto(`${baseURL}/asset`)
-      await page.waitForFunction(() => customElements.get('ld-workspace-asset-page') && customElements.get('ld-record-table'))
-      await page.locator('ld-workspace-asset-page').evaluate((element: any) => element.updateComplete)
+      await page.waitForFunction(() => customElements.get('lv-workspace-asset-page') && customElements.get('lv-record-table'))
+      await page.locator('lv-workspace-asset-page').evaluate((element: any) => element.updateComplete)
       const assetState = await page.evaluate(() => {
-        const asset = document.querySelector('ld-workspace-asset-page') as any
+        const asset = document.querySelector('lv-workspace-asset-page') as any
         const assetHeader = asset.shadowRoot.querySelector('.breadcrumb-header') as HTMLElement
         const assetTabs = asset.shadowRoot.querySelector('.asset-body > .tabs') as HTMLElement
         const assetFirstTab = asset.shadowRoot.querySelector('.asset-body > .tabs a') as HTMLElement
         const assetSectionBody = asset.shadowRoot.querySelector('.section-body') as HTMLElement
-        const semanticGraph = asset.shadowRoot.querySelector('ld-semantic-model-graph') as HTMLElement
-        const firstRecordTable = asset.shadowRoot.querySelector('ld-record-table') as HTMLElement
+        const semanticGraph = asset.shadowRoot.querySelector('lv-semantic-model-graph') as HTMLElement
+        const firstRecordTable = asset.shadowRoot.querySelector('lv-record-table') as HTMLElement
         const semanticGraphSection = asset.shadowRoot.querySelector('.semantic-model-section') as HTMLElement
         const assetPage = asset.shadowRoot.querySelector('.asset-page') as HTMLElement
         return {
           assetTitle: asset.shadowRoot.querySelector('h1 span:last-child')?.textContent?.trim(),
           assetHasOverview: asset.shadowRoot.textContent?.includes('Overview') ?? false,
-          assetHasRecordTable: Boolean(asset.shadowRoot.querySelector('ld-record-table')),
+          assetHasRecordTable: Boolean(asset.shadowRoot.querySelector('lv-record-table')),
           assetHasSemanticGraph: Boolean(semanticGraph),
           assetSemanticGraphBeforeRecordTable: Boolean(semanticGraph && firstRecordTable && semanticGraph.compareDocumentPosition(firstRecordTable) & Node.DOCUMENT_POSITION_FOLLOWING),
           assetHasDataModelHeading: Array.from(asset.shadowRoot.querySelectorAll('h2')).some((heading) => heading.textContent?.trim() === 'Data model'),
@@ -201,7 +201,7 @@ test('workspace catalog cards keep Open links visible with long descriptions', a
   const page = await browser.newPage({ viewport: { width: 1420, height: 1155 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-workspace-page'))
+    await page.waitForFunction(() => customElements.get('lv-workspace-page'))
     await page.evaluate(async () => {
       const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev') as any
       mergePatch({ page: {
@@ -215,9 +215,9 @@ test('workspace catalog cards keep Open links visible with long descriptions', a
         ],
       } })
     })
-    await page.locator('ld-workspace-page').evaluate((element: any) => element.updateComplete)
+    await page.locator('lv-workspace-page').evaluate((element: any) => element.updateComplete)
 
-    const state = await page.locator('ld-workspace-page').evaluate((element: any) => {
+    const state = await page.locator('lv-workspace-page').evaluate((element: any) => {
       const cards = Array.from(element.shadowRoot.querySelectorAll('article.card')) as HTMLElement[]
       const visualCard = cards[2]
       const open = visualCard.querySelector('a.primary-link') as HTMLAnchorElement
@@ -246,12 +246,12 @@ test('workspace asset search filters the current asset rows', async () => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-workspace-page'))
-    await page.locator('ld-workspace-page').evaluate((element: any) => element.updateComplete)
-    await page.waitForFunction(() => Boolean((document.querySelector('ld-workspace-page') as any)?.shadowRoot?.querySelector('ld-workspace-access-control')?.shadowRoot?.querySelector('.trigger')))
+    await page.waitForFunction(() => customElements.get('lv-workspace-page'))
+    await page.locator('lv-workspace-page').evaluate((element: any) => element.updateComplete)
+    await page.waitForFunction(() => Boolean((document.querySelector('lv-workspace-page') as any)?.shadowRoot?.querySelector('lv-workspace-access-control')?.shadowRoot?.querySelector('.trigger')))
 
     const state = await page.evaluate(async () => {
-      const workspace = document.querySelector('ld-workspace-page') as any
+      const workspace = document.querySelector('lv-workspace-page') as any
       const root = workspace.shadowRoot
       const input = root.querySelector('.toolbar .search input[type="search"]') as HTMLInputElement
       const form = root.querySelector('.toolbar .search') as HTMLFormElement
@@ -289,12 +289,12 @@ test('workspace access modal normalizes Go-shaped access signals', async () => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-workspace-page'))
-    await page.locator('ld-workspace-page').evaluate((element: any) => element.updateComplete)
+    await page.waitForFunction(() => customElements.get('lv-workspace-page'))
+    await page.locator('lv-workspace-page').evaluate((element: any) => element.updateComplete)
 
     const state = await page.evaluate(async () => {
-      const workspace = document.querySelector('ld-workspace-page') as any
-      const accessControl = workspace.shadowRoot.querySelector('ld-workspace-access-control') as any
+      const workspace = document.querySelector('lv-workspace-page') as any
+      const accessControl = workspace.shadowRoot.querySelector('lv-workspace-access-control') as any
       accessControl.shadowRoot.querySelector('.trigger').click()
       await accessControl.updateComplete
       const dialog = accessControl.shadowRoot.querySelector('[role="dialog"]')
@@ -314,7 +314,7 @@ test('workspace access modal normalizes Go-shaped access signals', async () => {
 
 	expect(state).toEqual({
 		hasDialog: false,
-		title: 'LibreDash Workspace roles apply to every published asset in this workspace.',
+		title: 'LeapView Workspace roles apply to every published asset in this workspace.',
 		roleOptions: [
 			{ value: 'principal', label: 'User' },
 			{ value: 'group', label: 'Group' },
@@ -334,17 +334,17 @@ test('refresh pipeline page renders run history and emits run-now events', async
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {
     await page.goto(`${baseURL}/asset`)
-    await page.waitForFunction(() => customElements.get('ld-workspace-asset-page') && customElements.get('ld-record-table'))
+    await page.waitForFunction(() => customElements.get('lv-workspace-asset-page') && customElements.get('lv-record-table'))
 
     const state = await page.evaluate(async () => {
-      const asset = document.querySelector('ld-workspace-asset-page') as any
+      const asset = document.querySelector('lv-workspace-asset-page') as any
       let refreshEvents = 0
-      asset.addEventListener('ld-run-refresh-pipeline', () => { refreshEvents += 1 })
+      asset.addEventListener('lv-run-refresh-pipeline', () => { refreshEvents += 1 })
       const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev') as any
       mergePatch({ page: {
         kind: 'workspace_asset',
         title: 'Sales refresh',
-        workspaceId: 'libredash',
+        workspaceId: 'leapview',
         assetId: 'refresh_pipeline:sales-refresh',
         activeSection: 'refreshes',
         asset: {
@@ -354,22 +354,22 @@ test('refresh pipeline page renders run history and emits run-now events', async
           type: 'refresh_pipeline',
           typeLabel: 'Refresh pipeline',
           key: 'sales-refresh',
-          detailHref: '/workspaces/libredash/assets/refresh_pipeline:sales-refresh/details',
-          openHref: '/workspaces/libredash/assets/refresh_pipeline:sales-refresh/details',
+          detailHref: '/workspaces/leapview/assets/refresh_pipeline:sales-refresh/details',
+          openHref: '/workspaces/leapview/assets/refresh_pipeline:sales-refresh/details',
         },
         breadcrumbs: [
           { label: 'Workspaces', href: '/workspaces' },
-          { label: 'LibreDash Workspace', href: '/workspaces/libredash' },
+          { label: 'LeapView Workspace', href: '/workspaces/leapview' },
           { label: 'Sales refresh', current: true },
         ],
         actions: [
           { label: 'Run now', icon: 'refresh', command: 'run-refresh-pipeline' },
-          { label: 'Back to workspace', href: '/workspaces/libredash', icon: 'back' },
+          { label: 'Back to workspace', href: '/workspaces/leapview', icon: 'back' },
         ],
         tabs: [
-          { id: 'details', label: 'Details', href: '/workspaces/libredash/assets/refresh_pipeline:sales-refresh/details', active: false },
-          { id: 'refreshes', label: 'Refreshes', href: '/workspaces/libredash/assets/refresh_pipeline:sales-refresh/refreshes', active: true },
-          { id: 'lineage', label: 'Lineage', href: '/workspaces/libredash/assets/refresh_pipeline:sales-refresh/lineage', active: false, count: 1 },
+          { id: 'details', label: 'Details', href: '/workspaces/leapview/assets/refresh_pipeline:sales-refresh/details', active: false },
+          { id: 'refreshes', label: 'Refreshes', href: '/workspaces/leapview/assets/refresh_pipeline:sales-refresh/refreshes', active: true },
+          { id: 'lineage', label: 'Lineage', href: '/workspaces/leapview/assets/refresh_pipeline:sales-refresh/lineage', active: false, count: 1 },
         ],
         refresh: {
           status: 'succeeded',
@@ -392,13 +392,13 @@ test('refresh pipeline page renders run history and emits run-now events', async
       mergePatch({ page: { refresh: { running: true } } })
       await asset.updateComplete
       const runningButton = asset.shadowRoot.querySelector('button[aria-label="Run now"]') as HTMLButtonElement
-      const spinner = runningButton.querySelector('ld-loading-spinner') as any
+      const spinner = runningButton.querySelector('lv-loading-spinner') as any
       await spinner?.updateComplete
       const spinnerSvg = spinner?.shadowRoot?.querySelector('svg') as SVGElement | null
       return {
         activeTab: asset.shadowRoot.querySelector('.tabs a.active')?.textContent?.trim(),
         hasRefreshButton: Boolean(button),
-        recordTableText: asset.shadowRoot.querySelector('ld-record-table')?.textContent,
+        recordTableText: asset.shadowRoot.querySelector('lv-record-table')?.textContent,
         refreshEvents,
         hasSpinner: Boolean(spinner),
         spinnerDuration: spinnerSvg ? getComputedStyle(spinnerSvg).animationDuration : '',
@@ -422,15 +422,15 @@ test('workspace asset page does not render versions as a product surface', async
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {
     await page.goto(`${baseURL}/asset`)
-    await page.waitForFunction(() => customElements.get('ld-workspace-asset-page') && customElements.get('ld-record-table'))
+    await page.waitForFunction(() => customElements.get('lv-workspace-asset-page') && customElements.get('lv-record-table'))
 
     const state = await page.evaluate(async () => {
-      const asset = document.querySelector('ld-workspace-asset-page') as any
+      const asset = document.querySelector('lv-workspace-asset-page') as any
       const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev') as any
       mergePatch({ page: {
         kind: 'workspace_asset',
         title: 'Executive Sales Dashboard',
-        workspaceId: 'libredash',
+        workspaceId: 'leapview',
         assetId: 'dashboard:executive-sales',
         activeSection: 'versions',
         asset: {
@@ -439,18 +439,18 @@ test('workspace asset page does not render versions as a product surface', async
           type: 'dashboard',
           typeLabel: 'Dashboard',
           key: 'executive-sales',
-          detailHref: '/workspaces/libredash/assets/dashboard:executive-sales/details',
+          detailHref: '/workspaces/leapview/assets/dashboard:executive-sales/details',
           openHref: '/dashboards/executive-sales',
         },
         breadcrumbs: [
           { label: 'Workspaces', href: '/workspaces' },
-          { label: 'LibreDash Workspace', href: '/workspaces/libredash' },
+          { label: 'LeapView Workspace', href: '/workspaces/leapview' },
           { label: 'Executive Sales Dashboard', current: true },
         ],
         actions: [],
         tabs: [
-          { id: 'details', label: 'Details', href: '/workspaces/libredash/assets/dashboard:executive-sales/details', active: false },
-          { id: 'lineage', label: 'Lineage', href: '/workspaces/libredash/assets/dashboard:executive-sales/lineage', active: false, count: 1 },
+          { id: 'details', label: 'Details', href: '/workspaces/leapview/assets/dashboard:executive-sales/details', active: false },
+          { id: 'lineage', label: 'Lineage', href: '/workspaces/leapview/assets/dashboard:executive-sales/lineage', active: false, count: 1 },
         ],
         details: {
           overview: [
@@ -460,7 +460,7 @@ test('workspace asset page does not render versions as a product surface', async
         },
       } })
       await asset.updateComplete
-      const table = asset.shadowRoot.querySelector('ld-record-table') as HTMLElement | null
+      const table = asset.shadowRoot.querySelector('lv-record-table') as HTMLElement | null
       return {
         tabText: asset.shadowRoot.querySelector('.tabs')?.textContent ?? '',
         sectionTitle: asset.shadowRoot.querySelector('.detail-section h2')?.textContent?.trim(),
@@ -480,11 +480,11 @@ test('workspace asset page does not render versions as a product surface', async
 
 function testDocument(root: 'workspace' | 'connections' | 'asset'): string {
   const assetList = {
-    workspaceId: 'libredash',
-    searchHref: '/workspaces/libredash',
+    workspaceId: 'leapview',
+    searchHref: '/workspaces/leapview',
     tabs: [
-      { id: '', label: 'All', href: '/workspaces/libredash', active: true },
-      { id: 'dashboard', label: 'Dashboard', href: '/workspaces/libredash?type=dashboard', active: false },
+      { id: '', label: 'All', href: '/workspaces/leapview', active: true },
+      { id: 'dashboard', label: 'Dashboard', href: '/workspaces/leapview?type=dashboard', active: false },
     ],
     assets: [
       {
@@ -495,8 +495,8 @@ function testDocument(root: 'workspace' | 'connections' | 'asset'): string {
         typeLabel: 'Semantic model',
         key: 'olist',
         parentTitle: '-',
-        detailHref: '/workspaces/libredash/assets/semantic_model:olist/details',
-        openHref: '/workspaces/libredash/assets/semantic_model:olist/details',
+        detailHref: '/workspaces/leapview/assets/semantic_model:olist/details',
+        openHref: '/workspaces/leapview/assets/semantic_model:olist/details',
       },
       {
         id: 'dashboard:customers',
@@ -506,7 +506,7 @@ function testDocument(root: 'workspace' | 'connections' | 'asset'): string {
         typeLabel: 'Dashboard',
         key: 'customers',
         parentTitle: '-',
-        detailHref: '/workspaces/libredash/assets/dashboard:customers/details',
+        detailHref: '/workspaces/leapview/assets/dashboard:customers/details',
         openHref: '/dashboards/customers',
       },
     ],
@@ -514,16 +514,16 @@ function testDocument(root: 'workspace' | 'connections' | 'asset'): string {
   }
   const workspacePage = {
     kind: 'workspace',
-    title: 'LibreDash Workspace',
+    title: 'LeapView Workspace',
     description: 'Published BI assets.',
-    workspaceId: 'libredash',
+    workspaceId: 'leapview',
     assetList,
   }
   const connectionsPage = {
     kind: 'connections',
     title: 'Connections',
     description: 'Connection-scoped data assets.',
-    workspaceId: 'libredash',
+    workspaceId: 'leapview',
     assetList: {
       ...assetList,
       searchHref: '/connections',
@@ -533,19 +533,19 @@ function testDocument(root: 'workspace' | 'connections' | 'asset'): string {
   const assetPage = {
     kind: 'workspace_asset',
     title: 'Olist Commerce',
-    workspaceId: 'libredash',
+    workspaceId: 'leapview',
     assetId: 'semantic_model:olist',
     activeSection: 'details',
     asset: assetList.assets[0],
     breadcrumbs: [
       { label: 'Workspaces', href: '/workspaces' },
-      { label: 'LibreDash Workspace', href: '/workspaces/libredash' },
+      { label: 'LeapView Workspace', href: '/workspaces/leapview' },
       { label: 'Olist Commerce', current: true },
     ],
     actions: [],
     tabs: [
-      { id: 'details', label: 'Details', href: '/workspaces/libredash/assets/semantic_model:olist/details', active: true },
-      { id: 'lineage', label: 'Lineage', href: '/workspaces/libredash/assets/semantic_model:olist/lineage', active: false, count: 1 },
+      { id: 'details', label: 'Details', href: '/workspaces/leapview/assets/semantic_model:olist/details', active: true },
+      { id: 'lineage', label: 'Lineage', href: '/workspaces/leapview/assets/semantic_model:olist/lineage', active: false, count: 1 },
     ],
     details: {
       overview: [
@@ -583,14 +583,14 @@ function testDocument(root: 'workspace' | 'connections' | 'asset'): string {
         title: 'Model tables (1)',
         table: {
           columns: [{ id: 'name', header: 'Name', kind: 'link', hrefKey: 'nameHref' }],
-          rows: [{ name: 'orders', nameHref: '/workspaces/libredash/assets/model_table:olist.orders/details' }],
+          rows: [{ name: 'orders', nameHref: '/workspaces/leapview/assets/model_table:olist.orders/details' }],
           empty: 'No model tables.',
         },
       }],
     },
   }
   const access = {
-    workspace: { ID: 'libredash', Title: 'LibreDash Workspace' },
+    workspace: { ID: 'leapview', Title: 'LeapView Workspace' },
     roles: [{ Name: 'viewer' }, { Name: 'workspace_admin' }],
     bindings: [{
       PrincipalID: 'principal:analyst@example.com',
@@ -604,18 +604,18 @@ function testDocument(root: 'workspace' | 'connections' | 'asset'): string {
     search: '',
   }
   const route = root === 'connections'
-    ? { signals: { page: connectionsPage }, element: '<ld-connections-page></ld-connections-page>' }
+    ? { signals: { page: connectionsPage }, element: '<lv-connections-page></lv-connections-page>' }
     : root === 'asset'
-      ? { signals: { page: assetPage }, element: '<ld-workspace-asset-page></ld-workspace-asset-page>' }
-      : { signals: { page: workspacePage, workspaceAccess: access }, element: '<ld-workspace-page></ld-workspace-page>' }
+      ? { signals: { page: assetPage }, element: '<lv-workspace-asset-page></lv-workspace-asset-page>' }
+      : { signals: { page: workspacePage, workspaceAccess: access }, element: '<lv-workspace-page></lv-workspace-page>' }
   return `
     <!doctype html>
     <html>
       <head>
         <style>
           html, body { margin: 0; min-height: 100%; }
-          body { --fontStack-system: system-ui; --ld-bg-app: #f6f8fa; --ld-bg-panel: #fff; --ld-bg-panel-muted: #f6f8fa; --ld-bg-control: #f6f8fa; --ld-bg-control-hover: #f3f4f6; --ld-fg-default: #24292f; --ld-fg-muted: #57606a; --ld-fg-link: #0969da; --ld-accent: #0969da; --ld-accent-fg: #fff; --ld-line-muted: #d8dee4; --ld-line-accent: #0969da; --ld-border-default: 1px solid #d0d7de; --ld-border-muted: 1px solid #d8dee4; --ld-border-transparent: 1px solid transparent; --ld-radius-default: 6px; --ld-radius-tight: 4px; --ld-radius-full: 999px; --ld-page-content-max-width: 72rem; --ld-workspace-detail-max-width: 72rem; --base-size-4: 4px; --base-size-6: 6px; --base-size-8: 8px; --base-size-10: 10px; --base-size-12: 12px; --base-size-16: 16px; --base-size-20: 20px; --base-size-24: 24px; --ld-space-control: 10px; --control-medium-size: 32px; --control-xlarge-size: 40px; --ld-font-size-caption: 12px; --ld-font-size-body-sm: 14px; --ld-font-size-title-sm: 16px; --ld-font-weight-medium: 500; --ld-font-weight-strong: 600; --ld-line-height-tight: 1.2; --ld-line-height-compact: 1.3; --ld-spinner-size-md: 16px; --ld-spinner-duration: 1800ms; --ld-asset-dashboard-bg: #fbefff; --ld-asset-dashboard-accent: #8250df; --ld-asset-dashboard-border: #d2bfff; --ld-asset-semantic-model-bg: #ddf4ff; --ld-asset-semantic-model-accent: #0969da; --ld-asset-semantic-model-border: #b6e3ff; --z-index-inspector: 1000; --ld-modal-backdrop: rgb(0 0 0 / .28); }
-          ld-workspace-page, ld-connections-page, ld-workspace-asset-page { display: block; min-height: 720px; }
+          body { --fontStack-system: system-ui; --lv-bg-app: #f6f8fa; --lv-bg-panel: #fff; --lv-bg-panel-muted: #f6f8fa; --lv-bg-control: #f6f8fa; --lv-bg-control-hover: #f3f4f6; --lv-fg-default: #24292f; --lv-fg-muted: #57606a; --lv-fg-link: #0969da; --lv-accent: #0969da; --lv-accent-fg: #fff; --lv-line-muted: #d8dee4; --lv-line-accent: #0969da; --lv-border-default: 1px solid #d0d7de; --lv-border-muted: 1px solid #d8dee4; --lv-border-transparent: 1px solid transparent; --lv-radius-default: 6px; --lv-radius-tight: 4px; --lv-radius-full: 999px; --lv-page-content-max-width: 72rem; --lv-workspace-detail-max-width: 72rem; --base-size-4: 4px; --base-size-6: 6px; --base-size-8: 8px; --base-size-10: 10px; --base-size-12: 12px; --base-size-16: 16px; --base-size-20: 20px; --base-size-24: 24px; --lv-space-control: 10px; --control-medium-size: 32px; --control-xlarge-size: 40px; --lv-font-size-caption: 12px; --lv-font-size-body-sm: 14px; --lv-font-size-title-sm: 16px; --lv-font-weight-medium: 500; --lv-font-weight-strong: 600; --lv-line-height-tight: 1.2; --lv-line-height-compact: 1.3; --lv-spinner-size-md: 16px; --lv-spinner-duration: 1800ms; --lv-asset-dashboard-bg: #fbefff; --lv-asset-dashboard-accent: #8250df; --lv-asset-dashboard-border: #d2bfff; --lv-asset-semantic-model-bg: #ddf4ff; --lv-asset-semantic-model-accent: #0969da; --lv-asset-semantic-model-border: #b6e3ff; --z-index-inspector: 1000; --lv-modal-backdrop: rgb(0 0 0 / .28); }
+          lv-workspace-page, lv-connections-page, lv-workspace-asset-page { display: block; min-height: 720px; }
         </style>
       </head>
       <body>

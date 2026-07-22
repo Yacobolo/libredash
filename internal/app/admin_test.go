@@ -12,13 +12,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/access"
-	"github.com/Yacobolo/libredash/internal/agent"
-	"github.com/Yacobolo/libredash/internal/platform"
-	"github.com/Yacobolo/libredash/internal/queryaudit"
-	"github.com/Yacobolo/libredash/internal/ui"
-	uisignals "github.com/Yacobolo/libredash/internal/ui/signals"
-	"github.com/Yacobolo/libredash/pkg/pagestream"
+	"github.com/Yacobolo/leapview/internal/access"
+	"github.com/Yacobolo/leapview/internal/agent"
+	"github.com/Yacobolo/leapview/internal/platform"
+	"github.com/Yacobolo/leapview/internal/queryaudit"
+	"github.com/Yacobolo/leapview/internal/ui"
+	uisignals "github.com/Yacobolo/leapview/internal/ui/signals"
+	"github.com/Yacobolo/leapview/pkg/pagestream"
 	_ "github.com/duckdb/duckdb-go/v2"
 )
 
@@ -76,14 +76,14 @@ func TestAdminPagesRenderReadOnlyAccessData(t *testing.T) {
 		path string
 		want []string
 	}{
-		{path: "/admin", want: []string{"<ld-admin-page", `section="general"`, `/updates?route=admin&amp;section=general`}},
-		{path: "/admin/principals", want: []string{"<ld-admin-page", `section="principals"`, `/updates?route=admin&amp;section=principals`}},
-		{path: "/admin/principals/" + analyst.ID, want: []string{"<ld-admin-page", `section="principal-detail"`, `/updates?principal=` + analyst.ID + `&amp;route=admin&amp;section=principal-detail`}},
-		{path: "/admin/groups", want: []string{"<ld-admin-page", `section="groups"`, `/updates?route=admin&amp;section=groups`}},
-		{path: "/admin/groups/group_finance", want: []string{"<ld-admin-page", `section="group-detail"`, `/updates?group=group_finance&amp;route=admin&amp;section=group-detail`}},
-		{path: "/admin/agent", want: []string{"<ld-admin-page", `section="agent"`, `/updates?route=admin&amp;section=agent`, "/admin/agent/config"}},
-		{path: "/admin/storage", want: []string{"<ld-admin-page", `section="storage"`, `/updates?route=admin&amp;section=storage`, "/admin/storage/select-table"}},
-		{path: "/admin/queries", want: []string{"<ld-admin-page", `section="queries"`, `/updates?route=admin&amp;section=queries`, "/admin/queries/command"}},
+		{path: "/admin", want: []string{"<lv-admin-page", `section="general"`, `/updates?route=admin&amp;section=general`}},
+		{path: "/admin/principals", want: []string{"<lv-admin-page", `section="principals"`, `/updates?route=admin&amp;section=principals`}},
+		{path: "/admin/principals/" + analyst.ID, want: []string{"<lv-admin-page", `section="principal-detail"`, `/updates?principal=` + analyst.ID + `&amp;route=admin&amp;section=principal-detail`}},
+		{path: "/admin/groups", want: []string{"<lv-admin-page", `section="groups"`, `/updates?route=admin&amp;section=groups`}},
+		{path: "/admin/groups/group_finance", want: []string{"<lv-admin-page", `section="group-detail"`, `/updates?group=group_finance&amp;route=admin&amp;section=group-detail`}},
+		{path: "/admin/agent", want: []string{"<lv-admin-page", `section="agent"`, `/updates?route=admin&amp;section=agent`, "/admin/agent/config"}},
+		{path: "/admin/storage", want: []string{"<lv-admin-page", `section="storage"`, `/updates?route=admin&amp;section=storage`, "/admin/storage/select-table"}},
+		{path: "/admin/queries", want: []string{"<lv-admin-page", `section="queries"`, `/updates?route=admin&amp;section=queries`, "/admin/queries/command"}},
 	}
 	for _, tc := range cases {
 		req := httptest.NewRequest(http.MethodGet, tc.path, nil)
@@ -99,7 +99,7 @@ func TestAdminPagesRenderReadOnlyAccessData(t *testing.T) {
 				t.Fatalf("%s missing %q:\n%s", tc.path, want, body)
 			}
 		}
-		for _, notWant := range []string{"/admin/access", "Assign role", "Remove access", "<form", "data-on:ld-workspace-access-upsert", "refresh-materializations"} {
+		for _, notWant := range []string{"/admin/access", "Assign role", "Remove access", "<form", "data-on:lv-workspace-access-upsert", "refresh-materializations"} {
 			if strings.Contains(body, notWant) {
 				t.Fatalf("%s rendered write control %q:\n%s", tc.path, notWant, body)
 			}
@@ -144,7 +144,7 @@ func TestAdminQueryHistoryCommandPublishesLoadMorePatch(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/admin/queries/command", body)
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
-	req.AddCookie(&http.Cookie{Name: "ld_client_id", Value: "test-client"})
+	req.AddCookie(&http.Cookie{Name: "lv_client_id", Value: "test-client"})
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
 
@@ -202,7 +202,7 @@ func TestAdminQueryHistoryCommandPublishesFilteredResetPatch(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/admin/queries/command", body)
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
-	req.AddCookie(&http.Cookie{Name: "ld_client_id", Value: "test-client"})
+	req.AddCookie(&http.Cookie{Name: "lv_client_id", Value: "test-client"})
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
 
@@ -264,7 +264,7 @@ func TestAdminQueryHistoryCommandSearchesFilterMenuOptions(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/admin/queries/command", body)
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
-	req.AddCookie(&http.Cookie{Name: "ld_client_id", Value: "test-client"})
+	req.AddCookie(&http.Cookie{Name: "lv_client_id", Value: "test-client"})
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
 
@@ -317,7 +317,7 @@ func TestAdminQueryHistoryCommandTogglesFilterAndResetsTable(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/admin/queries/command", body)
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
-	req.AddCookie(&http.Cookie{Name: "ld_client_id", Value: "test-client"})
+	req.AddCookie(&http.Cookie{Name: "lv_client_id", Value: "test-client"})
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
 
@@ -390,7 +390,7 @@ func TestAdminQueryHistoryCommandPublishesDetailPatch(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/admin/queries/command", body)
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
-	req.AddCookie(&http.Cookie{Name: "ld_client_id", Value: "test-client"})
+	req.AddCookie(&http.Cookie{Name: "lv_client_id", Value: "test-client"})
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
 
@@ -432,7 +432,7 @@ func TestAdminQueryHistoryCommandRequiresCSRF(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Referer", "http://localhost:8150/admin/queries")
-	req.AddCookie(&http.Cookie{Name: "ld_client_id", Value: "test-client"})
+	req.AddCookie(&http.Cookie{Name: "lv_client_id", Value: "test-client"})
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
 
@@ -453,7 +453,7 @@ func TestAdminQueryHistoryUpdatesForwardsPatches(t *testing.T) {
 	defer cancel()
 	req := httptest.NewRequestWithContext(reqCtx, http.MethodGet, "/updates?route=admin&section=queries", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
-	req.AddCookie(&http.Cookie{Name: "ld_client_id", Value: "test-client"})
+	req.AddCookie(&http.Cookie{Name: "lv_client_id", Value: "test-client"})
 	rec := httptest.NewRecorder()
 	done := make(chan struct{})
 	go func() {
@@ -495,7 +495,7 @@ func TestAdminStorageDetailRouteIsDropped(t *testing.T) {
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test"})
 
-	req := httptest.NewRequest(http.MethodGet, "/admin/storage/libredash-test.duckdb/model/orders", nil)
+	req := httptest.NewRequest(http.MethodGet, "/admin/storage/leapview-test.duckdb/model/orders", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
@@ -517,7 +517,7 @@ func TestAdminStorageUpdatesSubscribesWithoutInitialRescan(t *testing.T) {
 	defer cancel()
 	req := httptest.NewRequestWithContext(reqCtx, http.MethodGet, "/updates?route=admin&section=storage", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
-	req.AddCookie(&http.Cookie{Name: "ld_client_id", Value: "test-client"})
+	req.AddCookie(&http.Cookie{Name: "lv_client_id", Value: "test-client"})
 	rec := httptest.NewRecorder()
 	done := make(chan struct{})
 	go func() {
@@ -558,7 +558,7 @@ func TestAdminStorageSelectTablePublishesSelectedTablePatch(t *testing.T) {
 	token := testAPIToken(t, ctx, store, owner.ID, "test")
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	dir := t.TempDir()
-	catalogPath := filepath.Join(dir, "libredash.db")
+	catalogPath := filepath.Join(dir, "leapview.db")
 	dataPath := filepath.Join(dir, "data")
 	seedAdminStorageDuckLakeAt(t, catalogPath, dataPath)
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test", DuckLakeCatalogPath: catalogPath, DuckLakeDataPath: dataPath})
@@ -569,7 +569,7 @@ func TestAdminStorageSelectTablePublishesSelectedTablePatch(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/admin/storage/select-table", body)
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
-	req.AddCookie(&http.Cookie{Name: "ld_client_id", Value: "test-client"})
+	req.AddCookie(&http.Cookie{Name: "lv_client_id", Value: "test-client"})
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
 
@@ -599,14 +599,14 @@ func TestAdminStorageSelectTablePublishesSelectedTablePatch(t *testing.T) {
 
 func TestAdminStorageReadsDuckLakeMetadata(t *testing.T) {
 	dir := t.TempDir()
-	catalogPath := filepath.Join(dir, "libredash.db")
+	catalogPath := filepath.Join(dir, "leapview.db")
 	dataPath := filepath.Join(dir, "data")
 	seedAdminStorageDuckLakeAt(t, catalogPath, dataPath)
 	legacyDir := filepath.Join(dir, "duckdb")
 	if err := os.MkdirAll(legacyDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(legacyDir, "libredash-stale.duckdb"), []byte("stale"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(legacyDir, "leapview-stale.duckdb"), []byte("stale"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	server := NewWithOptions(fakeMetrics{}, Options{DefaultWorkspaceID: "test", DuckDBDir: legacyDir, DuckLakeCatalogPath: catalogPath, DuckLakeDataPath: dataPath})
@@ -657,7 +657,7 @@ func TestAdminStorageReadsDuckLakeMetadata(t *testing.T) {
 func TestAdminStorageIncludesDeploymentSnapshotContext(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
-	catalogPath := filepath.Join(dir, "libredash.db")
+	catalogPath := filepath.Join(dir, "leapview.db")
 	dataPath := filepath.Join(dir, "data")
 	store, err := platform.Open(ctx, catalogPath)
 	if err != nil {
@@ -706,18 +706,18 @@ func TestAdminStorageSelectTableRejectsInvalidCommand(t *testing.T) {
 	token := testAPIToken(t, ctx, store, owner.ID, "test")
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	dir := t.TempDir()
-	catalogPath := filepath.Join(dir, "libredash.db")
+	catalogPath := filepath.Join(dir, "leapview.db")
 	dataPath := filepath.Join(dir, "data")
 	seedAdminStorageDuckLakeAt(t, catalogPath, dataPath)
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test", DuckLakeCatalogPath: catalogPath, DuckLakeDataPath: dataPath})
 	updates, unsubscribe := server.broker.Subscribe("admin-storage:test-client")
 	defer unsubscribe()
 
-	body := strings.NewReader(`{"adminStorageCommand":{"databaseId":"libredash-test.duckdb","schema":"model","table":"missing"}}`)
+	body := strings.NewReader(`{"adminStorageCommand":{"databaseId":"leapview-test.duckdb","schema":"model","table":"missing"}}`)
 	req := httptest.NewRequest(http.MethodPost, "/admin/storage/select-table", body)
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
-	req.AddCookie(&http.Cookie{Name: "ld_client_id", Value: "test-client"})
+	req.AddCookie(&http.Cookie{Name: "lv_client_id", Value: "test-client"})
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
 
@@ -795,7 +795,7 @@ func TestAdminGeneralRendersWithoutStore(t *testing.T) {
 		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"<ld-admin-page", `section="general"`, `/updates?route=admin&amp;section=general`} {
+	for _, want := range []string{"<lv-admin-page", `section="general"`, `/updates?route=admin&amp;section=general`} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("admin general missing %q:\n%s", want, body)
 		}
@@ -815,7 +815,7 @@ func TestAdminStorageRendersEmptyStateWithoutDuckDBFiles(t *testing.T) {
 		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"<ld-admin-page", `section="storage"`, `/updates?route=admin&amp;section=storage`} {
+	for _, want := range []string{"<lv-admin-page", `section="storage"`, `/updates?route=admin&amp;section=storage`} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("admin storage missing %q:\n%s", want, body)
 		}

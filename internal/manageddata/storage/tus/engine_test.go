@@ -15,9 +15,9 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/manageddata/storage"
-	"github.com/Yacobolo/libredash/internal/manageddata/storage/filesystem"
-	managedtus "github.com/Yacobolo/libredash/internal/manageddata/storage/tus"
+	"github.com/Yacobolo/leapview/internal/manageddata/storage"
+	"github.com/Yacobolo/leapview/internal/manageddata/storage/filesystem"
+	managedtus "github.com/Yacobolo/leapview/internal/manageddata/storage/tus"
 )
 
 func TestEngineCreateResumeWriteAndFinalize(t *testing.T) {

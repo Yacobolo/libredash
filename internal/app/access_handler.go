@@ -3,8 +3,8 @@ package app
 import (
 	"net/http"
 
-	accessdomain "github.com/Yacobolo/libredash/internal/access"
-	accesshttp "github.com/Yacobolo/libredash/internal/access/http"
+	accessdomain "github.com/Yacobolo/leapview/internal/access"
+	accesshttp "github.com/Yacobolo/leapview/internal/access/http"
 )
 
 func (s *Server) accessHTTPHandler() accesshttp.Handler {

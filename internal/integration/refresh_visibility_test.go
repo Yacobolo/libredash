@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/analytics/materialize"
-	materializesqlite "github.com/Yacobolo/libredash/internal/analytics/materialize/sqlite"
+	"github.com/Yacobolo/leapview/internal/analytics/materialize"
+	materializesqlite "github.com/Yacobolo/leapview/internal/analytics/materialize/sqlite"
 )
 
 func TestRefreshVisibilityStreamsAndPersistsSemanticModelRuns(t *testing.T) {

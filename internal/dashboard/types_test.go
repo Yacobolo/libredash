@@ -6,7 +6,7 @@ import (
 	"math"
 	"testing"
 
-	visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 )
 
 func TestNormalizeProgressPercentKeepsThePublicSignalBounded(t *testing.T) {

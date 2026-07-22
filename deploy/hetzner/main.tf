@@ -3,13 +3,13 @@ locals {
   create_ssh_key       = trimspace(var.ssh_public_key_path) != "" && fileexists(local.ssh_public_key_path)
   ssh_private_key_path = endswith(local.ssh_public_key_path, ".pub") ? trimsuffix(local.ssh_public_key_path, ".pub") : local.ssh_public_key_path
   ssh_identity_arg     = local.create_ssh_key ? " -i ${local.ssh_private_key_path}" : ""
-  domain               = trimspace(var.domain) != "" ? trimspace(var.domain) : "${replace(hcloud_primary_ip.libredash.ip_address, ".", "-")}.sslip.io"
+  domain               = trimspace(var.domain) != "" ? trimspace(var.domain) : "${replace(hcloud_primary_ip.leapview.ip_address, ".", "-")}.sslip.io"
   labels = {
-    app = "libredash"
+    app = "leapview"
   }
 }
 
-resource "hcloud_primary_ip" "libredash" {
+resource "hcloud_primary_ip" "leapview" {
   name        = "${var.name}-ipv4"
   location    = var.location
   type        = "ipv4"
@@ -24,7 +24,7 @@ resource "hcloud_ssh_key" "local" {
   labels     = local.labels
 }
 
-resource "hcloud_firewall" "libredash" {
+resource "hcloud_firewall" "leapview" {
   name   = "${var.name}-firewall"
   labels = local.labels
 
@@ -57,7 +57,7 @@ resource "hcloud_firewall" "libredash" {
   }
 }
 
-resource "hcloud_server" "libredash" {
+resource "hcloud_server" "leapview" {
   name                     = var.name
   server_type              = var.server_type
   image                    = var.image
@@ -66,30 +66,30 @@ resource "hcloud_server" "libredash" {
   backups                  = true
   shutdown_before_deletion = true
   firewall_ids = [
-    hcloud_firewall.libredash.id,
+    hcloud_firewall.leapview.id,
   ]
   labels = local.labels
 
   public_net {
     ipv4_enabled = true
-    ipv4         = hcloud_primary_ip.libredash.id
+    ipv4         = hcloud_primary_ip.leapview.id
     ipv6_enabled = true
   }
 
   user_data = templatefile("${path.module}/cloud-init.yaml.tftpl", {
-    compose_b64              = base64encode(file("${path.module}/../compose/compose.yaml"))
-    compose_https_b64        = base64encode(file("${path.module}/../compose/compose.https.yaml"))
-    caddyfile_b64            = base64encode(file("${path.module}/../compose/Caddyfile"))
-    deployment_example_b64   = base64encode(file("${path.module}/../compose/deployment.env.example"))
-    libredashctl_wrapper_b64 = base64encode(file("${path.module}/files/libredashctl-wrapper"))
-    backup_hook_b64          = base64encode(file("${path.module}/files/libredash-backup-hook"))
-    backup_service_b64       = base64encode(file("${path.module}/files/libredash-backup.service"))
-    backup_timer_b64         = base64encode(file("${path.module}/files/libredash-backup.timer"))
+    compose_b64             = base64encode(file("${path.module}/../compose/compose.yaml"))
+    compose_https_b64       = base64encode(file("${path.module}/../compose/compose.https.yaml"))
+    caddyfile_b64           = base64encode(file("${path.module}/../compose/Caddyfile"))
+    deployment_example_b64  = base64encode(file("${path.module}/../compose/deployment.env.example"))
+    leapviewctl_wrapper_b64 = base64encode(file("${path.module}/files/leapviewctl-wrapper"))
+    backup_hook_b64         = base64encode(file("${path.module}/files/leapview-backup-hook"))
+    backup_service_b64      = base64encode(file("${path.module}/files/leapview-backup.service"))
+    backup_timer_b64        = base64encode(file("${path.module}/files/leapview-backup.timer"))
     provision_b64 = base64encode(templatefile("${path.module}/files/provision.sh.tftpl", {
-      domain          = jsonencode(local.domain)
-      admin_email     = jsonencode(var.admin_email)
-      libredash_image = jsonencode(var.libredash_image)
-      caddy_image     = jsonencode(var.caddy_image)
+      domain         = jsonencode(local.domain)
+      admin_email    = jsonencode(var.admin_email)
+      leapview_image = jsonencode(var.leapview_image)
+      caddy_image    = jsonencode(var.caddy_image)
     }))
   })
 }

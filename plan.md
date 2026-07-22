@@ -1,8 +1,8 @@
-# LibreDash Public API Target Architecture
+# LeapView Public API Target Architecture
 
 ## Status
 
-This document defines the pre-release target for LibreDash's public API. Breaking changes are allowed until the product is released. The target favors correctness, simplicity, robustness, scalability, and long-term maintainability over compatibility or implementation cost.
+This document defines the pre-release target for LeapView's public API. Breaking changes are allowed until the product is released. The target favors correctness, simplicity, robustness, scalability, and long-term maintainability over compatibility or implementation cost.
 
 The API is complete only when its runtime behavior, generated contract, authorization model, persistence semantics, and integration tests agree. Route presence alone is not completion.
 
@@ -20,7 +20,7 @@ The API is complete only when its runtime behavior, generated contract, authoriz
 
 - Expose one coherent headless surface under `/api/v1`.
 - Keep Datastar page streams, browser commands, sessions, and CSRF-protected administration private.
-- Each LibreDash instance serves one configured environment. Runtime product paths do not contain an environment segment.
+- Each LeapView instance serves one configured environment. Runtime product paths do not contain an environment segment.
 - Authored YAML remains the only project, dashboard, and semantic-model authoring mechanism.
 - Workspace IDs are globally unique within an instance.
 - Synchronous queries are bounded. Bulk export jobs are outside this version.
@@ -28,7 +28,7 @@ The API is complete only when its runtime behavior, generated contract, authoriz
 
 ## Resource Model
 
-LibreDash uses three principal hierarchies:
+LeapView uses three principal hierarchies:
 
 - Project → immutable release → deployment
 - Project → managed connection → immutable revision or upload session

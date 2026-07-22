@@ -6,5 +6,5 @@ export function visualSourceFromEvent(event: Event): HTMLElement | null {
 }
 
 function isFocusableVisual(element: HTMLElement): boolean {
-  return element.localName === 'ld-visualization-host'
+  return element.localName === 'lv-visualization-host'
 }

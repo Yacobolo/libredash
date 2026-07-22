@@ -3,7 +3,7 @@ package runtime
 import (
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/dashboard"
+	"github.com/Yacobolo/leapview/internal/dashboard"
 )
 
 func TestConsumerTableCountIsExplicitlyOptIn(t *testing.T) {

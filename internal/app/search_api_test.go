@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	dashboarddefinition "github.com/Yacobolo/libredash/internal/dashboard/definition"
-	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
 )
 
 func TestWorkspaceSearchReturnsProgressiveDiscoveryResults(t *testing.T) {

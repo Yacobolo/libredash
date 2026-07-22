@@ -8,7 +8,7 @@ let siteProcess: ReturnType<typeof Bun.spawn>
 const siteReadyTimeout = 60_000
 
 beforeAll(async () => {
-  siteProcess = Bun.spawn(['go', 'run', './cmd/libredash-site', '-addr', `127.0.0.1:${sitePort}`], {
+  siteProcess = Bun.spawn(['go', 'run', './cmd/leapview-site', '-addr', `127.0.0.1:${sitePort}`], {
     cwd: process.cwd(),
     env: process.env,
     stdout: 'ignore',
@@ -28,14 +28,14 @@ test('site explains the product, its workflow, and where it fits in the data sta
   const page = await browser.newPage()
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => Boolean(customElements.get('ld-site-flow-background')))
-    expect(await page.locator('ld-site-flow-background.site-hero-background').count()).toBe(1)
+    await page.waitForFunction(() => Boolean(customElements.get('lv-site-flow-background')))
+    expect(await page.locator('lv-site-flow-background.site-hero-background').count()).toBe(1)
     await page.waitForFunction(() => {
-      const host = document.querySelector('ld-site-flow-background')
+      const host = document.querySelector('lv-site-flow-background')
       const canvas = host?.shadowRoot?.querySelector('canvas') as HTMLCanvasElement | null
       return Boolean(canvas && canvas.width > 0 && canvas.height > 0)
     })
-    const flowBackground = page.locator('ld-site-flow-background')
+    const flowBackground = page.locator('lv-site-flow-background')
     const firstFlowFrame = await flowBackground.evaluate((host) => (host.shadowRoot?.querySelector('canvas') as HTMLCanvasElement).toDataURL())
     await page.waitForTimeout(100)
     const secondFlowFrame = await flowBackground.evaluate((host) => (host.shadowRoot?.querySelector('canvas') as HTMLCanvasElement).toDataURL())
@@ -69,7 +69,7 @@ test('site explains the product, its workflow, and where it fits in the data sta
     expect(await page.locator('.site-hero').getByText('Build dashboards as code, keep analytics in version control, and explore data with AI agents.').count()).toBe(1)
     const githubLinks = page.getByRole('link', { name: 'View on GitHub' })
     expect(await githubLinks.count()).toBe(2)
-    expect(await githubLinks.first().getAttribute('href')).toBe('https://github.com/Yacobolo/libredash')
+    expect(await githubLinks.first().getAttribute('href')).toBe('https://github.com/Yacobolo/leapview')
     expect(await githubLinks.locator('.site-github-mark').count()).toBe(2)
     expect(
       await githubLinks
@@ -118,12 +118,12 @@ test('site explains the product, its workflow, and where it fits in the data sta
     expect(await workflow.getByRole('heading', { name: 'Build in code' }).count()).toBe(1)
     expect(await workflow.getByRole('heading', { name: 'Review in Git' }).count()).toBe(1)
     expect(await workflow.getByRole('heading', { name: 'Deploy with confidence' }).count()).toBe(1)
-    expect(await workflow.locator('ld-site-feature-icon').evaluateAll((icons) => icons.map((icon) => icon.getAttribute('name')))).toEqual([
+    expect(await workflow.locator('lv-site-feature-icon').evaluateAll((icons) => icons.map((icon) => icon.getAttribute('name')))).toEqual([
       'blocks',
       'git-branch',
       'server',
     ])
-    expect(await page.getByText('apiVersion: libredash.dev/v1', { exact: false }).count()).toBe(1)
+    expect(await page.getByText('apiVersion: leapview.dev/v1', { exact: false }).count()).toBe(1)
     expect(await page.getByText('aggregation: sum', { exact: false }).count()).toBe(1)
     expect(
       await page
@@ -192,7 +192,7 @@ test('site explains the product, its workflow, and where it fits in the data sta
     expect(await mobileFlowMarkers.getAttribute('data-flow-path')).toBe('M50 0 V96')
     const productNode = stackFlow.locator('.site-stack-product-node')
     expect(await productNode.count()).toBe(1)
-    expect(await productNode.locator('ld-brand-mark[large]').count()).toBe(1)
+    expect(await productNode.locator('lv-brand-mark[large]').count()).toBe(1)
     const clientInterfaces = productNode.getByRole('list', { name: 'LeapView interfaces' })
     expect(await clientInterfaces.locator('.site-stack-client-interface').count()).toBe(4)
     for (const [label, icon] of [
@@ -204,13 +204,13 @@ test('site explains the product, its workflow, and where it fits in the data sta
       expect(await clientInterface.count()).toBe(1)
       expect(await clientInterface.getAttribute('tabindex')).toBe('0')
       expect(await clientInterface.getAttribute('data-label')).toBe(label)
-      expect(await clientInterface.locator(`ld-site-feature-icon[name="${icon}"][plain]`).count()).toBe(1)
+      expect(await clientInterface.locator(`lv-site-feature-icon[name="${icon}"][plain]`).count()).toBe(1)
       expect(await clientInterface.getByText(label, { exact: true }).count()).toBe(1)
       expect(await clientInterface.evaluate((element) => element.childNodes.length)).toBe(2)
     }
     const mcpInterface = clientInterfaces.locator('.site-stack-client-interface[aria-label="MCP"]')
     expect(await mcpInterface.locator('.site-stack-mcp-mark[aria-hidden="true"] > svg').count()).toBe(1)
-    expect(await mcpInterface.locator('ld-site-feature-icon').count()).toBe(0)
+    expect(await mcpInterface.locator('lv-site-feature-icon').count()).toBe(0)
     expect(await mcpInterface.getByText('MCP', { exact: true }).count()).toBe(1)
     expect(await mcpInterface.evaluate((element) => element.childNodes.length)).toBe(2)
     expect(await productNode.getByText('Planned', { exact: true }).count()).toBe(0)
@@ -302,7 +302,7 @@ test('site explains the product, its workflow, and where it fits in the data sta
       'site-cta',
     ])
     expect(await page.getByRole('contentinfo').count()).toBe(1)
-    expect(await page.locator('.site-product-proof, ld-site-chart-demo').count()).toBe(0)
+    expect(await page.locator('.site-product-proof, lv-site-chart-demo').count()).toBe(0)
     expect(await page.getByRole('heading', { name: 'One model. Two ways to explore.' }).count()).toBe(1)
     await page.evaluate(() => {
       document.documentElement.style.scrollBehavior = 'auto'
@@ -321,11 +321,11 @@ test('homepage flow background renders from design tokens and respects reduced m
   try {
     await page.goto(baseURL)
     await page.waitForFunction(() => {
-      const host = document.querySelector('ld-site-flow-background')
+      const host = document.querySelector('lv-site-flow-background')
       const canvas = host?.shadowRoot?.querySelector('canvas') as HTMLCanvasElement | null
       return Boolean(canvas && canvas.width > 0 && canvas.height > 0)
     })
-    const firstFrame = await page.locator('ld-site-flow-background').evaluate((host) => {
+    const firstFrame = await page.locator('lv-site-flow-background').evaluate((host) => {
       const canvas = host.shadowRoot?.querySelector('canvas') as HTMLCanvasElement | null
       if (!canvas) throw new Error('flow canvas is missing')
       const style = getComputedStyle(host)
@@ -360,15 +360,15 @@ test('homepage flow background renders from design tokens and respects reduced m
         image: canvas.toDataURL(),
         lineStart: style.getPropertyValue('--site-flow-line-start').trim(),
         lineEnd: style.getPropertyValue('--site-flow-line-end').trim(),
-        data1: rootStyle.getPropertyValue('--ld-data-1').trim(),
-        data7: rootStyle.getPropertyValue('--ld-data-7').trim(),
+        data1: rootStyle.getPropertyValue('--lv-data-1').trim(),
+        data7: rootStyle.getPropertyValue('--lv-data-7').trim(),
         activeRowRatio: activeRows.size / Math.ceil(canvas.height / 4),
         activeSampleRatio: activeSamples / sampleCount,
         directionalDelta: Math.abs(leftY / leftSamples - rightY / rightSamples) / canvas.height,
       }
     })
     await page.waitForTimeout(150)
-    const secondFrame = await page.locator('ld-site-flow-background').evaluate((host) => {
+    const secondFrame = await page.locator('lv-site-flow-background').evaluate((host) => {
       const canvas = host.shadowRoot?.querySelector('canvas') as HTMLCanvasElement | null
       if (!canvas) throw new Error('flow canvas is missing')
       return canvas.toDataURL()
@@ -395,11 +395,11 @@ test('homepage flow background stays centered and bounded on ultra-wide screens'
   try {
     await page.goto(baseURL)
     await page.waitForFunction(() => {
-      const host = document.querySelector('ld-site-flow-background')
+      const host = document.querySelector('lv-site-flow-background')
       const canvas = host?.shadowRoot?.querySelector('canvas') as HTMLCanvasElement | null
       return Boolean(canvas && canvas.width > 0 && canvas.height > 0)
     })
-    const geometry = await page.locator('ld-site-flow-background').evaluate((host) => {
+    const geometry = await page.locator('lv-site-flow-background').evaluate((host) => {
       const bounds = host.getBoundingClientRect()
       return {
         center: bounds.left + bounds.width / 2,
@@ -422,7 +422,7 @@ test('site brand pairs the LeapView wordmark with the Lucide Aperture ring mark'
   try {
     await page.goto(baseURL)
     const brand = page.getByRole('link', { name: 'LeapView', exact: true }).first()
-    const mark = brand.locator('ld-brand-mark')
+    const mark = brand.locator('lv-brand-mark')
     expect(await mark.count()).toBe(1)
     expect(await mark.getAttribute('aria-hidden')).toBe('true')
     expect(await mark.evaluate((element) => element.shadowRoot?.querySelectorAll('svg').length)).toBe(1)
@@ -439,7 +439,7 @@ test('site brand pairs the LeapView wordmark with the Lucide Aperture ring mark'
       }),
     ).toEqual({ backgroundColor: 'rgba(0, 0, 0, 0)', colorMatchesWordmark: true, borderRadius: '0px', borderWidth: '0px' })
     const lockup = await brand.evaluate((element) => {
-      const mark = element.querySelector('ld-brand-mark')
+      const mark = element.querySelector('lv-brand-mark')
       const glyph = mark?.shadowRoot?.querySelector('svg')
       const wordmark = element.querySelector('span')
       const markBounds = mark?.getBoundingClientRect()
@@ -516,17 +516,17 @@ test('documentation header keeps only search and theme actions', async () => {
     const header = page.locator('.site-header')
     const actions = header.locator('.site-nav-actions')
     expect(await header.getByRole('link', { name: 'LeapView', exact: true }).count()).toBe(1)
-    expect(await actions.locator('ld-site-search').count()).toBe(1)
-    expect(await actions.locator('ld-site-theme-toggle').count()).toBe(1)
-    expect(await actions.locator('ld-site-docs-drawer-toggle').count()).toBe(0)
-    expect(await actions.locator('ld-site-mobile-menu').count()).toBe(0)
+    expect(await actions.locator('lv-site-search').count()).toBe(1)
+    expect(await actions.locator('lv-site-theme-toggle').count()).toBe(1)
+    expect(await actions.locator('lv-site-docs-drawer-toggle').count()).toBe(0)
+    expect(await actions.locator('lv-site-mobile-menu').count()).toBe(0)
     expect(await actions.getByRole('link', { name: 'Docs', exact: true }).count()).toBe(0)
     expect(await actions.getByRole('link', { name: 'Demo', exact: true }).count()).toBe(0)
     expect(await actions.getByRole('link', { name: 'Visuals', exact: true }).count()).toBe(0)
 
     await page.setViewportSize({ width: 390, height: 844 })
     expect(await actions.getByRole('button', { name: 'Search documentation' }).isVisible()).toBe(true)
-    const docsMenu = page.locator('.site-docs-article-header ld-site-docs-drawer-toggle:not([placement])')
+    const docsMenu = page.locator('.site-docs-article-header lv-site-docs-drawer-toggle:not([placement])')
     expect(await docsMenu.count()).toBe(1)
     expect(await docsMenu.getByRole('button', { name: 'Open documentation menu' }).isVisible()).toBe(true)
 
@@ -544,18 +544,18 @@ test('documentation header keeps only search and theme actions', async () => {
 test('site supports system, light, and dark color modes', async () => {
   const page = await browser.newPage()
   try {
-    await page.addInitScript(() => localStorage.setItem('libredash-color-mode', 'system'))
+    await page.addInitScript(() => localStorage.setItem('leapview-color-mode', 'system'))
     await page.goto(baseURL)
     await page.waitForFunction(() => document.documentElement.dataset.colorMode === 'auto')
 
-    await page.waitForFunction(() => Boolean(customElements.get('ld-site-theme-toggle')))
+    await page.waitForFunction(() => Boolean(customElements.get('lv-site-theme-toggle')))
     await page.evaluate(() => {
       document.documentElement.style.scrollBehavior = 'auto'
       window.scrollTo(0, 64)
     })
-    const toggle = page.locator('ld-site-theme-toggle').locator('button[data-theme-toggle]')
+    const toggle = page.locator('lv-site-theme-toggle').locator('button[data-theme-toggle]')
     expect(await toggle.getAttribute('data-theme-mode')).toBe('system')
-    expect(await page.locator('ld-site-theme-toggle').evaluate((element) => element.shadowRoot?.querySelectorAll('svg[data-lucide="icon"]').length)).toBe(3)
+    expect(await page.locator('lv-site-theme-toggle').evaluate((element) => element.shadowRoot?.querySelectorAll('svg[data-lucide="icon"]').length)).toBe(3)
     await toggle.click()
     await page.waitForFunction(() => document.documentElement.dataset.colorMode === 'light')
     expect(await toggle.getAttribute('data-theme-mode')).toBe('light')
@@ -602,7 +602,7 @@ test('mobile landing page keeps the product story compact and ordered', async ()
     expect(await page.locator('.site-nav-links').evaluate((element) => getComputedStyle(element).display)).toBe('none')
     const headerHeight = await page.locator('.site-header').evaluate((element) => element.getBoundingClientRect().height)
     expect(headerHeight).toBeLessThanOrEqual(45)
-    const menu = page.locator('ld-site-mobile-menu')
+    const menu = page.locator('lv-site-mobile-menu')
     const menuButton = menu.locator('button')
     expect(await menuButton.count()).toBe(1)
     expect(await menuButton.evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44)
@@ -625,7 +625,7 @@ test('mobile landing page keeps the product story compact and ordered', async ()
     expect(await page.getByRole('list', { name: 'How LeapView connects to your data stack' }).evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(1)
     const screenshot = page.locator('img.site-product-screenshot-light')
     expect(await screenshot.evaluate((element) => element.getBoundingClientRect().width <= element.parentElement!.getBoundingClientRect().width)).toBe(true)
-    expect(await page.locator('ld-site-flow-background').evaluate((element) => element.getBoundingClientRect().height)).toBeLessThanOrEqual(800)
+    expect(await page.locator('lv-site-flow-background').evaluate((element) => element.getBoundingClientRect().height)).toBeLessThanOrEqual(800)
 
     await page.setViewportSize({ width: 533, height: 900 })
     const mobileHeroTitleSize = await page.locator('.site-hero h1').evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize))
@@ -693,17 +693,17 @@ test('getting started route gives users a code-native first path', async () => {
     expect(await breadcrumb.getByRole('link', { name: 'LeapView' }).count()).toBe(0)
     expect(await breadcrumb.getByText('Getting started', { exact: true }).getAttribute('aria-current')).toBe('page')
 
-    const markdownCopy = page.locator('ld-site-markdown-copy')
+    const markdownCopy = page.locator('lv-site-markdown-copy')
     expect(await markdownCopy.getAttribute('markdown')).toStartWith('# Get started with LeapView')
     expect(await markdownCopy.evaluate((element) => (element as HTMLElement & { markdown?: string }).markdown)).toStartWith('# Get started with LeapView')
     const copyMarkdown = page.getByRole('button', { name: 'Copy Markdown' })
     await copyMarkdown.click()
-    await page.waitForFunction(() => document.querySelector('ld-site-markdown-copy')?.shadowRoot?.querySelector('button')?.getAttribute('aria-label') === 'Markdown copied')
+    await page.waitForFunction(() => document.querySelector('lv-site-markdown-copy')?.shadowRoot?.querySelector('button')?.getAttribute('aria-label') === 'Markdown copied')
     expect(await markdownCopy.evaluate((element) => element.shadowRoot?.querySelector('button')?.getAttribute('aria-label'))).toBe('Markdown copied')
     expect(await page.locator('html').getAttribute('data-copied-markdown')).toStartWith('# Get started with LeapView')
 
     expect(await page.locator('.site-guide-step').count()).toBe(0)
-    expect((await page.locator('.site-docs-article pre code').allTextContents()).map((content) => content.trim())).toEqual(['task bootstrap', 'task dev', 'dashboards/\n  libredash.yaml\n  connections/\n    olist.yaml\n  sources/\n    olist.orders.yaml\n  workspaces/\n    sales/\n      workspace.yaml\n      models/\n        orders.yaml\n      semantic-models/\n        sales.yaml\n      dashboards/\n        executive-sales.yaml'])
+    expect((await page.locator('.site-docs-article pre code').allTextContents()).map((content) => content.trim())).toEqual(['task bootstrap', 'task dev', 'dashboards/\n  leapview.yaml\n  connections/\n    olist.yaml\n  sources/\n    olist.orders.yaml\n  workspaces/\n    sales/\n      workspace.yaml\n      models/\n        orders.yaml\n      semantic-models/\n        sales.yaml\n      dashboards/\n        executive-sales.yaml'])
     expect(await page.getByRole('link', { name: 'Visual gallery' }).count()).toBeGreaterThan(0)
   } finally {
     await page.close()
@@ -789,15 +789,15 @@ test('chart documentation renders every executable variation from its YAML', asy
     expect(await page.getByRole('heading', { name: 'Multiple series' }).isVisible()).toBe(true)
     expect(await page.getByRole('heading', { name: 'Stepped line' }).isVisible()).toBe(true)
     await page.waitForFunction(() => {
-      const examples = [...document.querySelectorAll('ld-site-visual-example')] as Array<HTMLElement & { shadowRoot: ShadowRoot }>
+      const examples = [...document.querySelectorAll('lv-site-visual-example')] as Array<HTMLElement & { shadowRoot: ShadowRoot }>
       return examples.length === 3 && examples.every((example) => {
-        const host = example.shadowRoot?.querySelector('ld-visualization-host') as HTMLElement & { envelope?: { dataState?: { datasets?: Array<{ rows?: unknown[] }> } } }
+        const host = example.shadowRoot?.querySelector('lv-visualization-host') as HTMLElement & { envelope?: { dataState?: { datasets?: Array<{ rows?: unknown[] }> } } }
         return Boolean(host?.envelope?.dataState?.datasets?.some((dataset) => dataset.rows?.length))
       })
     })
-    expect(await page.locator('ld-site-visual-example').count()).toBe(3)
-    expect(await page.locator('ld-site-visual-example').nth(0).getAttribute('example-id')).toBe('revenue_line')
-    expect(await page.locator('ld-site-visual-example').nth(2).getAttribute('example-id')).toBe('revenue_line_step')
+    expect(await page.locator('lv-site-visual-example').count()).toBe(3)
+    expect(await page.locator('lv-site-visual-example').nth(0).getAttribute('example-id')).toBe('revenue_line')
+    expect(await page.locator('lv-site-visual-example').nth(2).getAttribute('example-id')).toBe('revenue_line_step')
     const configurations = await page.locator('.site-docs-article pre code').allTextContents()
     expect(configurations.some((source) => source.includes('visuals:\n  revenue_line:'))).toBe(true)
     expect(configurations.every((source) => !source.includes('shape:'))).toBe(true)
@@ -805,8 +805,8 @@ test('chart documentation renders every executable variation from its YAML', asy
     const keyFields = await page.locator('.site-visual-key-fields').allTextContents()
     expect(keyFields).toHaveLength(3)
     expect(keyFields[2]).toContain('presentation.step')
-    await page.waitForFunction(() => document.querySelectorAll('ld-code-block[data-visual-example="revenue_line_step"] .code-block-highlighted-line').length === 3)
-    const steppedConfiguration = page.locator('ld-code-block[data-visual-example="revenue_line_step"]')
+    await page.waitForFunction(() => document.querySelectorAll('lv-code-block[data-visual-example="revenue_line_step"] .code-block-highlighted-line').length === 3)
+    const steppedConfiguration = page.locator('lv-code-block[data-visual-example="revenue_line_step"]')
     expect(await steppedConfiguration.getAttribute('data-highlighted-fields')).toBe('presentation.data_zoom,presentation.show_symbols,presentation.step')
     expect(await steppedConfiguration.locator('.code-block-highlighted-line').allTextContents()).toEqual([
       '      step: true',
@@ -822,12 +822,12 @@ test('chart documentation renders every executable variation from its YAML', asy
     expect(await stepField.count()).toBe(1)
     expect(await stepField.getAttribute('aria-controls')).toBe('visual-example-revenue_line_step-yaml')
     await stepField.focus()
-    await page.waitForFunction(() => document.querySelectorAll('ld-code-block[data-visual-example="revenue_line_step"] .code-block-focused-line').length === 1)
+    await page.waitForFunction(() => document.querySelectorAll('lv-code-block[data-visual-example="revenue_line_step"] .code-block-focused-line').length === 1)
     expect(await steppedConfiguration.locator('.code-block-focused-line').allTextContents()).toEqual(['      step: true'])
     await stepField.blur()
-    await page.waitForFunction(() => document.querySelectorAll('ld-code-block[data-visual-example="revenue_line_step"] .code-block-focused-line').length === 0)
-    const stepped = await page.locator('ld-site-visual-example').nth(2).evaluate((element) => {
-      const host = element.shadowRoot?.querySelector('ld-visualization-host') as HTMLElement & { envelope?: { spec?: { presentation?: Record<string, unknown> } } }
+    await page.waitForFunction(() => document.querySelectorAll('lv-code-block[data-visual-example="revenue_line_step"] .code-block-focused-line').length === 0)
+    const stepped = await page.locator('lv-site-visual-example').nth(2).evaluate((element) => {
+      const host = element.shadowRoot?.querySelector('lv-visualization-host') as HTMLElement & { envelope?: { spec?: { presentation?: Record<string, unknown> } } }
       return host?.envelope?.spec?.presentation?.step
     })
     expect(stepped).toBe(true)
@@ -840,8 +840,8 @@ test('KPI documentation uses compact example frames', async () => {
   const page = await browser.newPage()
   try {
     await page.goto(`${baseURL}/docs/visuals/kpi`)
-    await page.waitForFunction(() => document.querySelectorAll('ld-site-visual-example[type="kpi"]').length === 4)
-    const heights = await page.locator('ld-site-visual-example[type="kpi"]').evaluateAll((examples) =>
+    await page.waitForFunction(() => document.querySelectorAll('lv-site-visual-example[type="kpi"]').length === 4)
+    const heights = await page.locator('lv-site-visual-example[type="kpi"]').evaluateAll((examples) =>
       examples.map((example) => Math.round(example.getBoundingClientRect().height)),
     )
     expect(heights.every((height) => height >= 180 && height <= 240)).toBe(true)
@@ -874,54 +874,54 @@ test('every visual documentation page mounts its generated production payloads',
       const expected = visualType === 'map' ? 6 : visualType === 'candlestick' ? 2 : visualType === 'kpi' ? 4 : ['custom', 'table', 'matrix', 'pivot'].includes(visualType) ? 1 : 3
       await page.waitForFunction(
         ({ count }) => {
-          const examples = [...document.querySelectorAll('ld-site-visual-example')]
+          const examples = [...document.querySelectorAll('lv-site-visual-example')]
           return examples.length === count && examples.every((example) => {
-            const host = example.shadowRoot?.querySelector('ld-visualization-host') as HTMLElement & { envelope?: { dataState?: { datasets?: Array<{ rows?: unknown[] }>; blocks?: Record<string, { rows?: unknown[] }> } } } | null
+            const host = example.shadowRoot?.querySelector('lv-visualization-host') as HTMLElement & { envelope?: { dataState?: { datasets?: Array<{ rows?: unknown[] }>; blocks?: Record<string, { rows?: unknown[] }> } } } | null
             const state = host?.envelope?.dataState
             return Boolean(state?.datasets?.some((dataset) => dataset.rows?.length) || Object.values(state?.blocks ?? {}).some((block) => block.rows?.length))
           })
         },
         { count: expected },
       )
-      expect(await page.locator('ld-site-visual-example').count()).toBe(expected)
+      expect(await page.locator('lv-site-visual-example').count()).toBe(expected)
     }
     await page.goto(`${baseURL}/docs/visuals/gauge`)
-    await page.waitForFunction(() => document.querySelectorAll('ld-site-visual-example').length === 3)
-    const thresholds = await page.locator('ld-site-visual-example').nth(2).evaluate((element) => {
-      const host = element.shadowRoot?.querySelector('ld-visualization-host') as HTMLElement & { envelope?: { spec?: { presentation?: { thresholds?: unknown[] } } } }
+    await page.waitForFunction(() => document.querySelectorAll('lv-site-visual-example').length === 3)
+    const thresholds = await page.locator('lv-site-visual-example').nth(2).evaluate((element) => {
+      const host = element.shadowRoot?.querySelector('lv-visualization-host') as HTMLElement & { envelope?: { spec?: { presentation?: { thresholds?: unknown[] } } } }
       return host.envelope?.spec?.presentation?.thresholds?.length
     })
     expect(thresholds).toBe(3)
 
     await page.goto(`${baseURL}/docs/visuals/map`)
-    await page.waitForFunction(() => document.querySelectorAll('ld-site-visual-example').length === 6)
-    expect(await page.locator('ld-site-visual-example').first().evaluate((element) => {
-      const host = element.shadowRoot?.querySelector('ld-visualization-host') as HTMLElement & { envelope?: any }
+    await page.waitForFunction(() => document.querySelectorAll('lv-site-visual-example').length === 6)
+    expect(await page.locator('lv-site-visual-example').first().evaluate((element) => {
+      const host = element.shadowRoot?.querySelector('lv-visualization-host') as HTMLElement & { envelope?: any }
       const envelope = host.envelope
       const rows = envelope?.dataState?.datasets?.[0]?.rows ?? []
       return [envelope?.spec?.kind, envelope?.spec?.layers?.[0]?.geometry?.id, rows.length, new Set(rows.map((row: unknown[]) => row[0])).size]
     })).toEqual(['geographic', 'br-states-ibge', 27, 27])
-    expect(await page.locator('ld-site-visual-example').evaluateAll((elements) => elements.map((element) => {
-      const host = element.shadowRoot?.querySelector('ld-visualization-host') as HTMLElement & { envelope?: any }
+    expect(await page.locator('lv-site-visual-example').evaluateAll((elements) => elements.map((element) => {
+      const host = element.shadowRoot?.querySelector('lv-visualization-host') as HTMLElement & { envelope?: any }
       return host.envelope?.spec?.layers?.[0]?.kind
     }))).toEqual(['choropleth', 'point', 'heat', 'density', 'reference', 'path'])
     await page.waitForFunction(() => {
-      const example = document.querySelector('ld-site-visual-example') as HTMLElement & { shadowRoot: ShadowRoot }
-      const host = example?.shadowRoot?.querySelector('ld-visualization-host') as HTMLElement & { shadowRoot: ShadowRoot }
+      const example = document.querySelector('lv-site-visual-example') as HTMLElement & { shadowRoot: ShadowRoot }
+      const host = example?.shadowRoot?.querySelector('lv-visualization-host') as HTMLElement & { shadowRoot: ShadowRoot }
       return Boolean(host?.shadowRoot?.querySelector('.renderer[aria-label]'))
     })
-    expect(await page.locator('ld-site-visual-example').first().evaluate((element) => {
-      const host = element.shadowRoot?.querySelector('ld-visualization-host') as HTMLElement & { shadowRoot: ShadowRoot }
+    expect(await page.locator('lv-site-visual-example').first().evaluate((element) => {
+      const host = element.shadowRoot?.querySelector('lv-visualization-host') as HTMLElement & { shadowRoot: ShadowRoot }
       return host?.shadowRoot?.querySelector('.renderer[aria-label]')?.getAttribute('aria-label')
     })).not.toContain('NaN')
     await page.goto(`${baseURL}/docs/visuals/custom`)
     await page.waitForFunction(() => {
-      const example = document.querySelector('ld-site-visual-example') as HTMLElement & { shadowRoot: ShadowRoot }
-      const host = example?.shadowRoot?.querySelector('ld-visualization-host') as HTMLElement & { envelope?: any; shadowRoot: ShadowRoot }
+      const example = document.querySelector('lv-site-visual-example') as HTMLElement & { shadowRoot: ShadowRoot }
+      const host = example?.shadowRoot?.querySelector('lv-visualization-host') as HTMLElement & { envelope?: any; shadowRoot: ShadowRoot }
       return host?.envelope?.rendererID === 'vega-lite-sandbox' && Boolean(host.shadowRoot?.querySelector('iframe[title="Monthly revenue"]'))
     })
-    expect(await page.locator('ld-site-visual-example').evaluate((element) => {
-      const host = element.shadowRoot?.querySelector('ld-visualization-host') as HTMLElement & { shadowRoot: ShadowRoot }
+    expect(await page.locator('lv-site-visual-example').evaluate((element) => {
+      const host = element.shadowRoot?.querySelector('lv-visualization-host') as HTMLElement & { shadowRoot: ShadowRoot }
       return Boolean(host.shadowRoot?.querySelector('[role="alert"]'))
     })).toBe(false)
     const sandboxFrame = page.frames().find((frame) => frame !== page.mainFrame())
@@ -929,9 +929,9 @@ test('every visual documentation page mounts its generated production payloads',
     await sandboxFrame!.waitForSelector('#view canvas')
 
     await page.goto(`${baseURL}/docs/visuals/combo`)
-    await page.waitForFunction(() => document.querySelectorAll('ld-site-visual-example').length === 3)
-    expect(await page.locator('ld-site-visual-example').first().evaluate((element) => {
-      const host = element.shadowRoot?.querySelector('ld-visualization-host') as HTMLElement & { envelope?: any }
+    await page.waitForFunction(() => document.querySelectorAll('lv-site-visual-example').length === 3)
+    expect(await page.locator('lv-site-visual-example').first().evaluate((element) => {
+      const host = element.shadowRoot?.querySelector('lv-visualization-host') as HTMLElement & { envelope?: any }
       return [host.envelope?.spec?.kind, host.envelope?.spec?.presentation?.comboSeries?.length]
     })).toEqual(['cartesian', 2])
     expect(pageErrors).toEqual([])
@@ -945,24 +945,24 @@ test('map documentation renders fitted, attributed canvases without adapter erro
   try {
     await page.goto(`${baseURL}/docs/visuals/map`)
     await page.waitForFunction(() => {
-      const examples = [...document.querySelectorAll('ld-site-visual-example')]
+      const examples = [...document.querySelectorAll('lv-site-visual-example')]
       return examples.length === 6 && examples.every((element) => {
-        const host = element.shadowRoot?.querySelector('ld-visualization-host') as HTMLElement & { envelope?: unknown } | null
+        const host = element.shadowRoot?.querySelector('lv-visualization-host') as HTMLElement & { envelope?: unknown } | null
         return Boolean(host?.envelope)
       })
     })
     try {
       await page.waitForFunction(() => {
-        const examples = [...document.querySelectorAll('ld-site-visual-example')]
+        const examples = [...document.querySelectorAll('lv-site-visual-example')]
         return examples.every((element) => {
-          const host = element.shadowRoot?.querySelector('ld-visualization-host')
+          const host = element.shadowRoot?.querySelector('lv-visualization-host')
           const renderer = host?.shadowRoot?.querySelector('.renderer')
           return Boolean(host?.shadowRoot?.querySelector('canvas.maplibregl-canvas')) && renderer?.getAttribute('aria-busy') === 'false' && !host?.shadowRoot?.querySelector('[role="alert"]')
-        }) && Boolean(examples[0]?.shadowRoot?.querySelector('ld-visualization-host')?.shadowRoot?.querySelector('[data-map-attribution]')?.textContent?.trim())
+        }) && Boolean(examples[0]?.shadowRoot?.querySelector('lv-visualization-host')?.shadowRoot?.querySelector('[data-map-attribution]')?.textContent?.trim())
       })
     } catch (error) {
-      const diagnostics = await page.locator('ld-site-visual-example').evaluateAll((elements) => elements.map((element) => {
-        const host = element.shadowRoot?.querySelector('ld-visualization-host')
+      const diagnostics = await page.locator('lv-site-visual-example').evaluateAll((elements) => elements.map((element) => {
+        const host = element.shadowRoot?.querySelector('lv-visualization-host')
         const renderer = host?.shadowRoot?.querySelector('.renderer')
         return {
           id: element.getAttribute('example-id'),
@@ -973,8 +973,8 @@ test('map documentation renders fitted, attributed canvases without adapter erro
       }))
       throw new Error(`map examples did not settle: ${JSON.stringify(diagnostics)}`, { cause: error })
     }
-    const states = await page.locator('ld-site-visual-example').evaluateAll((elements) => elements.map((element) => {
-      const host = element.shadowRoot?.querySelector('ld-visualization-host')
+    const states = await page.locator('lv-site-visual-example').evaluateAll((elements) => elements.map((element) => {
+      const host = element.shadowRoot?.querySelector('lv-visualization-host')
       const canvas = host?.shadowRoot?.querySelector('canvas.maplibregl-canvas') as HTMLCanvasElement | null
       return {
         alert: host?.shadowRoot?.querySelector('[role="alert"]')?.textContent?.trim() ?? '',
@@ -992,8 +992,8 @@ test('map documentation renders fitted, attributed canvases without adapter erro
       { alert: '', attribution: 'Instituto Brasileiro de Geografia e Estatística (IBGE)', rendererChildren: 1 },
       { alert: '', attribution: '© OpenStreetMap contributors', rendererChildren: 1 },
     ])
-    expect(await page.locator('ld-site-visual-example').evaluateAll((elements) => elements.map((element) => {
-      const host = element.shadowRoot?.querySelector('ld-visualization-host')
+    expect(await page.locator('lv-site-visual-example').evaluateAll((elements) => elements.map((element) => {
+      const host = element.shadowRoot?.querySelector('lv-visualization-host')
       return {
         title: host?.shadowRoot?.querySelector('[data-visualization-title]')?.textContent?.trim(),
         expand: host?.shadowRoot?.querySelector('button')?.getAttribute('aria-label'),
@@ -1007,9 +1007,9 @@ test('map documentation renders fitted, attributed canvases without adapter erro
       { title: 'State order paths', expand: 'Expand map' },
     ])
     expect(states.every(({ width, height }) => width > 500 && height >= 400)).toBe(true)
-    expect(await page.evaluate(() => performance.getEntries().some(({ name }) => /\/map-assets\/libredash-streets\/styles\/[0-9a-f]{64}\/style\.json$/.test(name)))).toBe(true)
-    expect(await page.locator('ld-site-visual-example').evaluateAll((elements) => elements.map((element) => {
-      const host = element.shadowRoot?.querySelector('ld-visualization-host')
+    expect(await page.evaluate(() => performance.getEntries().some(({ name }) => /\/map-assets\/leapview-streets\/styles\/[0-9a-f]{64}\/style\.json$/.test(name)))).toBe(true)
+    expect(await page.locator('lv-site-visual-example').evaluateAll((elements) => elements.map((element) => {
+      const host = element.shadowRoot?.querySelector('lv-visualization-host')
       const fallback = host?.shadowRoot?.querySelector('[data-map-data-table]')
       return {
         summary: fallback?.querySelector('summary')?.textContent?.trim() ?? '',
@@ -1025,7 +1025,7 @@ test('map documentation renders fitted, attributed canvases without adapter erro
       { summary: 'View map data (35 rows)', columns: 2, rows: 35 },
     ])
 
-    const examples = page.locator('ld-site-visual-example')
+    const examples = page.locator('lv-site-visual-example')
     expect(await examples.nth(0).getByRole('button', { name: 'Select map data' }).count()).toBe(1)
     expect(await examples.nth(1).getByRole('button', { name: 'Select map data' }).count()).toBe(1)
     expect(await examples.nth(2).getByRole('button', { name: 'Select map data' }).count()).toBe(0)
@@ -1033,13 +1033,13 @@ test('map documentation renders fitted, attributed canvases without adapter erro
 
     await page.evaluate(() => {
       ;(window as any).__mapInteractionCommands = []
-      document.addEventListener('ld-interaction-select', (event) => {
+      document.addEventListener('lv-interaction-select', (event) => {
         ;(window as any).__mapInteractionCommands.push((event as CustomEvent).detail)
       })
     })
     const regionCanvas = examples.nth(0).locator('canvas.maplibregl-canvas')
     const regionPoint = await examples.nth(0).evaluate(async (element) => {
-      const host = element.shadowRoot?.querySelector('ld-visualization-host') as HTMLElement & { snapshot(): Promise<Blob>; shadowRoot: ShadowRoot }
+      const host = element.shadowRoot?.querySelector('lv-visualization-host') as HTMLElement & { snapshot(): Promise<Blob>; shadowRoot: ShadowRoot }
       const canvas = host.shadowRoot.querySelector('canvas.maplibregl-canvas') as HTMLCanvasElement
       const bitmap = await createImageBitmap(await host.snapshot())
       const copy = new OffscreenCanvas(bitmap.width, bitmap.height)
@@ -1090,7 +1090,7 @@ test('map documentation renders fitted, attributed canvases without adapter erro
     await page.evaluate(() => { (window as any).__mapInteractionCommands = [] })
     const pointCanvas = examples.nth(1).locator('canvas.maplibregl-canvas')
     const point = await examples.nth(1).evaluate(async (element) => {
-      const host = element.shadowRoot?.querySelector('ld-visualization-host') as HTMLElement & { snapshot(): Promise<Blob>; shadowRoot: ShadowRoot }
+      const host = element.shadowRoot?.querySelector('lv-visualization-host') as HTMLElement & { snapshot(): Promise<Blob>; shadowRoot: ShadowRoot }
       const canvas = host.shadowRoot.querySelector('canvas.maplibregl-canvas') as HTMLCanvasElement
       const bitmap = await createImageBitmap(await host.snapshot())
       const copy = new OffscreenCanvas(bitmap.width, bitmap.height)
@@ -1116,8 +1116,8 @@ test('map documentation renders fitted, attributed canvases without adapter erro
       mappings: [{ field: 'orders.order_id', fact: 'orders' }],
     })
 
-    const mapSnapshot = () => page.locator('ld-site-visual-example').nth(1).evaluate(async (element) => {
-      const host = element.shadowRoot?.querySelector('ld-visualization-host') as HTMLElement & { snapshot(): Promise<Blob> }
+    const mapSnapshot = () => page.locator('lv-site-visual-example').nth(1).evaluate(async (element) => {
+      const host = element.shadowRoot?.querySelector('lv-visualization-host') as HTMLElement & { snapshot(): Promise<Blob> }
       const blob = await host.snapshot()
       const bitmap = await createImageBitmap(blob)
       const canvas = new OffscreenCanvas(bitmap.width, bitmap.height)
@@ -1134,8 +1134,8 @@ test('map documentation renders fitted, attributed canvases without adapter erro
     expect(snapshot.visiblePixels).toBeGreaterThan(10_000)
 
     const applyTheme = (mode: 'dark' | 'light') => page.evaluate((nextMode) => new Promise<void>((resolve) => {
-      document.addEventListener('libredash-theme-applied', () => resolve(), { once: true })
-      document.dispatchEvent(new CustomEvent('libredash-theme-change', { detail: { mode: nextMode } }))
+      document.addEventListener('leapview-theme-applied', () => resolve(), { once: true })
+      document.dispatchEvent(new CustomEvent('leapview-theme-change', { detail: { mode: nextMode } }))
     }), mode)
     await applyTheme('dark')
     await page.waitForTimeout(250)
@@ -1148,8 +1148,8 @@ test('map documentation renders fitted, attributed canvases without adapter erro
     await page.setViewportSize({ width: 390, height: 844 })
     await page.waitForFunction(() => document.querySelector('.site-docs-sidebar')?.getAttribute('aria-hidden') === 'true')
     await page.waitForTimeout(250)
-    const mobile = await page.locator('ld-site-visual-example').evaluateAll((elements) => elements.map((element) => {
-      const host = element.shadowRoot?.querySelector('ld-visualization-host')
+    const mobile = await page.locator('lv-site-visual-example').evaluateAll((elements) => elements.map((element) => {
+      const host = element.shadowRoot?.querySelector('lv-visualization-host')
       const canvas = host?.shadowRoot?.querySelector('canvas.maplibregl-canvas') as HTMLCanvasElement | null
       return {
         alert: host?.shadowRoot?.querySelector('[role="alert"]')?.textContent?.trim() ?? '',
@@ -1169,9 +1169,9 @@ test('documentation articles apply the shared Markdown treatment', async () => {
   const page = await browser.newPage()
   try {
     await page.goto(`${baseURL}/docs/visuals/line`)
-    await page.waitForFunction(() => Boolean(document.querySelector('.site-docs-article ld-code-block .shiki')))
+    await page.waitForFunction(() => Boolean(document.querySelector('.site-docs-article lv-code-block .shiki')))
     const codeBlock = await page
-      .locator('.site-docs-article ld-code-block .code-block-shell')
+      .locator('.site-docs-article lv-code-block .code-block-shell')
       .first()
       .evaluate((element) => {
         const style = getComputedStyle(element)
@@ -1188,7 +1188,7 @@ test('documentation articles apply the shared Markdown treatment', async () => {
 
     await page.setViewportSize({ width: 390, height: 800 })
     const compactCodeBlock = await page
-      .locator('.site-docs-article ld-code-block')
+      .locator('.site-docs-article lv-code-block')
       .first()
       .evaluate((element) => {
         const article = element.closest('.site-docs-article') as HTMLElement
@@ -1212,7 +1212,7 @@ test('documentation articles apply the shared Markdown treatment', async () => {
     expect(tableHeader).not.toBe('rgba(0, 0, 0, 0)')
 
     const siteCSS = await (await fetch(`${baseURL}/static/site.css`)).text()
-    expect(siteCSS).not.toContain('--ld-chat-')
+    expect(siteCSS).not.toContain('--lv-chat-')
   } finally {
     await page.close()
   }
@@ -1224,13 +1224,13 @@ test('documentation Mermaid fences render as accessible responsive diagrams', as
   })
   try {
     await page.goto(`${baseURL}/docs/introduction`)
-    const diagram = page.locator('ld-site-mermaid').first()
+    const diagram = page.locator('lv-site-mermaid').first()
     await diagram.locator('svg').waitFor({ state: 'visible' })
 
     expect(await diagram.getAttribute('aria-label')).toBe('LeapView resource layers')
     expect(await diagram.locator('svg').getAttribute('role')).toBe('img')
     expect(await diagram.locator('svg title').textContent()).toBe('LeapView resource layers')
-    expect(await page.locator('.site-docs-article ld-code-block[language="mermaid"]').count()).toBe(0)
+    expect(await page.locator('.site-docs-article lv-code-block[language="mermaid"]').count()).toBe(0)
 
     const desktop = await diagram.evaluate((element) => {
       const svg = element.shadowRoot?.querySelector('svg') as SVGElement
@@ -1246,9 +1246,9 @@ test('documentation Mermaid fences render as accessible responsive diagrams', as
     await page.setViewportSize({ width: 390, height: 800 })
     expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false)
 
-    await page.evaluate(() => document.dispatchEvent(new CustomEvent('libredash-theme-change', { detail: { mode: 'dark' } })))
+    await page.evaluate(() => document.dispatchEvent(new CustomEvent('leapview-theme-change', { detail: { mode: 'dark' } })))
     await page.waitForFunction(() => document.querySelector('html')?.getAttribute('data-color-mode') === 'dark')
-    await page.waitForFunction(() => document.querySelector('ld-site-mermaid')?.getAttribute('data-rendered-theme') === 'dark')
+    await page.waitForFunction(() => document.querySelector('lv-site-mermaid')?.getAttribute('data-rendered-theme') === 'dark')
   } finally {
     await page.close()
   }
@@ -1276,7 +1276,7 @@ test('documentation articles provide a readable, navigable reference experience'
       const orderedList = article.querySelector('ol') as HTMLElement
       const unorderedList = article.querySelector('ul') as HTMLElement
       const heading = article.querySelector('h1') as HTMLElement
-      const action = article.querySelector('ld-site-markdown-copy') as HTMLElement
+      const action = article.querySelector('lv-site-markdown-copy') as HTMLElement
       const code = article.querySelector('pre code') as HTMLElement
       const navigation = document.querySelector('.site-docs-link') as HTMLElement
       return {
@@ -1311,14 +1311,14 @@ test('documentation articles provide a readable, navigable reference experience'
 
     expect(await page.locator('.site-docs-callout[data-callout="tip"]').count()).toBe(1)
     expect(await page.locator('.site-docs-callout-label').getByText('Tip', { exact: true }).isVisible()).toBe(true)
-    await page.waitForFunction(() => Boolean(document.querySelector('.site-docs-article ld-code-block .shiki')))
-    const codeBlock = page.locator('.site-docs-article ld-code-block').first()
+    await page.waitForFunction(() => Boolean(document.querySelector('.site-docs-article lv-code-block .shiki')))
+    const codeBlock = page.locator('.site-docs-article lv-code-block').first()
     expect(await codeBlock.getAttribute('language')).toBe('sh')
     expect(await codeBlock.getAttribute('toolbar')).not.toBeNull()
     expect(await codeBlock.locator('.shiki').getAttribute('class')).toContain('github-light')
     expect(await codeBlock.getByText('Shell', { exact: true }).isVisible()).toBe(true)
     await codeBlock.getByRole('button', { name: 'Copy code' }).click()
-    await page.waitForFunction(() => document.documentElement.dataset.copiedCode === 'libredash validate --project dashboards/libredash.yaml\n')
+    await page.waitForFunction(() => document.documentElement.dataset.copiedCode === 'leapview validate --project dashboards/leapview.yaml\n')
     expect(await codeBlock.getByRole('button', { name: 'Code copied' }).isVisible()).toBe(true)
 
     const activeGroup = page.locator('.site-docs-nav-group-active > summary').first()
@@ -1333,11 +1333,11 @@ test('documentation articles provide a readable, navigable reference experience'
     expect(navigationTreatment.groupBackground).toBe('rgba(0, 0, 0, 0)')
     expect(navigationTreatment.linkBackground).not.toBe(navigationTreatment.groupBackground)
 
-    const search = page.locator('ld-site-search')
+    const search = page.locator('lv-site-search')
     await search.getByRole('button', { name: 'Search documentation' }).click()
     expect(await search.getByRole('dialog', { name: 'Search documentation' }).isVisible()).toBe(true)
     const searchInput = search.locator('input[slot="input"]')
-    await page.waitForFunction(() => document.activeElement?.matches('ld-site-search input[slot="input"]'))
+    await page.waitForFunction(() => document.activeElement?.matches('lv-site-search input[slot="input"]'))
     expect(await searchInput.getAttribute('data-bind')).toBe('docsSearch.query')
     expect(await searchInput.getAttribute('data-on:input__debounce.200ms')).toBe("@get('/docs/search/active', {filterSignals: {include: /^docsSearch\\./}})")
     await searchInput.fill('semantic relationships')
@@ -1461,7 +1461,7 @@ test('documentation reading columns stay centered and readable at every layout t
         const shell = reading.querySelector('.site-guide-shell') as HTMLElement
         const article = reading.querySelector('.site-docs-article') as HTMLElement
         const paragraph = article.querySelector('p') as HTMLElement
-        const outline = reading.querySelector('ld-site-article-toc') as HTMLElement
+        const outline = reading.querySelector('lv-site-article-toc') as HTMLElement
         const contentRect = content.getBoundingClientRect()
         const contentStyle = getComputedStyle(content)
         const readingRect = reading.getBoundingClientRect()
@@ -1573,7 +1573,7 @@ test('documentation header keeps the Markdown copy action beside the title at ev
 
     const measure = () =>
       page.locator('.site-docs-article').evaluate((article) => {
-        const button = document.querySelector('ld-site-markdown-copy')?.shadowRoot?.querySelector('button')
+        const button = document.querySelector('lv-site-markdown-copy')?.shadowRoot?.querySelector('button')
         const title = article.querySelector('h1')
         const action = article.querySelector('.site-docs-article-actions')
         const buttonStyle = button ? getComputedStyle(button) : null
@@ -1622,9 +1622,9 @@ test('documentation articles end with a DuckDB-style About this page panel', asy
     expect(await article.getByRole('navigation', { name: 'Documentation pagination' }).count()).toBe(0)
     expect(await article.getByRole('link', { name: /^(Previous|Next)/ }).count()).toBe(0)
     expect(await panel.getByRole('heading', { name: 'About this page', exact: true }).count()).toBe(1)
-    expect(await panel.getByRole('link', { name: 'Report content issue', exact: true }).getAttribute('href')).toContain('github.com/Yacobolo/libredash/issues/new?')
-    expect(await panel.getByRole('link', { name: 'See this page as Markdown', exact: true }).getAttribute('href')).toBe('https://raw.githubusercontent.com/Yacobolo/libredash/main/docs/getting-started.md')
-    expect(await panel.getByRole('link', { name: 'Edit this page on GitHub', exact: true }).getAttribute('href')).toBe('https://github.com/Yacobolo/libredash/edit/main/docs/getting-started.md')
+    expect(await panel.getByRole('link', { name: 'Report content issue', exact: true }).getAttribute('href')).toContain('github.com/Yacobolo/leapview/issues/new?')
+    expect(await panel.getByRole('link', { name: 'See this page as Markdown', exact: true }).getAttribute('href')).toBe('https://raw.githubusercontent.com/Yacobolo/leapview/main/docs/getting-started.md')
+    expect(await panel.getByRole('link', { name: 'Edit this page on GitHub', exact: true }).getAttribute('href')).toBe('https://github.com/Yacobolo/leapview/edit/main/docs/getting-started.md')
 
     const measure = () =>
       panel.evaluate((element) => {
@@ -1710,7 +1710,7 @@ test('compact documentation navigation opens in a drawer', async () => {
     )
 
     const sidebar = page.locator('.site-docs-sidebar')
-    const headerDrawerToggle = page.locator('ld-site-docs-drawer-toggle:not([placement])')
+    const headerDrawerToggle = page.locator('lv-site-docs-drawer-toggle:not([placement])')
     const toggle = page.getByRole('button', {
       name: 'Open documentation menu',
     })
@@ -1750,7 +1750,7 @@ test('compact documentation navigation opens in a drawer', async () => {
     })
     expect(await sidebar.evaluate((element) => getComputedStyle(element).transitionDuration)).not.toBe('0s')
 
-    await page.locator('ld-site-docs-drawer-toggle[placement="drawer"]').getByRole('button', { name: 'Close documentation menu' }).click()
+    await page.locator('lv-site-docs-drawer-toggle[placement="drawer"]').getByRole('button', { name: 'Close documentation menu' }).click()
     await page.waitForFunction(() => !document.querySelector('.site-docs-layout')?.classList.contains('site-docs-drawer-open'))
     expect(await headerDrawerToggle.evaluate((element) => element.shadowRoot?.querySelector('button')?.getAttribute('aria-expanded'))).toBe('false')
   } finally {
@@ -1764,7 +1764,7 @@ test('documentation outlines match the compact DuckDB article navigation treatme
   })
   try {
     await page.goto(`${baseURL}/docs/guides/build/model-tables`)
-    const toc = page.locator('ld-site-article-toc')
+    const toc = page.locator('lv-site-article-toc')
     expect(await toc.locator('a[data-level="2"]').count()).toBeGreaterThanOrEqual(2)
     expect(await toc.locator('a[data-level="3"]').count()).toBeGreaterThanOrEqual(2)
     const tocTreatment = await toc.evaluate((element) => {
@@ -1860,27 +1860,27 @@ test('visual showcase renders every supported visual type', async () => {
   try {
     await page.goto(`${baseURL}/visuals`)
     await page.waitForFunction(() => {
-      const showcase = document.querySelector('ld-site-visual-showcase') as HTMLElement & { shadowRoot: ShadowRoot }
-      return showcase?.shadowRoot?.querySelectorAll('.chart').length === 24 && showcase?.shadowRoot?.querySelectorAll('.table-card ld-visualization-host').length === 3
+      const showcase = document.querySelector('lv-site-visual-showcase') as HTMLElement & { shadowRoot: ShadowRoot }
+      return showcase?.shadowRoot?.querySelectorAll('.chart').length === 24 && showcase?.shadowRoot?.querySelectorAll('.table-card lv-visualization-host').length === 3
     })
-    const visuals = await page.locator('ld-site-visual-showcase').evaluate((element) => {
+    const visuals = await page.locator('lv-site-visual-showcase').evaluate((element) => {
       const root = element.shadowRoot
       return {
         cards: root?.querySelectorAll('.chart').length,
-        hosts: root?.querySelectorAll('.chart ld-visualization-host').length,
-        kpis: Array.from(root?.querySelectorAll('.chart ld-visualization-host') ?? []).filter((host: any) => host.envelope?.spec?.kind === 'kpi').length,
+        hosts: root?.querySelectorAll('.chart lv-visualization-host').length,
+        kpis: Array.from(root?.querySelectorAll('.chart lv-visualization-host') ?? []).filter((host: any) => host.envelope?.spec?.kind === 'kpi').length,
       }
     })
     expect(visuals).toEqual({ cards: 24, hosts: 24, kpis: 1 })
     await page.waitForFunction(() => {
-      const showcase = document.querySelector('ld-site-visual-showcase') as HTMLElement & { shadowRoot: ShadowRoot }
-      return showcase?.shadowRoot?.querySelectorAll('.table-card ld-visualization-host').length === 3
+      const showcase = document.querySelector('lv-site-visual-showcase') as HTMLElement & { shadowRoot: ShadowRoot }
+      return showcase?.shadowRoot?.querySelectorAll('.table-card lv-visualization-host').length === 3
     })
-    await page.waitForFunction(() => Array.from(document.querySelector('ld-site-visual-showcase')?.shadowRoot?.querySelectorAll('.table-card ld-visualization-host') ?? []).every((host: any) => Boolean(host.envelope?.spec?.title) && !host.shadowRoot?.querySelector('[role="alert"]')))
-    const tables = await page.locator('ld-site-visual-showcase').evaluate((element) => ({
+    await page.waitForFunction(() => Array.from(document.querySelector('lv-site-visual-showcase')?.shadowRoot?.querySelectorAll('.table-card lv-visualization-host') ?? []).every((host: any) => Boolean(host.envelope?.spec?.title) && !host.shadowRoot?.querySelector('[role="alert"]')))
+    const tables = await page.locator('lv-site-visual-showcase').evaluate((element) => ({
       cards: element.shadowRoot?.querySelectorAll('.table-card').length,
-      tables: element.shadowRoot?.querySelectorAll('.table-card ld-visualization-host').length,
-      titles: Array.from(element.shadowRoot?.querySelectorAll('.table-card ld-visualization-host') ?? []).map((host: any) => host.envelope?.spec?.title),
+      tables: element.shadowRoot?.querySelectorAll('.table-card lv-visualization-host').length,
+      titles: Array.from(element.shadowRoot?.querySelectorAll('.table-card lv-visualization-host') ?? []).map((host: any) => host.envelope?.spec?.title),
     }))
     expect(tables.cards).toBe(3)
     expect(tables.tables).toBe(3)

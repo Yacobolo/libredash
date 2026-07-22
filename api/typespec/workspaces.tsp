@@ -2,7 +2,7 @@ using Http;
 using TypeSpec.OpenAPI;
 
 @route("/api/v1")
-namespace LibreDashAPI;
+namespace LeapViewAPI;
 
 model WorkspaceResponse {
   id: string;
@@ -184,7 +184,7 @@ op getWorkspaceActiveAssetGraph(@path workspace: string): OkJson<WorkspaceAssetG
 @route("/workspaces/{workspace}/assets/{assetId}")
 @get
 @apigen.authz(#{ mode: "privilege", privilege: "VIEW_ITEM" })
-@extension("x-libredash-object-scope", "workspace-asset")
+@extension("x-leapview-object-scope", "workspace-asset")
 @apigen.cli(#{ command: #["assets", "describe"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "assetId", displayName: "asset-id" }], output: #{ mode: "raw" } })
 @apigen.tool(#{
   name: "describe_asset",
@@ -200,7 +200,7 @@ op getWorkspaceAsset(@path workspace: string, @path assetId: string): OkJson<Ass
 @route("/workspaces/{workspace}/assets/{assetId}/lineage")
 @get
 @apigen.authz(#{ mode: "privilege", privilege: "VIEW_ITEM" })
-@extension("x-libredash-object-scope", "workspace-asset")
+@extension("x-leapview-object-scope", "workspace-asset")
 @apigen.cli(#{ command: #["assets", "lineage"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "assetId", displayName: "asset-id" }], output: #{ mode: "raw" } })
 @apigen.tool(#{
   name: "asset_lineage",

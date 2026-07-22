@@ -80,22 +80,22 @@ class EChartsHandle implements RendererHandle {
   private readonly handleClick = (params: unknown) => {
     const envelope = this.envelope
     if (!envelope) return
-    const event = params as { value?: unknown; data?: { __ld_dataset?: unknown; __ld_row_index?: unknown } }
+    const event = params as { value?: unknown; data?: { __lv_dataset?: unknown; __lv_row_index?: unknown } }
     let datasetID: string | undefined
     let row: unknown[] | undefined
     if (Array.isArray(event.value)) {
       datasetID = envelope.spec.interactions.find((candidate) => candidate.kind === 'select')?.mappings[0]?.source.dataset
       row = event.value
-    } else if (typeof event.data?.__ld_dataset === 'string' && Number.isInteger(event.data.__ld_row_index)) {
-      datasetID = event.data.__ld_dataset
+    } else if (typeof event.data?.__lv_dataset === 'string' && Number.isInteger(event.data.__lv_row_index)) {
+      datasetID = event.data.__lv_dataset
       if (envelope.dataState.kind === 'inline') {
-        row = envelope.dataState.datasets.find((candidate) => candidate.id === datasetID)?.rows[event.data.__ld_row_index as number]
+        row = envelope.dataState.datasets.find((candidate) => candidate.id === datasetID)?.rows[event.data.__lv_row_index as number]
       }
     }
     if (!datasetID || !row) return
     const command = interactionCommandForRow(envelope, datasetID, row)
     if (!command) return
-    this.container.dispatchEvent(new CustomEvent('ld-interaction-select', { bubbles: true, composed: true, detail: command }))
+    this.container.dispatchEvent(new CustomEvent('lv-interaction-select', { bubbles: true, composed: true, detail: command }))
   }
 }
 

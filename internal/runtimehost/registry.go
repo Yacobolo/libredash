@@ -7,7 +7,7 @@ import (
 	"sort"
 	"sync"
 
-	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
 )
 
 type RegistryOptions struct {

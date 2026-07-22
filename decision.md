@@ -2,13 +2,13 @@
 
 ## Summary
 
-LibreDash uses a semantic-model-first BI contract:
+LeapView uses a semantic-model-first BI contract:
 
 ```text
 sources -> models -> semantic model -> dashboards
 ```
 
-The browser UI and dashboard YAML query governed semantic models directly. LibreDash does not expose a separate curated query layer between semantic models and dashboards in v1.
+The browser UI and dashboard YAML query governed semantic models directly. LeapView does not expose a separate curated query layer between semantic models and dashboards in v1.
 
 ## Decision
 
@@ -114,7 +114,7 @@ visuals:
 
 ## Rules
 
-LibreDash should force a safe default path:
+LeapView should force a safe default path:
 
 1. Sources are raw-only and never define joins, measures, fields, or business logic.
 2. Models are light preparation only: casts, cleanup, naming, and grain-alignment preparation.
@@ -134,10 +134,10 @@ LibreDash should force a safe default path:
 
 This keeps the product close to the Power BI mental model: a semantic model is the governed business layer, and measures are the simplified DAX-like contract. We get a clear star-schema workflow without adopting DAX, Power Query, or a general transformation framework.
 
-The semantic model can still be optimized internally. LibreDash may generate physical tables, rollups, or cached results for speed, but those are runtime concerns. Authors model the business graph and dashboard queries remain semantic.
+The semantic model can still be optimized internally. LeapView may generate physical tables, rollups, or cached results for speed, but those are runtime concerns. Authors model the business graph and dashboard queries remain semantic.
 
 ## Future Extensions
 
 If repeated query subsets become painful, add optional semantic views later. A view should be a DRY, permission, or curation layer over the semantic model, not a required v1 modeling layer.
 
-If heavier transformations are needed, they should live upstream. LibreDash can support small local SQL preparation, but it should not become a full transformation orchestrator.
+If heavier transformations are needed, they should live upstream. LeapView can support small local SQL preparation, but it should not become a full transformation orchestrator.

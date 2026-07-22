@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/analytics/materialize"
-	"github.com/Yacobolo/libredash/internal/refreshpipeline"
-	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
-	"github.com/Yacobolo/libredash/internal/workspace"
+	"github.com/Yacobolo/leapview/internal/analytics/materialize"
+	"github.com/Yacobolo/leapview/internal/refreshpipeline"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
+	"github.com/Yacobolo/leapview/internal/workspace"
 )
 
 type ServingStateRepository interface {

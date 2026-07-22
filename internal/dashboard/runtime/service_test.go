@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/dashboard"
+	"github.com/Yacobolo/leapview/internal/dashboard"
 )
 
 func TestRuntimeDoesNotOwnAnalyticsEngineInternals(t *testing.T) {

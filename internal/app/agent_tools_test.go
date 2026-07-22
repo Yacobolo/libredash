@@ -9,15 +9,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/access"
-	agentcap "github.com/Yacobolo/libredash/internal/agent"
-	agenttools "github.com/Yacobolo/libredash/internal/agent/tools"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
-	"github.com/Yacobolo/libredash/internal/dataquery"
-	"github.com/Yacobolo/libredash/internal/queryaudit"
-	visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
-	"github.com/Yacobolo/libredash/internal/workspace"
-	agentcore "github.com/Yacobolo/libredash/pkg/agent"
+	"github.com/Yacobolo/leapview/internal/access"
+	agentcap "github.com/Yacobolo/leapview/internal/agent"
+	agenttools "github.com/Yacobolo/leapview/internal/agent/tools"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	"github.com/Yacobolo/leapview/internal/dataquery"
+	"github.com/Yacobolo/leapview/internal/queryaudit"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
+	"github.com/Yacobolo/leapview/internal/workspace"
+	agentcore "github.com/Yacobolo/leapview/pkg/agent"
 )
 
 func agentAPIGenToolsForTest(server *Server, scope agentcap.Scope) []agentcore.ToolDefinition {

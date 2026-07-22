@@ -31,11 +31,11 @@ export function joinGeometry(envelope: VisualizationEnvelope, layer: Visualizati
     const matched = values.get(String(feature.id ?? feature.properties?.id))
     return { ...feature, properties: {
       ...feature.properties,
-      __ld_value: matched?.value ?? null,
-      __ld_category: matched?.category ?? null,
-      __ld_label: matched?.label ?? '',
-      __ld_selected: matched?.selected ?? false,
-      __ld_has_selection: envelope.selection.length > 0,
+      __lv_value: matched?.value ?? null,
+      __lv_category: matched?.category ?? null,
+      __lv_label: matched?.label ?? '',
+      __lv_selected: matched?.selected ?? false,
+      __lv_has_selection: envelope.selection.length > 0,
       ...(matched ? rowLocator(dataset.id, matched.rowIndex, layer.id) : {}),
     } }
   })
@@ -59,11 +59,11 @@ export function coordinateGeometry(envelope: VisualizationEnvelope, layer: Visua
     const latitude = row[latitudeIndex], longitude = row[longitudeIndex]
     if (!validCoordinate(latitude, longitude)) continue
     features.push({ type: 'Feature', id: index, geometry: { type: 'Point', coordinates: [longitude as number, latitude as number] }, properties: {
-      __ld_value: valueIndex >= 0 ? row[valueIndex] : 1,
-      __ld_category: categoryIndex >= 0 ? row[categoryIndex] : null,
-      __ld_label: labelIndex >= 0 ? String(row[labelIndex] ?? '') : '',
-      __ld_selected: rowIsSelected(envelope, dataset.id, dataset.columns, row),
-      __ld_has_selection: envelope.selection.length > 0,
+      __lv_value: valueIndex >= 0 ? row[valueIndex] : 1,
+      __lv_category: categoryIndex >= 0 ? row[categoryIndex] : null,
+      __lv_label: labelIndex >= 0 ? String(row[labelIndex] ?? '') : '',
+      __lv_selected: rowIsSelected(envelope, dataset.id, dataset.columns, row),
+      __lv_has_selection: envelope.selection.length > 0,
       ...((layer.kind === 'point' || layer.tooltip.length > 0) && selectableRows ? rowLocator(dataset.id, index, layer.id) : {}),
     } })
   }
@@ -93,7 +93,7 @@ export function pathGeometry(envelope: VisualizationEnvelope, layer: Extract<Vis
     points.sort((a, b) => String(a.order).localeCompare(String(b.order), undefined, { numeric: true }))
     if (points.length < 2) continue
     const last = points.at(-1)!
-    features.push({ type: 'Feature', id, geometry: { type: 'LineString', coordinates: points.map((point) => point.coordinate) }, properties: { __ld_value: last.value ?? 1, __ld_category: last.category ?? null, __ld_path: id, ...(locatableRows ? rowLocator(dataset.id, last.rowIndex, layer.id) : {}) } })
+    features.push({ type: 'Feature', id, geometry: { type: 'LineString', coordinates: points.map((point) => point.coordinate) }, properties: { __lv_value: last.value ?? 1, __lv_category: last.category ?? null, __lv_path: id, ...(locatableRows ? rowLocator(dataset.id, last.rowIndex, layer.id) : {}) } })
   }
   return { type: 'FeatureCollection', features }
 }
@@ -104,7 +104,7 @@ function validCoordinate(latitude: unknown, longitude: unknown): latitude is num
 }
 
 function rowLocator(datasetID: string, rowIndex: number, layerID: string): Record<string, string | number> {
-  return { __ld_dataset: datasetID, __ld_row_index: rowIndex, __ld_layer_id: layerID }
+  return { __lv_dataset: datasetID, __lv_row_index: rowIndex, __lv_layer_id: layerID }
 }
 
 function rowIsSelected(envelope: VisualizationEnvelope, datasetID: string, columns: string[], row: unknown[]): boolean {

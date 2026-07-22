@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/analytics/materialize"
+	"github.com/Yacobolo/leapview/internal/analytics/materialize"
 	"github.com/go-chi/chi/v5"
 )
 

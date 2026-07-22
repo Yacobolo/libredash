@@ -17,12 +17,12 @@ import (
 	"testing"
 	"time"
 
-	analyticsmaterialize "github.com/Yacobolo/libredash/internal/analytics/materialize"
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	"github.com/Yacobolo/libredash/internal/dataquery"
-	uisignals "github.com/Yacobolo/libredash/internal/ui/signals"
-	"github.com/Yacobolo/libredash/internal/workspace"
+	analyticsmaterialize "github.com/Yacobolo/leapview/internal/analytics/materialize"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	"github.com/Yacobolo/leapview/internal/dataquery"
+	uisignals "github.com/Yacobolo/leapview/internal/ui/signals"
+	"github.com/Yacobolo/leapview/internal/workspace"
 	_ "github.com/duckdb/duckdb-go/v2"
 )
 
@@ -254,7 +254,7 @@ func TestDataExplorerRouteRendersSignalsAndWiring(t *testing.T) {
 	}
 	body := rec.Body.String()
 	for _, want := range []string{
-		"<ld-data-explorer",
+		"<lv-data-explorer",
 		"/static/data-explorer.js",
 		`<meta name="csrf-token" content="`,
 		"/static/command.js",
@@ -262,7 +262,7 @@ func TestDataExplorerRouteRendersSignalsAndWiring(t *testing.T) {
 		"route=data",
 		"workspace=test",
 		"/data/command",
-		"window.LibreDashCommand.headers()",
+		"window.LeapViewCommand.headers()",
 		"object=model_table%3Amodel_table%3Aolist.orders",
 	} {
 		body = html.UnescapeString(body)
@@ -465,7 +465,7 @@ func TestDataExplorerCommandPublishesPatch(t *testing.T) {
 	body := strings.NewReader(`{"dataExplorerCommand":{"workspaceId":"test","objectKey":"semantic_view:olist.orders","block":"b","start":100,"count":100,"requestSeq":7,"resetVersion":2,"sort":{"column":"status","direction":"asc"}}}`)
 	req := dataExplorerTestRequest(http.MethodPost, "/data/command", body)
 	req.Header.Set("Content-Type", "application/json")
-	req.AddCookie(&http.Cookie{Name: "ld_client_id", Value: "test-client"})
+	req.AddCookie(&http.Cookie{Name: "lv_client_id", Value: "test-client"})
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
 
@@ -605,7 +605,7 @@ func TestDataExplorerCommandReusesPostedPreviewTotalsForScroll(t *testing.T) {
 	}
 	req := dataExplorerTestRequest(http.MethodPost, "/data/command", strings.NewReader(string(bodyBytes)))
 	req.Header.Set("Content-Type", "application/json")
-	req.AddCookie(&http.Cookie{Name: "ld_client_id", Value: "test-client"})
+	req.AddCookie(&http.Cookie{Name: "lv_client_id", Value: "test-client"})
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
 
@@ -643,7 +643,7 @@ func TestDataExplorerCommandDoesNotPublishCanceledPreview(t *testing.T) {
 	body := strings.NewReader(`{"dataExplorerCommand":{"workspaceId":"test","objectKey":"semantic_view:olist.orders","block":"b","start":100,"count":100,"requestSeq":7,"resetVersion":2}}`)
 	req := dataExplorerTestRequest(http.MethodPost, "/data/command", body)
 	req.Header.Set("Content-Type", "application/json")
-	req.AddCookie(&http.Cookie{Name: "ld_client_id", Value: "test-client"})
+	req.AddCookie(&http.Cookie{Name: "lv_client_id", Value: "test-client"})
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
 
@@ -707,7 +707,7 @@ func TestDataExplorerCommandColumnWidthsReuseCurrentPreview(t *testing.T) {
 	}
 	req := dataExplorerTestRequest(http.MethodPost, "/data/command", strings.NewReader(string(bodyBytes)))
 	req.Header.Set("Content-Type", "application/json")
-	req.AddCookie(&http.Cookie{Name: "ld_client_id", Value: "test-client"})
+	req.AddCookie(&http.Cookie{Name: "lv_client_id", Value: "test-client"})
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
 
@@ -748,7 +748,7 @@ func TestDataExplorerBrowserCommandRequiresAndAcceptsCSRF(t *testing.T) {
 	forbiddenReq.Header.Set("Content-Type", "application/json")
 	forbiddenReq.Header.Set("Accept", "application/json")
 	forbiddenReq.Header.Set("Referer", "http://localhost:8150/data?workspace=test")
-	forbiddenReq.AddCookie(&http.Cookie{Name: "ld_client_id", Value: "test-client"})
+	forbiddenReq.AddCookie(&http.Cookie{Name: "lv_client_id", Value: "test-client"})
 	forbiddenRec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(forbiddenRec, forbiddenReq)
 	if forbiddenRec.Code != http.StatusForbidden {
@@ -768,7 +768,7 @@ func TestDataExplorerBrowserCommandRequiresAndAcceptsCSRF(t *testing.T) {
 	allowedReq.Header.Set("Accept", "application/json")
 	allowedReq.Header.Set("X-CSRF-Token", token)
 	allowedReq.Header.Set("Referer", "http://localhost:8150/data?workspace=test")
-	allowedReq.AddCookie(&http.Cookie{Name: "ld_client_id", Value: "test-client"})
+	allowedReq.AddCookie(&http.Cookie{Name: "lv_client_id", Value: "test-client"})
 	for _, cookie := range getRec.Result().Cookies() {
 		allowedReq.AddCookie(cookie)
 	}

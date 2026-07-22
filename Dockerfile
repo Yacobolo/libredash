@@ -57,17 +57,17 @@ COPY --from=web /src/static ./static
 
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
-    CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /out/libredash ./cmd/libredash && \
-    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/libredashctl ./cmd/libredashctl
+    CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /out/leapview ./cmd/leapview && \
+    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/leapviewctl ./cmd/leapviewctl
 
 FROM debian:bookworm-slim@sha256:60eac759739651111db372c07be67863818726f754804b8707c90979bda511df AS runtime
 
 ARG BUILD_VERSION=dev
 ARG BUILD_REVISION=unknown
 
-LABEL org.opencontainers.image.title="LibreDash" \
-      org.opencontainers.image.description="LibreDash business intelligence server" \
-      org.opencontainers.image.source="https://github.com/Yacobolo/libredash" \
+LABEL org.opencontainers.image.title="LeapView" \
+      org.opencontainers.image.description="LeapView business intelligence server" \
+      org.opencontainers.image.source="https://github.com/Yacobolo/leapview" \
       org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.version="$BUILD_VERSION" \
       org.opencontainers.image.revision="$BUILD_REVISION"
@@ -76,33 +76,33 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates libstdc++6 tzdata && \
     rm -rf /var/lib/apt/lists/*
 
-RUN groupadd --system libredash && \
-    useradd --system --gid libredash --home-dir /var/lib/libredash --shell /usr/sbin/nologin libredash
+RUN groupadd --system leapview && \
+    useradd --system --gid leapview --home-dir /var/lib/leapview --shell /usr/sbin/nologin leapview
 
 WORKDIR /app
 
-COPY --from=build /out/libredash /usr/local/bin/libredash
-COPY --from=build /out/libredashctl /usr/local/libexec/libredashctl
+COPY --from=build /out/leapview /usr/local/bin/leapview
+COPY --from=build /out/leapviewctl /usr/local/libexec/leapviewctl
 COPY --from=web /src/static ./static
 COPY --from=build /src/schemas ./schemas
 COPY --from=sourcegen /src/.data/map-assets ./.data/map-assets
 COPY dashboards ./dashboards
 
-RUN mkdir -p /var/lib/libredash && \
-    chown -R libredash:libredash /var/lib/libredash /app
+RUN mkdir -p /var/lib/leapview && \
+    chown -R leapview:leapview /var/lib/leapview /app
 
-USER libredash
+USER leapview
 
-ENV LIBREDASH_ADDR=:8080 \
-    LIBREDASH_ENVIRONMENT=prod \
-    LIBREDASH_HOME=/var/lib/libredash/home \
-    LIBREDASH_MAP_ASSET_DIR=/app/.data/map-assets \
-    LIBREDASH_MANAGED_DATA_DIR=/var/lib/libredash/home/managed-data \
-    LIBREDASH_PRODUCTION=1
+ENV LEAPVIEW_ADDR=:8080 \
+    LEAPVIEW_ENVIRONMENT=prod \
+    LEAPVIEW_HOME=/var/lib/leapview/home \
+    LEAPVIEW_MAP_ASSET_DIR=/app/.data/map-assets \
+    LEAPVIEW_MANAGED_DATA_DIR=/var/lib/leapview/home/managed-data \
+    LEAPVIEW_PRODUCTION=1
 
 EXPOSE 8080
-VOLUME ["/var/lib/libredash"]
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD ["libredash", "healthcheck"]
+VOLUME ["/var/lib/leapview"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD ["leapview", "healthcheck"]
 
-ENTRYPOINT ["libredash"]
+ENTRYPOINT ["leapview"]
 CMD ["serve", "--production"]

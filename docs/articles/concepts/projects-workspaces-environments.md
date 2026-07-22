@@ -7,7 +7,7 @@ Projects, workspaces, and instance environments are separate concepts. A LeapVie
 A project is the atomic configuration-as-code delivery unit. Its manifest discovers project-global connections and sources and one or more workspace manifests:
 
 ```yaml
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Project
 metadata:
   name: commerce

@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
-	visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 )
 
 func TestCompiledKPIFieldRetainsSemanticPresentation(t *testing.T) {

@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
-	apiidempotencysqlite "github.com/Yacobolo/libredash/internal/apiidempotency/sqlite"
-	"github.com/Yacobolo/libredash/internal/cursorsigning"
-	"github.com/Yacobolo/libredash/internal/workspace"
+	apigenapi "github.com/Yacobolo/leapview/internal/api/gen"
+	apiidempotencysqlite "github.com/Yacobolo/leapview/internal/apiidempotency/sqlite"
+	"github.com/Yacobolo/leapview/internal/cursorsigning"
+	"github.com/Yacobolo/leapview/internal/workspace"
 )
 
 func TestAPIGenResponseBufferNormalizesLegacyErrorsAsProblemDetails(t *testing.T) {

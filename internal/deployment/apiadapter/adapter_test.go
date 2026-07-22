@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/deployment"
-	"github.com/Yacobolo/libredash/internal/manageddata"
+	"github.com/Yacobolo/leapview/internal/deployment"
+	"github.com/Yacobolo/leapview/internal/manageddata"
 )
 
 func TestCreateProducesStableIdAndRequestDigestForIdempotentReplay(t *testing.T) {

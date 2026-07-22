@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	uisignals "github.com/Yacobolo/libredash/internal/ui/signals"
-	workspaceview "github.com/Yacobolo/libredash/internal/workspace"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	uisignals "github.com/Yacobolo/leapview/internal/ui/signals"
+	workspaceview "github.com/Yacobolo/leapview/internal/workspace"
 )
 
 func TestWorkspaceAssetDetailsRenderSharedShapeForSemanticModel(t *testing.T) {
@@ -24,8 +24,8 @@ func TestWorkspaceAssetDetailsRenderSharedShapeForSemanticModel(t *testing.T) {
 	rendered += bootstrapJSON(WorkspaceAssetBootstrapSignals(catalog, workspace, asset, assets, edges, "details", "Owner", AssetRefreshState{}, AssetVersionsState{}))
 
 	for _, want := range []string{
-		"<ld-app-shell",
-		"<ld-workspace-asset-page",
+		"<lv-app-shell",
+		"<lv-workspace-asset-page",
 		`"breadcrumbs":[`,
 		"Workspaces",
 		"LeapView Workspace",
@@ -181,7 +181,7 @@ func TestConnectionAssetPagesHideVersionsSurface(t *testing.T) {
 }
 
 func TestSemanticModelDetailsSignalIncludesModelGraph(t *testing.T) {
-	workspace := workspaceview.WorkspaceView{ID: "libredash", Title: "LeapView Workspace"}
+	workspace := workspaceview.WorkspaceView{ID: "leapview", Title: "LeapView Workspace"}
 	asset := workspaceview.AssetView{
 		ID:          "semantic_model:commerce",
 		WorkspaceID: workspace.ID,
@@ -274,7 +274,7 @@ func TestWorkspaceAssetDetailsRenderModelTableComposition(t *testing.T) {
 	rendered += bootstrapJSON(WorkspaceAssetBootstrapSignals(catalog, workspace, asset, assets, edges, "details", "Owner", AssetRefreshState{}, AssetVersionsState{}))
 
 	for _, want := range []string{
-		"<ld-workspace-asset-page",
+		"<lv-workspace-asset-page",
 		`"overview":[`,
 		"Fields (2)",
 		`"title":"SQL"`,
@@ -289,7 +289,7 @@ func TestWorkspaceAssetDetailsRenderModelTableComposition(t *testing.T) {
 		"/static/code-block.js",
 		"semantic-model-graph.js",
 		`"semanticModelGraph":`,
-		`<ld-code-block language="sql"`,
+		`<lv-code-block language="sql"`,
 	} {
 		if strings.Contains(rendered, notWant) {
 			t.Fatalf("model table details rendered source definition content %q:\n%s", notWant, rendered)
@@ -313,7 +313,7 @@ func TestWorkspaceAssetDetailsRenderDirectSourceModelTableWithoutSQL(t *testing.
 	rendered += bootstrapJSON(WorkspaceAssetBootstrapSignals(catalog, workspace, asset, assets, edges, "details", "Owner", AssetRefreshState{}, AssetVersionsState{}))
 
 	for _, want := range []string{
-		"<ld-workspace-asset-page",
+		"<lv-workspace-asset-page",
 		`"overview":[`,
 		"Fields (2)",
 		`"header":"Physical type"`,
@@ -327,7 +327,7 @@ func TestWorkspaceAssetDetailsRenderDirectSourceModelTableWithoutSQL(t *testing.
 		"SQL",
 		"Source / transform",
 		"/static/code-block.js",
-		`<ld-code-block language="sql"`,
+		`<lv-code-block language="sql"`,
 	} {
 		if strings.Contains(rendered, notWant) {
 			t.Fatalf("direct source model table details rendered %q:\n%s", notWant, rendered)
@@ -348,7 +348,7 @@ func TestWorkspaceAssetDetailsRenderSourceSchema(t *testing.T) {
 	rendered += bootstrapJSON(WorkspaceAssetBootstrapSignals(catalog, workspace, asset, assets, edges, "details", "Owner", AssetRefreshState{}, AssetVersionsState{}))
 
 	for _, want := range []string{
-		"<ld-workspace-asset-page",
+		"<lv-workspace-asset-page",
 		`"overview":[`,
 		"Fields (2)",
 		`"header":"Physical type"`,
@@ -632,7 +632,7 @@ func TestLineageProjectionPolicy(t *testing.T) {
 }
 
 func TestCollapsedAssetLineageCollapsesMeasureUsageToSemanticModel(t *testing.T) {
-	workspaceID := "libredash"
+	workspaceID := "leapview"
 	assets := map[string]workspaceview.AssetView{
 		"model-a": {
 			ID:          "model-a",
@@ -712,8 +712,8 @@ func TestConnectionAssetDetailsRenderConnectionSurface(t *testing.T) {
 	rendered += bootstrapJSON(ConnectionAssetBootstrapSignals(catalog, workspace, connection, assets, edges, "details", "Owner", AssetVersionsState{}))
 
 	for _, want := range []string{
-		"<ld-workspace-asset-page",
-		`assetWorkspace=libredash`,
+		"<lv-workspace-asset-page",
+		`assetWorkspace=leapview`,
 		`"breadcrumbs":[`,
 		"Olist connection",
 		`"overview":[`,
@@ -734,7 +734,7 @@ func TestConnectionAssetDetailsRenderConnectionSurface(t *testing.T) {
 		"Published from Git/YAML",
 		">Parent</span>",
 		"Back to workspace",
-		`href="/workspaces/libredash/assets/connection:olist.olist/details"`,
+		`href="/workspaces/leapview/assets/connection:olist.olist/details"`,
 	} {
 		if strings.Contains(rendered, notWant) {
 			t.Fatalf("connection details rendered workspace-only content %q:\n%s", notWant, rendered)
@@ -760,7 +760,7 @@ func TestConnectionsPageUsesConnectionAssetTabs(t *testing.T) {
 	rendered += bootstrapJSON(ConnectionsBootstrapSignals(catalog, workspace.ID, visibleAssets, edges, "source", "", "Owner"))
 
 	for _, want := range []string{
-		`<ld-connections-page`,
+		`<lv-connections-page`,
 		`"searchHref":"/connections"`,
 		`"href":"/connections?type=connection"`,
 		`"active":true,"href":"/connections?type=source"`,
@@ -791,8 +791,8 @@ func TestConnectionSourceAssetDetailsRenderConnectionChrome(t *testing.T) {
 	rendered += bootstrapJSON(ConnectionSourceAssetBootstrapSignals(catalog, workspace, connection, source, assets, edges, "details", "Owner", AssetVersionsState{}))
 
 	for _, want := range []string{
-		`<ld-workspace-asset-page`,
-		`assetWorkspace=libredash`,
+		`<lv-workspace-asset-page`,
+		`assetWorkspace=leapview`,
 		"Connections",
 		"Olist connection",
 		"Sources",
@@ -808,7 +808,7 @@ func TestConnectionSourceAssetDetailsRenderConnectionChrome(t *testing.T) {
 	for _, notWant := range []string{
 		"Workspaces /",
 		"Back to workspace",
-		`href="/workspaces/libredash/assets/source:olist.orders/details"`,
+		`href="/workspaces/leapview/assets/source:olist.orders/details"`,
 	} {
 		if strings.Contains(rendered, notWant) {
 			t.Fatalf("connection-scoped source details rendered workspace content %q:\n%s", notWant, rendered)
@@ -829,14 +829,14 @@ func TestWorkspaceAssetTabsUseWorkspaceAssetTypes(t *testing.T) {
 	rendered += bootstrapJSON(WorkspaceBootstrapSignals(catalog, workspace, assets, "", "", "Owner", access))
 
 	for _, want := range []string{
-		`<ld-workspace-page`,
-		`"href":"/workspaces/libredash"`,
+		`<lv-workspace-page`,
+		`"href":"/workspaces/leapview"`,
 		`"label":"All"`,
-		`"href":"/workspaces/libredash?type=model_table"`,
+		`"href":"/workspaces/leapview?type=model_table"`,
 		`"label":"Model table"`,
-		`"href":"/workspaces/libredash?type=semantic_model"`,
+		`"href":"/workspaces/leapview?type=semantic_model"`,
 		`"label":"Semantic model"`,
-		`"href":"/workspaces/libredash?type=dashboard"`,
+		`"href":"/workspaces/leapview?type=dashboard"`,
 		`"label":"Dashboard"`,
 	} {
 		if !strings.Contains(rendered, want) {
@@ -864,7 +864,7 @@ func TestWorkspaceAssetRowsUseDetailLinksForModelAndMetricAssets(t *testing.T) {
 		if strings.Contains(summary.DetailHref, `/models`) || strings.Contains(summary.DetailHref, `/metrics`) {
 			t.Fatalf("%s asset summary rendered removed legacy detail link: %s", typ, summary.DetailHref)
 		}
-		if want := "/workspaces/libredash/assets/" + byType[typ].ID + "/details"; summary.DetailHref != want {
+		if want := "/workspaces/leapview/assets/" + byType[typ].ID + "/details"; summary.DetailHref != want {
 			t.Fatalf("%s asset summary detail href = %q, want %q", typ, summary.DetailHref, want)
 		}
 	}
@@ -888,11 +888,11 @@ func TestWorkspaceAssetRowsRenderTokenBackedIconColors(t *testing.T) {
 	rendered += bootstrapJSON(WorkspaceBootstrapSignals(catalog, workspace, visibleAssets, "", "", "Owner", access))
 
 	for _, want := range []string{
-		`<ld-workspace-page`,
+		`<lv-workspace-page`,
 		`"typeLabel":"Dashboard"`,
 		`"typeLabel":"Model table"`,
 		`"typeLabel":"Semantic model"`,
-		`"detailHref":"/workspaces/libredash/assets/semantic_model:olist/details"`,
+		`"detailHref":"/workspaces/leapview/assets/semantic_model:olist/details"`,
 		`"title":"Olist Commerce"`,
 	} {
 		if !strings.Contains(rendered, want) {
@@ -923,10 +923,10 @@ func TestWorkspaceAccessControlRendersForManagers(t *testing.T) {
 	rendered += bootstrapJSON(WorkspaceBootstrapSignals(catalog, workspace, []workspaceview.AssetView{assets[0]}, "", "", "Owner", access))
 
 	for _, want := range []string{
-		`<ld-workspace-page`,
-		`data-on:ld-workspace-access-search__debounce.200ms=`,
-		`data-on:ld-workspace-access-upsert=`,
-		`data-on:ld-workspace-access-remove=`,
+		`<lv-workspace-page`,
+		`data-on:lv-workspace-access-search__debounce.200ms=`,
+		`data-on:lv-workspace-access-upsert=`,
+		`data-on:lv-workspace-access-remove=`,
 		`workspaceAccess`,
 		`command`,
 		`search`,
@@ -968,7 +968,7 @@ func TestWorkspaceAccessControlDoesNotRenderForViewers(t *testing.T) {
 
 	for _, notWant := range []string{
 		`workspaceaccess=`,
-		`data-on:ld-workspace-access-upsert=`,
+		`data-on:lv-workspace-access-upsert=`,
 	} {
 		if strings.Contains(rendered, notWant) {
 			t.Fatalf("workspace access control rendered for viewer %q:\n%s", notWant, rendered)
@@ -1011,7 +1011,7 @@ func testLogicalAssetID(id string) string {
 }
 
 var testAssetAliases = map[string]string{
-	"catalog":         "catalog:libredash",
+	"catalog":         "catalog:leapview",
 	"model":           "semantic_model:olist",
 	"connection":      "connection:olist.olist",
 	"source":          "source:olist.orders",
@@ -1288,16 +1288,16 @@ func tableHasRelation(grid recordTable, relation string) bool {
 }
 
 func testWorkspaceAssetFixtures() (workspaceview.WorkspaceView, dashboard.Catalog, []workspaceview.AssetView, []workspaceview.AssetEdgeView) {
-	workspace := workspaceview.WorkspaceView{ID: "libredash", Title: "LeapView Workspace", Description: "Local BI workspace."}
+	workspace := workspaceview.WorkspaceView{ID: "leapview", Title: "LeapView Workspace", Description: "Local BI workspace."}
 	catalog := dashboard.Catalog{Workspace: dashboard.CatalogWorkspace{ID: workspace.ID, Title: workspace.Title, Description: workspace.Description}}
 	assets := []workspaceview.AssetView{
-		{ID: "catalog:libredash", WorkspaceID: workspace.ID, Type: "catalog", Key: workspace.ID, Title: workspace.Title, Description: workspace.Description},
+		{ID: "catalog:leapview", WorkspaceID: workspace.ID, Type: "catalog", Key: workspace.ID, Title: workspace.Title, Description: workspace.Description},
 		{
 			ID:          "semantic_model:olist",
 			WorkspaceID: workspace.ID,
 			Type:        "semantic_model",
 			Key:         "olist",
-			ParentID:    "catalog:libredash",
+			ParentID:    "catalog:leapview",
 			Title:       "Olist Commerce",
 			Description: "Brazilian ecommerce model.",
 			Payload: map[string]any{
@@ -1324,8 +1324,8 @@ func testWorkspaceAssetFixtures() (workspaceview.WorkspaceView, dashboard.Catalo
 				"Relationships": []any{map[string]any{"ID": "orders_customers", "From": "orders.customer_id", "To": "customers.customer_id", "Cardinality": "many_to_one", "Active": true}},
 			},
 		},
-		{ID: "connection:olist.olist", WorkspaceID: workspace.ID, Type: "connection", Key: "olist.olist", ParentID: "catalog:libredash", Title: "Olist connection", Payload: map[string]any{"Kind": "local", "credentials_configured": false}},
-		{ID: "source:olist.orders", WorkspaceID: workspace.ID, Type: "source", Key: "olist.orders", ParentID: "catalog:libredash", Title: "orders", Payload: map[string]any{
+		{ID: "connection:olist.olist", WorkspaceID: workspace.ID, Type: "connection", Key: "olist.olist", ParentID: "catalog:leapview", Title: "Olist connection", Payload: map[string]any{"Kind": "local", "credentials_configured": false}},
+		{ID: "source:olist.orders", WorkspaceID: workspace.ID, Type: "source", Key: "olist.orders", ParentID: "catalog:leapview", Title: "orders", Payload: map[string]any{
 			"Connection": "olist",
 			"Format":     "csv",
 			"Path":       "orders.csv",
@@ -1338,8 +1338,8 @@ func testWorkspaceAssetFixtures() (workspaceview.WorkspaceView, dashboard.Catalo
 				map[string]any{"name": "customer_id", "ordinal": float64(2), "physicalType": "VARCHAR", "nullable": true},
 			}},
 		}},
-		{ID: "source:olist.payments", WorkspaceID: workspace.ID, Type: "source", Key: "olist.payments", ParentID: "catalog:libredash", Title: "payments", Payload: map[string]any{"Connection": "olist", "Format": "csv", "Path": "payments.csv"}},
-		{ID: "model_table:olist.orders", WorkspaceID: workspace.ID, Type: "model_table", Key: "olist.orders", ParentID: "catalog:libredash", Title: "orders", Payload: map[string]any{
+		{ID: "source:olist.payments", WorkspaceID: workspace.ID, Type: "source", Key: "olist.payments", ParentID: "catalog:leapview", Title: "payments", Payload: map[string]any{"Connection": "olist", "Format": "csv", "Path": "payments.csv"}},
+		{ID: "model_table:olist.orders", WorkspaceID: workspace.ID, Type: "model_table", Key: "olist.orders", ParentID: "catalog:leapview", Title: "orders", Payload: map[string]any{
 			"Source":     "orders",
 			"PrimaryKey": "order_id",
 			"Grain":      "order_id",
@@ -1352,7 +1352,7 @@ func testWorkspaceAssetFixtures() (workspaceview.WorkspaceView, dashboard.Catalo
 				map[string]any{"name": "state", "ordinal": float64(2), "physicalType": "VARCHAR", "nullable": true},
 			}},
 		}},
-		{ID: "model_table:olist.payments", WorkspaceID: workspace.ID, Type: "model_table", Key: "olist.payments", ParentID: "catalog:libredash", Title: "payments", Payload: map[string]any{
+		{ID: "model_table:olist.payments", WorkspaceID: workspace.ID, Type: "model_table", Key: "olist.payments", ParentID: "catalog:leapview", Title: "payments", Payload: map[string]any{
 			"Sources":            []any{"payments"},
 			"SourceDependencies": []any{"payments"},
 			"PrimaryKey":         "order_id",
@@ -1371,7 +1371,7 @@ func testWorkspaceAssetFixtures() (workspaceview.WorkspaceView, dashboard.Catalo
 		{ID: "field:olist.orders.state", WorkspaceID: workspace.ID, Type: "field", Key: "olist.orders.state", ParentID: "semantic_table:olist.orders", Title: "State", Payload: map[string]any{"Label": "State"}},
 		{ID: "measure:olist.revenue", WorkspaceID: workspace.ID, Type: "measure", Key: "olist.revenue", ParentID: "semantic_model:olist", Title: "Revenue", Payload: map[string]any{"Table": "orders", "Expression": "SUM(orders.revenue)", "Format": "currency"}},
 		{ID: "relationship:olist.orders_customers", WorkspaceID: workspace.ID, Type: "relationship", Key: "olist.orders_customers", ParentID: "semantic_model:olist", Title: "Orders to customers", Payload: map[string]any{"From": "orders.customer_id", "To": "customers.customer_id"}},
-		{ID: "dashboard:executive-sales", WorkspaceID: workspace.ID, Type: "dashboard", Key: "executive-sales", ParentID: "catalog:libredash", Title: "Executive Sales Dashboard", Description: "Sales overview.", Href: "/dashboards/executive-sales", Payload: map[string]any{"SemanticModel": "olist", "Tags": []any{"sales"}}},
+		{ID: "dashboard:executive-sales", WorkspaceID: workspace.ID, Type: "dashboard", Key: "executive-sales", ParentID: "catalog:leapview", Title: "Executive Sales Dashboard", Description: "Sales overview.", Href: "/dashboards/executive-sales", Payload: map[string]any{"SemanticModel": "olist", "Tags": []any{"sales"}}},
 		{ID: "page:executive-sales.overview", WorkspaceID: workspace.ID, Type: "page", Key: "executive-sales.overview", ParentID: "dashboard:executive-sales", Title: "Overview"},
 		{ID: "page_item:executive-sales.overview.revenue", WorkspaceID: workspace.ID, Type: "page_item", Key: "executive-sales.overview.revenue", ParentID: "page:executive-sales.overview", Title: "Revenue tile"},
 		{ID: "filter:executive-sales.state", WorkspaceID: workspace.ID, Type: "filter", Key: "executive-sales.state", ParentID: "dashboard:executive-sales", Title: "State", Payload: map[string]any{"Field": "orders.state", "Type": "multi_select"}},
@@ -1379,11 +1379,11 @@ func testWorkspaceAssetFixtures() (workspaceview.WorkspaceView, dashboard.Catalo
 		{ID: "visual:executive-sales.orders", WorkspaceID: workspace.ID, Type: "visual", Key: "executive-sales.orders", ParentID: "dashboard:executive-sales", Title: "Orders", Payload: map[string]any{"Type": "table", "Query": map[string]any{"Table": "orders"}}},
 	}
 	edges := []workspaceview.AssetEdgeView{
-		{ID: "catalog-model", FromAssetID: "catalog:libredash", ToAssetID: "semantic_model:olist", Type: "contains"},
-		{ID: "catalog-connection", FromAssetID: "catalog:libredash", ToAssetID: "connection:olist.olist", Type: "contains"},
-		{ID: "catalog-source", FromAssetID: "catalog:libredash", ToAssetID: "source:olist.orders", Type: "contains"},
-		{ID: "catalog-model-table", FromAssetID: "catalog:libredash", ToAssetID: "model_table:olist.orders", Type: "contains"},
-		{ID: "catalog-dashboard", FromAssetID: "catalog:libredash", ToAssetID: "dashboard:executive-sales", Type: "contains"},
+		{ID: "catalog-model", FromAssetID: "catalog:leapview", ToAssetID: "semantic_model:olist", Type: "contains"},
+		{ID: "catalog-connection", FromAssetID: "catalog:leapview", ToAssetID: "connection:olist.olist", Type: "contains"},
+		{ID: "catalog-source", FromAssetID: "catalog:leapview", ToAssetID: "source:olist.orders", Type: "contains"},
+		{ID: "catalog-model-table", FromAssetID: "catalog:leapview", ToAssetID: "model_table:olist.orders", Type: "contains"},
+		{ID: "catalog-dashboard", FromAssetID: "catalog:leapview", ToAssetID: "dashboard:executive-sales", Type: "contains"},
 		{ID: "model-semantic-table", FromAssetID: "semantic_model:olist", ToAssetID: "semantic_table:olist.orders", Type: "contains"},
 		{ID: "model-measure", FromAssetID: "semantic_model:olist", ToAssetID: "measure:olist.revenue", Type: "contains"},
 		{ID: "model-relationship", FromAssetID: "semantic_model:olist", ToAssetID: "relationship:olist.orders_customers", Type: "contains"},

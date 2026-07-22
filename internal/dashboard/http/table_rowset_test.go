@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/dashboard"
+	"github.com/Yacobolo/leapview/internal/dashboard"
 	"github.com/apache/arrow-go/v18/arrow/array"
 	"github.com/apache/arrow-go/v18/arrow/ipc"
 )
@@ -43,7 +43,7 @@ func TestDashboardTableArrowMatchesJSONAndCarriesSnapshotMetadata(t *testing.T) 
 		t.Fatalf("open Arrow: %v", err)
 	}
 	defer reader.Release()
-	if snapshot, ok := reader.Schema().Metadata().GetValue("libredash.serving_snapshot"); !ok || snapshot != "snapshot-a" {
+	if snapshot, ok := reader.Schema().Metadata().GetValue("leapview.serving_snapshot"); !ok || snapshot != "snapshot-a" {
 		t.Fatalf("snapshot metadata = %q, %v", snapshot, ok)
 	}
 	if !reader.Next() {

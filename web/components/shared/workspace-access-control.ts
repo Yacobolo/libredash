@@ -84,8 +84,8 @@ class WorkspaceAccessControl extends LitElement {
   static styles = css`
     :host {
       display: inline-block;
-      color: var(--ld-fg-default);
-      font-family: var(--ld-font-family-ui);
+      color: var(--lv-fg-default);
+      font-family: var(--lv-font-family-ui);
     }
 
     button,
@@ -96,39 +96,39 @@ class WorkspaceAccessControl extends LitElement {
 
     .trigger {
       display: inline-flex;
-      min-height: var(--ld-button-height);
+      min-height: var(--lv-button-height);
       align-items: center;
       justify-content: center;
       gap: var(--base-size-6);
-      border: var(--borderWidth-default) solid var(--ld-button-border-rest);
-      border-radius: var(--ld-button-radius);
-      background: var(--ld-button-bg-rest);
-      color: var(--ld-button-fg-rest);
+      border: var(--borderWidth-default) solid var(--lv-button-border-rest);
+      border-radius: var(--lv-button-radius);
+      background: var(--lv-button-bg-rest);
+      color: var(--lv-button-fg-rest);
       cursor: pointer;
-      font-size: var(--ld-font-size-body-sm);
-      font-weight: var(--ld-font-weight-strong);
-      line-height: var(--ld-line-height-tight);
-      padding: 0 var(--ld-button-padding-inline);
+      font-size: var(--lv-font-size-body-sm);
+      font-weight: var(--lv-font-weight-strong);
+      line-height: var(--lv-line-height-tight);
+      padding: 0 var(--lv-button-padding-inline);
       transition:
-        color var(--ld-transition-fast),
-        background-color var(--ld-transition-fast),
-        border-color var(--ld-transition-fast);
+        color var(--lv-transition-fast),
+        background-color var(--lv-transition-fast),
+        border-color var(--lv-transition-fast);
     }
 
     .trigger:hover,
     .trigger:focus-visible {
-      border-color: var(--ld-button-border-hover);
-      background: var(--ld-button-bg-hover);
-      color: var(--ld-fg-default);
-      outline: var(--focus-outline, var(--ld-border-default));
-      outline-color: var(--borderColor-accent-emphasis, var(--ld-line-accent));
+      border-color: var(--lv-button-border-hover);
+      background: var(--lv-button-bg-hover);
+      color: var(--lv-fg-default);
+      outline: var(--focus-outline, var(--lv-border-default));
+      outline-color: var(--borderColor-accent-emphasis, var(--lv-line-accent));
       outline-offset: var(--focus-outline-offset, var(--base-size-2));
     }
 
     .icon {
       display: inline-flex;
-      width: var(--ld-icon-sm);
-      height: var(--ld-icon-sm);
+      width: var(--lv-icon-sm);
+      height: var(--lv-icon-sm);
       align-items: center;
       justify-content: center;
       color: currentColor;
@@ -136,44 +136,44 @@ class WorkspaceAccessControl extends LitElement {
 
     .title {
       margin: 0;
-      color: var(--ld-fg-default);
-      font-size: var(--ld-font-size-title-sm);
-      font-weight: var(--ld-font-weight-strong);
-      line-height: var(--ld-line-height-snug);
+      color: var(--lv-fg-default);
+      font-size: var(--lv-font-size-title-sm);
+      font-weight: var(--lv-font-weight-strong);
+      line-height: var(--lv-line-height-snug);
     }
 
     .subtitle {
       margin: var(--base-size-4) 0 0;
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-body-sm);
-      font-weight: var(--ld-font-weight-normal);
-      line-height: var(--ld-line-height-snug);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-body-sm);
+      font-weight: var(--lv-font-weight-normal);
+      line-height: var(--lv-line-height-snug);
     }
 
     .row-action {
       display: inline-flex;
-      width: var(--ld-control-medium);
-      height: var(--ld-control-medium);
+      width: var(--lv-control-medium);
+      height: var(--lv-control-medium);
       flex: 0 0 auto;
       align-items: center;
       justify-content: center;
-      border: var(--ld-border-transparent);
-      border-radius: var(--ld-radius-default);
+      border: var(--lv-border-transparent);
+      border-radius: var(--lv-radius-default);
       background: transparent;
-      color: var(--ld-fg-muted);
+      color: var(--lv-fg-muted);
       cursor: pointer;
       padding: 0;
       transition:
-        color var(--ld-transition-fast),
-        background-color var(--ld-transition-fast),
-        border-color var(--ld-transition-fast);
+        color var(--lv-transition-fast),
+        background-color var(--lv-transition-fast),
+        border-color var(--lv-transition-fast);
     }
 
     .row-action:hover,
     .row-action:focus-visible {
-      border-color: var(--ld-line-muted);
-      background: var(--ld-bg-control-hover);
-      color: var(--ld-fg-default);
+      border-color: var(--lv-line-muted);
+      background: var(--lv-bg-control-hover);
+      color: var(--lv-fg-default);
       outline: 0;
     }
 
@@ -185,44 +185,44 @@ class WorkspaceAccessControl extends LitElement {
 
     .card {
       display: grid;
-      gap: var(--ld-space-control);
+      gap: var(--lv-space-control);
     }
 
     .section-title {
       margin: 0;
-      color: var(--ld-fg-default);
-      font-size: var(--ld-font-size-body-md);
-      font-weight: var(--ld-font-weight-strong);
-      line-height: var(--ld-line-height-snug);
+      color: var(--lv-fg-default);
+      font-size: var(--lv-font-size-body-md);
+      font-weight: var(--lv-font-weight-strong);
+      line-height: var(--lv-line-height-snug);
     }
 
     .label {
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
-      line-height: var(--ld-line-height-tight);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
+      line-height: var(--lv-line-height-tight);
     }
 
     .field-shell {
       display: flex;
-      min-height: var(--ld-control-medium);
+      min-height: var(--lv-control-medium);
       min-width: 0;
       align-items: center;
       gap: var(--base-size-8);
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-control);
-      color: var(--ld-fg-muted);
-      padding: 0 var(--ld-space-control);
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-control);
+      color: var(--lv-fg-muted);
+      padding: 0 var(--lv-space-control);
       transition:
-        background-color var(--ld-transition-fast),
-        border-color var(--ld-transition-fast);
+        background-color var(--lv-transition-fast),
+        border-color var(--lv-transition-fast);
     }
 
     .field-shell:focus-within,
     .field-shell:hover {
-      border-color: var(--ld-line-accent);
-      background: var(--ld-bg-control-hover);
+      border-color: var(--lv-line-accent);
+      background: var(--lv-bg-control-hover);
     }
 
     .composer {
@@ -233,8 +233,8 @@ class WorkspaceAccessControl extends LitElement {
     }
 
     .composer-shell {
-      min-height: var(--ld-control-medium);
-      border-radius: var(--ld-radius-tight);
+      min-height: var(--lv-control-medium);
+      border-radius: var(--lv-radius-tight);
       padding: var(--base-size-4) var(--base-size-6) var(--base-size-4) var(--base-size-12);
     }
 
@@ -247,10 +247,10 @@ class WorkspaceAccessControl extends LitElement {
       min-width: 7rem;
       flex: 0 0 auto;
       border: 0;
-      border-left: var(--ld-border-muted);
+      border-left: var(--lv-border-muted);
       border-radius: 0;
       background: transparent;
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
       padding-left: var(--base-size-12);
     }
 
@@ -260,15 +260,15 @@ class WorkspaceAccessControl extends LitElement {
 
     input,
     select {
-      min-height: var(--ld-control-medium);
+      min-height: var(--lv-control-medium);
       min-width: 0;
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-control);
-      color: var(--ld-fg-default);
-      font-size: var(--ld-font-size-body-sm);
-      font-weight: var(--ld-font-weight-medium);
-      line-height: var(--ld-line-height-snug);
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-control);
+      color: var(--lv-fg-default);
+      font-size: var(--lv-font-size-body-sm);
+      font-weight: var(--lv-font-weight-medium);
+      line-height: var(--lv-line-height-snug);
       padding: 0 var(--base-size-8);
     }
 
@@ -287,43 +287,43 @@ class WorkspaceAccessControl extends LitElement {
     }
 
     input::placeholder {
-      color: var(--ld-fg-muted);
+      color: var(--lv-fg-muted);
     }
 
     input:focus,
     select:focus {
-      border-color: var(--ld-line-accent);
-      outline: 2px solid var(--ld-line-accent-muted);
+      border-color: var(--lv-line-accent);
+      outline: 2px solid var(--lv-line-accent-muted);
       outline-offset: 0;
     }
 
     .submit {
-      min-height: var(--ld-button-height);
+      min-height: var(--lv-button-height);
       min-width: var(--base-size-80);
-      border: var(--borderWidth-default) solid var(--ld-button-accent-border-rest);
-      border-radius: var(--ld-button-radius);
-      background: var(--ld-button-accent-bg-rest);
-      color: var(--ld-button-accent-fg-rest);
+      border: var(--borderWidth-default) solid var(--lv-button-accent-border-rest);
+      border-radius: var(--lv-button-radius);
+      background: var(--lv-button-accent-bg-rest);
+      color: var(--lv-button-accent-fg-rest);
       cursor: pointer;
-      font-size: var(--ld-font-size-body-sm);
-      font-weight: var(--ld-font-weight-strong);
-      line-height: var(--ld-line-height-tight);
-      padding: 0 var(--ld-button-padding-inline-spacious);
+      font-size: var(--lv-font-size-body-sm);
+      font-weight: var(--lv-font-weight-strong);
+      line-height: var(--lv-line-height-tight);
+      padding: 0 var(--lv-button-padding-inline-spacious);
     }
 
     .submit:hover,
     .submit:focus-visible {
-      border-color: var(--ld-button-accent-border-hover);
-      background: var(--ld-button-accent-bg-hover);
-      outline: var(--focus-outline, var(--ld-border-default));
-      outline-color: var(--borderColor-accent-emphasis, var(--ld-line-accent));
+      border-color: var(--lv-button-accent-border-hover);
+      background: var(--lv-button-accent-bg-hover);
+      outline: var(--focus-outline, var(--lv-border-default));
+      outline-color: var(--borderColor-accent-emphasis, var(--lv-line-accent));
       outline-offset: var(--focus-outline-offset, var(--base-size-2));
     }
 
     .submit:disabled {
-      border-color: var(--ld-button-accent-border-disabled);
-      background: var(--ld-button-accent-bg-disabled);
-      color: var(--ld-button-accent-fg-disabled);
+      border-color: var(--lv-button-accent-border-disabled);
+      background: var(--lv-button-accent-bg-disabled);
+      color: var(--lv-button-accent-fg-disabled);
     }
 
     .submit:disabled,
@@ -333,23 +333,23 @@ class WorkspaceAccessControl extends LitElement {
     }
 
     .status {
-      border-radius: var(--ld-radius-default);
-      font-size: var(--ld-font-size-body-sm);
-      font-weight: var(--ld-font-weight-medium);
-      line-height: var(--ld-line-height-snug);
+      border-radius: var(--lv-radius-default);
+      font-size: var(--lv-font-size-body-sm);
+      font-weight: var(--lv-font-weight-medium);
+      line-height: var(--lv-line-height-snug);
       padding: var(--base-size-8) var(--base-size-12);
     }
 
     .status-error {
-      border: var(--ld-border-danger);
-      background: var(--ld-bg-danger-muted);
-      color: var(--ld-fg-danger);
+      border: var(--lv-border-danger);
+      background: var(--lv-bg-danger-muted);
+      color: var(--lv-fg-danger);
     }
 
     .status-message {
-      border: 1px solid var(--ld-line-success-muted);
-      background: var(--ld-bg-success-muted);
-      color: var(--ld-fg-success);
+      border: 1px solid var(--lv-line-success-muted);
+      background: var(--lv-bg-success-muted);
+      color: var(--lv-fg-success);
     }
 
     .toolbar {
@@ -366,9 +366,9 @@ class WorkspaceAccessControl extends LitElement {
     .list {
       display: grid;
       overflow: hidden;
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-tight);
-      background: var(--ld-bg-panel);
+      border: var(--lv-border-muted);
+      border-radius: var(--lv-radius-tight);
+      background: var(--lv-bg-panel);
     }
 
     .row {
@@ -376,8 +376,8 @@ class WorkspaceAccessControl extends LitElement {
       grid-template-columns: minmax(0, 1fr) minmax(8rem, 10rem) auto;
       align-items: center;
       gap: var(--base-size-12);
-      border-bottom: var(--ld-border-muted);
-      padding: var(--ld-space-control) var(--base-size-12);
+      border-bottom: var(--lv-border-muted);
+      padding: var(--lv-space-control) var(--base-size-12);
     }
 
     .person {
@@ -398,12 +398,12 @@ class WorkspaceAccessControl extends LitElement {
       height: var(--base-size-28);
       align-items: center;
       justify-content: center;
-      border: var(--ld-border-muted);
+      border: var(--lv-border-muted);
       border-radius: 999px;
-      background: var(--ld-bg-control);
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-strong);
+      background: var(--lv-bg-control);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-strong);
       line-height: 1;
       text-transform: uppercase;
     }
@@ -411,32 +411,32 @@ class WorkspaceAccessControl extends LitElement {
     .name {
       overflow: hidden;
       margin: 0;
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: var(--ld-font-size-body-sm);
-      font-weight: var(--ld-font-weight-strong);
-      line-height: var(--ld-line-height-snug);
+      font-size: var(--lv-font-size-body-sm);
+      font-weight: var(--lv-font-weight-strong);
+      line-height: var(--lv-line-height-snug);
     }
 
     .email {
       overflow: hidden;
       margin: var(--base-size-2) 0 0;
-      color: var(--ld-fg-muted);
+      color: var(--lv-fg-muted);
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-normal);
-      line-height: var(--ld-line-height-tight);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-normal);
+      line-height: var(--lv-line-height-tight);
     }
 
     .empty {
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-tight);
-      background: var(--ld-bg-panel);
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-body-sm);
-      font-weight: var(--ld-font-weight-medium);
+      border: var(--lv-border-muted);
+      border-radius: var(--lv-radius-tight);
+      background: var(--lv-bg-panel);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-body-sm);
+      font-weight: var(--lv-font-weight-medium);
       padding: var(--base-size-20) var(--base-size-16);
       text-align: center;
     }
@@ -456,7 +456,7 @@ class WorkspaceAccessControl extends LitElement {
 
       .composer-role {
         min-width: 100%;
-        border-top: var(--ld-border-muted);
+        border-top: var(--lv-border-muted);
         border-left: 0;
         padding-left: var(--base-size-8);
       }
@@ -496,7 +496,7 @@ class WorkspaceAccessControl extends LitElement {
   private renderDrawer(access: WorkspaceAccess) {
     const status = access.status ?? {}
     return html`
-      <ld-drawer open label="Manage access" @ld-drawer-close=${this.closeDialog}>
+      <lv-drawer open label="Manage access" @lv-drawer-close=${this.closeDialog}>
         <h2 class="title" slot="title" id="workspace-access-title">Manage access</h2>
         <p class="subtitle" slot="subtitle">${this.drawerSubtitle(access)}</p>
         <div class="drawer-body">
@@ -558,7 +558,7 @@ class WorkspaceAccessControl extends LitElement {
               ${this.renderBindings(access)}
             </section>
           </div>
-      </ld-drawer>
+      </lv-drawer>
     `
   }
 
@@ -647,7 +647,7 @@ class WorkspaceAccessControl extends LitElement {
     this.query = (event.currentTarget as HTMLInputElement).value
     if (this.searchTimer !== null) window.clearTimeout(this.searchTimer)
     this.searchTimer = window.setTimeout(() => {
-      this.dispatchEvent(new CustomEvent('ld-workspace-access-search', {
+      this.dispatchEvent(new CustomEvent('lv-workspace-access-search', {
         bubbles: true,
         composed: true,
         detail: { search: this.query },
@@ -659,7 +659,7 @@ class WorkspaceAccessControl extends LitElement {
     this.previousFocus = document.activeElement as HTMLElement | null
     this.open = true
     window.setTimeout(() => {
-      this.renderRoot.querySelector('ld-drawer')?.focusFirst()
+      this.renderRoot.querySelector('lv-drawer')?.focusFirst()
     }, 0)
   }
 
@@ -686,7 +686,7 @@ class WorkspaceAccessControl extends LitElement {
       subjectId: this.subjectType === 'principal' ? '' : subjectID,
     }
     if (!subjectID || (!command.role && !command.privilege)) return
-    this.dispatchEvent(new CustomEvent('ld-workspace-access-upsert', {
+    this.dispatchEvent(new CustomEvent('lv-workspace-access-upsert', {
       bubbles: true,
       composed: true,
       detail: command,
@@ -695,7 +695,7 @@ class WorkspaceAccessControl extends LitElement {
 
   private updateBindingRole(binding: Binding, role: string): void {
     if (!role || role === binding.role) return
-    this.dispatchEvent(new CustomEvent('ld-workspace-access-upsert', {
+    this.dispatchEvent(new CustomEvent('lv-workspace-access-upsert', {
       bubbles: true,
       composed: true,
       detail: {
@@ -711,7 +711,7 @@ class WorkspaceAccessControl extends LitElement {
 
   private removeBinding(binding: Binding): void {
     if (!binding.principalId && !binding.id) return
-    this.dispatchEvent(new CustomEvent('ld-workspace-access-remove', {
+    this.dispatchEvent(new CustomEvent('lv-workspace-access-remove', {
       bubbles: true,
       composed: true,
       detail: {
@@ -830,10 +830,10 @@ function mailIcon() {
   return html`<span class="icon" aria-hidden="true">${lucideIcon(Mail, { size: 16 })}</span>`
 }
 
-customElements.define('ld-workspace-access-control', WorkspaceAccessControl)
+customElements.define('lv-workspace-access-control', WorkspaceAccessControl)
 
 declare global {
   interface HTMLElementTagNameMap {
-    'ld-workspace-access-control': WorkspaceAccessControl
+    'lv-workspace-access-control': WorkspaceAccessControl
   }
 }

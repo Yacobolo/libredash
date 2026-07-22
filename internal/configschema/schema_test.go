@@ -14,8 +14,8 @@ import (
 )
 
 func TestValidateBytesRejectsUnknownEnvelopeField(t *testing.T) {
-	err := ValidateBytes(KindProject, "libredash.yaml", []byte(`
-apiVersion: libredash.dev/v1
+	err := ValidateBytes(KindProject, "leapview.yaml", []byte(`
+apiVersion: leapview.dev/v1
 kind: Project
 metadata:
   name: test
@@ -33,7 +33,7 @@ surprise: true
 
 func TestValidateBytesRejectsRemovedWorkspaceAgentPolicyInclude(t *testing.T) {
 	err := ValidateBytes(KindWorkspace, "workspace.yaml", []byte(`
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Workspace
 metadata:
   name: sales
@@ -54,7 +54,7 @@ spec:
 
 func TestValidateBytesRejectsWrongEnvelopeType(t *testing.T) {
 	err := ValidateBytes(KindWorkspace, "workspace.yaml", []byte(`
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Workspace
 metadata:
   name: sales
@@ -73,7 +73,7 @@ spec:
 
 func TestValidateBytesRejectsUnsupportedEnum(t *testing.T) {
 	err := ValidateBytes(KindDashboardResource, "dashboard.yaml", []byte(`
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Dashboard
 metadata:
   name: sales
@@ -95,7 +95,7 @@ spec:
 
 func TestDashboardVisualContractUnifiesChartsAndTables(t *testing.T) {
 	err := ValidateBytes(KindDashboardResource, "dashboard.yaml", []byte(`
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Dashboard
 metadata:
   name: sales
@@ -208,7 +208,7 @@ func TestDashboardVisualContractRejectsLegacyChartTableSplit(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			content := `
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Dashboard
 metadata:
   name: sales
@@ -233,7 +233,7 @@ spec:
 
 func TestValidateBytesRejectsRemovedLocalConnectionKind(t *testing.T) {
 	err := ValidateBytes(KindConnection, "local.yaml", []byte(`
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Connection
 metadata:
   name: files
@@ -245,7 +245,7 @@ spec:
 
 func TestValidateBytesRejectsInvalidIdentifierKey(t *testing.T) {
 	err := ValidateBytes(KindModelTable, "orders.yaml", []byte(`
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: ModelTable
 metadata:
   name: orders
@@ -269,7 +269,7 @@ func TestValidateBytesRejectsMissingRequiredRootFields(t *testing.T) {
 			name: "project spec",
 			kind: KindProject,
 			content: `
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Project
 metadata:
   name: test
@@ -280,7 +280,7 @@ metadata:
 			name: "workspace uses",
 			kind: KindWorkspace,
 			content: `
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Workspace
 metadata:
   name: sales
@@ -298,7 +298,7 @@ spec:
 			name: "dashboard semantic model",
 			kind: KindDashboardResource,
 			content: `
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Dashboard
 metadata:
   name: sales
@@ -349,7 +349,7 @@ func TestGeneratedJSONSchemasRejectInvalidDocuments(t *testing.T) {
 			name: "project missing spec",
 			kind: KindProject,
 			instance: map[string]any{
-				"apiVersion": "libredash.dev/v1",
+				"apiVersion": "leapview.dev/v1",
 				"kind":       "Project",
 				"metadata":   map[string]any{"name": "test"},
 			},
@@ -358,7 +358,7 @@ func TestGeneratedJSONSchemasRejectInvalidDocuments(t *testing.T) {
 			name: "workspace missing uses",
 			kind: KindWorkspace,
 			instance: map[string]any{
-				"apiVersion": "libredash.dev/v1",
+				"apiVersion": "leapview.dev/v1",
 				"kind":       "Workspace",
 				"metadata":   map[string]any{"name": "sales"},
 				"spec": map[string]any{
@@ -372,7 +372,7 @@ func TestGeneratedJSONSchemasRejectInvalidDocuments(t *testing.T) {
 			name: "model table missing primary key",
 			kind: KindModelTable,
 			instance: map[string]any{
-				"apiVersion": "libredash.dev/v1",
+				"apiVersion": "leapview.dev/v1",
 				"kind":       "ModelTable",
 				"metadata":   map[string]any{"name": "orders"},
 				"spec":       map[string]any{},
@@ -382,7 +382,7 @@ func TestGeneratedJSONSchemasRejectInvalidDocuments(t *testing.T) {
 			name: "dashboard empty pages",
 			kind: KindDashboardResource,
 			instance: map[string]any{
-				"apiVersion": "libredash.dev/v1",
+				"apiVersion": "leapview.dev/v1",
 				"kind":       "Dashboard",
 				"metadata":   map[string]any{"name": "sales"},
 				"spec": map[string]any{
@@ -415,14 +415,14 @@ func TestJSONSchemaFilesAreFresh(t *testing.T) {
 			t.Fatalf("read generated schema %s: %v", name, err)
 		}
 		if string(onDisk) != string(content) {
-			t.Fatalf("%s is stale; run libredash schema export --format json-schema --out schemas/json", path)
+			t.Fatalf("%s is stale; run leapview schema export --format json-schema --out schemas/json", path)
 		}
 	}
 }
 
 func explicitShowcaseResourceFiles(root string) []string {
 	return []string{
-		filepath.Join(root, "libredash.yaml"),
+		filepath.Join(root, "leapview.yaml"),
 		filepath.Join(root, "connections", "olist.yaml"),
 		filepath.Join(root, "sources", "olist.customers.yaml"),
 		filepath.Join(root, "sources", "olist.order_items.yaml"),
@@ -459,7 +459,7 @@ func kindForResourceFile(t *testing.T, path string) (Kind, bool) {
 	if err := yaml.Unmarshal(content, &header); err != nil {
 		t.Fatal(err)
 	}
-	if header.APIVersion != "libredash.dev/v1" {
+	if header.APIVersion != "leapview.dev/v1" {
 		return "", false
 	}
 	switch header.Kind {

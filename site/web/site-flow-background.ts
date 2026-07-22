@@ -21,8 +21,8 @@ class SiteFlowBackground extends LitElement {
 
   static styles = css`
     :host {
-      --site-flow-line-start: var(--ld-data-1);
-      --site-flow-line-end: var(--ld-data-7);
+      --site-flow-line-start: var(--lv-data-1);
+      --site-flow-line-end: var(--lv-data-7);
       position: absolute;
       inset-block-start: 0;
       left: 50%;
@@ -69,12 +69,12 @@ class SiteFlowBackground extends LitElement {
   connectedCallback(): void {
     super.connectedCallback()
     document.addEventListener('visibilitychange', this.handleVisibilityChange)
-    document.addEventListener('libredash-theme-applied', this.handleThemeApplied)
+    document.addEventListener('leapview-theme-applied', this.handleThemeApplied)
   }
 
   disconnectedCallback(): void {
     document.removeEventListener('visibilitychange', this.handleVisibilityChange)
-    document.removeEventListener('libredash-theme-applied', this.handleThemeApplied)
+    document.removeEventListener('leapview-theme-applied', this.handleThemeApplied)
     this.motionQuery?.removeEventListener('change', this.handleMotionChange)
     this.resizeObserver?.disconnect()
     this.intersectionObserver?.disconnect()
@@ -242,6 +242,6 @@ class SiteFlowBackground extends LitElement {
   }
 }
 
-if (!customElements.get('ld-site-flow-background')) {
-  customElements.define('ld-site-flow-background', SiteFlowBackground)
+if (!customElements.get('lv-site-flow-background')) {
+  customElements.define('lv-site-flow-background', SiteFlowBackground)
 }

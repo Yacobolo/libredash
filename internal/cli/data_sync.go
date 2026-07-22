@@ -15,10 +15,10 @@ import (
 	"strings"
 	"time"
 
-	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
-	"github.com/Yacobolo/libredash/internal/manageddata"
-	"github.com/Yacobolo/libredash/internal/manageddata/localplan"
-	workspacecompiler "github.com/Yacobolo/libredash/internal/workspace/compiler"
+	apigenapi "github.com/Yacobolo/leapview/internal/api/gen"
+	"github.com/Yacobolo/leapview/internal/manageddata"
+	"github.com/Yacobolo/leapview/internal/manageddata/localplan"
+	workspacecompiler "github.com/Yacobolo/leapview/internal/workspace/compiler"
 	"github.com/spf13/cobra"
 )
 
@@ -78,7 +78,7 @@ func dataSyncCommand(ctx context.Context, planner dataPlanner, opts *rootOptions
 			})
 		},
 	}
-	command.Flags().StringVar(&projectPath, "project", filepath.Join("dashboards", "libredash.yaml"), "project catalog path")
+	command.Flags().StringVar(&projectPath, "project", filepath.Join("dashboards", "leapview.yaml"), "project catalog path")
 	command.Flags().StringVar(&connection, "connection", "", "project-global managed connection")
 	command.Flags().StringVar(&from, "from", "", "local filesystem root to ingest")
 	command.Flags().StringVar(&opts.environment, "environment", "", "assert the target instance environment")

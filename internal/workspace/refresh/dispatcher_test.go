@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/analytics/materialize"
-	"github.com/Yacobolo/libredash/internal/execution"
+	"github.com/Yacobolo/leapview/internal/analytics/materialize"
+	"github.com/Yacobolo/leapview/internal/execution"
 )
 
 func TestDispatcherMarksUnsupportedJobFailed(t *testing.T) {

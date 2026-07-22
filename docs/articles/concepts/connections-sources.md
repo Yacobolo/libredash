@@ -7,7 +7,7 @@ Connections and sources deliberately answer different questions: **how can LeapV
 A connection describes a physical access method and its defaults. Supported connection kinds are defined by the generated schema and currently include managed data, object storage, HTTP, relational databases, SQLite, DuckLake, and Quack-compatible access.
 
 ```yaml
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Connection
 metadata:
   name: olist
@@ -51,7 +51,7 @@ The v1 object-storage contract is:
 A source gives one accessible object a stable project identity:
 
 ```yaml
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Source
 metadata:
   name: olist.orders

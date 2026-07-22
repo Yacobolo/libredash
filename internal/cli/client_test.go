@@ -27,7 +27,7 @@ func TestTargetEnvironmentDiscoversAndAssertsInstance(t *testing.T) {
 
 func TestLoadClientConfigMakesExistingTokenFilePrivate(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "cli.json")
-	t.Setenv("LIBREDASH_CLI_CONFIG", path)
+	t.Setenv("LEAPVIEW_CLI_CONFIG", path)
 	if err := os.WriteFile(path, []byte(`{"targets":{"http://localhost:8080":{"token":"secret"}}}`), 0o644); err != nil {
 		t.Fatalf("write client config: %v", err)
 	}

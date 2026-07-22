@@ -1,11 +1,11 @@
 import "@yacobolo/apigen";
 
 @apigen.`package`(#{
-  title: "LibreDash Visualization IR",
+  title: "LeapView Visualization IR",
   version: "1.0.0",
   description: "Renderer-independent visualization specifications and runtime data contracts.",
 })
-namespace LibreDashVisualization;
+namespace LeapViewVisualization;
 
 enum VisualizationFieldRole {
   dimension: "dimension",
@@ -428,7 +428,7 @@ model GeographicVisualizationPresentation extends VisualizationPresentation {
 }
 
 @apigen.contract(#{ kind: "visualization-spec", tags: #["visualization", "ir"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "visualization-spec" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "visualization-spec" })
 @discriminator("kind")
 model VisualizationSpec {
   `kind`: string;
@@ -938,7 +938,7 @@ model VisualizationDiagnostic {
 }
 
 @apigen.contract(#{ kind: "visualization-envelope", tags: #["visualization", "ir"] })
-@apigen.`metadata`(#{ `x-libredash-contract-role`: "visualization-envelope" })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "visualization-envelope" })
 model VisualizationEnvelope {
   `schemaVersion`: 3;
   `visualID`: string;

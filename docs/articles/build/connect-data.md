@@ -5,7 +5,7 @@ Connections are project-global access definitions. Sources give individual files
 For scoped S3 Parquet with workload or instance identity:
 
 ```yaml
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Connection
 metadata: {name: commerce_lake}
 spec:
@@ -19,7 +19,7 @@ spec:
 Then define a source within that connection's scope:
 
 ```yaml
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Source
 metadata: {name: commerce.orders}
 spec:
@@ -61,7 +61,7 @@ Use one connection for inputs that share access method, credentials, and operati
 Create `dashboards/connections/commerce.yaml`:
 
 ```yaml
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Connection
 metadata:
   name: commerce
@@ -86,7 +86,7 @@ Never put a password, API key, or cloud secret value in this file. Use the runti
 Create `dashboards/sources/commerce.orders.yaml`:
 
 ```yaml
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Source
 metadata:
   name: commerce.orders
@@ -141,19 +141,19 @@ This makes the source eligible for that workspace's model tables. It does not st
 Validate the resource graph:
 
 ```sh
-libredash validate --project dashboards/libredash.yaml
+leapview validate --project dashboards/leapview.yaml
 ```
 
 For a managed connection, inspect the local revision before uploading it:
 
 ```sh
-libredash data plan \
-  --project dashboards/libredash.yaml \
+leapview data plan \
+  --project dashboards/leapview.yaml \
   --connection commerce \
   --from ./data/commerce
 ```
 
-Then stage it to a target with `libredash data sync`. Staging returns an immutable revision digest; deployment activates that reviewed digest separately.
+Then stage it to a target with `leapview data sync`. Staging returns an immutable revision digest; deployment activates that reviewed digest separately.
 
 ## Verify the source boundary
 
@@ -163,7 +163,7 @@ For managed data, retain the revision digest returned by staging and confirm tha
 
 ## Troubleshooting
 
-If validation cannot discover the connection or source, resolve include patterns relative to `dashboards/libredash.yaml` and check for duplicate matches. If staging reports missing files, compare the source `path` with the case-sensitive filename beneath `--from`. If a model later reports denied source access, add the logical source ID to the workspace rather than bypassing the workspace boundary.
+If validation cannot discover the connection or source, resolve include patterns relative to `dashboards/leapview.yaml` and check for duplicate matches. If staging reports missing files, compare the source `path` with the case-sensitive filename beneath `--from`. If a model later reports denied source access, add the logical source ID to the workspace rather than bypassing the workspace boundary.
 
 ## Next steps
 

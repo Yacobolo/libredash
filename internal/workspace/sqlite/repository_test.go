@@ -6,16 +6,16 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/platform"
-	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
-	servingstatesqlite "github.com/Yacobolo/libredash/internal/servingstate/sqlite"
-	"github.com/Yacobolo/libredash/internal/workspace"
-	workspacesqlite "github.com/Yacobolo/libredash/internal/workspace/sqlite"
+	"github.com/Yacobolo/leapview/internal/platform"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
+	servingstatesqlite "github.com/Yacobolo/leapview/internal/servingstate/sqlite"
+	"github.com/Yacobolo/leapview/internal/workspace"
+	workspacesqlite "github.com/Yacobolo/leapview/internal/workspace/sqlite"
 )
 
 func TestRepositoryEnsureRejectsBlankWorkspaceID(t *testing.T) {
 	ctx := context.Background()
-	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "libredash.db"))
+	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "leapview.db"))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
@@ -38,7 +38,7 @@ func TestRepositoryEnsureRejectsBlankWorkspaceID(t *testing.T) {
 
 func TestRepositoryActiveServingStateGraphUsesLogicalAssetIDs(t *testing.T) {
 	ctx := context.Background()
-	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "libredash.db"))
+	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "leapview.db"))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestRepositoryActiveServingStateGraphUsesLogicalAssetIDs(t *testing.T) {
 
 func TestRepositoryAssetVersionsAreDistinctPublishedConfigVersions(t *testing.T) {
 	ctx := context.Background()
-	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "libredash.db"))
+	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "leapview.db"))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}

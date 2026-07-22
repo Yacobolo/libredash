@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/dataquery"
+	"github.com/Yacobolo/leapview/internal/dataquery"
 )
 
 var (

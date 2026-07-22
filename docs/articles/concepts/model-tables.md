@@ -9,7 +9,7 @@ Raw inputs often contain transport-oriented names, weakly typed values, duplicat
 A model table declares a stable identity, primary key, grain, source dependencies, documented output fields, and a SQL transformation:
 
 ```yaml
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: ModelTable
 metadata:
   workspace: sales

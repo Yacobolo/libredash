@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 )
 
 // planMultiFactBundle builds one statement-local governed projection and

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	_ "github.com/duckdb/duckdb-go/v2"
 )
 

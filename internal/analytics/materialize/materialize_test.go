@@ -13,15 +13,15 @@ import (
 	"testing"
 	"time"
 
-	analyticsduckdb "github.com/Yacobolo/libredash/internal/analytics/duckdb"
-	analyticsmaterialize "github.com/Yacobolo/libredash/internal/analytics/materialize"
-	analyticsmaterializesqlite "github.com/Yacobolo/libredash/internal/analytics/materialize/sqlite"
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	semanticquery "github.com/Yacobolo/libredash/internal/analytics/query"
-	"github.com/Yacobolo/libredash/internal/platform"
-	"github.com/Yacobolo/libredash/internal/refreshpipeline"
-	"github.com/Yacobolo/libredash/internal/workspace"
-	workspacesqlite "github.com/Yacobolo/libredash/internal/workspace/sqlite"
+	analyticsduckdb "github.com/Yacobolo/leapview/internal/analytics/duckdb"
+	analyticsmaterialize "github.com/Yacobolo/leapview/internal/analytics/materialize"
+	analyticsmaterializesqlite "github.com/Yacobolo/leapview/internal/analytics/materialize/sqlite"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	semanticquery "github.com/Yacobolo/leapview/internal/analytics/query"
+	"github.com/Yacobolo/leapview/internal/platform"
+	"github.com/Yacobolo/leapview/internal/refreshpipeline"
+	"github.com/Yacobolo/leapview/internal/workspace"
+	workspacesqlite "github.com/Yacobolo/leapview/internal/workspace/sqlite"
 	_ "github.com/duckdb/duckdb-go/v2"
 )
 
@@ -371,7 +371,7 @@ func TestWorkspaceRuntimeUsesPlatformDBAsDuckLakeCatalog(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dataDir, "orders.csv"), []byte("order_id,status,revenue\no1,paid,10\no2,paid,15\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	catalogPath := filepath.Join(dir, "libredash.db")
+	catalogPath := filepath.Join(dir, "leapview.db")
 	store, err := platform.Open(ctx, catalogPath)
 	if err != nil {
 		t.Fatalf("open platform store: %v", err)
@@ -406,7 +406,7 @@ func TestWorkspaceRuntimeUsesPlatformDBAsDuckLakeCatalog(t *testing.T) {
 	}
 	bindManagedTestRoot(model, dataDir)
 	duckRoot := filepath.Join(dir, "duckdb", "dev")
-	duckLakeDataPath := filepath.Join(dir, ".libredash", "data")
+	duckLakeDataPath := filepath.Join(dir, ".leapview", "data")
 	runtime, err := analyticsduckdb.OpenWorkspaceMaterializeRuntime(ctx, analyticsduckdb.WorkspaceRuntimeConfig{
 		Models:           map[string]*semanticmodel.Model{"sales": model},
 		DBDir:            duckRoot,
@@ -457,7 +457,7 @@ func TestWorkspaceRuntimeQueriesPinnedDuckLakeSnapshots(t *testing.T) {
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	catalogPath := filepath.Join(dir, "libredash.db")
+	catalogPath := filepath.Join(dir, "leapview.db")
 	store, err := platform.Open(ctx, catalogPath)
 	if err != nil {
 		t.Fatalf("open platform store: %v", err)
@@ -469,7 +469,7 @@ func TestWorkspaceRuntimeQueriesPinnedDuckLakeSnapshots(t *testing.T) {
 		Models:           map[string]*semanticmodel.Model{"sales": model},
 		DBDir:            duckRoot,
 		CatalogPath:      catalogPath,
-		DuckLakeDataPath: filepath.Join(dir, ".libredash", "data"),
+		DuckLakeDataPath: filepath.Join(dir, ".leapview", "data"),
 	}
 
 	writeOrdersCSV(t, dataDir, 10, 15)
@@ -522,7 +522,7 @@ func TestWorkspaceRuntimeCanCommitWhilePinnedSnapshotIsOpen(t *testing.T) {
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	catalogPath := filepath.Join(dir, "libredash.db")
+	catalogPath := filepath.Join(dir, "leapview.db")
 	store, err := platform.Open(ctx, catalogPath)
 	if err != nil {
 		t.Fatalf("open platform store: %v", err)
@@ -532,7 +532,7 @@ func TestWorkspaceRuntimeCanCommitWhilePinnedSnapshotIsOpen(t *testing.T) {
 		Models:           map[string]*semanticmodel.Model{"sales": simpleOrdersModel(t, dataDir)},
 		DBDir:            filepath.Join(dir, "duckdb", "dev"),
 		CatalogPath:      catalogPath,
-		DuckLakeDataPath: filepath.Join(dir, ".libredash", "data"),
+		DuckLakeDataPath: filepath.Join(dir, ".leapview", "data"),
 	}
 
 	writeOrdersCSV(t, dataDir, 10, 15)
@@ -575,13 +575,13 @@ func TestWorkspaceRuntimeWritesDuckLakeDataUnderConfiguredInstanceStore(t *testi
 		t.Fatal(err)
 	}
 	writeOrdersCSV(t, dataDir, 10, 15)
-	catalogPath := filepath.Join(dir, ".libredash", "libredash.db")
-	dataPath := filepath.Join(dir, ".libredash", "data")
-	oldEnvironmentDataPath := filepath.Join(dir, ".libredash", "duckdb", "dev", "data")
+	catalogPath := filepath.Join(dir, ".leapview", "leapview.db")
+	dataPath := filepath.Join(dir, ".leapview", "data")
+	oldEnvironmentDataPath := filepath.Join(dir, ".leapview", "duckdb", "dev", "data")
 
 	runtime, err := analyticsduckdb.OpenWorkspaceMaterializeRuntime(ctx, analyticsduckdb.WorkspaceRuntimeConfig{
 		Models:           map[string]*semanticmodel.Model{"sales": simpleOrdersModel(t, dataDir)},
-		DBDir:            filepath.Join(dir, ".libredash", "duckdb", "dev"),
+		DBDir:            filepath.Join(dir, ".leapview", "duckdb", "dev"),
 		CatalogPath:      catalogPath,
 		DuckLakeDataPath: dataPath,
 	})
@@ -609,12 +609,12 @@ func TestWorkspaceRuntimeWritesDuckLakeCommitMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeOrdersCSV(t, dataDir, 10, 15)
-	catalogPath := filepath.Join(dir, ".libredash", "libredash.db")
-	dataPath := filepath.Join(dir, ".libredash", "data")
+	catalogPath := filepath.Join(dir, ".leapview", "leapview.db")
+	dataPath := filepath.Join(dir, ".leapview", "data")
 
 	runtime, err := analyticsduckdb.OpenWorkspaceMaterializeRuntime(ctx, analyticsduckdb.WorkspaceRuntimeConfig{
 		Models:           map[string]*semanticmodel.Model{"sales": simpleOrdersModel(t, dataDir)},
-		DBDir:            filepath.Join(dir, ".libredash", "duckdb", "dev"),
+		DBDir:            filepath.Join(dir, ".leapview", "duckdb", "dev"),
 		CatalogPath:      catalogPath,
 		DuckLakeDataPath: dataPath,
 		ServingStateID:   "dep_123",
@@ -1710,7 +1710,7 @@ func writeFixture(t *testing.T, dir, name, content string) {
 
 func openMaterializationStore(t *testing.T, ctx context.Context) *platform.Store {
 	t.Helper()
-	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "libredash.db"))
+	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "leapview.db"))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}

@@ -20,22 +20,22 @@ test('MapLibre geometry assets are same-origin and content addressed', async () 
 })
 
 test('MapLibre map styles rewrite only pinned same-origin PMTiles and assets', async () => {
-  const style = new TextEncoder().encode(JSON.stringify({ version: 8, sources: { base: { type: 'vector', url: 'pmtiles://__LIBREDASH_ARCHIVE__' } }, layers: [] }))
+  const style = new TextEncoder().encode(JSON.stringify({ version: 8, sources: { base: { type: 'vector', url: 'pmtiles://__LEAPVIEW_ARCHIVE__' } }, layers: [] }))
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', style))
   const styleDigest = [...digest].map((value) => value.toString(16).padStart(2, '0')).join('')
   const asset = {
-    id: 'streets', styleUrl: `/map-assets/libredash-streets/styles/${styleDigest}/style.json`, styleDigest: `sha256:${styleDigest}`,
-    archiveUrl: `/map-assets/libredash-streets/archives/${'a'.repeat(64)}/basemap.pmtiles`, archiveDigest: `sha256:${'a'.repeat(64)}`, glyphsUrl: `/map-assets/libredash-streets/assets/${'b'.repeat(40)}/glyphs/{fontstack}/{range}.pbf`, spriteUrl: `/map-assets/libredash-streets/assets/${'b'.repeat(40)}/sprites/libredash`,
+    id: 'streets', styleUrl: `/map-assets/leapview-streets/styles/${styleDigest}/style.json`, styleDigest: `sha256:${styleDigest}`,
+    archiveUrl: `/map-assets/leapview-streets/archives/${'a'.repeat(64)}/basemap.pmtiles`, archiveDigest: `sha256:${'a'.repeat(64)}`, glyphsUrl: `/map-assets/leapview-streets/assets/${'b'.repeat(40)}/glyphs/{fontstack}/{range}.pbf`, spriteUrl: `/map-assets/leapview-streets/assets/${'b'.repeat(40)}/sprites/leapview`,
     source: 'OSM', license: 'ODbL', attribution: 'OSM', minimumZoom: 0, maximumZoom: 6, bounds: [-180, -85, 180, 85], labelAnchor: 'labels',
   } as const
   const previous = globalThis.fetch
   globalThis.fetch = (async () => new Response(style)) as typeof fetch
   try {
     const loaded = await loadMapStyleAsset(asset, 'https://dash.example/workspaces/maps')
-    expect((loaded.sources.base as { url?: string }).url).toBe(`pmtiles://https://dash.example/map-assets/libredash-streets/archives/${'a'.repeat(64)}/basemap.pmtiles`)
-    expect(loaded.glyphs).toBe(`https://dash.example/map-assets/libredash-streets/assets/${'b'.repeat(40)}/glyphs/{fontstack}/{range}.pbf`)
+    expect((loaded.sources.base as { url?: string }).url).toBe(`pmtiles://https://dash.example/map-assets/leapview-streets/archives/${'a'.repeat(64)}/basemap.pmtiles`)
+    expect(loaded.glyphs).toBe(`https://dash.example/map-assets/leapview-streets/assets/${'b'.repeat(40)}/glyphs/{fontstack}/{range}.pbf`)
     await expect(loadMapStyleAsset({ ...asset, styleUrl: 'https://attacker.example/style.json' }, 'https://dash.example/maps')).rejects.toThrow(/same-origin/)
-    await expect(loadMapStyleAsset({ ...asset, styleUrl: '/map-assets/libredash-streets/style.json' }, 'https://dash.example/maps')).rejects.toThrow(/content-addressed/)
+    await expect(loadMapStyleAsset({ ...asset, styleUrl: '/map-assets/leapview-streets/style.json' }, 'https://dash.example/maps')).rejects.toThrow(/content-addressed/)
   } finally { globalThis.fetch = previous }
 })
 
@@ -121,9 +121,9 @@ test('MapLibre point, heat, and density layers use typed in-memory coordinates w
   const geometry = coordinateGeometry(envelope, layer)
   expect(geometry.features).toHaveLength(1)
   expect(geometry.features[0]?.geometry).toEqual({ type: 'Point', coordinates: [12.56, 55.67] })
-  expect(geometry.features[0]?.properties?.__ld_value).toBe(3)
-  expect(geometry.features[0]?.properties?.__ld_selected).toBe(true)
-  expect(geometry.features[0]?.properties).toMatchObject({ __ld_dataset: 'primary', __ld_row_index: 0, __ld_layer_id: 'stores' })
+  expect(geometry.features[0]?.properties?.__lv_value).toBe(3)
+  expect(geometry.features[0]?.properties?.__lv_selected).toBe(true)
+  expect(geometry.features[0]?.properties).toMatchObject({ __lv_dataset: 'primary', __lv_row_index: 0, __lv_layer_id: 'stores' })
 })
 
 test('MapLibre selectable features carry only a validated internal row locator', () => {
@@ -138,32 +138,32 @@ test('MapLibre selectable features carry only a validated internal row locator',
   } as FeatureCollection
   const joined = joinGeometry(envelope, layer!, geometry)
   expect(joined.features[0]?.properties).toMatchObject({
-    id: 'SP', publicGeometryName: 'São Paulo', __ld_dataset: 'primary', __ld_row_index: 0, __ld_layer_id: 'states', __ld_value: 10,
+    id: 'SP', publicGeometryName: 'São Paulo', __lv_dataset: 'primary', __lv_row_index: 0, __lv_layer_id: 'states', __lv_value: 10,
   })
   expect(joined.features[0]?.properties).not.toHaveProperty('customer_secret')
-  expect(joined.features[1]?.properties).not.toHaveProperty('__ld_row_index')
+  expect(joined.features[1]?.properties).not.toHaveProperty('__lv_row_index')
 })
 
 test('MapLibre hit testing selects the topmost valid point or region and rejects forged locators', () => {
   const envelope = selectableEnvelope()
   const features = [
-    { layer: { id: 'ld-states' }, properties: { __ld_dataset: 'primary', __ld_row_index: 1, __ld_layer_id: 'states' } },
-    { layer: { id: 'ld-states' }, properties: { __ld_dataset: 'primary', __ld_row_index: 0, __ld_layer_id: 'states' } },
+    { layer: { id: 'lv-states' }, properties: { __lv_dataset: 'primary', __lv_row_index: 1, __lv_layer_id: 'states' } },
+    { layer: { id: 'lv-states' }, properties: { __lv_dataset: 'primary', __lv_row_index: 0, __lv_layer_id: 'states' } },
   ]
-  expect(interactionCommandForRenderedFeatures(envelope, features, ['ld-states'])?.mappings[0]?.value).toBe('RJ')
-  expect(interactionCommandForRenderedFeatures(envelope, [{ layer: { id: 'ld-states' }, properties: { __ld_dataset: 'forged', __ld_row_index: 0, __ld_layer_id: 'states' } }], ['ld-states'])).toBeUndefined()
-  expect(interactionCommandForRenderedFeatures(envelope, [{ layer: { id: 'ld-states' }, properties: { __ld_dataset: 'primary', __ld_row_index: 99, __ld_layer_id: 'states' } }], ['ld-states'])).toBeUndefined()
-  expect(interactionCommandForRenderedFeatures(envelope, [{ layer: { id: 'ld-heat' }, properties: { __ld_dataset: 'primary', __ld_row_index: 0, __ld_layer_id: 'heat' } }], ['ld-states'])).toBeUndefined()
+  expect(interactionCommandForRenderedFeatures(envelope, features, ['lv-states'])?.mappings[0]?.value).toBe('RJ')
+  expect(interactionCommandForRenderedFeatures(envelope, [{ layer: { id: 'lv-states' }, properties: { __lv_dataset: 'forged', __lv_row_index: 0, __lv_layer_id: 'states' } }], ['lv-states'])).toBeUndefined()
+  expect(interactionCommandForRenderedFeatures(envelope, [{ layer: { id: 'lv-states' }, properties: { __lv_dataset: 'primary', __lv_row_index: 99, __lv_layer_id: 'states' } }], ['lv-states'])).toBeUndefined()
+  expect(interactionCommandForRenderedFeatures(envelope, [{ layer: { id: 'lv-heat' }, properties: { __lv_dataset: 'primary', __lv_row_index: 0, __lv_layer_id: 'heat' } }], ['lv-states'])).toBeUndefined()
 })
 
 test('MapLibre cluster expansion selects the topmost valid cluster without requiring datum selection', () => {
-  const sources = new Map([['ld-points-clusters', 'ld-points-source']])
+  const sources = new Map([['lv-points-clusters', 'lv-points-source']])
   expect(clusterExpansionForRenderedFeatures([
     { layer: { id: 'forged' }, properties: { cluster_id: 7 }, geometry: { type: 'Point', coordinates: [1, 2] } },
-    { layer: { id: 'ld-points-clusters' }, properties: { cluster_id: 9 }, geometry: { type: 'Point', coordinates: [-46.63, -23.55] } },
-  ], sources)).toEqual({ sourceID: 'ld-points-source', clusterID: 9, center: [-46.63, -23.55] })
+    { layer: { id: 'lv-points-clusters' }, properties: { cluster_id: 9 }, geometry: { type: 'Point', coordinates: [-46.63, -23.55] } },
+  ], sources)).toEqual({ sourceID: 'lv-points-source', clusterID: 9, center: [-46.63, -23.55] })
   expect(clusterExpansionForRenderedFeatures([
-    { layer: { id: 'ld-points-clusters' }, properties: { cluster_id: 'forged' }, geometry: { type: 'Point', coordinates: [-46.63, -23.55] } },
+    { layer: { id: 'lv-points-clusters' }, properties: { cluster_id: 'forged' }, geometry: { type: 'Point', coordinates: [-46.63, -23.55] } },
   ], sources)).toBeUndefined()
 })
 
@@ -178,12 +178,12 @@ test('MapLibre keeps semantic selection active when pan and zoom are disabled', 
 
 test('MapLibre blank hits clear only the selection owned by that map', () => {
   const envelope = selectableEnvelope()
-  expect(mapInteractionCommand(envelope, [], ['ld-states'])).toBeUndefined()
+  expect(mapInteractionCommand(envelope, [], ['lv-states'])).toBeUndefined()
   const selected = {
     ...envelope,
     selection: [{ datum: { dataset: 'primary', dataRevision: 4, identity: { state: 'SP' } }, label: 'SP' }],
   } as VisualizationEnvelope
-  expect(mapInteractionCommand(selected, [], ['ld-states'])).toEqual({
+  expect(mapInteractionCommand(selected, [], ['lv-states'])).toEqual({
     sourceKind: 'visual', sourceId: 'state-map', interactionKind: 'point_selection', action: 'clear', toggle: false, mappings: [],
   })
 })
@@ -193,10 +193,10 @@ test('MapLibre selection-only refreshes update existing sources without rebuildi
   const layer = envelope.spec.kind === 'geographic' ? envelope.spec.layers[0]! : undefined
   const geometry = { type: 'FeatureCollection', features: [{ type: 'Feature', id: 'SP', geometry: { type: 'Polygon', coordinates: [] }, properties: { id: 'SP' } }] } as FeatureCollection
   const updates: FeatureCollection[] = []
-  const updated = updateSelectionSources(envelope, [{ spec: layer!, sourceID: 'ld-states', geometry }], (sourceID) => sourceID === 'ld-states' ? { setData: (data) => updates.push(data as FeatureCollection) } : undefined)
+  const updated = updateSelectionSources(envelope, [{ spec: layer!, sourceID: 'lv-states', geometry }], (sourceID) => sourceID === 'lv-states' ? { setData: (data) => updates.push(data as FeatureCollection) } : undefined)
   expect(updated).toBe(1)
   expect(updates).toHaveLength(1)
-  expect(updates[0]?.features[0]?.properties).toMatchObject({ __ld_dataset: 'primary', __ld_row_index: 0, __ld_layer_id: 'states' })
+  expect(updates[0]?.features[0]?.properties).toMatchObject({ __lv_dataset: 'primary', __lv_row_index: 0, __lv_layer_id: 'states' })
 })
 
 test('MapLibre spatial requests preserve revision and viewport identity', () => {
@@ -284,22 +284,22 @@ test('MapLibre normalizes finite measure values without losing raw tooltip value
   const data = {
     type: 'FeatureCollection',
     features: [
-      { type: 'Feature', geometry: { type: 'Point', coordinates: [-70, -20] }, properties: { __ld_value: 10 } },
-      { type: 'Feature', geometry: { type: 'Point', coordinates: [-60, -10] }, properties: { __ld_value: 20 } },
-      { type: 'Feature', geometry: { type: 'Point', coordinates: [-50, 0] }, properties: { __ld_value: 30 } },
-      { type: 'Feature', geometry: { type: 'Point', coordinates: [-40, 10] }, properties: { __ld_value: null } },
+      { type: 'Feature', geometry: { type: 'Point', coordinates: [-70, -20] }, properties: { __lv_value: 10 } },
+      { type: 'Feature', geometry: { type: 'Point', coordinates: [-60, -10] }, properties: { __lv_value: 20 } },
+      { type: 'Feature', geometry: { type: 'Point', coordinates: [-50, 0] }, properties: { __lv_value: 30 } },
+      { type: 'Feature', geometry: { type: 'Point', coordinates: [-40, 10] }, properties: { __lv_value: null } },
     ],
   } as FeatureCollection
 
   const normalized = normalizeFeatureWeights(data)
-  expect(normalized.features.map((feature) => feature.properties?.__ld_value)).toEqual([10, 20, 30, null])
-  expect(normalized.features.map((feature) => feature.properties?.__ld_weight)).toEqual([0, 0.5, 1, 0])
+  expect(normalized.features.map((feature) => feature.properties?.__lv_value)).toEqual([10, 20, 30, null])
+  expect(normalized.features.map((feature) => feature.properties?.__lv_weight)).toEqual([0, 0.5, 1, 0])
 
   const fixed = normalizeFeatureWeights(data, { domainMinimum: 0, domainMaximum: 40 })
-  expect(fixed.features.map((feature) => feature.properties?.__ld_weight)).toEqual([0.25, 0.5, 0.75, 0])
+  expect(fixed.features.map((feature) => feature.properties?.__lv_weight)).toEqual([0.25, 0.5, 0.75, 0])
 
   const diverging = normalizeFeatureWeights(data, { domainMinimum: 0, domainMidpoint: 10, domainMaximum: 30 })
-  expect(diverging.features.map((feature) => feature.properties?.__ld_weight)).toEqual([0.5, 0.75, 1, 0])
+  expect(diverging.features.map((feature) => feature.properties?.__lv_weight)).toEqual([0.5, 0.75, 1, 0])
 })
 
 test('MapLibre categorical scales assign deterministic colors by category', () => {
@@ -315,15 +315,15 @@ test('MapLibre categorical scales assign deterministic colors by category', () =
     dataState: { kind: 'inline', datasets: [{ id: 'primary', columns: ['lat', 'lon', 'category'], rows: [[1, 1, 'B'], [2, 2, 'A'], [3, 3, 'B']] }] },
   } as VisualizationEnvelope
   const decorated = applyFeatureScales(coordinateGeometry(envelope, layer), layer)
-  const colors = decorated.features.map((feature) => feature.properties?.__ld_color)
+  const colors = decorated.features.map((feature) => feature.properties?.__lv_color)
   expect(colors[0]).toBe(colors[2])
   expect(colors[0]).not.toBe(colors[1])
-  expect(mapLayer('ld-stores', layer).paint['circle-color']).toEqual(['coalesce', ['get', '__ld_color'], '#ccc'])
+  expect(mapLayer('lv-stores', layer).paint['circle-color']).toEqual(['coalesce', ['get', '__lv_color'], '#ccc'])
 })
 
 test('MapLibre tooltips use compiled fields and contractual formatting without exposing other columns', () => {
   const envelope = selectableEnvelope()
-  const entries = mapTooltipEntries(envelope, [{ layer: { id: 'ld-states' }, properties: { __ld_dataset: 'primary', __ld_row_index: 0, __ld_layer_id: 'states' } }])
+  const entries = mapTooltipEntries(envelope, [{ layer: { id: 'lv-states' }, properties: { __lv_dataset: 'primary', __lv_row_index: 0, __lv_layer_id: 'states' } }])
   expect(entries).toEqual([{ label: 'State', value: 'SP' }, { label: 'Revenue', value: '10' }])
   expect(entries.some((entry) => entry.value.includes('governed'))).toBe(false)
 })
@@ -428,7 +428,7 @@ test('MapLibre point and region styles strongly distinguish a current selection'
   const region = mapLayer('states', 'choropleth')
   expect(region.paint['fill-opacity']).toContain(0.4)
   expect(mapOutlineLayer('states-selected', 'states')).toMatchObject({
-    source: 'states', type: 'line', filter: ['==', ['get', '__ld_selected'], true],
+    source: 'states', type: 'line', filter: ['==', ['get', '__lv_selected'], true],
     paint: { 'line-color': '#bf3989', 'line-width': 3 },
   })
 })

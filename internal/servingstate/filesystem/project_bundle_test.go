@@ -11,10 +11,10 @@ import (
 	"strings"
 	"testing"
 
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
-	"github.com/Yacobolo/libredash/internal/workspace"
-	workspacecompiler "github.com/Yacobolo/libredash/internal/workspace/compiler"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
+	"github.com/Yacobolo/leapview/internal/workspace"
+	workspacecompiler "github.com/Yacobolo/leapview/internal/workspace/compiler"
 )
 
 const olistManagedDataRevision = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -62,8 +62,8 @@ func TestPackProjectValidatesSelectedWorkspace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadCompiledWorkspaceArtifact() error = %v", err)
 	}
-	if compiled.ProjectID != "libredash-showcase" {
-		t.Fatalf("ProjectID = %q, want libredash-showcase", compiled.ProjectID)
+	if compiled.ProjectID != "leapview-showcase" {
+		t.Fatalf("ProjectID = %q, want leapview-showcase", compiled.ProjectID)
 	}
 	if compiled.ProjectDigest == "" {
 		t.Fatal("ProjectDigest is empty")
@@ -78,8 +78,8 @@ func TestPackProjectValidatesSelectedWorkspace(t *testing.T) {
 	if !reflect.DeepEqual(validation.AccessPolicy, compiled.Definition.Access) {
 		t.Fatalf("validation access policy does not match compiled artifact")
 	}
-	if compiled.Validation.Status != "passed" || compiled.Validation.SchemaVersion != "libredash.dev/v1" {
-		t.Fatalf("compiled validation = %#v, want passed libredash.dev/v1", compiled.Validation)
+	if compiled.Validation.Status != "passed" || compiled.Validation.SchemaVersion != "leapview.dev/v1" {
+		t.Fatalf("compiled validation = %#v, want passed leapview.dev/v1", compiled.Validation)
 	}
 	if compiled.Validation.GraphHash == "" || compiled.Validation.GraphHash != graphHash(compiled.Graph) {
 		t.Fatalf("compiled validation graph hash = %q, want %q", compiled.Validation.GraphHash, graphHash(compiled.Graph))
@@ -334,7 +334,7 @@ func mutateArtifactForTest(t *testing.T, path string, mutate func(*CompiledWorks
 	if err := os.WriteFile(filepath.Join(root, "manifest.json"), manifestBytes, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".libredash-test-artifact-*.tar.gz")
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".leapview-test-artifact-*.tar.gz")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -367,7 +367,7 @@ func addUnlistedArtifactFileForTest(t *testing.T, path, name, content string) {
 	if err := os.WriteFile(target, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".libredash-test-artifact-*.tar.gz")
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".leapview-test-artifact-*.tar.gz")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -449,11 +449,11 @@ func TestPackProjectStoresActiveDeploymentPlanDiff(t *testing.T) {
 }
 
 func TestPackProjectDoesNotSerializeResolvedConnectionCredentials(t *testing.T) {
-	t.Setenv("LIBREDASH_TEST_CRM_URL", "postgres://secret-host/sales")
+	t.Setenv("LEAPVIEW_TEST_CRM_URL", "postgres://secret-host/sales")
 	t.Setenv("AWS_SECRET_ACCESS_KEY", "ambient-secret-must-not-be-serialized")
 	projectPath := writeBundleProjectFixture(t, map[string]string{
-		"libredash.yaml": `
-apiVersion: libredash.dev/v1
+		"leapview.yaml": `
+apiVersion: leapview.dev/v1
 kind: Project
 metadata:
   name: test
@@ -469,7 +469,7 @@ spec:
       - workspaces/*/workspace.yaml
 `,
 		"connections/crm.yaml": `
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Connection
 metadata:
   name: crm
@@ -477,10 +477,10 @@ spec:
   kind: postgres
   credentials:
     provider: env
-    secret: LIBREDASH_TEST_CRM_URL
+    secret: LEAPVIEW_TEST_CRM_URL
 `,
 		"connections/lake.yaml": `
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Connection
 metadata:
   name: lake
@@ -492,7 +492,7 @@ spec:
     region: eu-west-1
 `,
 		"sources/crm.orders.yaml": `
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Source
 metadata:
   name: crm.orders
@@ -504,7 +504,7 @@ spec:
       type: string
 `,
 		"sources/lake.events.yaml": `
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Source
 metadata:
   name: lake.events
@@ -517,7 +517,7 @@ spec:
       type: string
 `,
 		"workspaces/sales/workspace.yaml": `
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Workspace
 metadata:
   name: sales
@@ -539,7 +539,7 @@ spec:
     include: []
 `,
 		"workspaces/sales/models/orders.yaml": `
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: ModelTable
 metadata:
   workspace: sales
@@ -556,7 +556,7 @@ spec:
       SELECT order_id FROM source."crm.orders"
 `,
 		"workspaces/sales/semantic-models/sales.yaml": `
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: SemanticModel
 metadata:
   workspace: sales
@@ -571,7 +571,7 @@ spec:
       empty: zero
 `,
 		"workspaces/sales/dashboards/sales.yaml": `
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Dashboard
 metadata:
   workspace: sales
@@ -662,8 +662,8 @@ func writeBundleProjectFixture(t *testing.T, files map[string]string) string {
 func writeManagedBundleProject(t *testing.T) string {
 	t.Helper()
 	return writeBundleProjectFixture(t, map[string]string{
-		"libredash.yaml": `
-apiVersion: libredash.dev/v1
+		"leapview.yaml": `
+apiVersion: leapview.dev/v1
 kind: Project
 metadata:
   name: project-a
@@ -676,7 +676,7 @@ spec:
     include: [workspaces/*/workspace.yaml]
 `,
 		"connections/orders.yaml": `
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Connection
 metadata:
   name: orders
@@ -686,7 +686,7 @@ spec:
     provider: none
 `,
 		"sources/orders.orders.yaml": `
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Source
 metadata:
   name: orders.orders
@@ -699,7 +699,7 @@ spec:
       type: string
 `,
 		"workspaces/sales/workspace.yaml": `
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Workspace
 metadata:
   name: sales
@@ -716,7 +716,7 @@ spec:
     include: []
 `,
 		"workspaces/sales/models/orders.yaml": `
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: ModelTable
 metadata:
   workspace: sales
@@ -729,7 +729,7 @@ spec:
       label: Order ID
 `,
 		"workspaces/sales/semantic-models/sales.yaml": `
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: SemanticModel
 metadata:
   workspace: sales

@@ -27,8 +27,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
-BIN="$TMP_DIR/libredash"
-go build -o "$BIN" ./cmd/libredash
+BIN="$TMP_DIR/leapview"
+go build -o "$BIN" ./cmd/leapview
 
 PORT="$(python3 - <<'PY'
 import socket
@@ -40,20 +40,20 @@ PY
 )"
 TARGET="http://127.0.0.1:$PORT"
 
-export LIBREDASH_HOME="$TMP_DIR/home"
-export LIBREDASH_ADDR="127.0.0.1:$PORT"
-export LIBREDASH_PRODUCTION=true
-export LIBREDASH_PUBLIC_URL="https://localhost"
-export LIBREDASH_ALLOWED_HOSTS="127.0.0.1,localhost"
-export LIBREDASH_ENVIRONMENT=dev
-export LIBREDASH_API_TOKEN_ONLY_AUTH=true
-export LIBREDASH_CSRF_KEY="agent-e2e-csrf-key-agent-e2e-csrf-key"
-export LIBREDASH_METRICS_BEARER_TOKEN="agent-e2e-metrics-token-agent-e2e"
-export LIBREDASH_AGENT_API_KEY="$DEEPSEEK_KEY"
-export LIBREDASH_AGENT_BASE_URL="https://api.deepseek.com"
-export LIBREDASH_AGENT_MODEL="deepseek-v4-flash"
+export LEAPVIEW_HOME="$TMP_DIR/home"
+export LEAPVIEW_ADDR="127.0.0.1:$PORT"
+export LEAPVIEW_PRODUCTION=true
+export LEAPVIEW_PUBLIC_URL="https://localhost"
+export LEAPVIEW_ALLOWED_HOSTS="127.0.0.1,localhost"
+export LEAPVIEW_ENVIRONMENT=dev
+export LEAPVIEW_API_TOKEN_ONLY_AUTH=true
+export LEAPVIEW_CSRF_KEY="agent-e2e-csrf-key-agent-e2e-csrf-key"
+export LEAPVIEW_METRICS_BEARER_TOKEN="agent-e2e-metrics-token-agent-e2e"
+export LEAPVIEW_AGENT_API_KEY="$DEEPSEEK_KEY"
+export LEAPVIEW_AGENT_BASE_URL="https://api.deepseek.com"
+export LEAPVIEW_AGENT_MODEL="deepseek-v4-flash"
 
-export LIBREDASH_BOOTSTRAP_ADMIN_EMAIL=agent-e2e@example.com
+export LEAPVIEW_BOOTSTRAP_ADMIN_EMAIL=agent-e2e@example.com
 INITIAL_CREDENTIALS="$("$BIN" admin initialize --format json)"
 TOKEN="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["publisherToken"])' <<<"$INITIAL_CREDENTIALS")"
 "$BIN" serve > "$TMP_DIR/server.log" 2>&1 &
@@ -70,14 +70,14 @@ for _ in {1..80}; do
   sleep 0.25
 done
 
-SYNC_OUTPUT="$("$BIN" data sync --project dashboards/libredash.yaml --connection olist --from .data/olist --target "$TARGET" --token "$TOKEN")"
+SYNC_OUTPUT="$("$BIN" data sync --project dashboards/leapview.yaml --connection olist --from .data/olist --target "$TARGET" --token "$TOKEN")"
 echo "$SYNC_OUTPUT"
 REVISION="$(awk '$1 == "staged" { print $2 }' <<<"$SYNC_OUTPUT")"
 [[ "$REVISION" =~ ^sha256:[0-9a-f]{64}$ ]] || {
   echo "managed data sync did not return a canonical revision" >&2
   exit 1
 }
-"$BIN" deploy --target "$TARGET" --token "$TOKEN" --project dashboards/libredash.yaml --revision "olist=$REVISION" --auto-approve
+"$BIN" deploy --target "$TARGET" --token "$TOKEN" --project dashboards/leapview.yaml --revision "olist=$REVISION" --auto-approve
 
 OUTPUT="$("$BIN" agent ask "List the dashboards I can use in the sales workspace and mention the Olist context." --target "$TARGET" --token "$TOKEN" --json)"
 echo "$OUTPUT"

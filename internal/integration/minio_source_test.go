@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	analyticsduckdb "github.com/Yacobolo/libredash/internal/analytics/duckdb"
-	analyticsmaterialize "github.com/Yacobolo/libredash/internal/analytics/materialize"
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
+	analyticsduckdb "github.com/Yacobolo/leapview/internal/analytics/duckdb"
+	analyticsmaterialize "github.com/Yacobolo/leapview/internal/analytics/materialize"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
@@ -19,17 +19,17 @@ import (
 )
 
 func TestMinIOParquetSourceRefreshContract(t *testing.T) {
-	endpoint := strings.TrimRight(os.Getenv("LIBREDASH_TEST_MINIO_ENDPOINT"), "/")
+	endpoint := strings.TrimRight(os.Getenv("LEAPVIEW_TEST_MINIO_ENDPOINT"), "/")
 	if endpoint == "" {
-		t.Skip("set LIBREDASH_TEST_MINIO_ENDPOINT to run the MinIO integration test")
+		t.Skip("set LEAPVIEW_TEST_MINIO_ENDPOINT to run the MinIO integration test")
 	}
 	ctx := context.Background()
 	const (
-		bucket = "libredash-integration"
+		bucket = "leapview-integration"
 		key    = "orders/current.parquet"
 		region = "us-east-1"
-		user   = "libredash"
-		secret = "libredash-integration-secret"
+		user   = "leapview"
+		secret = "leapview-integration-secret"
 	)
 	client := minIOClient(t, ctx, endpoint, region, user, secret)
 	if _, err := client.CreateBucket(ctx, &awss3.CreateBucketInput{Bucket: aws.String(bucket)}); err != nil {
@@ -39,7 +39,7 @@ func TestMinIOParquetSourceRefreshContract(t *testing.T) {
 	putMinIOObject(t, ctx, client, bucket, "commerce/"+key, parquetFixture(t, 10, 20))
 	credentialJSON := fmt.Sprintf(`{"access_key_id":%q,"secret_access_key":%q,"region":%q,"endpoint":%q,"url_style":"path","use_ssl":false}`,
 		user, secret, region, strings.TrimPrefix(strings.TrimPrefix(endpoint, "http://"), "https://"))
-	t.Setenv("LIBREDASH_TEST_MINIO_CREDENTIALS", credentialJSON)
+	t.Setenv("LEAPVIEW_TEST_MINIO_CREDENTIALS", credentialJSON)
 	model := minIOModel(bucket, key)
 	if err := model.Validate(); err != nil {
 		t.Fatalf("validate scoped MinIO model: %v", err)
@@ -138,7 +138,7 @@ func minIOModel(bucket, key string) *semanticmodel.Model {
 		Name:              "commerce",
 		DefaultConnection: "lake",
 		Connections: map[string]semanticmodel.Connection{
-			"lake": {Kind: "s3", Scope: scope, Credentials: semanticmodel.ConnectionCredentials{Provider: "env", Secret: "LIBREDASH_TEST_MINIO_CREDENTIALS"}},
+			"lake": {Kind: "s3", Scope: scope, Credentials: semanticmodel.ConnectionCredentials{Provider: "env", Secret: "LEAPVIEW_TEST_MINIO_CREDENTIALS"}},
 		},
 		Sources: map[string]semanticmodel.Source{
 			"orders": {Connection: "lake", Path: "s3://" + bucket + "/commerce/" + key, Format: "parquet"},

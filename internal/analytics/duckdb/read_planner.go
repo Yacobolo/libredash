@@ -7,14 +7,14 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/analytics/connectors"
-	"github.com/Yacobolo/libredash/internal/analytics/duckdb/queryjson"
-	analyticsmaterialize "github.com/Yacobolo/libredash/internal/analytics/materialize"
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
+	"github.com/Yacobolo/leapview/internal/analytics/connectors"
+	"github.com/Yacobolo/leapview/internal/analytics/duckdb/queryjson"
+	analyticsmaterialize "github.com/Yacobolo/leapview/internal/analytics/materialize"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	_ "github.com/duckdb/duckdb-go/v2"
 )
 
-const rowPresenceColumn = "__libredash_row_present"
+const rowPresenceColumn = "__leapview_row_present"
 
 func PlanModelTable(ctx context.Context, runtimeDB queryContext, model *semanticmodel.Model, tableName string, table semanticmodel.Table) (analyticsmaterialize.ModelTablePlan, error) {
 	if err := validateIdentifier(tableName); err != nil {
@@ -286,7 +286,7 @@ func planningLiteral(columnType string) string {
 	case strings.Contains(upper, "TIME"):
 		return "TIMESTAMP '1970-01-01 00:00:00'"
 	default:
-		return "'__libredash_stub__'"
+		return "'__leapview_stub__'"
 	}
 }
 

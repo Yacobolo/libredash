@@ -32,7 +32,7 @@ export function emitMapObservation(
   envelope: VisualizationEnvelope,
   detail: Readonly<Record<string, string | number>> = {},
 ): void {
-  target.dispatchEvent(new CustomEvent('ld-map-observation', {
+  target.dispatchEvent(new CustomEvent('lv-map-observation', {
     bubbles: true,
     composed: true,
     detail: { stage, durationMs, visualID: envelope.visualID, rendererID: envelope.rendererID, ...detail },

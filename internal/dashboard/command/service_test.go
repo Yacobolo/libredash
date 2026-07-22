@@ -5,12 +5,12 @@ import (
 	"math"
 	"testing"
 
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	dashboarddefinition "github.com/Yacobolo/libredash/internal/dashboard/definition"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
-	"github.com/Yacobolo/libredash/internal/testutil/dashboardfixture"
-	visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	"github.com/Yacobolo/leapview/internal/testutil/dashboardfixture"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 )
 
 type fakeMetrics struct {

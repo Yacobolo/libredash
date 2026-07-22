@@ -5,20 +5,20 @@ import { DatastarLit } from '../shared/datastar-lit'
 import { checkSignalContract } from '../shared/signal-contract'
 import { lucideIcon } from '../shared/lucide-icons'
 
-class LibreDashCatalogPage extends DatastarLit(LitElement) {
+class LeapViewCatalogPage extends DatastarLit(LitElement) {
   static styles = css`
     :host {
       display: block;
       min-width: 0;
       min-height: 100svh;
-      background: var(--ld-bg-app);
-      color: var(--ld-fg-default);
-      font-family: var(--ld-font-family-ui, var(--fontStack-system));
+      background: var(--lv-bg-app);
+      color: var(--lv-fg-default);
+      font-family: var(--lv-font-family-ui, var(--fontStack-system));
     }
 
     section {
       display: grid;
-      width: min(100%, var(--ld-page-content-max-width));
+      width: min(100%, var(--lv-page-content-max-width));
       min-width: 0;
       min-height: 100svh;
       align-content: start;
@@ -40,20 +40,20 @@ class LibreDashCatalogPage extends DatastarLit(LitElement) {
 
     h1 {
       overflow: hidden;
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: var(--ld-font-size-title-sm);
-      font-weight: var(--ld-font-weight-strong);
-      line-height: var(--ld-line-height-compact);
+      font-size: var(--lv-font-size-title-sm);
+      font-weight: var(--lv-font-weight-strong);
+      line-height: var(--lv-line-height-compact);
     }
 
     .detail,
     .muted {
       margin-top: var(--base-size-4);
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-body-sm);
-      line-height: var(--ld-line-height-snug);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-body-sm);
+      line-height: var(--lv-line-height-snug);
     }
 
     .grid {
@@ -70,28 +70,28 @@ class LibreDashCatalogPage extends DatastarLit(LitElement) {
       min-width: 0;
       grid-template-rows: minmax(0, 1fr) auto;
       overflow: hidden;
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-panel);
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-panel);
       padding: var(--base-size-16);
-      box-shadow: var(--ld-shadow-resting-sm, none);
+      box-shadow: var(--lv-shadow-resting-sm, none);
     }
 
     .eyebrow {
       margin-bottom: var(--base-size-4);
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
-      line-height: var(--ld-line-height-tight);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
+      line-height: var(--lv-line-height-tight);
       text-transform: uppercase;
     }
 
     h2 {
       margin-top: var(--base-size-4);
-      color: var(--ld-fg-default);
-      font-size: var(--ld-font-size-body-md);
-      font-weight: var(--ld-font-weight-strong);
-      line-height: var(--ld-line-height-snug);
+      color: var(--lv-fg-default);
+      font-size: var(--lv-font-size-body-md);
+      font-weight: var(--lv-font-weight-strong);
+      line-height: var(--lv-line-height-snug);
     }
 
     .tags {
@@ -102,14 +102,14 @@ class LibreDashCatalogPage extends DatastarLit(LitElement) {
     }
 
     .tag {
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-full);
-      background: var(--ld-bg-panel-muted);
-      color: var(--ld-fg-muted);
+      border: var(--lv-border-muted);
+      border-radius: var(--lv-radius-full);
+      background: var(--lv-bg-panel-muted);
+      color: var(--lv-fg-muted);
       padding: 0 var(--base-size-8);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
-      line-height: var(--ld-line-height-snug);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
+      line-height: var(--lv-line-height-snug);
       text-transform: uppercase;
     }
 
@@ -119,26 +119,26 @@ class LibreDashCatalogPage extends DatastarLit(LitElement) {
       justify-content: space-between;
       gap: var(--base-size-12);
       margin-top: var(--base-size-16);
-      border-top: var(--ld-border-muted);
+      border-top: var(--lv-border-muted);
       padding-top: var(--base-size-12);
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
     }
 
     a {
       display: inline-grid;
-      min-height: var(--ld-button-height-sm);
+      min-height: var(--lv-button-height-sm);
       grid-auto-flow: column;
       place-items: center;
       gap: var(--base-size-6);
-      border: var(--borderWidth-default) solid var(--ld-button-accent-border-rest);
-      border-radius: var(--ld-button-radius);
-      background: var(--ld-button-accent-bg-rest);
-      color: var(--ld-button-accent-fg-rest);
-      padding: 0 var(--ld-button-padding-inline-sm);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-strong);
+      border: var(--borderWidth-default) solid var(--lv-button-accent-border-rest);
+      border-radius: var(--lv-button-radius);
+      background: var(--lv-button-accent-bg-rest);
+      color: var(--lv-button-accent-fg-rest);
+      padding: 0 var(--lv-button-padding-inline-sm);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-strong);
       text-decoration: none;
     }
   `
@@ -185,4 +185,4 @@ class LibreDashCatalogPage extends DatastarLit(LitElement) {
   }
 }
 
-customElements.define('ld-catalog-page', LibreDashCatalogPage)
+customElements.define('lv-catalog-page', LeapViewCatalogPage)

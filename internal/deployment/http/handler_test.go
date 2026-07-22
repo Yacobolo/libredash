@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/deployment/apiadapter"
+	"github.com/Yacobolo/leapview/internal/deployment/apiadapter"
 )
 
 func TestCreateResponseUsesProjectDeploymentWireContract(t *testing.T) {
@@ -56,7 +56,7 @@ func TestCreateRejectsEnvironmentOutsideInstanceBeforeMutation(t *testing.T) {
 
 func TestUnexpectedCoordinatorErrorIsGenericInternalServerError(t *testing.T) {
 	handler := NewHandler(Options{
-		Coordinator: &fakeCoordinator{err: errors.New("secret sqlite path /srv/libredash.db")},
+		Coordinator: &fakeCoordinator{err: errors.New("secret sqlite path /srv/leapview.db")},
 		CurrentPrincipal: func(*stdhttp.Request) (Principal, bool) {
 			return Principal{ID: "principal"}, true
 		},

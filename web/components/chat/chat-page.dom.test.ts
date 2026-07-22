@@ -70,22 +70,22 @@ for (const viewport of [
     try {
       await page.goto(baseURL)
       await page.waitForFunction(() => (
-        customElements.get('ld-chat-page')
-          && customElements.get('ld-chat-thread')
-          && customElements.get('ld-chat-composer')
+        customElements.get('lv-chat-page')
+          && customElements.get('lv-chat-thread')
+          && customElements.get('lv-chat-composer')
       ))
-      await page.locator('ld-chat-page').evaluate((element: any) => element.updateComplete)
+      await page.locator('lv-chat-page').evaluate((element: any) => element.updateComplete)
 
-      const state = await page.locator('ld-chat-page').evaluate((element: any) => {
+      const state = await page.locator('lv-chat-page').evaluate((element: any) => {
         const root = element.shadowRoot
-        const composer = root.querySelector('ld-chat-composer') as any
-        const thread = root.querySelector('ld-chat-thread') as any
+        const composer = root.querySelector('lv-chat-composer') as any
+        const thread = root.querySelector('lv-chat-thread') as any
         const threadRoot = thread?.shadowRoot
         return {
           title: root.querySelector('h1')?.textContent?.trim(),
           hasRouteHeader: Boolean(root.querySelector('header')),
           hasDescription: Boolean(root.querySelector('.conversation-description')),
-          hasSubSidebar: Boolean(root.querySelector('ld-sub-sidebar')),
+          hasSubSidebar: Boolean(root.querySelector('lv-sub-sidebar')),
           hasThread: Boolean(thread),
           hasComposer: Boolean(composer),
           emptyState: threadRoot?.querySelector('.empty')?.textContent?.trim() ?? null,
@@ -122,16 +122,16 @@ for (const viewport of [
     try {
       await page.goto(`${baseURL}/new`)
       await page.waitForFunction(() => (
-        customElements.get('ld-chat-page')
-          && customElements.get('ld-chat-composer')
+        customElements.get('lv-chat-page')
+          && customElements.get('lv-chat-composer')
       ))
-      await page.locator('ld-chat-page').evaluate((element: any) => element.updateComplete)
+      await page.locator('lv-chat-page').evaluate((element: any) => element.updateComplete)
 
-      const state = await page.locator('ld-chat-page').evaluate((element: any) => {
+      const state = await page.locator('lv-chat-page').evaluate((element: any) => {
         const root = element.shadowRoot
         const title = root.querySelector('h1') as HTMLElement
         const stage = root.querySelector('.new-chat-stage') as HTMLElement
-        const composer = root.querySelector('ld-chat-composer') as any
+        const composer = root.querySelector('lv-chat-composer') as any
         const composerRoot = composer?.shadowRoot
         const composerSurface = composerRoot?.querySelector('.composer-surface') as HTMLElement
         const titleRect = title.getBoundingClientRect()
@@ -146,8 +146,8 @@ for (const viewport of [
           title: title.textContent?.trim(),
           hasRouteHeader: Boolean(root.querySelector('header')),
           hasDescription: Boolean(root.querySelector('.conversation-description')),
-          hasStartConversationBox: Boolean(root.querySelector('ld-chat-thread')?.shadowRoot?.querySelector('.empty')),
-          hasThread: Boolean(root.querySelector('ld-chat-thread')),
+          hasStartConversationBox: Boolean(root.querySelector('lv-chat-thread')?.shadowRoot?.querySelector('.empty')),
+          hasThread: Boolean(root.querySelector('lv-chat-thread')),
           hasConversationTitlebar: Boolean(root.querySelector('.conversation-titlebar')),
           hasNewStage: Boolean(stage),
           hasComposer: Boolean(composer),
@@ -203,7 +203,7 @@ test('new chat navigates when the created conversation signal arrives', async ()
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {
     await page.goto(`${baseURL}/new`)
-    await page.waitForFunction(() => customElements.get('ld-chat-page'))
+    await page.waitForFunction(() => customElements.get('lv-chat-page'))
     await page.evaluate(async () => {
       const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev')
       mergePatch({ agent: { activeConversationId: 'c3' } })
@@ -219,16 +219,16 @@ test('chat list page renders searchable conversation history', async () => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {
     await page.goto(`${baseURL}/list`)
-    await page.waitForFunction(() => customElements.get('ld-chat-page') && customElements.get('ld-chat-list'))
-    await page.locator('ld-chat-page').evaluate((element: any) => element.updateComplete)
+    await page.waitForFunction(() => customElements.get('lv-chat-page') && customElements.get('lv-chat-list'))
+    await page.locator('lv-chat-page').evaluate((element: any) => element.updateComplete)
 
-    const initial = await page.locator('ld-chat-page').evaluate((element: any) => {
+    const initial = await page.locator('lv-chat-page').evaluate((element: any) => {
       const root = element.shadowRoot
-      const list = root.querySelector('ld-chat-list') as any
+      const list = root.querySelector('lv-chat-list') as any
       const listRoot = list?.shadowRoot
       return {
-        hasThread: Boolean(root.querySelector('ld-chat-thread')),
-        hasComposer: Boolean(root.querySelector('ld-chat-composer')),
+        hasThread: Boolean(root.querySelector('lv-chat-thread')),
+        hasComposer: Boolean(root.querySelector('lv-chat-composer')),
         hasRouteHeader: Boolean(root.querySelector('header')),
         hasChatList: Boolean(list),
         activeConversationId: list?.activeConversationId,
@@ -288,18 +288,18 @@ test('chat list page renders searchable conversation history', async () => {
     expect(initial.rows).toContainEqual({ href: '/chats/c1', label: 'Revenue check', active: 'true', text: 'Revenue check Jan 2', optionsLabel: 'More options for Revenue check' })
     expect(initial.rows).toContainEqual({ href: '/chats/c2', label: 'Inventory status', active: 'false', text: 'Inventory status Jan 3', optionsLabel: 'More options for Inventory status' })
 
-    await page.locator('ld-chat-page').evaluate((element: any) => {
-      const input = element.shadowRoot.querySelector('ld-chat-list').shadowRoot.querySelector('.search') as HTMLInputElement
+    await page.locator('lv-chat-page').evaluate((element: any) => {
+      const input = element.shadowRoot.querySelector('lv-chat-list').shadowRoot.querySelector('.search') as HTMLInputElement
       input.value = 'inventory'
       input.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true, inputType: 'insertText', data: 'inventory' }))
     })
-    await page.locator('ld-chat-page').evaluate(async (element: any) => {
-      const list = element.shadowRoot.querySelector('ld-chat-list') as any
+    await page.locator('lv-chat-page').evaluate(async (element: any) => {
+      const list = element.shadowRoot.querySelector('lv-chat-list') as any
       await list.updateComplete
     })
 
-    const filteredRows = await page.locator('ld-chat-page').evaluate((element: any) => {
-      const root = element.shadowRoot.querySelector('ld-chat-list').shadowRoot
+    const filteredRows = await page.locator('lv-chat-page').evaluate((element: any) => {
+      const root = element.shadowRoot.querySelector('lv-chat-list').shadowRoot
       return Array.from(root.querySelectorAll('tbody tr')).map((row: any) => ({
         href: row.querySelector('.primary-link')?.getAttribute('href'),
         text: row.textContent.replace(/\s+/g, ' ').trim(),
@@ -343,13 +343,13 @@ function testDocument(view = 'conversation', scenario: 'active' | 'new' = 'activ
       <head>
         <style>
           html, body { margin: 0; min-height: 100%; }
-          body { --fontStack-system: system-ui; --ld-bg-app: #f6f8fa; --ld-bg-panel: #fff; --ld-bg-control: #f6f8fa; --ld-bg-control-hover: #f3f4f6; --ld-bg-hover: #eff2f5; --ld-bg-accent-muted: #ddf4ff; --ld-fg-default: #24292f; --ld-fg-muted: #57606a; --ld-fg-link: #0969da; --ld-accent: #0969da; --ld-accent-fg: #fff; --ld-line-default: #d0d7de; --ld-line-muted: #d8dee4; --ld-line-accent: #0969da; --ld-line-accent-muted: #54aeff; --ld-border-default: 1px solid #d0d7de; --ld-border-muted: 1px solid #d8dee4; --ld-border-transparent: 1px solid transparent; --ld-border-width-focus: 2px; --ld-radius-default: 6px; --ld-radius-tight: 4px; --ld-radius-large: 12px; --base-size-4: 4px; --base-size-8: 8px; --base-size-10: 10px; --base-size-12: 12px; --base-size-16: 16px; --base-size-36: 36px; --ld-space-2xs: 2px; --ld-space-xs: 4px; --ld-space-sm: 8px; --ld-space-md: 12px; --ld-space-lg: 16px; --ld-space-control: 10px; --control-medium-size: 32px; --control-large-size: 40px; --control-medium-paddingInline-spacious: 16px; --ld-control-medium: 32px; --button-primary-bgColor-rest: #0969da; --button-primary-bgColor-hover: #0757b3; --button-primary-fgColor-rest: #fff; --ld-chat-stack-width: 760px; --ld-chat-thread-padding: 16px; --ld-chat-thread-padding-compact: 12px; --ld-font-size-caption: 12px; --ld-font-size-body-sm: 14px; --ld-font-size-title-sm: 16px; --ld-font-size-title-md: 20px; --ld-font-weight-strong: 600; --ld-font-weight-medium: 500; --ld-line-height-compact: 1.3; --ld-line-height-normal: 1.5; --ld-transition-fast: 160ms ease; --ld-transition-medium: 260ms ease; --shadow-resting-small: 0 1px 2px rgb(0 0 0 / .08); --ld-shadow-floating-sm: 0 8px 24px rgb(0 0 0 / .12); --duration-fast: 160ms; --ease-ld: ease; }
-          ld-chat-page { min-height: 720px; }
+          body { --fontStack-system: system-ui; --lv-bg-app: #f6f8fa; --lv-bg-panel: #fff; --lv-bg-control: #f6f8fa; --lv-bg-control-hover: #f3f4f6; --lv-bg-hover: #eff2f5; --lv-bg-accent-muted: #ddf4ff; --lv-fg-default: #24292f; --lv-fg-muted: #57606a; --lv-fg-link: #0969da; --lv-accent: #0969da; --lv-accent-fg: #fff; --lv-line-default: #d0d7de; --lv-line-muted: #d8dee4; --lv-line-accent: #0969da; --lv-line-accent-muted: #54aeff; --lv-border-default: 1px solid #d0d7de; --lv-border-muted: 1px solid #d8dee4; --lv-border-transparent: 1px solid transparent; --lv-border-width-focus: 2px; --lv-radius-default: 6px; --lv-radius-tight: 4px; --lv-radius-large: 12px; --base-size-4: 4px; --base-size-8: 8px; --base-size-10: 10px; --base-size-12: 12px; --base-size-16: 16px; --base-size-36: 36px; --lv-space-2xs: 2px; --lv-space-xs: 4px; --lv-space-sm: 8px; --lv-space-md: 12px; --lv-space-lg: 16px; --lv-space-control: 10px; --control-medium-size: 32px; --control-large-size: 40px; --control-medium-paddingInline-spacious: 16px; --lv-control-medium: 32px; --button-primary-bgColor-rest: #0969da; --button-primary-bgColor-hover: #0757b3; --button-primary-fgColor-rest: #fff; --lv-chat-stack-width: 760px; --lv-chat-thread-padding: 16px; --lv-chat-thread-padding-compact: 12px; --lv-font-size-caption: 12px; --lv-font-size-body-sm: 14px; --lv-font-size-title-sm: 16px; --lv-font-size-title-md: 20px; --lv-font-weight-strong: 600; --lv-font-weight-medium: 500; --lv-line-height-compact: 1.3; --lv-line-height-normal: 1.5; --lv-transition-fast: 160ms ease; --lv-transition-medium: 260ms ease; --shadow-resting-small: 0 1px 2px rgb(0 0 0 / .08); --lv-shadow-floating-sm: 0 8px 24px rgb(0 0 0 / .12); --duration-fast: 160ms; --ease-lv: ease; }
+          lv-chat-page { min-height: 720px; }
         </style>
       </head>
       <body>
         <main data-signals="${escapeHTML(JSON.stringify({ page, agent, visuals: {}, tables: {} }))}">
-          <ld-chat-page></ld-chat-page>
+          <lv-chat-page></lv-chat-page>
         </main>
         <script type="module" src="/static/vendor/datastar-1.0.2.js?v=dev"></script>
         <script type="module" src="/chat-page-under-test.js"></script>

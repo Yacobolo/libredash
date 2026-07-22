@@ -11,11 +11,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/deployment"
-	"github.com/Yacobolo/libredash/internal/manageddata"
-	platformdb "github.com/Yacobolo/libredash/internal/platform/db"
-	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
-	servingstatesqlite "github.com/Yacobolo/libredash/internal/servingstate/sqlite"
+	"github.com/Yacobolo/leapview/internal/deployment"
+	"github.com/Yacobolo/leapview/internal/manageddata"
+	platformdb "github.com/Yacobolo/leapview/internal/platform/db"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
+	servingstatesqlite "github.com/Yacobolo/leapview/internal/servingstate/sqlite"
 )
 
 type Repository struct {

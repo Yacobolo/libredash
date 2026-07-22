@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/manageddata"
+	"github.com/Yacobolo/leapview/internal/manageddata"
 	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite"
 )
@@ -145,7 +145,7 @@ func TestServingStateBindingsAllowMultipleCollections(t *testing.T) {
 func testRepository(t *testing.T) (context.Context, *sql.DB, *Repository) {
 	t.Helper()
 	ctx := context.Background()
-	store, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "libredash.db")+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
+	store, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "leapview.db")+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
 	if err != nil {
 		t.Fatal(err)
 	}

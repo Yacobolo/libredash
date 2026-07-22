@@ -28,12 +28,12 @@ export class VisualizationHost extends LitElement {
 
   static styles = [visualActionStyles, css`
     :host, .surface { display: block; width: 100%; height: 100%; min-width: 0; min-height: 0; }
-    :host { color: var(--ld-fg-default); background: var(--ld-chart-surface); font-family: var(--fontStack-system); }
-    .surface { position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr); background: var(--ld-chart-surface); }
+    :host { color: var(--lv-fg-default); background: var(--lv-chart-surface); font-family: var(--fontStack-system); }
+    .surface { position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr); background: var(--lv-chart-surface); }
     .surface.headerless { grid-template-rows: minmax(0, 1fr); }
-    .renderer-stage { position: relative; min-width: 0; min-height: 0; overflow: hidden; background: var(--ld-chart-surface); }
+    .renderer-stage { position: relative; min-width: 0; min-height: 0; overflow: hidden; background: var(--lv-chart-surface); }
     .renderer { display: block; width: 100%; height: 100%; min-width: 0; min-height: 0; overflow: hidden; }
-    .ld-kpi-card {
+    .lv-kpi-card {
       position: relative;
       display: grid;
       align-content: center;
@@ -44,43 +44,43 @@ export class VisualizationHost extends LitElement {
       gap: var(--base-size-4);
       padding: var(--base-size-12) var(--base-size-16) var(--base-size-12) var(--base-size-20);
       overflow: hidden;
-      background: var(--ld-chart-surface);
+      background: var(--lv-chart-surface);
     }
-    .ld-kpi-card::before {
+    .lv-kpi-card::before {
       content: '';
       position: absolute;
       inset-block: 0;
       inset-inline-start: 0;
       width: var(--base-size-4);
-      background: var(--ld-line-muted);
+      background: var(--lv-line-muted);
     }
-    .ld-kpi-card[data-tone='success']::before { background: var(--ld-fg-success); }
-    .ld-kpi-card[data-tone='warning']::before { background: var(--ld-fg-warning); }
-    .ld-kpi-card[data-tone='danger']::before { background: var(--ld-fg-danger); }
-    .ld-kpi-card[data-tone='ink']::before { background: var(--ld-data-1); }
-    .ld-visualization-label {
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-strong);
-      line-height: var(--ld-line-height-compact);
+    .lv-kpi-card[data-tone='success']::before { background: var(--lv-fg-success); }
+    .lv-kpi-card[data-tone='warning']::before { background: var(--lv-fg-warning); }
+    .lv-kpi-card[data-tone='danger']::before { background: var(--lv-fg-danger); }
+    .lv-kpi-card[data-tone='ink']::before { background: var(--lv-data-1); }
+    .lv-visualization-label {
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-strong);
+      line-height: var(--lv-line-height-compact);
       text-transform: uppercase;
     }
-    .ld-visualization-kpi {
+    .lv-visualization-kpi {
       display: block;
       overflow: hidden;
-      color: var(--ld-fg-default);
-      font-size: clamp(var(--ld-font-size-title-md, var(--ld-font-size-title-sm)), 2.5vw, var(--ld-font-size-display));
-      font-weight: var(--ld-font-weight-strong);
-      line-height: var(--ld-line-height-none);
+      color: var(--lv-fg-default);
+      font-size: clamp(var(--lv-font-size-title-md, var(--lv-font-size-title-sm)), 2.5vw, var(--lv-font-size-display));
+      font-weight: var(--lv-font-weight-strong);
+      line-height: var(--lv-line-height-none);
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .ld-visualization-note {
+    .lv-visualization-note {
       overflow: hidden;
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-body-sm);
-      font-weight: var(--ld-font-weight-medium);
-      line-height: var(--ld-line-height-compact);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-body-sm);
+      font-weight: var(--lv-font-weight-medium);
+      line-height: var(--lv-line-height-compact);
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -92,19 +92,19 @@ export class VisualizationHost extends LitElement {
       align-content: center;
       justify-items: center;
       gap: var(--base-size-8);
-      background: var(--ld-chart-surface);
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-body-sm);
-      font-weight: var(--ld-font-weight-medium);
+      background: var(--lv-chart-surface);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-body-sm);
+      font-weight: var(--lv-font-weight-medium);
     }
     .loading-spinner {
       width: var(--base-size-20);
       height: var(--base-size-20);
       box-sizing: border-box;
-      border: var(--base-size-2) solid var(--ld-line-muted);
-      border-top-color: var(--ld-fg-link);
-      border-radius: var(--ld-radius-full);
-      animation: visualization-loading-spin var(--ld-duration-slow) linear infinite;
+      border: var(--base-size-2) solid var(--lv-line-muted);
+      border-top-color: var(--lv-fg-link);
+      border-radius: var(--lv-radius-full);
+      animation: visualization-loading-spin var(--lv-duration-slow) linear infinite;
     }
     @keyframes visualization-loading-spin { to { transform: rotate(360deg); } }
     @media (prefers-reduced-motion: reduce) { .loading-spinner { animation: none; } }
@@ -116,8 +116,8 @@ export class VisualizationHost extends LitElement {
       justify-content: space-between;
       gap: var(--base-size-8);
       min-height: calc(var(--control-small-size) + var(--base-size-6));
-      border-bottom: var(--ld-border-default);
-      background: var(--ld-chart-surface);
+      border-bottom: var(--lv-border-default);
+      background: var(--lv-chart-surface);
       padding: var(--base-size-6) var(--base-size-8) var(--base-size-4) var(--control-small-paddingInline-normal);
       box-sizing: border-box;
     }
@@ -128,12 +128,12 @@ export class VisualizationHost extends LitElement {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: var(--ld-font-size-body-md);
-      font-weight: var(--ld-font-weight-strong);
+      font-size: var(--lv-font-size-body-md);
+      font-weight: var(--lv-font-weight-strong);
       letter-spacing: 0;
-      line-height: var(--ld-line-height-compact);
+      line-height: var(--lv-line-height-compact);
     }
-    .error { position: absolute; inset: 0; display: grid; place-items: center; color: var(--ld-fg-danger); padding: 1rem; text-align: center; background: var(--ld-bg-panel); }
+    .error { position: absolute; inset: 0; display: grid; place-items: center; color: var(--lv-fg-danger); padding: 1rem; text-align: center; background: var(--lv-bg-panel); }
     .fallback { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
   `]
 
@@ -160,7 +160,7 @@ export class VisualizationHost extends LitElement {
       visualizationRegistry,
       this.rendererContainer,
       (value): value is VisualizationEnvelope => validateGeneratedEnvelope(value) && validateEnvelopeBoundary(value),
-      (detail) => this.dispatchEvent(new CustomEvent('ld-visualization-observation', { bubbles: true, composed: true, detail })),
+      (detail) => this.dispatchEvent(new CustomEvent('lv-visualization-observation', { bubbles: true, composed: true, detail })),
     )
     this.resizeObserver = new ResizeObserver(([entry]) => {
       if (!entry) return
@@ -234,7 +234,7 @@ export class VisualizationHost extends LitElement {
         </header>
       ` : null}
       <div class="renderer-stage" aria-busy=${String(this.applying)}>
-        <div class="renderer" role="group" aria-label=${this.envelope?.spec.accessibility.title ?? 'Visualization'} aria-describedby="visualization-fallback" aria-busy=${String(this.applying)} aria-hidden=${String(!this.presented)} ?inert=${!this.presented} @ld-map-observation=${this.forwardAdapterObservation}></div>
+        <div class="renderer" role="group" aria-label=${this.envelope?.spec.accessibility.title ?? 'Visualization'} aria-describedby="visualization-fallback" aria-busy=${String(this.applying)} aria-hidden=${String(!this.presented)} ?inert=${!this.presented} @lv-map-observation=${this.forwardAdapterObservation}></div>
         ${showInitialLoading ? html`<div class="initial-loading" data-visualization-loading role="status" aria-live="polite">
           <span class="loading-spinner" aria-hidden="true"></span>
           <span>${loadingLabel}</span>
@@ -295,7 +295,7 @@ export class VisualizationHost extends LitElement {
       this.openVisualFocus(this, detail)
       return
     }
-    this.dispatchEvent(new CustomEvent('ld-visual-action', {
+    this.dispatchEvent(new CustomEvent('lv-visual-action', {
       bubbles: true,
       composed: true,
       detail,
@@ -306,13 +306,13 @@ export class VisualizationHost extends LitElement {
     const detail = adapterObservation(event.detail)
     if (!detail) return
     event.stopPropagation()
-    this.dispatchEvent(new CustomEvent('ld-visualization-observation', { bubbles: true, composed: true, detail }))
+    this.dispatchEvent(new CustomEvent('lv-visualization-observation', { bubbles: true, composed: true, detail }))
   }
 
   private connectContextListeners(): void {
     if (this.contextListenersConnected) return
     this.contextListenersConnected = true
-    document.addEventListener('libredash-theme-applied', this.handleRendererContextChange)
+    document.addEventListener('leapview-theme-applied', this.handleRendererContextChange)
     this.reducedMotionMedia = window.matchMedia?.('(prefers-reduced-motion: reduce)')
     this.reducedMotionMedia?.addEventListener?.('change', this.handleRendererContextChange)
   }
@@ -320,7 +320,7 @@ export class VisualizationHost extends LitElement {
   private disconnectContextListeners(): void {
     if (!this.contextListenersConnected) return
     this.contextListenersConnected = false
-    document.removeEventListener('libredash-theme-applied', this.handleRendererContextChange)
+    document.removeEventListener('leapview-theme-applied', this.handleRendererContextChange)
     this.reducedMotionMedia?.removeEventListener?.('change', this.handleRendererContextChange)
     this.reducedMotionMedia = undefined
   }
@@ -341,15 +341,15 @@ export class VisualizationHost extends LitElement {
       devicePixelRatio: window.devicePixelRatio || 1,
       fontFamily: styles.fontFamily || defaultRendererContext.fontFamily,
       colors: {
-        foreground: color('--ld-fg-default', defaultRendererContext.colors.foreground),
-        muted: color('--ld-chart-axis', defaultRendererContext.colors.muted),
-        grid: color('--ld-chart-grid', defaultRendererContext.colors.grid),
-        surface: color('--ld-chart-surface', defaultRendererContext.colors.surface),
-        accent: color('--ld-fg-accent', defaultRendererContext.colors.accent),
-        success: color('--ld-fg-success', defaultRendererContext.colors.success),
-        attention: color('--ld-fg-warning', defaultRendererContext.colors.attention),
-        danger: color('--ld-fg-danger', defaultRendererContext.colors.danger),
-        data: Array.from({ length: 8 }, (_, index) => color(`--ld-data-${index + 1}`, defaultRendererContext.colors.data[index]!)),
+        foreground: color('--lv-fg-default', defaultRendererContext.colors.foreground),
+        muted: color('--lv-chart-axis', defaultRendererContext.colors.muted),
+        grid: color('--lv-chart-grid', defaultRendererContext.colors.grid),
+        surface: color('--lv-chart-surface', defaultRendererContext.colors.surface),
+        accent: color('--lv-fg-accent', defaultRendererContext.colors.accent),
+        success: color('--lv-fg-success', defaultRendererContext.colors.success),
+        attention: color('--lv-fg-warning', defaultRendererContext.colors.attention),
+        danger: color('--lv-fg-danger', defaultRendererContext.colors.danger),
+        data: Array.from({ length: 8 }, (_, index) => color(`--lv-data-${index + 1}`, defaultRendererContext.colors.data[index]!)),
       },
     }
   }
@@ -363,6 +363,6 @@ export class VisualizationHost extends LitElement {
   }
 }
 
-if (!customElements.get('ld-visualization-host')) customElements.define('ld-visualization-host', VisualizationHost)
+if (!customElements.get('lv-visualization-host')) customElements.define('lv-visualization-host', VisualizationHost)
 
-declare global { interface HTMLElementTagNameMap { 'ld-visualization-host': VisualizationHost } }
+declare global { interface HTMLElementTagNameMap { 'lv-visualization-host': VisualizationHost } }

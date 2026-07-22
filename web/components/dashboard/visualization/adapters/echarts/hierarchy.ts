@@ -2,7 +2,7 @@ import type { VisualizationEnvelope } from '../../../../../generated/visualizati
 import type { RendererContext } from '../../host-controller'
 import { escapeHTML, formatField, inlineDataset, legend, type EChartsTranslation } from './common'
 
-type HierarchyNode = { name: string; value?: unknown; __ld_dataset: string; __ld_row_index: number; children?: HierarchyNode[] }
+type HierarchyNode = { name: string; value?: unknown; __lv_dataset: string; __lv_row_index: number; children?: HierarchyNode[] }
 
 export function hierarchyOption(envelope: VisualizationEnvelope, context: RendererContext): EChartsTranslation {
   const spec = envelope.spec
@@ -15,7 +15,7 @@ export function hierarchyOption(envelope: VisualizationEnvelope, context: Render
     const valueIndex = spec.value ? columns.indexOf(spec.value.field) : -1
     const links = (dataset?.rows ?? []).map((row, rowIndex) => ({
       source: String(row[sourceIndex]), target: String(row[targetIndex]), value: valueIndex >= 0 ? row[valueIndex] : undefined,
-      __ld_dataset: dataset?.id ?? 'primary', __ld_row_index: rowIndex,
+      __lv_dataset: dataset?.id ?? 'primary', __lv_row_index: rowIndex,
     }))
     const names = [...new Set(links.flatMap((link) => [link.source, link.target]))]
     const series: EChartsTranslation = {
@@ -73,7 +73,7 @@ export function hierarchyData(envelope: VisualizationEnvelope): HierarchyNode[] 
     const parent = parentIndex >= 0 && row[parentIndex] !== null && row[parentIndex] !== undefined && row[parentIndex] !== '' ? String(row[parentIndex]) : undefined
     const id = parent ? `${parent}\u001f${escapeSegment(name)}` : escapeSegment(name)
     if (byID.has(id)) throw new Error(`duplicate hierarchy node ${JSON.stringify(id)}`)
-    byID.set(id, { name, value: valueIndex >= 0 ? row[valueIndex] : undefined, __ld_dataset: dataset.id, __ld_row_index: rowIndex })
+    byID.set(id, { name, value: valueIndex >= 0 ? row[valueIndex] : undefined, __lv_dataset: dataset.id, __lv_row_index: rowIndex })
     parentByID.set(id, parent)
   }
   const roots: HierarchyNode[] = []

@@ -1,7 +1,7 @@
 {
   "$defs": {
     "#APIVersion": {
-      "const": "libredash.dev/v1"
+      "const": "leapview.dev/v1"
     },
     "#FieldRef": {
       "pattern": "^[A-Za-z_][A-Za-z0-9_]*\\.[A-Za-z_][A-Za-z0-9_]*$",

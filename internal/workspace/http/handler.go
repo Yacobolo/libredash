@@ -13,15 +13,15 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/access"
-	"github.com/Yacobolo/libredash/internal/api"
-	"github.com/Yacobolo/libredash/internal/assetnav"
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	"github.com/Yacobolo/libredash/internal/ui"
-	uisignals "github.com/Yacobolo/libredash/internal/ui/signals"
-	"github.com/Yacobolo/libredash/internal/workspace"
-	workspacedatastar "github.com/Yacobolo/libredash/internal/workspace/datastar"
-	"github.com/Yacobolo/libredash/pkg/pagestream"
+	"github.com/Yacobolo/leapview/internal/access"
+	"github.com/Yacobolo/leapview/internal/api"
+	"github.com/Yacobolo/leapview/internal/assetnav"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	"github.com/Yacobolo/leapview/internal/ui"
+	uisignals "github.com/Yacobolo/leapview/internal/ui/signals"
+	"github.com/Yacobolo/leapview/internal/workspace"
+	workspacedatastar "github.com/Yacobolo/leapview/internal/workspace/datastar"
+	"github.com/Yacobolo/leapview/pkg/pagestream"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -1411,7 +1411,7 @@ func writeJSON(w nethttp.ResponseWriter, status int, value any) {
 func writeJSONError(w nethttp.ResponseWriter, err error, status int) {
 	w.Header().Set("Content-Type", "application/problem+json")
 	writeJSON(w, status, map[string]any{
-		"type": "https://libredash.dev/problems/http-error", "title": nethttp.StatusText(status),
+		"type": "https://leapview.dev/problems/http-error", "title": nethttp.StatusText(status),
 		"status": status, "detail": err.Error(), "instance": "", "code": fmt.Sprintf("HTTP_%d", status),
 		"requestId": w.Header().Get("X-Request-ID"), "errors": []any{},
 	})

@@ -53,7 +53,7 @@ type docsReadOutput struct {
 
 func newDocumentationMCPHandler() stdhttp.Handler {
 	server := mcp.NewServer(
-		&mcp.Implementation{Name: "libredash-docs", Title: "LeapView documentation", Version: "1.0.0"},
+		&mcp.Implementation{Name: "leapview-docs", Title: "LeapView documentation", Version: "1.0.0"},
 		&mcp.ServerOptions{Instructions: "Read-only generated LeapView documentation. Search before reading a focused document, command, or API operation. This server cannot execute LeapView commands or API operations."},
 	)
 	annotations := &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true, DestructiveHint: boolPointer(false), OpenWorldHint: boolPointer(false)}

@@ -6,7 +6,7 @@ package definition
 import (
 	"fmt"
 
-	"github.com/Yacobolo/libredash/internal/visualization/ir"
+	"github.com/Yacobolo/leapview/internal/visualization/ir"
 )
 
 const (

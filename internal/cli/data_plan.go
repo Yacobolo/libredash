@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/manageddata"
-	"github.com/Yacobolo/libredash/internal/manageddata/localplan"
+	"github.com/Yacobolo/leapview/internal/manageddata"
+	"github.com/Yacobolo/leapview/internal/manageddata/localplan"
 	"github.com/spf13/cobra"
 )
 
@@ -74,7 +74,7 @@ func dataPlanCommand(ctx context.Context, planner dataPlanner) *cobra.Command {
 			return writeDataPlan(cmd.OutOrStdout(), result)
 		},
 	}
-	command.Flags().StringVar(&projectPath, "project", filepath.Join("dashboards", "libredash.yaml"), "project path")
+	command.Flags().StringVar(&projectPath, "project", filepath.Join("dashboards", "leapview.yaml"), "project path")
 	command.Flags().StringVar(&connection, "connection", "", "project-global managed connection")
 	command.Flags().StringVar(&from, "from", "", "local filesystem root to ingest")
 	command.Flags().StringVar(&previousManifestPath, "previous-manifest", "", "prior managed data manifest path")

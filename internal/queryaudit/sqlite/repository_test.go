@@ -5,13 +5,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/platform"
-	"github.com/Yacobolo/libredash/internal/queryaudit"
+	"github.com/Yacobolo/leapview/internal/platform"
+	"github.com/Yacobolo/leapview/internal/queryaudit"
 )
 
 func TestRepositoryRecordsAndFiltersQueryEvents(t *testing.T) {
 	ctx := context.Background()
-	store, err := platform.Open(ctx, t.TempDir()+"/libredash.db")
+	store, err := platform.Open(ctx, t.TempDir()+"/leapview.db")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func TestRepositoryRecordsAndFiltersQueryEvents(t *testing.T) {
 
 func TestRepositoryRedactsSecretsBeforePersistingQueryEvents(t *testing.T) {
 	ctx := context.Background()
-	store, err := platform.Open(ctx, t.TempDir()+"/libredash.db")
+	store, err := platform.Open(ctx, t.TempDir()+"/leapview.db")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +129,7 @@ func TestRepositoryRedactsSecretsBeforePersistingQueryEvents(t *testing.T) {
 
 func TestRepositoryRejectsQueryEventWithoutPrincipal(t *testing.T) {
 	ctx := context.Background()
-	store, err := platform.Open(ctx, t.TempDir()+"/libredash.db")
+	store, err := platform.Open(ctx, t.TempDir()+"/leapview.db")
 	if err != nil {
 		t.Fatal(err)
 	}

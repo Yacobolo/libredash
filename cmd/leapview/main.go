@@ -4,7 +4,7 @@ import (
 	"context"
 	"log"
 
-	"github.com/Yacobolo/libredash/internal/cli"
+	"github.com/Yacobolo/leapview/internal/cli"
 )
 
 func main() {

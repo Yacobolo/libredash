@@ -34,8 +34,8 @@ Refreshes replace the served data atomically. DuckLake snapshots provide interna
 Each LeapView instance has one server process, one configured environment, one control-plane database, one global DuckLake catalog, and one analytical data store:
 
 ```text
-.libredash/
-  libredash.db              # LeapView control-plane tables
+.leapview/
+  leapview.db              # LeapView control-plane tables
   ducklake/catalog.sqlite   # global DuckLake analytical metadata catalog
   data/                     # DuckLake-managed Parquet files
   artifacts/                # workspace bundles
@@ -93,8 +93,8 @@ DuckLake:
     model.customers -> data/model/customers/*.parquet
 
 DuckDB:
-  ATTACH 'ducklake:sqlite:.libredash/ducklake/catalog.sqlite' AS lake
-    (DATA_PATH '.libredash/data', SNAPSHOT_VERSION 42)
+  ATTACH 'ducklake:sqlite:.leapview/ducklake/catalog.sqlite' AS lake
+    (DATA_PATH '.leapview/data', SNAPSHOT_VERSION 42)
   SELECT ... FROM lake.model.orders
 ```
 

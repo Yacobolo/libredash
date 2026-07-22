@@ -4,8 +4,8 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/Yacobolo/libredash/internal/ui"
-	"github.com/Yacobolo/libredash/internal/workspace"
+	"github.com/Yacobolo/leapview/internal/ui"
+	"github.com/Yacobolo/leapview/internal/workspace"
 	"github.com/gorilla/csrf"
 )
 

@@ -1,6 +1,6 @@
 # Semantic Model Design
 
-LibreDash uses a model-scoped, multi-fact semantic layer:
+LeapView uses a model-scoped, multi-fact semantic layer:
 
 ```text
 sources -> models -> semantic model -> dashboards
@@ -11,7 +11,7 @@ Sources describe physical inputs. Models prepare DuckDB tables at useful grains.
 ## Contract
 
 ```yaml
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: SemanticModel
 metadata:
   workspace: movielens

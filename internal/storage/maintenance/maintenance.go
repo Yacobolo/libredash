@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	analyticsducklake "github.com/Yacobolo/libredash/internal/analytics/ducklake"
-	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
+	analyticsducklake "github.com/Yacobolo/leapview/internal/analytics/ducklake"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
 )
 
 type ServingStateRepository interface {

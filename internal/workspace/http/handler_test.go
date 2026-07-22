@@ -3,7 +3,7 @@ package http
 import (
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/workspace"
+	"github.com/Yacobolo/leapview/internal/workspace"
 )
 
 func TestAssetDTOUsesLogicalIDAndTypedPayload(t *testing.T) {

@@ -18,7 +18,7 @@ declare global {
       VantaBase?: {
         prototype?: {
           initThree?: () => void
-          libreDashP5Only?: boolean
+          leapViewP5Only?: boolean
         }
       }
     }
@@ -29,15 +29,15 @@ type VantaEffect = {
   destroy(): void
 }
 
-class LibreDashTopologyBackground extends LitElement {
+class LeapViewTopologyBackground extends LitElement {
   private effect?: VantaEffect
   private refreshFrame?: number
   private readonly themeListener = () => this.scheduleEffectRefresh()
 
   static styles = css`
     :host {
-      --topology-accent: var(--ld-accent, var(--bgColor-accent-emphasis));
-      --topology-bg: var(--ld-topology-bg, var(--bgColor-inverse));
+      --topology-accent: var(--lv-accent, var(--bgColor-accent-emphasis));
+      --topology-bg: var(--lv-topology-bg, var(--bgColor-inverse));
       position: absolute;
       inset: 0;
       display: block;
@@ -59,11 +59,11 @@ class LibreDashTopologyBackground extends LitElement {
 
   connectedCallback() {
     super.connectedCallback()
-    document.addEventListener('libredash-theme-applied', this.themeListener)
+    document.addEventListener('leapview-theme-applied', this.themeListener)
   }
 
   disconnectedCallback() {
-    document.removeEventListener('libredash-theme-applied', this.themeListener)
+    document.removeEventListener('leapview-theme-applied', this.themeListener)
     if (this.refreshFrame) window.cancelAnimationFrame(this.refreshFrame)
     this.destroyEffect()
     super.disconnectedCallback()
@@ -95,8 +95,8 @@ class LibreDashTopologyBackground extends LitElement {
     if (!mount || this.effect) return
 
     skipUnusedThreeInit()
-    const color = cssColor('--bgColor-accent-emphasis', '--ld-accent')
-    const backgroundColor = cssColor('--ld-topology-bg', '--bgColor-inverse')
+    const color = cssColor('--bgColor-accent-emphasis', '--lv-accent')
+    const backgroundColor = cssColor('--lv-topology-bg', '--bgColor-inverse')
     if (!color || !backgroundColor) return
 
     this.effect = topology({
@@ -122,9 +122,9 @@ class LibreDashTopologyBackground extends LitElement {
 
 function skipUnusedThreeInit() {
   const prototype = window.VANTA?.VantaBase?.prototype
-  if (!prototype || prototype.libreDashP5Only) return
+  if (!prototype || prototype.leapViewP5Only) return
   prototype.initThree = () => {}
-  prototype.libreDashP5Only = true
+  prototype.leapViewP5Only = true
 }
 
 function cssColor(variableName: string, fallbackVariableName: string) {
@@ -160,4 +160,4 @@ function toHex(value: string | number) {
   return Math.round(Number(value)).toString(16).padStart(2, '0')
 }
 
-customElements.define('ld-topology-background', LibreDashTopologyBackground)
+customElements.define('lv-topology-background', LeapViewTopologyBackground)

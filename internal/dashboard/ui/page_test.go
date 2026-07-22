@@ -1,17 +1,17 @@
 package ui
 
 import (
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 	"html"
 	"net/url"
 	"strings"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	dashboarddefinition "github.com/Yacobolo/libredash/internal/dashboard/definition"
-	visualizationdefinition "github.com/Yacobolo/libredash/internal/visualization/definition"
-	workspacecompiler "github.com/Yacobolo/libredash/internal/workspace/compiler"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
+	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
+	workspacecompiler "github.com/Yacobolo/leapview/internal/workspace/compiler"
 )
 
 func fieldRefs(fields ...string) []reportdef.FieldRef {
@@ -86,7 +86,7 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 	}
 
 	showcase := renderPageForTest(t, compiled, model, report.Pages[0])
-	if !strings.Contains(showcase, `<ld-dashboard-page`) || !strings.Contains(showcase, `data-on:ld-filters-change`) || !strings.Contains(showcase, `data-on:ld-interaction-select`) {
+	if !strings.Contains(showcase, `<lv-dashboard-page`) || !strings.Contains(showcase, `data-on:lv-filters-change`) || !strings.Contains(showcase, `data-on:lv-interaction-select`) {
 		t.Fatalf("showcase page did not mount dashboard route root with command bridge:\n%s", showcase)
 	}
 	if strings.Contains(showcase, `data-signals=`) || !strings.Contains(showcase, `data-init="@get('/updates?`) {
@@ -103,17 +103,17 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 	if !strings.Contains(showcase, `/commands/reload`) || strings.Contains(showcase, `data-url-param-shape`) {
 		t.Fatalf("showcase page did not wire dashboard reload command without URL shape attribute:\n%s", showcase)
 	}
-	for _, attr := range []string{"data-on:ld-filters-change", "data-on:ld-filters-refresh", "data-on:datastar-url-params-sync__window"} {
+	for _, attr := range []string{"data-on:lv-filters-change", "data-on:lv-filters-refresh", "data-on:datastar-url-params-sync__window"} {
 		segment := renderedAttrSegment(showcase, attr)
 		if !strings.Contains(segment, `/commands/reload`) || strings.Contains(segment, `@get($runtime.updatesUrl`) {
 			t.Fatalf("%s segment = %q, want reload command without updates stream reopen:\n%s", attr, segment, showcase)
 		}
 	}
 	commandSignalFilters := map[string][]string{
-		"data-on:ld-interaction-select":           {"runtime", "interactionCommand"},
-		"data-on:ld-visualization-window-request": {"runtime", "visualWindowCommand"},
-		"data-on:ld-filters-change":               {"runtime", "filters[.]controls"},
-		"data-on:ld-selection-clear":              {"runtime"},
+		"data-on:lv-interaction-select":           {"runtime", "interactionCommand"},
+		"data-on:lv-visualization-window-request": {"runtime", "visualWindowCommand"},
+		"data-on:lv-filters-change":               {"runtime", "filters[.]controls"},
+		"data-on:lv-selection-clear":              {"runtime"},
 	}
 	for attr, signalPaths := range commandSignalFilters {
 		segment := renderedAttrSegment(showcase, attr)
@@ -131,7 +131,7 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 			}
 		}
 	}
-	if strings.Contains(showcase, "data-on:ld-visual-window-change") {
+	if strings.Contains(showcase, "data-on:lv-visual-window-change") {
 		t.Fatalf("showcase page retained the retired table-specific window event:\n%s", showcase)
 	}
 	showcaseSignals := html.UnescapeString(jsonString(BootstrapSignals("client", "stream-instance", dashboard.Catalog{}, compiled, model, definitions, report.Pages, report.Pages[0], dashboard.Filters{})))
@@ -242,15 +242,15 @@ func renderedAttrSegment(body, name string) string {
 func assertNoDashboardProductDOM(t *testing.T, body string) {
 	t.Helper()
 	for _, tag := range []string{
-		"ld-sub-sidebar",
-		"ld-report-canvas",
-		"ld-filter-panel",
-		"ld-filter-card",
-		"ld-kpi-card",
-		"ld-echart",
-		"ld-report-table",
-		"ld-report-footer",
-		"ld-visual-modal",
+		"lv-sub-sidebar",
+		"lv-report-canvas",
+		"lv-filter-panel",
+		"lv-filter-card",
+		"lv-kpi-card",
+		"lv-echart",
+		"lv-report-table",
+		"lv-report-footer",
+		"lv-visual-modal",
 	} {
 		if strings.Contains(body, "<"+tag) {
 			t.Fatalf("Go rendered dashboard product DOM <%s> below route root:\n%s", tag, body)

@@ -1,7 +1,7 @@
 using Http;
 using TypeSpec.OpenAPI;
 
-namespace LibreDashAPI;
+namespace LeapViewAPI;
 
 @minLength(1)
 @maxLength(200)

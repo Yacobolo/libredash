@@ -8,15 +8,15 @@ import (
 	"sort"
 	"strings"
 
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	dashboarddefinition "github.com/Yacobolo/libredash/internal/dashboard/definition"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
-	visualizationdefinition "github.com/Yacobolo/libredash/internal/visualization/definition"
-	visualizationgeometry "github.com/Yacobolo/libredash/internal/visualization/geometry"
-	visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
-	visualizationmapasset "github.com/Yacobolo/libredash/internal/visualization/mapasset"
-	visualizationruntime "github.com/Yacobolo/libredash/internal/visualization/runtime"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
+	visualizationgeometry "github.com/Yacobolo/leapview/internal/visualization/geometry"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
+	visualizationmapasset "github.com/Yacobolo/leapview/internal/visualization/mapasset"
+	visualizationruntime "github.com/Yacobolo/leapview/internal/visualization/runtime"
 )
 
 func CompileDashboardDefinition(authored *reportdef.Dashboard, visualizations map[string]visualizationdefinition.Definition) (dashboarddefinition.Definition, error) {

@@ -18,19 +18,19 @@ const emptyChrome: ChromeSignal = {
   },
 }
 
-class LibreDashAppShell extends DatastarLit(LitElement) {
+class LeapViewAppShell extends DatastarLit(LitElement) {
   static styles = css`
     :host {
       display: grid;
       min-height: 100svh;
       grid-template-columns: auto minmax(0, 1fr);
-      background: var(--ld-bg-app);
-      color: var(--ld-fg-default);
-      font-family: var(--ld-font-family-ui, var(--fontStack-system));
+      background: var(--lv-bg-app);
+      color: var(--lv-fg-default);
+      font-family: var(--lv-font-family-ui, var(--fontStack-system));
     }
 
-    ld-sidebar {
-      border-right: var(--ld-border-default);
+    lv-sidebar {
+      border-right: var(--lv-border-default);
     }
 
     main {
@@ -49,9 +49,9 @@ class LibreDashAppShell extends DatastarLit(LitElement) {
         grid-template-columns: 1fr;
       }
 
-      ld-sidebar {
+      lv-sidebar {
         border-right: 0;
-        border-bottom: var(--ld-border-default);
+        border-bottom: var(--lv-border-default);
       }
     }
   `
@@ -76,7 +76,7 @@ class LibreDashAppShell extends DatastarLit(LitElement) {
 
   render() {
     return html`
-      <ld-sidebar .config=${this.chrome.sidebar}></ld-sidebar>
+      <lv-sidebar .config=${this.chrome.sidebar}></lv-sidebar>
       <main>
         <slot name="page"></slot>
       </main>
@@ -87,7 +87,7 @@ class LibreDashAppShell extends DatastarLit(LitElement) {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
     if (event.composedPath().some((node) => node instanceof HTMLAnchorElement)) return
 
-    const sidebar = this.shadowRoot?.querySelector('ld-sidebar') as HTMLElement | null
+    const sidebar = this.shadowRoot?.querySelector('lv-sidebar') as HTMLElement | null
     const root = sidebar?.shadowRoot
     if (!sidebar || !root) return
 
@@ -108,4 +108,4 @@ class LibreDashAppShell extends DatastarLit(LitElement) {
   }
 }
 
-customElements.define('ld-app-shell', LibreDashAppShell)
+customElements.define('lv-app-shell', LeapViewAppShell)

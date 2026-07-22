@@ -1,6 +1,6 @@
 targets:
-  - name: libredash-v1
-    typespec_dir: .apigen/libredash-v1
+  - name: leapview-v1
+    typespec_dir: .apigen/leapview-v1
     ir_out: gen/json-ir.json
     openapi_out: gen/openapi.yaml
     go_out:

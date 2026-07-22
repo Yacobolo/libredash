@@ -12,10 +12,10 @@ import (
 	"text/tabwriter"
 	"time"
 
-	agenttools "github.com/Yacobolo/libredash/internal/agent/tools"
-	"github.com/Yacobolo/libredash/internal/api"
-	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
-	agentcore "github.com/Yacobolo/libredash/pkg/agent"
+	agenttools "github.com/Yacobolo/leapview/internal/agent/tools"
+	"github.com/Yacobolo/leapview/internal/api"
+	apigenapi "github.com/Yacobolo/leapview/internal/api/gen"
+	agentcore "github.com/Yacobolo/leapview/pkg/agent"
 	apigenagenttool "github.com/Yacobolo/toolbelt/apigen/runtime/agenttool"
 	"github.com/spf13/cobra"
 )

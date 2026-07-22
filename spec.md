@@ -1,6 +1,6 @@
-# LibreDash Architecture Spec
+# LeapView Architecture Spec
 
-This document defines the target architecture for LibreDash: a feature-oriented modular monolith with ports and adapters. The goal is cohesive product capabilities, explicit infrastructure boundaries, and a codebase that grows without turning `internal/app`, `platform`, or global service objects into new monoliths.
+This document defines the target architecture for LeapView: a feature-oriented modular monolith with ports and adapters. The goal is cohesive product capabilities, explicit infrastructure boundaries, and a codebase that grows without turning `internal/app`, `platform`, or global service objects into new monoliths.
 
 ## Core Rules
 
@@ -81,7 +81,7 @@ The authored product contract is:
 sources -> models -> semantic model -> dashboards
 ```
 
-LibreDash is assets-as-code. Authored YAML in Git is the source of truth. The compiler turns authored contracts into a normalized workspace and stable asset graph. Serving states publish immutable graph snapshots. Runtime stores never become authoring sources.
+LeapView is assets-as-code. Authored YAML in Git is the source of truth. The compiler turns authored contracts into a normalized workspace and stable asset graph. Serving states publish immutable graph snapshots. Runtime stores never become authoring sources.
 
 Not product/schema concepts in the v1 contract:
 
@@ -292,7 +292,7 @@ Broad interfaces must split when consumers diverge. Dashboard streaming, semanti
 
 ## Product Interfaces
 
-LibreDash has peer product interfaces:
+LeapView has peer product interfaces:
 
 ```text
 REST API / APIGen

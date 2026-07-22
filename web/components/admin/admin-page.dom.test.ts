@@ -55,15 +55,15 @@ for (const viewport of [
     try {
       await page.goto(baseURL)
       await page.waitForFunction(() => (
-        customElements.get('ld-admin-page')
-          && customElements.get('ld-sub-sidebar')
-          && customElements.get('ld-record-table')
+        customElements.get('lv-admin-page')
+          && customElements.get('lv-sub-sidebar')
+          && customElements.get('lv-record-table')
       ))
-      await page.locator('ld-admin-page').evaluate((element: any) => element.updateComplete)
+      await page.locator('lv-admin-page').evaluate((element: any) => element.updateComplete)
 
-      const state = await page.locator('ld-admin-page').evaluate((element: any) => {
+      const state = await page.locator('lv-admin-page').evaluate((element: any) => {
         const root = element.shadowRoot
-        const subSidebar = root.querySelector('ld-sub-sidebar') as HTMLElement
+        const subSidebar = root.querySelector('lv-sub-sidebar') as HTMLElement
         const subSidebarAside = subSidebar?.shadowRoot?.querySelector('aside') as HTMLElement | null
         const main = root.querySelector('.main') as HTMLElement
         const mainRect = main.getBoundingClientRect()
@@ -75,13 +75,13 @@ for (const viewport of [
         const isMobile = window.innerWidth <= 640
         return {
           title: root.querySelector('h1')?.textContent?.trim(),
-          hasSidebar: Boolean(root.querySelector('ld-sub-sidebar')),
+          hasSidebar: Boolean(root.querySelector('lv-sub-sidebar')),
           sidebarBorderRight: subSidebar ? getComputedStyle(subSidebar).borderRight : '',
           sidebarBackground: subSidebarAside ? getComputedStyle(subSidebarAside).backgroundColor : '',
           mainCentered: isMobile || Math.abs((mainRect.left + mainRect.width / 2) - availableCenter) <= 1,
           mainConstrained: isMobile || Math.round(mainRect.width) < Math.round(availableRight - availableLeft),
-          hasRecordTable: Boolean(root.querySelector('ld-record-table')),
-          recordTableVariant: root.querySelector('ld-record-table')?.getAttribute('variant'),
+          hasRecordTable: Boolean(root.querySelector('lv-record-table')),
+          recordTableVariant: root.querySelector('lv-record-table')?.getAttribute('variant'),
           text: root.textContent,
         }
       })
@@ -107,10 +107,10 @@ test('admin navigation remains pinned while content scrolls on desktop', async (
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-admin-page') && customElements.get('ld-sub-sidebar') && customElements.get('ld-record-table'))
+    await page.waitForFunction(() => customElements.get('lv-admin-page') && customElements.get('lv-sub-sidebar') && customElements.get('lv-record-table'))
 
       const state = await page.evaluate(async () => {
-        const element = document.createElement('ld-admin-page') as any
+        const element = document.createElement('lv-admin-page') as any
         element.style.minHeight = '1600px'
       const pageSignal = {
         kind: 'admin',
@@ -120,7 +120,7 @@ test('admin navigation remains pinned while content scrolls on desktop', async (
           label: 'Admin',
           railLabel: 'Admin',
           ariaLabel: 'Admin navigation',
-          storageKey: 'libredash-admin-sidebar-collapsed',
+          storageKey: 'leapview-admin-sidebar-collapsed',
           activeId: 'principals',
           collapsible: false,
           numbered: false,
@@ -133,7 +133,7 @@ test('admin navigation remains pinned while content scrolls on desktop', async (
           ],
         },
         headerTitle: 'Principals',
-        headerDetail: 'Users and service principals known to LibreDash.',
+        headerDetail: 'Users and service principals known to LeapView.',
         sections: Array.from({ length: 40 }, (_, index) => ({
           title: `Section ${index + 1}`,
           facts: [
@@ -151,7 +151,7 @@ test('admin navigation remains pinned while content scrolls on desktop', async (
       document.documentElement.style.minHeight = '2400px'
       document.body.style.minHeight = '2400px'
       await element.updateComplete
-      const subSidebar = element.shadowRoot.querySelector('ld-sub-sidebar') as HTMLElement
+      const subSidebar = element.shadowRoot.querySelector('lv-sub-sidebar') as HTMLElement
       const before = subSidebar.getBoundingClientRect()
       window.scrollTo(0, 420)
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
@@ -228,7 +228,7 @@ function queryAuditFixturePage() {
       label: 'Admin',
       railLabel: 'Admin',
       ariaLabel: 'Admin navigation',
-      storageKey: 'libredash-admin-sidebar-collapsed',
+      storageKey: 'leapview-admin-sidebar-collapsed',
       activeId: 'queries',
       collapsible: false,
       numbered: false,
@@ -419,14 +419,14 @@ test('query audit page filters table rows and exposes optional metadata columns'
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-admin-page') && customElements.get('ld-record-table'))
+    await page.waitForFunction(() => customElements.get('lv-admin-page') && customElements.get('lv-record-table'))
     const state = await page.evaluate(async (fixture) => {
-      localStorage.removeItem('libredash-admin-query-events-columns')
-      const element = document.createElement('ld-admin-page') as any
+      localStorage.removeItem('leapview-admin-query-events-columns')
+      const element = document.createElement('lv-admin-page') as any
       const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev') as any
       mergePatch({ page: fixture, adminQueryHistory: fixture.queryHistory, adminQueryDetail: { eventId: '', loading: false, error: '' } })
       ;(window as any).queryHistoryCommands = []
-      element.addEventListener('ld-query-history-command', (event: CustomEvent) => {
+      element.addEventListener('lv-query-history-command', (event: CustomEvent) => {
         ;(window as any).queryHistoryCommands.push(event.detail)
       })
       document.body.replaceChildren(element)
@@ -438,7 +438,7 @@ test('query audit page filters table rows and exposes optional metadata columns'
       await new Promise((resolve) => setTimeout(resolve, 250))
       await element.updateComplete
       const commandAfterSearch = (window as any).queryHistoryCommands.at(-1)
-      const menus = Array.from(root.querySelectorAll('ld-filter-menu')) as any[]
+      const menus = Array.from(root.querySelectorAll('lv-filter-menu')) as any[]
       menus[0]?.shadowRoot?.querySelector<HTMLButtonElement>('.trigger')?.click()
       await menus[0]?.updateComplete
       const workspaceMenuSearch = menus[0]?.shadowRoot?.querySelector<HTMLInputElement>('.search input')
@@ -454,7 +454,7 @@ test('query audit page filters table rows and exposes optional metadata columns'
       menus[2]?.shadowRoot?.querySelector<HTMLInputElement>('.option input')?.click()
       await element.updateComplete
       const filterToggleCommand = (window as any).queryHistoryCommands.at(-1)
-      const table = root.querySelector('ld-record-table') as any
+      const table = root.querySelector('lv-record-table') as any
       const rowText = table?.textContent ?? ''
       table.querySelector('.record-table-column-selector summary')?.click()
       Array.from(table.querySelectorAll('label'))
@@ -467,7 +467,7 @@ test('query audit page filters table rows and exposes optional metadata columns'
       const hiddenRuntimeHeaders = visibleHeaderLabels(table)
       table.querySelector<HTMLButtonElement>('.record-query-expand')?.click()
       await table.updateComplete
-      const expandedCodeBlock = table.querySelector('.record-query-expanded-cell ld-code-block') as (HTMLElement & { updateComplete: Promise<boolean> }) | null
+      const expandedCodeBlock = table.querySelector('.record-query-expanded-cell lv-code-block') as (HTMLElement & { updateComplete: Promise<boolean> }) | null
       await expandedCodeBlock?.updateComplete
       const expandedQueryText = expandedCodeBlock?.shadowRoot?.querySelector('code')?.textContent
         ?? table.querySelector('.record-query-expanded-cell')?.textContent
@@ -482,7 +482,7 @@ test('query audit page filters table rows and exposes optional metadata columns'
       await element.updateComplete
       const drawer = root.querySelector('.query-detail-drawer') as HTMLElement | null
       const drawerText = drawer?.textContent ?? ''
-      const drawerCodeBlock = drawer?.querySelector('ld-code-block') as (HTMLElement & { updateComplete: Promise<boolean> }) | null
+      const drawerCodeBlock = drawer?.querySelector('lv-code-block') as (HTMLElement & { updateComplete: Promise<boolean> }) | null
       await drawerCodeBlock?.updateComplete
       const drawerCode = drawerCodeBlock?.shadowRoot?.querySelector('code')?.textContent ?? drawerCodeBlock?.querySelector('code')?.textContent ?? ''
       const drawerAnimationName = drawer ? getComputedStyle(drawer).animationName : ''
@@ -517,14 +517,14 @@ test('query audit page filters table rows and exposes optional metadata columns'
       const operationHeaders = visibleHeaderLabels(table)
       const operationText = table.textContent ?? ''
       const hasDetailAction = Boolean(table.querySelector('.record-icon-action[aria-label="Details"]'))
-      const recreated = document.createElement('ld-admin-page') as any
+      const recreated = document.createElement('lv-admin-page') as any
       document.body.replaceChildren(recreated)
       await recreated.updateComplete
-      const recreatedTable = recreated.shadowRoot.querySelector('ld-record-table') as any
+      const recreatedTable = recreated.shadowRoot.querySelector('lv-record-table') as any
       const refreshedHeaders = visibleHeaderLabels(recreatedTable)
       return {
         title: root.querySelector('h1')?.textContent?.trim(),
-        hasFilters: root.querySelectorAll('ld-filter-menu').length === 5,
+        hasFilters: root.querySelectorAll('lv-filter-menu').length === 5,
         firstMenuText: menus[0]?.shadowRoot?.textContent ?? '',
         hasMetrics: Boolean(root.querySelector('.metrics')),
         hasColumnSelector: Boolean(table.querySelector('.record-table-column-selector')),
@@ -627,13 +627,13 @@ test('query audit emits load more commands from backend-driven history state', a
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-admin-page') && customElements.get('ld-record-table'))
+    await page.waitForFunction(() => customElements.get('lv-admin-page') && customElements.get('lv-record-table'))
       const state = await page.evaluate(async (fixture) => {
-        const element = document.createElement('ld-admin-page') as any
+        const element = document.createElement('lv-admin-page') as any
       const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev') as any
       mergePatch({ page: fixture, adminQueryHistory: fixture.queryHistory, adminQueryDetail: { eventId: '', loading: false, error: '' } })
       ;(window as any).queryHistoryCommands = []
-      element.addEventListener('ld-query-history-command', (event: CustomEvent) => {
+      element.addEventListener('lv-query-history-command', (event: CustomEvent) => {
         ;(window as any).queryHistoryCommands.push(event.detail)
       })
       document.body.replaceChildren(element)
@@ -662,7 +662,7 @@ test('query audit emits load more commands from backend-driven history state', a
       } })
       await element.updateComplete
       const updatedText = root.textContent ?? ''
-      const workspaceMenu = root.querySelector('ld-filter-menu') as HTMLElement | null
+      const workspaceMenu = root.querySelector('lv-filter-menu') as HTMLElement | null
       return {
         footerText,
         command,
@@ -687,15 +687,15 @@ test('query audit detail drawer behaves as a mobile overlay', async () => {
   const page = await browser.newPage({ viewport: { width: 390, height: 820 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-admin-page') && customElements.get('ld-record-table'))
+    await page.waitForFunction(() => customElements.get('lv-admin-page') && customElements.get('lv-record-table'))
       const state = await page.evaluate(async (fixture) => {
-        const element = document.createElement('ld-admin-page') as any
+        const element = document.createElement('lv-admin-page') as any
       const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev') as any
       mergePatch({ page: fixture, adminQueryHistory: fixture.queryHistory, adminQueryDetail: { eventId: '', loading: false, error: '' } })
       document.body.replaceChildren(element)
       await element.updateComplete
       const root = element.shadowRoot
-      const table = root.querySelector('ld-record-table') as any
+      const table = root.querySelector('lv-record-table') as any
       table.querySelector<HTMLElement>('tbody tr.record-row')?.click()
       await element.updateComplete
       mergePatch({ adminQueryDetail: fixture.queryDetail })
@@ -725,15 +725,15 @@ test('query audit drawer does not block selecting another row', async () => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-admin-page') && customElements.get('ld-record-table'))
+    await page.waitForFunction(() => customElements.get('lv-admin-page') && customElements.get('lv-record-table'))
       const state = await page.evaluate(async (fixture) => {
-        const element = document.createElement('ld-admin-page') as any
+        const element = document.createElement('lv-admin-page') as any
       const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev') as any
       mergePatch({ page: fixture, adminQueryHistory: fixture.queryHistory, adminQueryDetail: { eventId: '', loading: false, error: '' } })
       document.body.replaceChildren(element)
       await element.updateComplete
       const root = element.shadowRoot
-      const table = root.querySelector('ld-record-table') as any
+      const table = root.querySelector('lv-record-table') as any
       const rows = Array.from(table.querySelectorAll<HTMLElement>('tbody tr.record-row'))
       rows[0]?.click()
       await element.updateComplete
@@ -791,15 +791,15 @@ test('admin storage route renders storage explorer from typed signal data', asyn
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-admin-page') && customElements.get('ld-storage-explorer'))
+    await page.waitForFunction(() => customElements.get('lv-admin-page') && customElements.get('lv-storage-explorer'))
 
     const state = await page.evaluate(async () => {
-      const element = document.createElement('ld-admin-page') as any
+      const element = document.createElement('lv-admin-page') as any
       const table = {
         key: 'ducklake-catalog\u0000model\u0000orders',
         databaseId: 'ducklake-catalog',
         databaseName: 'DuckLake catalog',
-        databasePath: '/tmp/libredash/libredash.db',
+        databasePath: '/tmp/leapview/leapview.db',
         modelId: 'ducklake',
         modelName: 'DuckLake',
         schema: 'model',
@@ -823,8 +823,8 @@ test('admin storage route renders storage explorer from typed signal data', asyn
       }
       const storage = {
         summary: {
-          catalogPath: '/tmp/libredash/libredash.db',
-          dataPath: '/tmp/libredash/data',
+          catalogPath: '/tmp/leapview/leapview.db',
+          dataPath: '/tmp/leapview/data',
           catalogSizeLabel: '32 KiB',
           dataSizeLabel: '12 KiB',
           totalSizeLabel: '44 KiB',
@@ -850,7 +850,7 @@ test('admin storage route renders storage explorer from typed signal data', asyn
           label: 'Admin',
           railLabel: 'Admin',
           ariaLabel: 'Admin navigation',
-          storageKey: 'libredash-admin-sidebar-collapsed',
+          storageKey: 'leapview-admin-sidebar-collapsed',
           activeId: 'storage',
           collapsible: false,
           numbered: false,
@@ -865,7 +865,7 @@ test('admin storage route renders storage explorer from typed signal data', asyn
       mergePatch({ page: pageSignal, adminStorage: storage })
       document.body.append(element)
       await element.updateComplete
-      const explorer = element.shadowRoot.querySelector('ld-storage-explorer') as any
+      const explorer = element.shadowRoot.querySelector('lv-storage-explorer') as any
       await explorer.updateComplete
       const schemaText = explorer.shadowRoot.textContent
       const filesTab = Array.from(explorer.shadowRoot.querySelectorAll<HTMLButtonElement>('.storage-tab')).find((button) => button.textContent?.includes('Data files'))
@@ -913,7 +913,7 @@ test('admin storage route renders storage explorer from typed signal data', asyn
     expect(state.metricsWrap).toBe('wrap')
     expect(state.explorerText ?? '').toMatch(/orders/)
     expect(state.explorerText ?? '').toMatch(/DuckLake catalog/)
-    expect(state.explorerText ?? '').toMatch(/\/tmp\/libredash\/libredash\.db/)
+    expect(state.explorerText ?? '').toMatch(/\/tmp\/leapview\/leapview\.db/)
     expect(state.explorerText ?? '').toMatch(/Table UUID/)
     expect(state.explorerText ?? '').toMatch(/table-uuid/)
     expect(state.explorerText ?? '').toMatch(/DuckLake path/)
@@ -938,7 +938,7 @@ test('admin agent route renders prompt editor, tools catalog, and emits save com
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-admin-page') && customElements.get('ld-agent-prompt-editor') && customElements.get('ld-agent-tools'))
+    await page.waitForFunction(() => customElements.get('lv-admin-page') && customElements.get('lv-agent-prompt-editor') && customElements.get('lv-agent-tools'))
 
     const state = await page.evaluate(async () => {
       const waitFor = async (predicate: () => boolean, timeoutMs = 5000): Promise<void> => {
@@ -948,7 +948,7 @@ test('admin agent route renders prompt editor, tools catalog, and emits save com
           await new Promise((resolve) => setTimeout(resolve, 20))
         }
       }
-      const element = document.createElement('ld-admin-page') as any
+      const element = document.createElement('lv-admin-page') as any
       const pageSignal = {
         kind: 'admin',
         title: 'Agent',
@@ -957,7 +957,7 @@ test('admin agent route renders prompt editor, tools catalog, and emits save com
           label: 'Admin',
           railLabel: 'Admin',
           ariaLabel: 'Admin navigation',
-          storageKey: 'libredash-admin-sidebar-collapsed',
+          storageKey: 'leapview-admin-sidebar-collapsed',
           activeId: 'agent',
           collapsible: false,
           numbered: false,
@@ -1000,21 +1000,21 @@ test('admin agent route renders prompt editor, tools catalog, and emits save com
       document.body.append(element)
       await element.updateComplete
       let command: unknown = null
-      element.addEventListener('ld-agent-system-prompt-save', (event: CustomEvent) => { command = event.detail })
+      element.addEventListener('lv-agent-system-prompt-save', (event: CustomEvent) => { command = event.detail })
       const root = element.shadowRoot
-      const editor = root.querySelector('ld-agent-prompt-editor') as any
-      const toolsCatalog = root.querySelector('ld-agent-tools') as any
+      const editor = root.querySelector('lv-agent-prompt-editor') as any
+      const toolsCatalog = root.querySelector('lv-agent-tools') as any
       await editor.updateComplete
       await toolsCatalog.updateComplete
       const editorRoot = editor.shadowRoot
-      await customElements.whenDefined('ld-code-editor')
-      await waitFor(() => Boolean(editorRoot.querySelector('ld-code-editor')))
+      await customElements.whenDefined('lv-code-editor')
+      await waitFor(() => Boolean(editorRoot.querySelector('lv-code-editor')))
       const controlRow = editorRoot.querySelector('.prompt-control-row')!
       const actions = editorRoot.querySelector('.prompt-actions')!
       const body = editorRoot.querySelector('.prompt-body')!
-      const markdownView = editorRoot.querySelector('ld-markdown-view') as any
+      const markdownView = editorRoot.querySelector('lv-markdown-view') as any
       const preSwitchState = {
-        hasCodeEditor: Boolean(editorRoot.querySelector('ld-code-editor')),
+        hasCodeEditor: Boolean(editorRoot.querySelector('lv-code-editor')),
         hasMarkdownView: Boolean(markdownView),
         markdownViewCompact: markdownView?.compact,
         markdownValue: markdownView?.value,
@@ -1027,18 +1027,18 @@ test('admin agent route renders prompt editor, tools catalog, and emits save com
       editButton.click()
       await editor.updateComplete
       const immediateSwitchState = {
-        hasCodeEditor: Boolean(editorRoot.querySelector('ld-code-editor')),
+        hasCodeEditor: Boolean(editorRoot.querySelector('lv-code-editor')),
         hasLoading: Boolean(editorRoot.querySelector('.editor-loading')),
         hasTextarea: Boolean(editorRoot.querySelector('textarea')),
       }
       await editor.updateComplete
-      const codeEditor = editorRoot.querySelector('ld-code-editor') as any
+      const codeEditor = editorRoot.querySelector('lv-code-editor') as any
       await codeEditor.updateComplete
       await waitFor(() => Boolean(codeEditor.shadowRoot.querySelector('.view-line')))
       const editorFontSize = getComputedStyle(codeEditor.shadowRoot.querySelector('.view-line')!).fontSize
       const seededEditorValue = codeEditor.value
       codeEditor.value = 'Updated prompt'
-      codeEditor.dispatchEvent(new CustomEvent('ld-code-editor-change', {
+      codeEditor.dispatchEvent(new CustomEvent('lv-code-editor-change', {
         bubbles: true,
         composed: true,
         detail: { value: 'Updated prompt' },
@@ -1051,7 +1051,7 @@ test('admin agent route renders prompt editor, tools catalog, and emits save com
         status: editorRoot.querySelector('.prompt-status')?.textContent?.trim(),
       }
       codeEditor.value = 'Signal prompt'
-      codeEditor.dispatchEvent(new CustomEvent('ld-code-editor-change', {
+      codeEditor.dispatchEvent(new CustomEvent('lv-code-editor-change', {
         bubbles: true,
         composed: true,
         detail: { value: 'Signal prompt' },
@@ -1063,7 +1063,7 @@ test('admin agent route renders prompt editor, tools catalog, and emits save com
         status: editorRoot.querySelector('.prompt-status')?.textContent?.trim() ?? '',
       }
       codeEditor.value = 'Updated prompt'
-      codeEditor.dispatchEvent(new CustomEvent('ld-code-editor-change', {
+      codeEditor.dispatchEvent(new CustomEvent('lv-code-editor-change', {
         bubbles: true,
         composed: true,
         detail: { value: 'Updated prompt' },
@@ -1076,7 +1076,7 @@ test('admin agent route renders prompt editor, tools catalog, and emits save com
         title: root.querySelector('h1')?.textContent?.trim(),
         hasEditor: Boolean(editor),
         hasToolsCatalog: Boolean(toolsCatalog),
-        hasGenericToolsRecordTable: Boolean(root.querySelector('section[aria-label="Tools"] ld-record-table')),
+        hasGenericToolsRecordTable: Boolean(root.querySelector('section[aria-label="Tools"] lv-record-table')),
         toolsCatalogText: toolsCatalog.shadowRoot.textContent,
         hasCodeEditor: Boolean(codeEditor),
         preSwitchState,
@@ -1135,7 +1135,7 @@ test('admin agent prompt editor disables saves for read-only users', async () =>
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-admin-page') && customElements.get('ld-agent-prompt-editor'))
+    await page.waitForFunction(() => customElements.get('lv-admin-page') && customElements.get('lv-agent-prompt-editor'))
 
     const state = await page.evaluate(async () => {
       const waitFor = async (predicate: () => boolean, timeoutMs = 5000): Promise<void> => {
@@ -1145,7 +1145,7 @@ test('admin agent prompt editor disables saves for read-only users', async () =>
           await new Promise((resolve) => setTimeout(resolve, 20))
         }
       }
-      const element = document.createElement('ld-admin-page') as any
+      const element = document.createElement('lv-admin-page') as any
       const pageSignal = {
         kind: 'admin',
         title: 'Agent',
@@ -1154,7 +1154,7 @@ test('admin agent prompt editor disables saves for read-only users', async () =>
           label: 'Admin',
           railLabel: 'Admin',
           ariaLabel: 'Admin navigation',
-          storageKey: 'libredash-admin-sidebar-collapsed',
+          storageKey: 'leapview-admin-sidebar-collapsed',
           activeId: 'agent',
           collapsible: false,
           numbered: false,
@@ -1177,16 +1177,16 @@ test('admin agent prompt editor disables saves for read-only users', async () =>
       document.body.append(element)
       await element.updateComplete
       let command: unknown = null
-      element.addEventListener('ld-agent-system-prompt-save', (event: CustomEvent) => { command = event.detail })
-      const editor = element.shadowRoot.querySelector('ld-agent-prompt-editor') as any
+      element.addEventListener('lv-agent-system-prompt-save', (event: CustomEvent) => { command = event.detail })
+      const editor = element.shadowRoot.querySelector('lv-agent-prompt-editor') as any
       await editor.updateComplete
       const editorRoot = editor.shadowRoot
       const editButton = editorRoot.querySelector<HTMLButtonElement>('.mode-toggle button[aria-label="Edit"]')!
       editButton.click()
-      await customElements.whenDefined('ld-code-editor')
-      await waitFor(() => Boolean(editorRoot.querySelector('ld-code-editor')))
+      await customElements.whenDefined('lv-code-editor')
+      await waitFor(() => Boolean(editorRoot.querySelector('lv-code-editor')))
       await editor.updateComplete
-      const codeEditor = editorRoot.querySelector('ld-code-editor') as any
+      const codeEditor = editorRoot.querySelector('lv-code-editor') as any
       await codeEditor.updateComplete
       const saveButton = editorRoot.querySelector<HTMLButtonElement>('.save-button')
       return {
@@ -1210,10 +1210,10 @@ test('admin agent tools catalog renders payload fields, JSON, empty, unsupported
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-agent-tools'))
+    await page.waitForFunction(() => customElements.get('lv-agent-tools'))
 
     const state = await page.evaluate(async () => {
-      const element = document.createElement('ld-agent-tools') as any
+      const element = document.createElement('lv-agent-tools') as any
       element.tools = [{
         name: 'query_visual',
         description: 'Query visual data.',
@@ -1375,7 +1375,7 @@ test('agent prompt editor seeds edit mode from value attribute', async () => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-agent-prompt-editor'))
+    await page.waitForFunction(() => customElements.get('lv-agent-prompt-editor'))
 
     const state = await page.evaluate(async () => {
       const waitFor = async (predicate: () => boolean, timeoutMs = 5000): Promise<void> => {
@@ -1385,17 +1385,17 @@ test('agent prompt editor seeds edit mode from value attribute', async () => {
           await new Promise((resolve) => setTimeout(resolve, 20))
         }
       }
-      const element = document.createElement('ld-agent-prompt-editor') as any
+      const element = document.createElement('lv-agent-prompt-editor') as any
       element.setAttribute('value', 'Attribute prompt')
       document.body.append(element)
       await element.updateComplete
       const root = element.shadowRoot
       const editButton = root.querySelector<HTMLButtonElement>('.mode-toggle button[aria-label="Edit"]')!
       editButton.click()
-      await customElements.whenDefined('ld-code-editor')
-      await waitFor(() => Boolean(root.querySelector('ld-code-editor')))
+      await customElements.whenDefined('lv-code-editor')
+      await waitFor(() => Boolean(root.querySelector('lv-code-editor')))
       await element.updateComplete
-      const codeEditor = root.querySelector('ld-code-editor') as any
+      const codeEditor = root.querySelector('lv-code-editor') as any
       await codeEditor.updateComplete
       return {
         activeMode: root.querySelector('.mode-toggle button[aria-pressed="true"]')?.getAttribute('aria-label'),
@@ -1414,10 +1414,10 @@ test('agent prompt preview delegates to compact markdown view', async () => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-agent-prompt-editor') && customElements.get('ld-markdown-view'))
+    await page.waitForFunction(() => customElements.get('lv-agent-prompt-editor') && customElements.get('lv-markdown-view'))
 
     const state = await page.evaluate(async () => {
-      const element = document.createElement('ld-agent-prompt-editor') as any
+      const element = document.createElement('lv-agent-prompt-editor') as any
       element.value = [
         '# Hello darkness',
         '',
@@ -1446,7 +1446,7 @@ test('agent prompt preview delegates to compact markdown view', async () => {
       document.body.append(element)
       await element.updateComplete
       const root = element.shadowRoot
-      const markdownView = root.querySelector('ld-markdown-view') as any
+      const markdownView = root.querySelector('lv-markdown-view') as any
       await markdownView.updateComplete
       const h1 = markdownView.shadowRoot.querySelector('h1')!
       return {
@@ -1472,15 +1472,15 @@ test('admin storage explorer keeps table, schema, and breadcrumb selection coher
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-storage-explorer'))
+    await page.waitForFunction(() => customElements.get('lv-storage-explorer'))
 
     const state = await page.evaluate(async () => {
-      const element = document.createElement('ld-storage-explorer') as any
+      const element = document.createElement('lv-storage-explorer') as any
       const customers = {
         key: 'ducklake-catalog\u0000model\u0000customers',
         databaseId: 'ducklake-catalog',
         databaseName: 'DuckLake catalog',
-        databasePath: '/tmp/libredash/libredash.db',
+        databasePath: '/tmp/leapview/leapview.db',
         modelId: 'ducklake',
         modelName: 'DuckLake',
         schema: 'model',
@@ -1517,8 +1517,8 @@ test('admin storage explorer keeps table, schema, and breadcrumb selection coher
       }
       const storage = {
         summary: {
-          catalogPath: '/tmp/libredash/libredash.db',
-          dataPath: '/tmp/libredash/data',
+          catalogPath: '/tmp/leapview/leapview.db',
+          dataPath: '/tmp/leapview/data',
           catalogSizeLabel: '32 KiB',
           dataSizeLabel: '24 KiB',
           totalSizeLabel: '56 KiB',
@@ -1538,7 +1538,7 @@ test('admin storage explorer keeps table, schema, and breadcrumb selection coher
       }
       element.storage = storage
       const commands: unknown[] = []
-      element.addEventListener('ld-storage-table-select', (event: CustomEvent) => commands.push(event.detail))
+      element.addEventListener('lv-storage-table-select', (event: CustomEvent) => commands.push(event.detail))
       document.body.append(element)
       await element.updateComplete
 
@@ -1582,7 +1582,7 @@ test('admin storage explorer keeps table, schema, and breadcrumb selection coher
         detail: detailText(),
       }
 
-      const schemaRowsBeforeBreadcrumb = root.querySelectorAll('ld-record-table tbody tr').length
+      const schemaRowsBeforeBreadcrumb = root.querySelectorAll('lv-record-table tbody tr').length
       ordersButton.click()
       await element.updateComplete
       const schemaBreadcrumb = root.querySelector<HTMLButtonElement>('button[data-breadcrumb-kind="schema"]')!
@@ -1605,7 +1605,7 @@ test('admin storage explorer keeps table, schema, and breadcrumb selection coher
       const afterBreadcrumb = {
         selectedNames: selectedNames(),
         detail: detailText(),
-        schemaRows: root.querySelectorAll('ld-record-table tbody tr').length,
+        schemaRows: root.querySelectorAll('lv-record-table tbody tr').length,
         schemaRowsBeforeBreadcrumb,
         catalogTabs,
         catalogActiveTab,
@@ -1657,7 +1657,7 @@ function testDocument(): string {
       label: 'Admin',
       railLabel: 'Admin',
       ariaLabel: 'Admin navigation',
-      storageKey: 'libredash-admin-sidebar-collapsed',
+      storageKey: 'leapview-admin-sidebar-collapsed',
       activeId: 'principals',
       collapsible: false,
       numbered: false,
@@ -1668,7 +1668,7 @@ function testDocument(): string {
       ],
     },
     headerTitle: 'Principals',
-    headerDetail: 'Users and service principals known to LibreDash.',
+    headerDetail: 'Users and service principals known to LeapView.',
     sections: [{
       title: 'Principals',
       table: {
@@ -1689,13 +1689,13 @@ function testDocument(): string {
       <head>
         <style>
           html, body { margin: 0; min-height: 100%; }
-          body { --fontStack-system: system-ui; --ld-bg-app: #f6f8fa; --ld-bg-panel: #fff; --ld-bg-panel-muted: #f6f8fa; --ld-bg-control: #f6f8fa; --ld-bg-control-hover: #f3f4f6; --ld-bg-accent: #0969da; --ld-bg-accent-muted: #ddf4ff; --ld-sidebar-bg: #f1f3f5; --ld-report-rail-bg: #ffffff; --ld-fg-default: #24292f; --ld-fg-muted: #57606a; --ld-fg-accent: #0969da; --ld-fg-link: #0969da; --ld-fg-success: #1a7f37; --ld-fg-warning: #9a6700; --ld-fg-danger: #d1242f; --ld-fg-on-accent: #fff; --ld-icon-muted: #57606a; --ld-line-muted: #d8dee4; --ld-border-width: 1px; --ld-border-default: 1px solid #d0d7de; --ld-border-muted: 1px solid #d8dee4; --ld-radius-default: 6px; --ld-radius-full: 999px; --ld-page-content-max-width: 72rem; --ld-workspace-detail-max-width: 72rem; --base-size-4: 4px; --base-size-6: 6px; --base-size-8: 8px; --base-size-12: 12px; --base-size-16: 16px; --ld-font-size-caption: 12px; --ld-font-size-body-sm: 14px; --ld-font-size-body-md: 16px; --ld-font-size-title-sm: 18px; --ld-font-size-title-md: 22px; --ld-font-weight-medium: 500; --ld-font-weight-strong: 600; --ld-line-height-tight: 1.2; --ld-line-height-compact: 1.3; --ld-line-height-normal: 1.5; }
-          ld-admin-page { min-height: 720px; }
+          body { --fontStack-system: system-ui; --lv-bg-app: #f6f8fa; --lv-bg-panel: #fff; --lv-bg-panel-muted: #f6f8fa; --lv-bg-control: #f6f8fa; --lv-bg-control-hover: #f3f4f6; --lv-bg-accent: #0969da; --lv-bg-accent-muted: #ddf4ff; --lv-sidebar-bg: #f1f3f5; --lv-report-rail-bg: #ffffff; --lv-fg-default: #24292f; --lv-fg-muted: #57606a; --lv-fg-accent: #0969da; --lv-fg-link: #0969da; --lv-fg-success: #1a7f37; --lv-fg-warning: #9a6700; --lv-fg-danger: #d1242f; --lv-fg-on-accent: #fff; --lv-icon-muted: #57606a; --lv-line-muted: #d8dee4; --lv-border-width: 1px; --lv-border-default: 1px solid #d0d7de; --lv-border-muted: 1px solid #d8dee4; --lv-radius-default: 6px; --lv-radius-full: 999px; --lv-page-content-max-width: 72rem; --lv-workspace-detail-max-width: 72rem; --base-size-4: 4px; --base-size-6: 6px; --base-size-8: 8px; --base-size-12: 12px; --base-size-16: 16px; --lv-font-size-caption: 12px; --lv-font-size-body-sm: 14px; --lv-font-size-body-md: 16px; --lv-font-size-title-sm: 18px; --lv-font-size-title-md: 22px; --lv-font-weight-medium: 500; --lv-font-weight-strong: 600; --lv-line-height-tight: 1.2; --lv-line-height-compact: 1.3; --lv-line-height-normal: 1.5; }
+          lv-admin-page { min-height: 720px; }
         </style>
       </head>
       <body>
         <main data-signals="${signals}">
-          <ld-admin-page></ld-admin-page>
+          <lv-admin-page></lv-admin-page>
         </main>
         <script type="module" src="/static/vendor/datastar-1.0.2.js?v=dev"></script>
         <script type="module" src="/admin-page-under-test.js"></script>

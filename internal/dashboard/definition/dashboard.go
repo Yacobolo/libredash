@@ -6,9 +6,9 @@ import (
 	"net/url"
 	"sort"
 
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	visualizationdefinition "github.com/Yacobolo/libredash/internal/visualization/definition"
-	"github.com/Yacobolo/libredash/internal/visualization/ir"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
+	"github.com/Yacobolo/leapview/internal/visualization/ir"
 )
 
 type FilterDefinition struct {

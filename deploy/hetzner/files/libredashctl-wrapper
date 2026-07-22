@@ -1,6 +1,0 @@
-#!/usr/bin/env sh
-set -eu
-
-export LIBREDASHCTL_ROOT=/opt/libredash
-export LIBREDASHCTL_BACKUP_HOOK=/usr/local/sbin/libredash-backup-hook
-exec /opt/libredash/libredashctl "$@"

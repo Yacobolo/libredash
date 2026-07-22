@@ -14,11 +14,11 @@ import (
 	"strings"
 	"time"
 
-	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
-	apiidempotencysqlite "github.com/Yacobolo/libredash/internal/apiidempotency/sqlite"
-	"github.com/Yacobolo/libredash/internal/brand"
-	"github.com/Yacobolo/libredash/internal/cursorsigning"
-	"github.com/Yacobolo/libredash/internal/workspace"
+	apigenapi "github.com/Yacobolo/leapview/internal/api/gen"
+	apiidempotencysqlite "github.com/Yacobolo/leapview/internal/apiidempotency/sqlite"
+	"github.com/Yacobolo/leapview/internal/brand"
+	"github.com/Yacobolo/leapview/internal/cursorsigning"
+	"github.com/Yacobolo/leapview/internal/workspace"
 )
 
 type apiIdempotencyRecord struct {
@@ -40,7 +40,7 @@ type apiCursor struct {
 	Expires  int64  `json:"expires"`
 }
 
-const apiCursorSnapshotHeader = "X-LibreDash-Cursor-Snapshot"
+const apiCursorSnapshotHeader = "X-LeapView-Cursor-Snapshot"
 
 func (s *Server) publicProtocolMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

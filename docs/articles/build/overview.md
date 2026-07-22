@@ -41,17 +41,17 @@ Avoid these common shortcuts:
 Validate after adding each resource layer:
 
 ```sh
-libredash validate --project dashboards/libredash.yaml
+leapview validate --project dashboards/leapview.yaml
 ```
 
 Once the project is valid, inspect how it differs from the active target:
 
 ```sh
-libredash plan \
-  --project dashboards/libredash.yaml \
+leapview plan \
+  --project dashboards/leapview.yaml \
   --environment dev \
-  --target "$LIBREDASH_TARGET" \
-  --token "$LIBREDASH_API_TOKEN"
+  --target "$LEAPVIEW_TARGET" \
+  --token "$LEAPVIEW_API_TOKEN"
 ```
 
 The local plan is useful even without a target; a target-aware plan adds active deployment differences. Use `--json` in automation and keep human-readable output for review.
@@ -61,10 +61,10 @@ The local plan is useful even without a target; a target-aware plan adds active 
 Before debugging a report component, inspect the semantic surface directly:
 
 ```sh
-libredash semantic-models describe sales \
+leapview semantic-models describe sales \
   --workspace sales \
-  --target "$LIBREDASH_TARGET" \
-  --token "$LIBREDASH_API_TOKEN"
+  --target "$LEAPVIEW_TARGET" \
+  --token "$LEAPVIEW_API_TOKEN"
 ```
 
 The generated [`semantic-models` command reference](/docs/cli/semantic-models) includes dataset discovery, field listing, preview, explain, and query operations. These commands help distinguish semantic or data failures from rendering problems.

@@ -1,6 +1,6 @@
 package api
 
-import visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
+import visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 
 type DashboardSummary struct {
 	ID            string   `json:"id"`

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"math"
 
-	semanticquery "github.com/Yacobolo/libredash/internal/analytics/query"
-	"github.com/Yacobolo/libredash/internal/dataquery"
+	semanticquery "github.com/Yacobolo/leapview/internal/analytics/query"
+	"github.com/Yacobolo/leapview/internal/dataquery"
 )
 
 // executeProjectionBundle replaces scalar branches with exact reductions of

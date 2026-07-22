@@ -1,6 +1,6 @@
 package query
 
-import semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
+import semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 
 type Field struct {
 	Field string

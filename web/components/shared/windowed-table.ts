@@ -189,7 +189,7 @@ class WindowedTable extends LitElement {
       min-width: 0;
       min-height: 0;
       overflow: hidden;
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
       font-family: var(--fontStack-system);
     }
 
@@ -199,9 +199,9 @@ class WindowedTable extends LitElement {
       min-height: 0;
       grid-template-rows: auto minmax(0, 1fr) auto;
       overflow: hidden;
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-panel);
+      border: var(--lv-border-muted);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-panel);
     }
 
     .toolbar,
@@ -210,22 +210,22 @@ class WindowedTable extends LitElement {
       align-items: center;
       justify-content: space-between;
       gap: var(--base-size-8);
-      border-block-end: var(--ld-border-muted);
+      border-block-end: var(--lv-border-muted);
       padding: var(--base-size-8) var(--base-size-16);
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
     }
 
     .footer {
-      border-block-start: var(--ld-border-muted);
+      border-block-start: var(--lv-border-muted);
       border-block-end: 0;
     }
 
     .toolbar strong,
     .footer strong {
-      color: var(--ld-fg-default);
-      font-weight: var(--ld-font-weight-strong);
+      color: var(--lv-fg-default);
+      font-weight: var(--lv-font-weight-strong);
     }
 
     .options {
@@ -234,13 +234,13 @@ class WindowedTable extends LitElement {
 
     .options summary {
       display: grid;
-      width: var(--ld-button-height-sm);
-      height: var(--ld-button-height-sm);
+      width: var(--lv-button-height-sm);
+      height: var(--lv-button-height-sm);
       place-items: center;
-      border: var(--ld-border-default);
-      border-radius: var(--ld-button-radius);
-      background: var(--ld-button-bg-rest);
-      color: var(--ld-button-fg-rest);
+      border: var(--lv-border-default);
+      border-radius: var(--lv-button-radius);
+      background: var(--lv-button-bg-rest);
+      color: var(--lv-button-fg-rest);
       cursor: pointer;
       list-style: none;
     }
@@ -257,10 +257,10 @@ class WindowedTable extends LitElement {
       display: grid;
       min-width: 220px;
       gap: var(--base-size-4);
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-panel);
-      box-shadow: var(--ld-shadow-floating-sm);
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-panel);
+      box-shadow: var(--lv-shadow-floating-sm);
       padding: var(--base-size-8);
     }
 
@@ -269,8 +269,8 @@ class WindowedTable extends LitElement {
       align-items: center;
       gap: var(--base-size-8);
       min-height: var(--control-xsmall-size);
-      color: var(--ld-fg-default);
-      font-size: var(--ld-font-size-caption);
+      color: var(--lv-fg-default);
+      font-size: var(--lv-font-size-caption);
       cursor: pointer;
     }
 
@@ -279,7 +279,7 @@ class WindowedTable extends LitElement {
       min-width: 0;
       min-height: 0;
       overflow: hidden;
-      background: var(--ld-bg-app);
+      background: var(--lv-bg-app);
     }
 
     .scrollport {
@@ -295,30 +295,30 @@ class WindowedTable extends LitElement {
     .plane,
     .head,
     .row {
-      min-width: var(--ld-windowed-table-width, 760px);
-      width: var(--ld-windowed-table-width, 760px);
+      min-width: var(--lv-windowed-table-width, 760px);
+      width: var(--lv-windowed-table-width, 760px);
     }
 
     .head,
     .row {
       display: grid;
-      grid-template-columns: var(--ld-windowed-table-columns);
+      grid-template-columns: var(--lv-windowed-table-columns);
     }
 
     .head {
       position: sticky;
       top: 0;
       z-index: 2;
-      border-bottom: var(--ld-border-emphasis, var(--ld-border-default));
-      background: var(--ld-bg-panel);
-      color: var(--ld-fg-muted);
+      border-bottom: var(--lv-border-emphasis, var(--lv-border-default));
+      background: var(--lv-bg-panel);
+      color: var(--lv-fg-muted);
     }
 
     .header-cell,
     .cell {
       min-width: 0;
       overflow: hidden;
-      border-right: var(--ld-border-muted);
+      border-right: var(--lv-border-muted);
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -345,22 +345,22 @@ class WindowedTable extends LitElement {
       padding: 0 var(--base-size-8);
       cursor: pointer;
       font: inherit;
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-strong);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-strong);
       text-align: left;
       text-transform: uppercase;
     }
 
     .header-cell button:hover,
     .header-cell button:focus-visible {
-      background: var(--ld-bg-control-hover);
-      color: var(--ld-fg-default);
+      background: var(--lv-bg-control-hover);
+      color: var(--lv-fg-default);
       outline: 0;
     }
 
     .sort {
       min-width: 1rem;
-      color: var(--ld-fg-link);
+      color: var(--lv-fg-link);
       text-align: right;
     }
 
@@ -379,57 +379,57 @@ class WindowedTable extends LitElement {
       inset-block: 3px;
       left: 2px;
       width: 2px;
-      border-radius: var(--ld-radius-full);
+      border-radius: var(--lv-radius-full);
       background: transparent;
       content: "";
     }
 
     .header-cell:hover .column-resizer::after,
     .column-resizer.resizing::after {
-      background: var(--ld-fg-link);
+      background: var(--lv-fg-link);
     }
 
     .resize-guide {
       position: absolute;
       top: 0;
       bottom: 0;
-      left: var(--ld-windowed-resize-guide-x, -9999px);
+      left: var(--lv-windowed-resize-guide-x, -9999px);
       z-index: var(--zIndex-overlay);
       width: 0;
-      border-left: 2px solid var(--ld-fg-link);
-      box-shadow: 0 0 0 1px color-mix(in srgb, var(--ld-fg-link), transparent 74%);
+      border-left: 2px solid var(--lv-fg-link);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--lv-fg-link), transparent 74%);
       pointer-events: none;
     }
 
     .canvas {
       position: relative;
-      min-width: var(--ld-windowed-table-width, 760px);
-      width: var(--ld-windowed-table-width, 760px);
+      min-width: var(--lv-windowed-table-width, 760px);
+      width: var(--lv-windowed-table-width, 760px);
     }
 
     .row {
       position: absolute;
       inset-inline: 0;
-      min-height: var(--ld-windowed-row-height, 34px);
-      border-bottom: var(--ld-border-muted);
-      background: var(--ld-bg-app);
+      min-height: var(--lv-windowed-row-height, 34px);
+      border-bottom: var(--lv-border-muted);
+      background: var(--lv-bg-app);
     }
 
     .row:nth-child(even) {
-      background: color-mix(in srgb, var(--ld-table-stripe, var(--ld-bg-panel-muted)), var(--ld-bg-app) 74%);
+      background: color-mix(in srgb, var(--lv-table-stripe, var(--lv-bg-panel-muted)), var(--lv-bg-app) 74%);
     }
 
     .row:hover {
-      background: var(--ld-bg-control-hover);
+      background: var(--lv-bg-control-hover);
     }
 
     .cell {
       display: flex;
-      min-height: var(--ld-windowed-row-height, 34px);
+      min-height: var(--lv-windowed-row-height, 34px);
       align-items: center;
       padding: 0 var(--base-size-8);
-      color: var(--ld-fg-default);
-      font-size: var(--ld-font-size-body-sm);
+      color: var(--lv-fg-default);
+      font-size: var(--lv-font-size-body-sm);
     }
 
     .cell.right,
@@ -444,19 +444,19 @@ class WindowedTable extends LitElement {
       text-overflow: ellipsis;
       white-space: nowrap;
       font-family: var(--fontStack-monospace);
-      font-size: var(--ld-font-size-caption);
+      font-size: var(--lv-font-size-caption);
     }
 
     .muted,
     .empty,
     .error {
-      color: var(--ld-fg-muted);
+      color: var(--lv-fg-muted);
       padding: var(--base-size-16);
-      font-size: var(--ld-font-size-body-sm);
+      font-size: var(--lv-font-size-body-sm);
     }
 
     .error {
-      color: var(--ld-fg-danger, var(--fgColor-danger));
+      color: var(--lv-fg-danger, var(--fgColor-danger));
     }
 
     .loading {
@@ -466,7 +466,7 @@ class WindowedTable extends LitElement {
       z-index: 3;
       height: 2px;
       overflow: hidden;
-      background: color-mix(in srgb, var(--ld-fg-link), transparent 82%);
+      background: color-mix(in srgb, var(--lv-fg-link), transparent 82%);
     }
 
     .loading::after {
@@ -474,7 +474,7 @@ class WindowedTable extends LitElement {
       inset-block: 0;
       inset-inline-start: -30%;
       width: 30%;
-      background: var(--ld-fg-link);
+      background: var(--lv-fg-link);
       content: "";
       animation: loading-slide 1s ease-in-out infinite;
     }
@@ -483,8 +483,8 @@ class WindowedTable extends LitElement {
       display: block;
       width: min(78%, 160px);
       height: 9px;
-      border-radius: var(--ld-radius-full);
-      background: color-mix(in srgb, var(--ld-fg-muted), transparent 84%);
+      border-radius: var(--lv-radius-full);
+      background: color-mix(in srgb, var(--lv-fg-muted), transparent 84%);
     }
 
     @keyframes loading-slide {
@@ -577,9 +577,9 @@ class WindowedTable extends LitElement {
             <div class="scrollport" ${ref(this.viewportRef)} @scroll=${this.handleScroll}>
               <div
                 class="plane"
-                style=${`--ld-windowed-table-columns:${widths.map((width) => `${width}px`).join(' ')};--ld-windowed-table-width:${tableWidth}px;--ld-windowed-row-height:${table.rowHeight}px`}
+                style=${`--lv-windowed-table-columns:${widths.map((width) => `${width}px`).join(' ')};--lv-windowed-table-width:${tableWidth}px;--lv-windowed-row-height:${table.rowHeight}px`}
               >
-                ${this.resizeGuide >= 0 ? html`<span class="resize-guide" style=${`--ld-windowed-resize-guide-x:${this.resizeGuide}px`}></span>` : nothing}
+                ${this.resizeGuide >= 0 ? html`<span class="resize-guide" style=${`--lv-windowed-resize-guide-x:${this.resizeGuide}px`}></span>` : nothing}
                 <div class="head" role="row">
                   ${columns.map((column) => html`
                     <div class=${`header-cell ${column.align === 'right' ? 'right' : ''}`} role="columnheader">
@@ -757,7 +757,7 @@ class WindowedTable extends LitElement {
       this.expectedBlocks.set(block, { start, requestSeq, resetVersion, sort })
     }
     this.requestUpdate()
-    this.dispatchEvent(new CustomEvent<WindowedTableRequest>('ld-windowed-table-request', {
+    this.dispatchEvent(new CustomEvent<WindowedTableRequest>('lv-windowed-table-request', {
       bubbles: true,
       composed: true,
       detail: { block, start, count, requestSeq, sort, resetVersion },
@@ -872,7 +872,7 @@ class WindowedTable extends LitElement {
     const table = normalizeTable(this.table)
     const columnWidths = this.currentColumnWidths(table)
     this.clearResize()
-    this.dispatchEvent(new CustomEvent('ld-windowed-table-column-widths', {
+    this.dispatchEvent(new CustomEvent('lv-windowed-table-column-widths', {
       bubbles: true,
       composed: true,
       detail: { columnWidths },
@@ -909,7 +909,7 @@ class WindowedTable extends LitElement {
     const current = this.visibleColumns(table).map((column) => column.key)
     const next = checked ? [...new Set([...current, columnKey])] : current.filter((key) => key !== columnKey)
     this.localVisibleColumns = next
-    this.dispatchEvent(new CustomEvent('ld-windowed-table-columns', {
+    this.dispatchEvent(new CustomEvent('lv-windowed-table-columns', {
       bubbles: true,
       composed: true,
       detail: { visibleColumns: next },
@@ -951,10 +951,10 @@ function cellLabel(value: unknown): string {
   return String(value)
 }
 
-if (!customElements.get('ld-windowed-table')) customElements.define('ld-windowed-table', WindowedTable)
+if (!customElements.get('lv-windowed-table')) customElements.define('lv-windowed-table', WindowedTable)
 
 declare global {
   interface HTMLElementTagNameMap {
-    'ld-windowed-table': WindowedTable
+    'lv-windowed-table': WindowedTable
   }
 }

@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
+	apigenapi "github.com/Yacobolo/leapview/internal/api/gen"
 )
 
 type managedDataCLIClient struct {

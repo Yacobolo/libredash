@@ -4,9 +4,9 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/Yacobolo/libredash/internal/access"
-	"github.com/Yacobolo/libredash/internal/agent"
-	agenthttp "github.com/Yacobolo/libredash/internal/agent/http"
+	"github.com/Yacobolo/leapview/internal/access"
+	"github.com/Yacobolo/leapview/internal/agent"
+	agenthttp "github.com/Yacobolo/leapview/internal/agent/http"
 )
 
 func (s *Server) agentHTTPHandler() *agenthttp.Handler {

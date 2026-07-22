@@ -48,7 +48,7 @@ test('markdown view renders sanitized markdown with default and compact typograp
   const page = await browser.newPage({ viewport: { width: 900, height: 700 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-markdown-view'))
+    await page.waitForFunction(() => customElements.get('lv-markdown-view'))
 
     const state = await page.evaluate(async () => {
       const markdown = [
@@ -78,12 +78,12 @@ test('markdown view renders sanitized markdown with default and compact typograp
         '',
         '<script>window.__unsafe = true</script><img src=x onerror="window.__unsafe = true">',
       ].join('\n')
-      const standard = document.createElement('ld-markdown-view') as any
+      const standard = document.createElement('lv-markdown-view') as any
       standard.value = markdown
-      const compact = document.createElement('ld-markdown-view') as any
+      const compact = document.createElement('lv-markdown-view') as any
       compact.value = markdown
       compact.compact = true
-      const empty = document.createElement('ld-markdown-view') as any
+      const empty = document.createElement('lv-markdown-view') as any
       empty.emptyText = 'Nothing here.'
       document.body.append(standard, compact, empty)
       await standard.updateComplete
@@ -158,8 +158,8 @@ function testDocument(): string {
       <head>
         <style>
           html, body { margin: 0; min-height: 100%; }
-          body { --fontStack-system: system-ui; --fontStack-monospace: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; --ld-bg-panel: #fff; --ld-bg-panel-muted: #f6f8fa; --ld-bg-control: #f6f8fa; --ld-fg-default: #24292f; --ld-fg-muted: #57606a; --ld-fg-accent: #0969da; --ld-line-muted: #d8dee4; --ld-border-width: 1px; --ld-border-muted: 1px solid #d8dee4; --ld-radius-default: 6px; --base-size-4: 4px; --base-size-8: 8px; --base-size-12: 12px; --base-size-16: 16px; --base-size-20: 20px; --ld-space-2xs: 2px; --ld-space-xs: 4px; --ld-font-size-caption: 12px; --ld-font-size-body-sm: 14px; --ld-font-size-body-md: 16px; --ld-font-size-title-sm: 18px; --ld-font-size-title-md: 22px; --ld-font-weight-strong: 600; --ld-line-height-compact: 1.3; --ld-line-height-snug: 1.35; --ld-line-height-normal: 1.5; --ld-line-height-relaxed: 1.55; --ld-chat-markdown-block-gap: 10px; --ld-chat-markdown-list-indent: 20px; --ld-chat-markdown-list-item-gap: 2px; --ld-chat-code-radius: 4px; --ld-chat-code-padding-block: 1px; --ld-chat-code-padding-inline: 4px; --ld-chat-code-font-scale: 0.92em; --ld-chat-pre-padding-block: 9px; --ld-chat-pre-padding-inline: 10px; --ld-chat-quote-border-width: 2px; --ld-chat-bubble-padding-block: 12px; --ld-chat-link-underline-thickness: 1px; --ld-chat-link-underline-offset: 2px; }
-          ld-markdown-view { display: block; width: 760px; margin: 24px; }
+          body { --fontStack-system: system-ui; --fontStack-monospace: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; --lv-bg-panel: #fff; --lv-bg-panel-muted: #f6f8fa; --lv-bg-control: #f6f8fa; --lv-fg-default: #24292f; --lv-fg-muted: #57606a; --lv-fg-accent: #0969da; --lv-line-muted: #d8dee4; --lv-border-width: 1px; --lv-border-muted: 1px solid #d8dee4; --lv-radius-default: 6px; --base-size-4: 4px; --base-size-8: 8px; --base-size-12: 12px; --base-size-16: 16px; --base-size-20: 20px; --lv-space-2xs: 2px; --lv-space-xs: 4px; --lv-font-size-caption: 12px; --lv-font-size-body-sm: 14px; --lv-font-size-body-md: 16px; --lv-font-size-title-sm: 18px; --lv-font-size-title-md: 22px; --lv-font-weight-strong: 600; --lv-line-height-compact: 1.3; --lv-line-height-snug: 1.35; --lv-line-height-normal: 1.5; --lv-line-height-relaxed: 1.55; --lv-chat-markdown-block-gap: 10px; --lv-chat-markdown-list-indent: 20px; --lv-chat-markdown-list-item-gap: 2px; --lv-chat-code-radius: 4px; --lv-chat-code-padding-block: 1px; --lv-chat-code-padding-inline: 4px; --lv-chat-code-font-scale: 0.92em; --lv-chat-pre-padding-block: 9px; --lv-chat-pre-padding-inline: 10px; --lv-chat-quote-border-width: 2px; --lv-chat-bubble-padding-block: 12px; --lv-chat-link-underline-thickness: 1px; --lv-chat-link-underline-offset: 2px; }
+          lv-markdown-view { display: block; width: 760px; margin: 24px; }
         </style>
       </head>
       <body>

@@ -17,7 +17,7 @@ type stageDefinition struct {
 }
 
 var stages = map[string]stageDefinition{
-	"libredash-v1": {entry: `import "./typespec/main.tsp";` + "\n", directories: []string{"typespec", "visualization"}},
+	"leapview-v1": {entry: `import "./typespec/main.tsp";` + "\n", directories: []string{"typespec", "visualization"}},
 	"ui-signals":   {entry: `import "./signals/main.tsp";` + "\n", directories: []string{"signals", "visualization"}},
 }
 

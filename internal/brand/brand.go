@@ -1,6 +1,6 @@
 // Package brand owns the user-facing LeapView product identity.
 //
-// Stable compatibility identifiers such as the libredash executable, module,
+// Stable compatibility identifiers such as the leapview executable, module,
 // environment variables, API headers, and storage keys intentionally live
 // outside this package and retain their existing names.
 package brand

@@ -11,18 +11,18 @@ class HTMLHandle implements RendererHandle {
   update(envelope: VisualizationEnvelope, _change: number, context: RendererContext): void {
     this.container.replaceChildren()
     const article = document.createElement('article')
-    article.className = 'ld-kpi-card'
+    article.className = 'lv-kpi-card'
     article.setAttribute('aria-label', envelope.spec.accessibility.title)
     if (envelope.spec.kind === 'kpi') article.dataset.tone = envelope.spec.presentation.tone
     const label = document.createElement('div')
-    label.className = 'ld-visualization-label'
+    label.className = 'lv-visualization-label'
     label.textContent = envelope.spec.title
     const value = document.createElement('strong')
-    value.className = 'ld-visualization-kpi'
+    value.className = 'lv-visualization-kpi'
     value.textContent = kpiText(envelope, context)
     article.append(label, value)
     if (envelope.spec.kind === 'kpi' && envelope.spec.presentation.note) {
-      const note = document.createElement('small'); note.className = 'ld-visualization-note'; note.textContent = envelope.spec.presentation.note; article.append(note)
+      const note = document.createElement('small'); note.className = 'lv-visualization-note'; note.textContent = envelope.spec.presentation.note; article.append(note)
     }
     this.container.append(article)
   }

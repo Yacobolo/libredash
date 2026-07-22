@@ -32,33 +32,33 @@ class FilterMenu extends LitElement {
       position: relative;
       display: inline-block;
       min-width: 0;
-      color: var(--ld-fg-default);
-      font-family: var(--ld-font-family-ui, var(--fontStack-system));
+      color: var(--lv-fg-default);
+      font-family: var(--lv-font-family-ui, var(--fontStack-system));
     }
 
     .trigger {
       display: inline-flex;
       min-width: 0;
-      min-height: var(--ld-control-medium);
+      min-height: var(--lv-control-medium);
       align-items: center;
       justify-content: space-between;
       gap: var(--base-size-8);
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-small);
-      background: var(--ld-bg-panel);
-      color: var(--ld-fg-default);
+      border: var(--lv-border-muted);
+      border-radius: var(--lv-radius-small);
+      background: var(--lv-bg-panel);
+      color: var(--lv-fg-default);
       cursor: pointer;
       font: inherit;
-      font-size: var(--ld-font-size-body-sm);
-      line-height: var(--ld-line-height-compact);
-      padding: 0 var(--ld-space-control);
+      font-size: var(--lv-font-size-body-sm);
+      line-height: var(--lv-line-height-compact);
+      padding: 0 var(--lv-space-control);
       white-space: nowrap;
     }
 
     .trigger:hover,
     .trigger:focus-visible,
     .trigger[aria-expanded="true"] {
-      border-color: var(--ld-border-accent);
+      border-color: var(--lv-border-accent);
       outline: 0;
     }
 
@@ -78,10 +78,10 @@ class FilterMenu extends LitElement {
       max-height: min(28rem, calc(100svh - var(--base-size-32)));
       grid-template-rows: auto minmax(0, 1fr) auto;
       overflow: hidden;
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-panel);
-      box-shadow: var(--ld-shadow-floating-lg);
+      border: var(--lv-border-muted);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-panel);
+      box-shadow: var(--lv-shadow-floating-lg);
     }
 
     .search {
@@ -89,20 +89,20 @@ class FilterMenu extends LitElement {
       grid-template-columns: auto minmax(0, 1fr);
       align-items: center;
       gap: var(--base-size-8);
-      border-bottom: var(--ld-border-muted);
+      border-bottom: var(--lv-border-muted);
       padding: var(--base-size-8);
-      color: var(--ld-fg-muted);
+      color: var(--lv-fg-muted);
     }
 
     .search input {
       min-width: 0;
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-small);
-      background: var(--ld-bg-input);
-      color: var(--ld-fg-default);
+      border: var(--lv-border-muted);
+      border-radius: var(--lv-radius-small);
+      background: var(--lv-bg-input);
+      color: var(--lv-fg-default);
       font: inherit;
-      font-size: var(--ld-font-size-body-sm);
-      padding: var(--base-size-8) var(--ld-space-control);
+      font-size: var(--lv-font-size-body-sm);
+      padding: var(--base-size-8) var(--lv-space-control);
     }
 
     .options {
@@ -117,15 +117,15 @@ class FilterMenu extends LitElement {
       grid-template-columns: auto auto minmax(0, 1fr) auto;
       align-items: center;
       gap: var(--base-size-8);
-      border-radius: var(--ld-radius-small);
+      border-radius: var(--lv-radius-small);
       cursor: pointer;
-      padding: var(--ld-space-sm) var(--base-size-8);
-      font-size: var(--ld-font-size-body-sm);
+      padding: var(--lv-space-sm) var(--base-size-8);
+      font-size: var(--lv-font-size-body-sm);
     }
 
     .option:hover,
     .option:focus-within {
-      background: var(--ld-bg-control-hover, var(--ld-bg-panel-muted));
+      background: var(--lv-bg-control-hover, var(--lv-bg-panel-muted));
     }
 
     .option input {
@@ -136,7 +136,7 @@ class FilterMenu extends LitElement {
 
     .option-icon {
       display: inline-flex;
-      color: var(--ld-fg-muted);
+      color: var(--lv-fg-muted);
     }
 
     .option-label {
@@ -151,8 +151,8 @@ class FilterMenu extends LitElement {
     .empty,
     .error,
     .loading {
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
     }
 
     .option-description {
@@ -169,34 +169,34 @@ class FilterMenu extends LitElement {
     }
 
     .error {
-      color: var(--ld-fg-danger);
+      color: var(--lv-fg-danger);
     }
 
     .footer {
       display: flex;
       justify-content: flex-end;
-      border-top: var(--ld-border-muted);
+      border-top: var(--lv-border-muted);
       padding: var(--base-size-8);
     }
 
     .clear {
       display: inline-flex;
-      min-height: var(--ld-control-small);
+      min-height: var(--lv-control-small);
       align-items: center;
       gap: var(--base-size-6);
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-small);
-      background: var(--ld-bg-panel);
-      color: var(--ld-fg-default);
+      border: var(--lv-border-muted);
+      border-radius: var(--lv-radius-small);
+      background: var(--lv-bg-panel);
+      color: var(--lv-fg-default);
       cursor: pointer;
       font: inherit;
-      font-size: var(--ld-font-size-caption);
+      font-size: var(--lv-font-size-caption);
       padding: 0 var(--base-size-8);
     }
 
     .clear:hover,
     .clear:focus-visible {
-      background: var(--ld-bg-control-hover, var(--ld-bg-panel-muted));
+      background: var(--lv-bg-control-hover, var(--lv-bg-panel-muted));
       outline: 0;
     }
   `
@@ -313,7 +313,7 @@ class FilterMenu extends LitElement {
 
   private emitCommand(action: FilterMenuCommandAction, detail: { search?: string; value?: string } = {}): void {
     const menu = this.currentMenu()
-    this.dispatchEvent(new CustomEvent('ld-filter-menu-command', {
+    this.dispatchEvent(new CustomEvent('lv-filter-menu-command', {
       bubbles: true,
       composed: true,
       detail: {
@@ -342,4 +342,4 @@ class FilterMenu extends LitElement {
   }
 }
 
-if (!customElements.get('ld-filter-menu')) customElements.define('ld-filter-menu', FilterMenu)
+if (!customElements.get('lv-filter-menu')) customElements.define('lv-filter-menu', FilterMenu)

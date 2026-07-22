@@ -6,7 +6,7 @@ import (
 	"math"
 	"time"
 
-	visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 )
 
 type Signals struct {
@@ -307,7 +307,7 @@ type InteractionCommand struct {
 	Mappings        []InteractionCommandMapping `json:"mappings"`
 }
 
-const UIRowSelectionField = "__libredash.rowKey"
+const UIRowSelectionField = "__leapview.rowKey"
 
 type InteractionCommandMapping struct {
 	Field string                    `json:"field"`

@@ -25,7 +25,7 @@ var stateCodes = map[string]string{
 type featureCollection struct {
 	Type     string    `json:"type"`
 	Features []feature `json:"features"`
-	Metadata metadata  `json:"libredash"`
+	Metadata metadata  `json:"leapview"`
 }
 type feature struct {
 	Type       string          `json:"type"`

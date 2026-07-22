@@ -6,8 +6,8 @@ TMP_DIR="$ROOT/.tmp"
 PID_FILE="$TMP_DIR/dev-server.pid"
 PORT_FILE="$TMP_DIR/dev-server.port"
 LOG_FILE="$TMP_DIR/dev-server.log"
-PORT_START="${LIBREDASH_DEV_PORT_START:-8100}"
-PORT_COUNT="${LIBREDASH_DEV_PORT_COUNT:-100}"
+PORT_START="${LEAPVIEW_DEV_PORT_START:-8100}"
+PORT_COUNT="${LEAPVIEW_DEV_PORT_COUNT:-100}"
 
 mkdir -p "$TMP_DIR"
 
@@ -72,7 +72,7 @@ stop_recorded() {
   local pid
   pid="$(cat "$PID_FILE" 2>/dev/null || true)"
   if is_alive "$pid"; then
-    stop_pid "$pid" "LibreDash dev server"
+    stop_pid "$pid" "LeapView dev server"
   fi
   rm -f "$PID_FILE"
   stop_port "$port"
@@ -89,7 +89,7 @@ stop_port() {
   while read -r pid; do
     [[ -z "$pid" ]] && continue
     if same_worktree_pid "$pid"; then
-      stop_pid "$pid" "LibreDash dev server on port $port"
+      stop_pid "$pid" "LeapView dev server on port $port"
     fi
   done <<< "$pids"
 }
@@ -175,7 +175,7 @@ ensure_port() {
     while read -r pid; do
       [[ -z "$pid" ]] && continue
       if same_worktree_pid "$pid"; then
-        stop_pid "$pid" "LibreDash dev server on port $port"
+        stop_pid "$pid" "LeapView dev server on port $port"
         stopped=true
       else
         blocked=true
@@ -205,35 +205,35 @@ runner_name() {
 wait_ready() {
   local port="$1"
   local pid="$2"
-  local attempts="${LIBREDASH_DEV_READY_ATTEMPTS:-150}"
-  local interval="${LIBREDASH_DEV_READY_INTERVAL:-0.2}"
+  local attempts="${LEAPVIEW_DEV_READY_ATTEMPTS:-150}"
+  local interval="${LEAPVIEW_DEV_READY_INTERVAL:-0.2}"
 
   for ((attempt = 1; attempt <= attempts; attempt++)); do
     if curl -fsS "http://localhost:$port/workspaces" >/dev/null 2>&1; then
       return 0
     fi
     if ! is_alive "$pid"; then
-      echo "LibreDash dev server exited before it became ready" >&2
+      echo "LeapView dev server exited before it became ready" >&2
       return 1
     fi
     sleep "$interval"
   done
 
-  echo "LibreDash dev server did not become ready on http://localhost:$port" >&2
+  echo "LeapView dev server did not become ready on http://localhost:$port" >&2
   return 1
 }
 
 deploy_project() {
 	local port="$1"
-	local project="${2:-${LIBREDASH_DEV_PROJECT:-dashboards/libredash.yaml}}"
+	local project="${2:-${LEAPVIEW_DEV_PROJECT:-dashboards/leapview.yaml}}"
 	local connection="${3:-}"
 	local from="${4:-}"
-	if [[ "${LIBREDASH_DEV_SKIP_PUBLISH:-}" == "1" ]]; then
+	if [[ "${LEAPVIEW_DEV_SKIP_PUBLISH:-}" == "1" ]]; then
     echo "Skipping dev project deploy"
     return 0
   fi
 	local -a revision_args=()
-	if [[ "$project" == "dashboards/libredash.yaml" ]]; then
+	if [[ "$project" == "dashboards/leapview.yaml" ]]; then
 		connection="${connection:-olist}"
 		from="${from:-.data/olist}"
 	fi
@@ -243,7 +243,7 @@ deploy_project() {
 			return 1
 		}
 		local sync_output revision
-		sync_output="$(go run ./cmd/libredash data sync --project "$project" --connection "$connection" --from "$from" --target "http://localhost:${port}" --token dev)" || return 1
+		sync_output="$(go run ./cmd/leapview data sync --project "$project" --connection "$connection" --from "$from" --target "http://localhost:${port}" --token dev)" || return 1
     printf '%s\n' "$sync_output"
     revision="$(printf '%s\n' "$sync_output" | awk '$1 == "staged" { print $2 }')"
     [[ "$revision" =~ ^sha256:[0-9a-f]{64}$ ]] || {
@@ -252,7 +252,7 @@ deploy_project() {
     }
 		revision_args=(--revision "$connection=$revision")
 	fi
-  go run ./cmd/libredash deploy --project "$project" "${revision_args[@]}" --target "http://localhost:${port}" --token dev --auto-approve
+  go run ./cmd/leapview deploy --project "$project" "${revision_args[@]}" --target "http://localhost:${port}" --token dev --auto-approve
 }
 
 attach_server() {
@@ -261,13 +261,13 @@ attach_server() {
   local tail_pid=""
 
   touch "$LOG_FILE"
-  tail -n "${LIBREDASH_DEV_LOG_LINES:-120}" -f "$LOG_FILE" &
+  tail -n "${LEAPVIEW_DEV_LOG_LINES:-120}" -f "$LOG_FILE" &
   tail_pid="$!"
 
   cleanup_attach() {
     [[ -n "$tail_pid" ]] && kill "$tail_pid" 2>/dev/null || true
     if is_alive "$pid"; then
-      stop_pid "$pid" "LibreDash dev server"
+      stop_pid "$pid" "LeapView dev server"
     fi
     stop_port "$port"
   }
@@ -282,22 +282,22 @@ attach_server() {
 }
 
 start() {
-	local project="${1:-${LIBREDASH_DEV_PROJECT:-dashboards/libredash.yaml}}"
+	local project="${1:-${LEAPVIEW_DEV_PROJECT:-dashboards/leapview.yaml}}"
 	local connection="${2:-}"
 	local from="${3:-}"
-  if [[ "${LIBREDASH_DEV_RESTART:-}" != "1" ]]; then
+  if [[ "${LEAPVIEW_DEV_RESTART:-}" != "1" ]]; then
     local existing_pid
     existing_pid="$(running_server_pid || true)"
     if [[ -n "$existing_pid" ]]; then
       local existing_port
       existing_port="$(recorded_port)"
-      echo "LibreDash dev server already running"
+      echo "LeapView dev server already running"
       echo "PID: $existing_pid"
       echo "URL: http://localhost:$existing_port"
       echo "Logs: $LOG_FILE"
       echo "Deploying project to existing server..."
 			deploy_project "$existing_port" "$project" "$connection" "$from"
-      echo "Attached to LibreDash logs. Press Ctrl-C to stop."
+      echo "Attached to LeapView logs. Press Ctrl-C to stop."
       attach_server "$existing_pid" "$existing_port"
       return 0
     fi
@@ -314,13 +314,13 @@ start() {
 
   local runner
   runner="$(runner_name)"
-  echo "Starting LibreDash on http://localhost:$port"
+  echo "Starting LeapView on http://localhost:$port"
   if [[ "$runner" == "air" ]]; then
     echo "Runner: air"
   else
     echo "Runner: local binary (install air for hot reload)"
   fi
-  if [[ "${LIBREDASH_DEV_SKIP_PUBLISH:-}" == "1" ]]; then
+  if [[ "${LEAPVIEW_DEV_SKIP_PUBLISH:-}" == "1" ]]; then
     echo "Project deploy disabled. Press Ctrl-C to stop."
   else
     echo "Deploying project after startup. Press Ctrl-C to stop."
@@ -328,37 +328,37 @@ start() {
 
   cd "$ROOT"
   export PORT="$port"
-  export LIBREDASH_ADDR=":$port"
-  export LIBREDASH_DEV_WORKTREE="$ROOT"
+  export LEAPVIEW_ADDR=":$port"
+  export LEAPVIEW_DEV_WORKTREE="$ROOT"
 
   : > "$LOG_FILE"
   if [[ "$runner" == "air" ]]; then
     air -c .air.toml >> "$LOG_FILE" 2>&1 &
   else
-    go build -o "$TMP_DIR/libredash-dev" ./cmd/libredash
-    "$TMP_DIR/libredash-dev" >> "$LOG_FILE" 2>&1 &
+    go build -o "$TMP_DIR/leapview-dev" ./cmd/leapview
+    "$TMP_DIR/leapview-dev" >> "$LOG_FILE" 2>&1 &
   fi
   local pid="$!"
   echo "$pid" > "$PID_FILE"
 
   if ! wait_ready "$port" "$pid"; then
-    stop_pid "$pid" "LibreDash dev server"
+    stop_pid "$pid" "LeapView dev server"
     exit 1
   fi
 
 	if ! deploy_project "$port" "$project" "$connection" "$from"; then
-    stop_pid "$pid" "LibreDash dev server"
+    stop_pid "$pid" "LeapView dev server"
     exit 1
   fi
 
-  echo "LibreDash listening at http://localhost:$port"
-  echo "Attached to LibreDash logs. Press Ctrl-C to stop."
+  echo "LeapView listening at http://localhost:$port"
+  echo "Attached to LeapView logs. Press Ctrl-C to stop."
   attach_server "$pid" "$port"
 }
 
 stop() {
   stop_recorded
-  echo "LibreDash dev server stopped"
+  echo "LeapView dev server stopped"
 }
 
 status() {
@@ -372,7 +372,7 @@ status() {
   fi
 
   if is_alive "$pid"; then
-    echo "LibreDash dev server running"
+    echo "LeapView dev server running"
     echo "PID: $pid"
     [[ -n "$port" ]] && echo "URL: http://localhost:$port"
     echo "Command: $(pid_command "$pid")"
@@ -381,7 +381,7 @@ status() {
   fi
 
   if is_alive "$port_pid" && same_worktree_pid "$port_pid"; then
-    echo "LibreDash dev server running"
+    echo "LeapView dev server running"
     echo "PID: $port_pid"
     [[ -n "$port" ]] && echo "URL: http://localhost:$port"
     echo "Command: $(pid_command "$port_pid")"
@@ -389,14 +389,14 @@ status() {
     return 0
   fi
 
-  echo "LibreDash dev server not running"
+  echo "LeapView dev server not running"
   [[ -n "$port" ]] && echo "Last port: $port"
   echo "Logs: $LOG_FILE"
 }
 
 logs() {
   touch "$LOG_FILE"
-  tail -n "${LIBREDASH_DEV_LOG_LINES:-120}" -f "$LOG_FILE"
+  tail -n "${LEAPVIEW_DEV_LOG_LINES:-120}" -f "$LOG_FILE"
 }
 
 action="${1:-}"

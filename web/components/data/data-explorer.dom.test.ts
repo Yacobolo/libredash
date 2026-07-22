@@ -50,10 +50,10 @@ test('data explorer renders object browser and emits preview commands', async ()
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-data-explorer') && customElements.get('ld-data-preview-table') && customElements.get('ld-windowed-table'))
+    await page.waitForFunction(() => customElements.get('lv-data-explorer') && customElements.get('lv-data-preview-table') && customElements.get('lv-windowed-table'))
 
     const state = await page.evaluate(async () => {
-      const element = document.createElement('ld-data-explorer') as any
+      const element = document.createElement('lv-data-explorer') as any
       const pageSignal = {
         kind: 'data',
         title: 'Data Explorer',
@@ -156,16 +156,16 @@ test('data explorer renders object browser and emits preview commands', async ()
       const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev') as any
       mergePatch({ page: pageSignal, dataExplorer })
       const commands: any[] = []
-      element.addEventListener('ld-data-explorer-command', (event: CustomEvent) => commands.push(event.detail))
+      element.addEventListener('lv-data-explorer-command', (event: CustomEvent) => commands.push(event.detail))
       document.body.append(element)
-      for (let index = 0; index < 20 && !element.shadowRoot?.querySelector('ld-data-preview-table'); index += 1) {
+      for (let index = 0; index < 20 && !element.shadowRoot?.querySelector('lv-data-preview-table'); index += 1) {
         await element.updateComplete
         await new Promise((resolve) => requestAnimationFrame(resolve))
       }
       const root = element.shadowRoot
-      const previewTable = root.querySelector('ld-data-preview-table') as any
+      const previewTable = root.querySelector('lv-data-preview-table') as any
       await previewTable.updateComplete
-      const grid = previewTable.renderRoot.querySelector('ld-windowed-table') as any
+      const grid = previewTable.renderRoot.querySelector('lv-windowed-table') as any
       await grid.updateComplete
       const firstSemantic = Array.from(root.querySelectorAll<HTMLButtonElement>('.object-button')).find((button) => button.textContent?.includes('semantic view'))!
       firstSemantic.click()
@@ -232,7 +232,7 @@ function testDocument() {
         <style>
           html, body { margin: 0; min-height: 100%; }
           body { font-family: Inter, system-ui, sans-serif; }
-          ld-data-explorer { display: block; min-height: 720px; }
+          lv-data-explorer { display: block; min-height: 720px; }
         </style>
       </head>
       <body>

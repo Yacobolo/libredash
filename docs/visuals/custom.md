@@ -9,7 +9,7 @@ Every preview on this page is generated from the YAML shown below it using a fix
 
 ## Basic
 
-Reference `primary` as the named dataset and use query aliases in encodings. LibreDash rejects network data, inline values, transforms, parameters, and executable expressions.
+Reference `primary` as the named dataset and use query aliases in encodings. LeapView rejects network data, inline values, transforms, parameters, and executable expressions.
 
 {{< visual id="custom_monthly_revenue" >}}
 

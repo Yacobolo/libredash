@@ -43,7 +43,7 @@ export function selectedDatasetSource(envelope: VisualizationEnvelope, dataset: 
     const matches = selected.some((entry) => identityFields.every((identity) => Object.is(row[dataset.columns.indexOf(identity.id)], entry.datum.identity[identity.id])))
     return [...row, matches]
   })
-  return [[...dataset.columns, '__ld_selected'], ...rows]
+  return [[...dataset.columns, '__lv_selected'], ...rows]
 }
 
 export function baseOption(envelope: VisualizationEnvelope, context: RendererContext): EChartsTranslation {
@@ -64,7 +64,7 @@ export function baseOption(envelope: VisualizationEnvelope, context: RendererCon
     },
     title: envelope.status.kind === 'error' ? { text: envelope.status.message ?? 'Visualization error', textStyle: { color: context.colors.danger } } : undefined,
     graphic: statusGraphic(envelope, context),
-    visualMap: envelope.selection.length > 0 ? { show: false, dimension: '__ld_selected', pieces: [{ value: true, opacity: 1 }, { value: false, opacity: 0.35 }] } : undefined,
+    visualMap: envelope.selection.length > 0 ? { show: false, dimension: '__lv_selected', pieces: [{ value: true, opacity: 1 }, { value: false, opacity: 0.35 }] } : undefined,
   }
 }
 

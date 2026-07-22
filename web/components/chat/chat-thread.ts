@@ -48,7 +48,7 @@ class ChatThread extends LitElement {
       height: 100%;
       min-height: 0;
       overflow: hidden;
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
       font-family: var(--fontStack-system);
     }
 
@@ -64,7 +64,7 @@ class ChatThread extends LitElement {
       min-height: 0;
       grid-template-rows: minmax(0, 1fr);
       overflow: hidden;
-      background: var(--ld-bg-page);
+      background: var(--lv-bg-page);
     }
 
     .scroll {
@@ -72,39 +72,39 @@ class ChatThread extends LitElement {
       min-height: 0;
       overflow: auto;
       overscroll-behavior: contain;
-      padding: var(--ld-chat-thread-padding);
+      padding: var(--lv-chat-thread-padding);
     }
 
     .stack {
       display: grid;
-      width: min(100%, var(--ld-chat-stack-width));
+      width: min(100%, var(--lv-chat-stack-width));
       margin-inline: auto;
-      gap: var(--ld-chat-stack-gap);
+      gap: var(--lv-chat-stack-gap);
     }
 
     .alert {
       display: grid;
-      gap: var(--ld-space-sm);
+      gap: var(--lv-space-sm);
       align-content: center;
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-panel);
-      padding: var(--ld-chat-thread-padding);
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-body-sm);
+      border: var(--lv-border-muted);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-panel);
+      padding: var(--lv-chat-thread-padding);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-body-sm);
       text-align: center;
     }
 
     .alert {
-      border-color: var(--ld-line-danger-muted);
-      background: var(--ld-bg-danger-muted);
-      color: var(--ld-fg-default);
+      border-color: var(--lv-line-danger-muted);
+      background: var(--lv-bg-danger-muted);
+      color: var(--lv-fg-default);
       text-align: left;
     }
 
     .message {
       display: grid;
-      max-width: min(var(--ld-chat-message-width), 100%);
+      max-width: min(var(--lv-chat-message-width), 100%);
     }
 
     .message.user {
@@ -117,18 +117,18 @@ class ChatThread extends LitElement {
     }
 
     .label {
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-strong);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-strong);
     }
 
     .bubble {
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-panel);
-      padding: var(--ld-chat-bubble-padding-block) var(--ld-chat-bubble-padding-inline);
-      font-size: var(--ld-font-size-body-sm);
-      line-height: var(--ld-line-height-relaxed);
+      border: var(--lv-border-muted);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-panel);
+      padding: var(--lv-chat-bubble-padding-block) var(--lv-chat-bubble-padding-inline);
+      font-size: var(--lv-font-size-body-sm);
+      line-height: var(--lv-line-height-relaxed);
       overflow-wrap: anywhere;
     }
 
@@ -138,12 +138,12 @@ class ChatThread extends LitElement {
 
     .agent-turn {
       display: grid;
-      max-width: min(var(--ld-chat-message-width), 100%);
+      max-width: min(var(--lv-chat-message-width), 100%);
     }
 
     .agent-stack {
       display: grid;
-      gap: var(--ld-chat-agent-item-gap);
+      gap: var(--lv-chat-agent-item-gap);
     }
 
     .agent-markdown {
@@ -151,21 +151,21 @@ class ChatThread extends LitElement {
     }
 
     .user .bubble {
-      border-color: var(--ld-line-muted);
-      background: var(--ld-bg-panel-muted);
+      border-color: var(--lv-line-muted);
+      background: var(--lv-bg-panel-muted);
     }
 
     .message.error .bubble {
-      border-color: var(--ld-line-danger-muted);
-      background: var(--ld-bg-danger-muted);
+      border-color: var(--lv-line-danger-muted);
+      background: var(--lv-bg-danger-muted);
     }
 
     .tool-call {
       display: grid;
       width: fit-content;
       max-width: 100%;
-      margin-block: var(--ld-chat-agent-tool-gap);
-      gap: var(--ld-space-sm);
+      margin-block: var(--lv-chat-agent-tool-gap);
+      gap: var(--lv-space-sm);
     }
 
     .tool-call.has-artifact {
@@ -177,26 +177,26 @@ class ChatThread extends LitElement {
       width: fit-content;
       max-width: 100%;
       align-items: center;
-      gap: var(--ld-chat-activity-gap);
+      gap: var(--lv-chat-activity-gap);
       border: 0;
-      border-radius: var(--ld-radius-tight);
+      border-radius: var(--lv-radius-tight);
       background: transparent;
-      padding: var(--ld-space-2xs) 0;
-      color: var(--ld-fg-muted);
+      padding: var(--lv-space-2xs) 0;
+      color: var(--lv-fg-muted);
       cursor: pointer;
       font: inherit;
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
-      line-height: var(--ld-line-height-snug);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
+      line-height: var(--lv-line-height-snug);
       text-align: left;
-      transition: color var(--ld-transition-fast);
+      transition: color var(--lv-transition-fast);
     }
 
     .tool-icon {
       display: inline-flex;
-      width: var(--ld-chat-activity-icon-size);
-      height: var(--ld-chat-activity-icon-size);
-      flex: 0 0 var(--ld-chat-activity-icon-size);
+      width: var(--lv-chat-activity-icon-size);
+      height: var(--lv-chat-activity-icon-size);
+      flex: 0 0 var(--lv-chat-activity-icon-size);
       color: currentColor;
     }
 
@@ -212,7 +212,7 @@ class ChatThread extends LitElement {
     }
 
     .tool-call.running .tool-trigger {
-      color: var(--ld-fg-warning);
+      color: var(--lv-fg-warning);
     }
 
     .tool-call.running .tool-icon {
@@ -220,22 +220,22 @@ class ChatThread extends LitElement {
     }
 
     .tool-call.error .tool-trigger {
-      color: var(--ld-fg-danger);
+      color: var(--lv-fg-danger);
     }
 
     .tool-trigger:hover,
     .tool-trigger:focus-visible {
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
     }
 
     .tool-call.error .tool-trigger:hover,
     .tool-call.error .tool-trigger:focus-visible {
-      color: var(--ld-fg-danger);
+      color: var(--lv-fg-danger);
     }
 
     .tool-trigger:focus-visible {
-      outline: var(--ld-border-width-focus) solid var(--ld-line-emphasis);
-      outline-offset: var(--ld-space-xs);
+      outline: var(--lv-border-width-focus) solid var(--lv-line-emphasis);
+      outline-offset: var(--lv-space-xs);
     }
 
     .activity-text {
@@ -247,14 +247,14 @@ class ChatThread extends LitElement {
 
     .tool-chevron {
       display: inline-flex;
-      width: var(--ld-chat-activity-icon-size);
-      height: var(--ld-chat-activity-icon-size);
-      flex: 0 0 var(--ld-chat-activity-icon-size);
+      width: var(--lv-chat-activity-icon-size);
+      height: var(--lv-chat-activity-icon-size);
+      flex: 0 0 var(--lv-chat-activity-icon-size);
       opacity: 0;
-      transform: translateX(calc(-1 * var(--ld-space-xs)));
+      transform: translateX(calc(-1 * var(--lv-space-xs)));
       transition:
-        opacity var(--ld-transition-fast),
-        transform var(--ld-transition-fast);
+        opacity var(--lv-transition-fast),
+        transform var(--lv-transition-fast);
     }
 
     .tool-chevron svg {
@@ -282,68 +282,68 @@ class ChatThread extends LitElement {
     .tool-details {
       display: grid;
       max-width: min(42rem, 100%);
-      gap: var(--ld-space-md);
-      border-left: var(--ld-border-width-focus) solid var(--ld-line-muted);
-      padding-left: var(--ld-space-lg);
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      animation: tool-details-open var(--ld-transition-normal);
+      gap: var(--lv-space-md);
+      border-left: var(--lv-border-width-focus) solid var(--lv-line-muted);
+      padding-left: var(--lv-space-lg);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      animation: tool-details-open var(--lv-transition-normal);
       transform-origin: top left;
     }
 
     .tool-detail-block {
       display: grid;
-      gap: var(--ld-space-xs);
+      gap: var(--lv-space-xs);
     }
 
     .tool-detail-label {
-      color: var(--ld-fg-muted);
-      font-weight: var(--ld-font-weight-medium);
+      color: var(--lv-fg-muted);
+      font-weight: var(--lv-font-weight-medium);
     }
 
     .tool-detail-block pre {
-      max-height: var(--ld-chat-tool-max-height);
+      max-height: var(--lv-chat-tool-max-height);
       max-width: 100%;
       overflow: auto;
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-control);
+      border: var(--lv-border-muted);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-control);
       margin: 0;
-      padding: var(--ld-chat-pre-padding-block) var(--ld-chat-pre-padding-inline);
-      color: var(--ld-fg-default);
+      padding: var(--lv-chat-pre-padding-block) var(--lv-chat-pre-padding-inline);
+      color: var(--lv-fg-default);
       font-family: var(--fontStack-monospace);
-      font-size: var(--ld-font-size-caption);
-      line-height: var(--ld-line-height-snug);
+      font-size: var(--lv-font-size-caption);
+      line-height: var(--lv-line-height-snug);
       white-space: pre-wrap;
     }
 
-    .tool-detail-block ld-code-block {
+    .tool-detail-block lv-code-block {
       max-width: 100%;
     }
 
     .tool-error {
-      color: var(--ld-fg-danger);
+      color: var(--lv-fg-danger);
     }
 
-    ld-visual-artifact {
+    lv-visual-artifact {
       display: block;
       width: 100%;
       min-width: 0;
       overflow: hidden;
     }
 
-    ld-visual-artifact:not([type='table']):not([type='matrix']):not([type='pivot']) {
+    lv-visual-artifact:not([type='table']):not([type='matrix']):not([type='pivot']) {
       height: 18rem;
     }
 
-    ld-visual-artifact:is([type='table'], [type='matrix'], [type='pivot']) {
+    lv-visual-artifact:is([type='table'], [type='matrix'], [type='pivot']) {
       height: 22rem;
     }
 
     @keyframes tool-details-open {
       from {
         opacity: 0;
-        transform: translateY(calc(-1 * var(--ld-chat-tool-disclosure-offset)));
+        transform: translateY(calc(-1 * var(--lv-chat-tool-disclosure-offset)));
       }
       to {
         opacity: 1;
@@ -363,7 +363,7 @@ class ChatThread extends LitElement {
 
     @media (max-width: 720px) {
       .scroll {
-        padding: var(--ld-chat-thread-padding-compact);
+        padding: var(--lv-chat-thread-padding-compact);
       }
     }
   `
@@ -455,11 +455,11 @@ class ChatThread extends LitElement {
 
   private renderBubble(content: string, renderMarkdown: boolean) {
     const className = ['bubble', renderMarkdown ? 'markdown' : 'plain'].join(' ')
-    return html`<div class=${className}>${renderMarkdown ? html`<ld-markdown-view .value=${content}></ld-markdown-view>` : content}</div>`
+    return html`<div class=${className}>${renderMarkdown ? html`<lv-markdown-view .value=${content}></lv-markdown-view>` : content}</div>`
   }
 
   private renderAssistantContent(content: string) {
-    return html`<ld-markdown-view class="agent-markdown" .value=${content}></ld-markdown-view>`
+    return html`<lv-markdown-view class="agent-markdown" .value=${content}></lv-markdown-view>`
   }
 
   private renderTool(item: ChatTranscriptItemSignal) {
@@ -492,7 +492,7 @@ class ChatThread extends LitElement {
 
   private renderArtifact(artifact: ChatArtifactSignal) {
     const payload = this.resolvedVisuals[artifact.id] || null
-    return html`<ld-visual-artifact type=${artifact.type} artifact-id=${artifact.id} .payload=${payload ?? null}></ld-visual-artifact>`
+    return html`<lv-visual-artifact type=${artifact.type} artifact-id=${artifact.id} .payload=${payload ?? null}></lv-visual-artifact>`
   }
 
   private renderToolDetails(item: ChatTranscriptItemSignal, detailsID: string) {
@@ -510,7 +510,7 @@ class ChatThread extends LitElement {
     return html`
       <div class="tool-detail-block">
         <div class="tool-detail-label">${label}</div>
-        <ld-code-block compact language=${language} .code=${value}></ld-code-block>
+        <lv-code-block compact language=${language} .code=${value}></lv-code-block>
       </div>
     `
   }
@@ -629,4 +629,4 @@ function statusLabel(status: string): string {
   }
 }
 
-if (!customElements.get('ld-chat-thread')) customElements.define('ld-chat-thread', ChatThread)
+if (!customElements.get('lv-chat-thread')) customElements.define('lv-chat-thread', ChatThread)

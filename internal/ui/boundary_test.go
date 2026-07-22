@@ -11,7 +11,7 @@ import (
 
 func TestUIPackageDoesNotImportHeadlessAPIContract(t *testing.T) {
 	assertNoForbiddenImports(t, ".", map[string]bool{
-		"github.com/Yacobolo/libredash/internal/api": true,
+		"github.com/Yacobolo/leapview/internal/api": true,
 	})
 }
 

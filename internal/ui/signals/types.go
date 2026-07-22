@@ -6,14 +6,14 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/agent"
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	"github.com/Yacobolo/libredash/internal/brand"
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	dashboarddefinition "github.com/Yacobolo/libredash/internal/dashboard/definition"
-	visualizationdefinition "github.com/Yacobolo/libredash/internal/visualization/definition"
-	visualizationruntime "github.com/Yacobolo/libredash/internal/visualization/runtime"
-	workspaceview "github.com/Yacobolo/libredash/internal/workspace"
+	"github.com/Yacobolo/leapview/internal/agent"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	"github.com/Yacobolo/leapview/internal/brand"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
+	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
+	visualizationruntime "github.com/Yacobolo/leapview/internal/visualization/runtime"
+	workspaceview "github.com/Yacobolo/leapview/internal/workspace"
 )
 
 const (

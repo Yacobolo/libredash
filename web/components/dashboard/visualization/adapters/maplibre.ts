@@ -29,12 +29,12 @@ export { coordinateReferenceGrid, fitMapToGeographicData, resetMapToHome } from 
 
 export const adapter: RendererAdapter = {
   async mount(container, envelope, context) {
-    const frame = document.createElement('div'); frame.style.cssText = 'position:relative;width:100%;height:100%;overflow:hidden;background:var(--ld-chart-surface,var(--ld-bg-panel,#fff))'
+    const frame = document.createElement('div'); frame.style.cssText = 'position:relative;width:100%;height:100%;overflow:hidden;background:var(--lv-chart-surface,var(--lv-bg-panel,#fff))'
     setRendererFramePresented(frame, false)
     installMapLibreChromeStyles(frame)
     const surface = document.createElement('div'); surface.style.cssText = 'position:absolute;inset:0'
     const attribution = document.createElement('div'); attribution.dataset.mapAttribution = ''; attribution.setAttribute('role', 'note'); attribution.setAttribute('aria-label', 'Map attribution')
-    attribution.style.cssText = 'position:absolute;right:6px;bottom:6px;z-index:1;max-width:calc(100% - 12px);padding:2px 5px;border-radius:4px;background:color-mix(in srgb,var(--ld-bg-panel,#fff) 88%,transparent);color:var(--ld-fg-muted,#57606a);font:10px/1.3 var(--ld-font-family-ui,system-ui);pointer-events:none;text-align:right'
+    attribution.style.cssText = 'position:absolute;right:6px;bottom:6px;z-index:1;max-width:calc(100% - 12px);padding:2px 5px;border-radius:4px;background:color-mix(in srgb,var(--lv-bg-panel,#fff) 88%,transparent);color:var(--lv-fg-muted,#57606a);font:10px/1.3 var(--lv-font-family-ui,system-ui);pointer-events:none;text-align:right'
     frame.append(surface, attribution); container.replaceChildren(frame)
     const pointerOptions = mapPointerOptions(envelope)
     const backgroundColor = getComputedStyle(frame).backgroundColor || '#f6f8fa'
@@ -114,15 +114,15 @@ class MapLibreHandle implements RendererHandle {
     this.tooltip = document.createElement('div')
     this.tooltip.setAttribute('role', 'tooltip')
     this.tooltip.hidden = true
-    this.tooltip.style.cssText = 'position:absolute;z-index:4;max-width:280px;padding:8px 10px;border:1px solid var(--ld-line-default,#d0d7de);border-radius:6px;background:color-mix(in srgb,var(--ld-bg-panel,#fff) 96%,transparent);box-shadow:var(--ld-shadow-floating,0 8px 24px rgba(140,149,159,.2));color:var(--ld-fg-default,#1f2328);font:12px/1.45 var(--ld-font-family-ui,system-ui);pointer-events:none'
+    this.tooltip.style.cssText = 'position:absolute;z-index:4;max-width:280px;padding:8px 10px;border:1px solid var(--lv-line-default,#d0d7de);border-radius:6px;background:color-mix(in srgb,var(--lv-bg-panel,#fff) 96%,transparent);box-shadow:var(--lv-shadow-floating,0 8px 24px rgba(140,149,159,.2));color:var(--lv-fg-default,#1f2328);font:12px/1.45 var(--lv-font-family-ui,system-ui);pointer-events:none'
     this.legend = document.createElement('div')
     this.legend.setAttribute('role', 'note')
     this.legend.dataset.mapLegend = ''
     this.legend.hidden = true
-    this.legend.style.cssText = 'position:absolute;z-index:3;right:10px;bottom:28px;min-width:132px;max-width:220px;padding:8px;border:1px solid var(--ld-line-default,#d0d7de);border-radius:6px;background:color-mix(in srgb,var(--ld-bg-panel,#fff) 94%,transparent);color:var(--ld-fg-default,#1f2328);font:11px/1.35 var(--ld-font-family-ui,system-ui)'
+    this.legend.style.cssText = 'position:absolute;z-index:3;right:10px;bottom:28px;min-width:132px;max-width:220px;padding:8px;border:1px solid var(--lv-line-default,#d0d7de);border-radius:6px;background:color-mix(in srgb,var(--lv-bg-panel,#fff) 94%,transparent);color:var(--lv-fg-default,#1f2328);font:11px/1.35 var(--lv-font-family-ui,system-ui)'
     this.accessibleTable = document.createElement('details')
     this.accessibleTable.dataset.mapDataTable = ''
-    this.accessibleTable.style.cssText = 'position:absolute;z-index:3;left:10px;bottom:28px;max-width:min(520px,calc(100% - 20px));max-height:55%;overflow:auto;border:1px solid var(--ld-line-default,#d0d7de);border-radius:6px;background:color-mix(in srgb,var(--ld-bg-panel,#fff) 96%,transparent);color:var(--ld-fg-default,#1f2328);font:11px/1.35 var(--ld-font-family-ui,system-ui);box-shadow:0 1px 3px rgba(31,35,40,.12)'
+    this.accessibleTable.style.cssText = 'position:absolute;z-index:3;left:10px;bottom:28px;max-width:min(520px,calc(100% - 20px));max-height:55%;overflow:auto;border:1px solid var(--lv-line-default,#d0d7de);border-radius:6px;background:color-mix(in srgb,var(--lv-bg-panel,#fff) 96%,transparent);color:var(--lv-fg-default,#1f2328);font:11px/1.35 var(--lv-font-family-ui,system-ui);box-shadow:0 1px 3px rgba(31,35,40,.12)'
     this.frame.append(this.tooltip, this.legend, this.accessibleTable)
     this.map.on('click', this.handleClick)
     this.map.on('mousemove', this.handlePointerMove)
@@ -224,7 +224,7 @@ class MapLibreHandle implements RendererHandle {
   private addCoordinateReferenceGrid(collections: FeatureCollection[]): void {
     const data = coordinateReferenceGrid(collections)
     if (data.features.length === 0) return
-    let id = '__ld-coordinate-reference'
+    let id = '__lv-coordinate-reference'
     while (this.map.getSource(id) || this.map.getLayer(id)) id += '-'
     this.map.addSource(id, { type: 'geojson', data })
     this.map.addLayer({
@@ -254,7 +254,7 @@ class MapLibreHandle implements RendererHandle {
       data = coordinateGeometry(envelope, layer)
     }
     data = applyFeatureScales(data, layer)
-    const id = `ld-${layer.id}`
+    const id = `lv-${layer.id}`
     const sourceOptions: any = { type: 'geojson', data }
     if (layer.kind === 'point' && layer.cluster.enabled) Object.assign(sourceOptions, { cluster: true, clusterRadius: layer.cluster.radius, clusterMaxZoom: layer.cluster.maximumZoom, clusterMinPoints: layer.cluster.minimumPoints })
     this.map.addSource(id, sourceOptions)
@@ -317,7 +317,7 @@ class MapLibreHandle implements RendererHandle {
       return
     }
     this.spatialSelectionControl ??= new MapSpatialSelectionControl(this.map, this.frame, (command) => {
-      this.container.dispatchEvent(new CustomEvent('ld-interaction-spatial-select', { bubbles: true, composed: true, detail: command }))
+      this.container.dispatchEvent(new CustomEvent('lv-interaction-spatial-select', { bubbles: true, composed: true, detail: command }))
     })
     if (!this.spatialSelectionControl.element.isConnected) this.frame.append(this.spatialSelectionControl.element)
     this.spatialSelectionControl.update(envelope)
@@ -340,8 +340,8 @@ class MapLibreHandle implements RendererHandle {
 
   private addDataLabelLayer(sourceID: string, layer: Extract<VisualizationGeographicLayer, { kind: 'point' | 'choropleth' }>, theme: 'auto' | 'light' | 'dark'): void {
     const id = `${sourceID}-data-label`
-    this.map.addLayer({ id, source: sourceID, type: 'symbol', filter: layer.kind === 'point' ? ['all', ['!', ['has', 'point_count']], ['!=', ['get', '__ld_label'], '']] : ['!=', ['get', '__ld_label'], ''], minzoom: layer.visibility.minimumZoom, maxzoom: layer.visibility.maximumZoom, layout: {
-      'text-field': ['get', '__ld_label'], 'text-font': ['Noto Sans Medium'], 'text-size': 11, 'text-offset': [0, layer.kind === 'point' ? 1.25 : 0], 'text-anchor': layer.kind === 'point' ? 'top' : 'center', 'text-optional': true,
+    this.map.addLayer({ id, source: sourceID, type: 'symbol', filter: layer.kind === 'point' ? ['all', ['!', ['has', 'point_count']], ['!=', ['get', '__lv_label'], '']] : ['!=', ['get', '__lv_label'], ''], minzoom: layer.visibility.minimumZoom, maxzoom: layer.visibility.maximumZoom, layout: {
+      'text-field': ['get', '__lv_label'], 'text-font': ['Noto Sans Medium'], 'text-size': 11, 'text-offset': [0, layer.kind === 'point' ? 1.25 : 0], 'text-anchor': layer.kind === 'point' ? 'top' : 'center', 'text-optional': true,
     }, paint: { 'text-color': theme === 'dark' ? '#f0f6fc' : '#1f2328', 'text-halo-color': theme === 'dark' ? '#0d1821' : '#ffffff', 'text-halo-width': 1.25 } })
     this.layerIDs.push(id)
   }
@@ -353,7 +353,7 @@ class MapLibreHandle implements RendererHandle {
     const fragment = document.createDocumentFragment()
     for (const entry of entries) {
       const row = document.createElement('div'); row.style.cssText = 'display:grid;grid-template-columns:minmax(64px,auto) minmax(0,1fr);gap:10px'
-      const label = document.createElement('span'); label.style.color = 'var(--ld-fg-muted,#57606a)'; label.textContent = entry.label
+      const label = document.createElement('span'); label.style.color = 'var(--lv-fg-muted,#57606a)'; label.textContent = entry.label
       const value = document.createElement('strong'); value.style.cssText = 'font-weight:600;text-align:right;overflow-wrap:anywhere'; value.textContent = entry.value
       row.append(label, value); fragment.append(row)
     }
@@ -372,8 +372,8 @@ class MapLibreHandle implements RendererHandle {
     }
     if (controls.reset) {
       const button = document.createElement('button')
-      button.type = 'button'; button.className = 'ld-map-reset'; button.textContent = 'Reset view'; button.setAttribute('aria-label', 'Reset map view')
-      button.style.cssText = 'position:absolute;z-index:3;top:10px;right:50px;padding:5px 8px;border:1px solid var(--ld-line-default,#d0d7de);border-radius:4px;background:var(--ld-bg-panel,#fff);color:var(--ld-fg-default,#1f2328);font:600 11px/1.2 var(--ld-font-family-ui,system-ui);cursor:pointer;box-shadow:0 1px 2px rgba(31,35,40,.08)'
+      button.type = 'button'; button.className = 'lv-map-reset'; button.textContent = 'Reset view'; button.setAttribute('aria-label', 'Reset map view')
+      button.style.cssText = 'position:absolute;z-index:3;top:10px;right:50px;padding:5px 8px;border:1px solid var(--lv-line-default,#d0d7de);border-radius:4px;background:var(--lv-bg-panel,#fff);color:var(--lv-fg-default,#1f2328);font:600 11px/1.2 var(--lv-font-family-ui,system-ui);cursor:pointer;box-shadow:0 1px 2px rgba(31,35,40,.08)'
       button.addEventListener('click', () => { if (this.homeCamera) resetMapToHome(this.map, this.homeCamera) })
       this.frame.append(button); this.resetButton = button
     }
@@ -414,14 +414,14 @@ class MapLibreHandle implements RendererHandle {
     summary.textContent = `View map data (${data.rows.length}${data.totalRows > data.rows.length ? ` of ${data.totalRows}` : ''} rows)`
     summary.style.cssText = 'padding:6px 8px;cursor:pointer;font-weight:600;white-space:nowrap'
     const table = document.createElement('table')
-    table.style.cssText = 'border-collapse:collapse;min-width:100%;background:var(--ld-bg-panel,#fff)'
+    table.style.cssText = 'border-collapse:collapse;min-width:100%;background:var(--lv-bg-panel,#fff)'
     const caption = document.createElement('caption')
     caption.textContent = envelope.spec.accessibility.summary ?? envelope.spec.accessibility.description
-    caption.style.cssText = 'padding:6px 8px;text-align:left;color:var(--ld-fg-muted,#57606a)'
+    caption.style.cssText = 'padding:6px 8px;text-align:left;color:var(--lv-fg-muted,#57606a)'
     const header = document.createElement('tr')
     for (const column of data.columns) {
       const cell = document.createElement('th'); cell.scope = 'col'; cell.textContent = column.label
-      cell.style.cssText = 'padding:5px 8px;border-top:1px solid var(--ld-line-subtle,#d8dee4);border-bottom:1px solid var(--ld-line-default,#d0d7de);text-align:left;white-space:nowrap'
+      cell.style.cssText = 'padding:5px 8px;border-top:1px solid var(--lv-line-subtle,#d8dee4);border-bottom:1px solid var(--lv-line-default,#d0d7de);text-align:left;white-space:nowrap'
       header.append(cell)
     }
     const head = document.createElement('thead'); head.append(header)
@@ -430,7 +430,7 @@ class MapLibreHandle implements RendererHandle {
       const element = document.createElement('tr')
       for (const value of row) {
         const cell = document.createElement('td'); cell.textContent = value
-        cell.style.cssText = 'padding:4px 8px;border-bottom:1px solid var(--ld-line-subtle,#d8dee4);white-space:nowrap'
+        cell.style.cssText = 'padding:4px 8px;border-bottom:1px solid var(--lv-line-subtle,#d8dee4);white-space:nowrap'
         element.append(cell)
       }
       body.append(element)
@@ -440,7 +440,7 @@ class MapLibreHandle implements RendererHandle {
   }
 
   private dispatchInteraction(command: OptimisticInteractionCommand): void {
-    this.container.dispatchEvent(new CustomEvent('ld-interaction-select', { bubbles: true, composed: true, detail: command }))
+    this.container.dispatchEvent(new CustomEvent('lv-interaction-select', { bubbles: true, composed: true, detail: command }))
   }
 
   private readonly handleClick = (event: MapMouseEvent) => {
@@ -476,7 +476,7 @@ class MapLibreHandle implements RendererHandle {
       if (this.lastSpatialRequest?.key === key && now - this.lastSpatialRequest.at < 500) return
       this.spatialRequestSeq = requestSeq
       this.lastSpatialRequest = { key, at: now }
-      this.container.dispatchEvent(new CustomEvent('ld-visual-spatial-window-change', { bubbles: true, composed: true, detail: request }))
+      this.container.dispatchEvent(new CustomEvent('lv-visual-spatial-window-change', { bubbles: true, composed: true, detail: request }))
     }, 120)
   }
 

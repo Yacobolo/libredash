@@ -9,11 +9,11 @@ variable "hcloud_token" {
 variable "name" {
   description = "Name prefix for Hetzner resources."
   type        = string
-  default     = "libredash"
+  default     = "leapview"
 }
 
 variable "server_type" {
-  description = "Hetzner server type. cpx22 is the supported baseline for a small LibreDash instance."
+  description = "Hetzner server type. cpx22 is the supported baseline for a small LeapView instance."
   type        = string
   default     = "cpx22"
 }
@@ -71,13 +71,13 @@ variable "admin_email" {
   }
 }
 
-variable "libredash_image" {
-  description = "Public LibreDash OCI image pinned to an immutable sha256 digest."
+variable "leapview_image" {
+  description = "Public LeapView OCI image pinned to an immutable sha256 digest."
   type        = string
 
   validation {
-    condition     = can(regex("^[A-Za-z0-9._:/-]+@sha256:[0-9a-f]{64}$", var.libredash_image))
-    error_message = "libredash_image must be an immutable OCI reference ending in @sha256:<64 lowercase hex characters>."
+    condition     = can(regex("^[A-Za-z0-9._:/-]+@sha256:[0-9a-f]{64}$", var.leapview_image))
+    error_message = "leapview_image must be an immutable OCI reference ending in @sha256:<64 lowercase hex characters>."
   }
 }
 

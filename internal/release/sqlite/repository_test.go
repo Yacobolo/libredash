@@ -5,12 +5,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/platform"
-	"github.com/Yacobolo/libredash/internal/release"
+	"github.com/Yacobolo/leapview/internal/platform"
+	"github.com/Yacobolo/leapview/internal/release"
 )
 
 func TestReleaseLifecycleIsIdempotentAndImmutable(t *testing.T) {
-	store, err := platform.Open(t.Context(), filepath.Join(t.TempDir(), "libredash.db"))
+	store, err := platform.Open(t.Context(), filepath.Join(t.TempDir(), "leapview.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +64,7 @@ func TestReleaseLifecycleIsIdempotentAndImmutable(t *testing.T) {
 }
 
 func TestReleaseFinalizationRejectsMissingOrMismatchedArtifacts(t *testing.T) {
-	store, err := platform.Open(t.Context(), filepath.Join(t.TempDir(), "libredash.db"))
+	store, err := platform.Open(t.Context(), filepath.Join(t.TempDir(), "leapview.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	"github.com/Yacobolo/libredash/internal/dashboard/consumer"
-	dashboardruntime "github.com/Yacobolo/libredash/internal/dashboard/runtime"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	"github.com/Yacobolo/leapview/internal/dashboard/consumer"
+	dashboardruntime "github.com/Yacobolo/leapview/internal/dashboard/runtime"
 )
 
 func TestCommandsPublishReloadPatchesToOpenStream(t *testing.T) {

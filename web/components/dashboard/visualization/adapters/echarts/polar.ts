@@ -16,7 +16,7 @@ export function polarOption(envelope: VisualizationEnvelope, context: RendererCo
     return {
       series: [{
         id: 'series:polar:gauge', type: 'gauge', min: minimum, max: maximum,
-        data: [{ value, __ld_dataset: dataset?.id ?? 'primary', __ld_row_index: 0 }], pointer: { show: spec.presentation.showPointer },
+        data: [{ value, __lv_dataset: dataset?.id ?? 'primary', __lv_row_index: 0 }], pointer: { show: spec.presentation.showPointer },
         progress: { show: true, width: spec.presentation.progressWidth }, axisLine: { lineStyle: { color: colors } },
         detail: { formatter: (raw: unknown) => formatField(envelope, spec.value, raw, context), color: context.colors.foreground },
       }],

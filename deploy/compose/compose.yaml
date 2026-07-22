@@ -1,8 +1,8 @@
-name: ${COMPOSE_PROJECT_NAME:-libredash}
+name: ${COMPOSE_PROJECT_NAME:-leapview}
 
 services:
-  libredash:
-    image: ${LIBREDASH_IMAGE:?set LIBREDASH_IMAGE in deployment.env}
+  leapview:
+    image: ${LEAPVIEW_IMAGE:?set LEAPVIEW_IMAGE in deployment.env}
     restart: unless-stopped
     init: true
     read_only: true
@@ -11,15 +11,15 @@ services:
     pids_limit: 1024
     mem_limit: ${APP_MEMORY_LIMIT:-3g}
     stop_grace_period: 2m
-    env_file: [libredash.env]
+    env_file: [leapview.env]
     ports:
       - "${COMPOSE_APP_BIND:-127.0.0.1:8080}:8080"
     volumes:
-      - libredash-state:/var/lib/libredash
+      - leapview-state:/var/lib/leapview
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=512m
     healthcheck:
-      test: [CMD, libredash, healthcheck]
+      test: [CMD, leapview, healthcheck]
       interval: 30s
       timeout: 5s
       start_period: 20s
@@ -29,4 +29,4 @@ services:
       options: {max-size: 20m, max-file: "5"}
 
 volumes:
-  libredash-state:
+  leapview-state:

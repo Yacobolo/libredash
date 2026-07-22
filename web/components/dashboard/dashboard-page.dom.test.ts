@@ -52,35 +52,35 @@ for (const viewport of [{ name: 'desktop', width: 1280, height: 820 }, { name: '
     const page = await browser.newPage({ viewport })
     try {
       await page.goto(baseURL)
-      await page.waitForFunction(() => customElements.get('ld-dashboard-page') && customElements.get('ld-visualization-host'))
-      await page.waitForFunction(() => (document.querySelector('ld-dashboard-page') as any)?.page?.title === 'Executive Sales Dashboard')
+      await page.waitForFunction(() => customElements.get('lv-dashboard-page') && customElements.get('lv-visualization-host'))
+      await page.waitForFunction(() => (document.querySelector('lv-dashboard-page') as any)?.page?.title === 'Executive Sales Dashboard')
       await page.waitForFunction(() => {
-        const dashboard = document.querySelector('ld-dashboard-page') as any
-        const hosts = Array.from(dashboard?.shadowRoot?.querySelectorAll('ld-visualization-host') ?? []) as any[]
+        const dashboard = document.querySelector('lv-dashboard-page') as any
+        const hosts = Array.from(dashboard?.shadowRoot?.querySelectorAll('lv-visualization-host') ?? []) as any[]
         const tableHost = hosts.find((host) => host.envelope?.visualID === 'orders')
-        return Boolean(tableHost?.shadowRoot?.querySelector('ld-report-table'))
+        return Boolean(tableHost?.shadowRoot?.querySelector('lv-report-table'))
       })
-      const state = await page.locator('ld-dashboard-page').evaluate(async (element: any) => {
+      const state = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
         await element.updateComplete
         const root = element.shadowRoot
-        const hosts = Array.from(root.querySelectorAll('ld-visualization-host')) as any[]
+        const hosts = Array.from(root.querySelectorAll('lv-visualization-host')) as any[]
         await Promise.all(hosts.map((host) => host.updateComplete))
         const tableHost = hosts.find((host) => host.envelope?.visualID === 'orders')
-        const table = tableHost?.shadowRoot?.querySelector('ld-report-table') as any
+        const table = tableHost?.shadowRoot?.querySelector('lv-report-table') as any
         await table?.updateComplete
         const kpiHost = hosts.find((host) => host.envelope?.visualID === 'orders_kpi')
-        const kpi = kpiHost?.shadowRoot?.querySelector('.ld-kpi-card') as HTMLElement | null
-        const kpiLabel = kpi?.querySelector('.ld-visualization-label') as HTMLElement | null
-        const kpiValue = kpi?.querySelector('.ld-visualization-kpi') as HTMLElement | null
-        const canvas = root.querySelector('ld-report-canvas') as any
+        const kpi = kpiHost?.shadowRoot?.querySelector('.lv-kpi-card') as HTMLElement | null
+        const kpiLabel = kpi?.querySelector('.lv-visualization-label') as HTMLElement | null
+        const kpiValue = kpi?.querySelector('.lv-visualization-kpi') as HTMLElement | null
+        const canvas = root.querySelector('lv-report-canvas') as any
         await canvas.updateComplete
         const assigned = (canvas.shadowRoot.querySelector('slot') as HTMLSlotElement).assignedElements() as HTMLElement[]
-        const visualFrame = (id: string) => assigned.find((item) => (item.querySelector('ld-visualization-host') as any)?.envelope?.visualID === id)?.getBoundingClientRect()
+        const visualFrame = (id: string) => assigned.find((item) => (item.querySelector('lv-visualization-host') as any)?.envelope?.visualID === id)?.getBoundingClientRect()
         const chart = visualFrame('orders_chart')
         const tableFrame = visualFrame('orders')
         return {
           title: root.querySelector('h1')?.textContent?.trim(), hostCount: hosts.length,
-          legacyCount: root.querySelectorAll('ld-echart, ld-kpi-card, ld-report-table').length,
+          legacyCount: root.querySelectorAll('lv-echart, lv-kpi-card, lv-report-table').length,
           kinds: hosts.map((host) => host.envelope?.spec?.kind).sort(),
           statuses: Object.fromEntries(hosts.map((host) => [host.envelope?.visualID, host.envelope?.status?.kind])),
           tableText: table?.shadowRoot?.textContent?.replace(/\s+/g, ' ').trim(),
@@ -90,7 +90,7 @@ for (const viewport of [{ name: 'desktop', width: 1280, height: 820 }, { name: '
             tone: kpi?.dataset.tone,
             label: kpiLabel?.textContent?.trim(),
             value: kpiValue?.textContent?.trim(),
-            note: kpi?.querySelector('.ld-visualization-note')?.textContent?.trim(),
+            note: kpi?.querySelector('.lv-visualization-note')?.textContent?.trim(),
             display: kpi ? getComputedStyle(kpi).display : '',
             valueSize: kpiValue ? Number.parseFloat(getComputedStyle(kpiValue).fontSize) : 0,
             labelSize: kpiLabel ? Number.parseFloat(getComputedStyle(kpiLabel).fontSize) : 0,
@@ -127,20 +127,20 @@ test('windowed table keeps a bounded DOM and requests unloaded chunks while scro
   try {
     await page.goto(baseURL)
     await page.waitForFunction(() => {
-      const dashboard = document.querySelector('ld-dashboard-page') as any
-      const hosts = Array.from(dashboard?.shadowRoot?.querySelectorAll('ld-visualization-host') ?? []) as any[]
+      const dashboard = document.querySelector('lv-dashboard-page') as any
+      const hosts = Array.from(dashboard?.shadowRoot?.querySelectorAll('lv-visualization-host') ?? []) as any[]
       const tableHost = hosts.find((host) => host.envelope?.visualID === 'orders')
-      return Boolean(tableHost?.shadowRoot?.querySelector('ld-report-table')?.shadowRoot?.querySelector('.table-scrollport'))
+      return Boolean(tableHost?.shadowRoot?.querySelector('lv-report-table')?.shadowRoot?.querySelector('.table-scrollport'))
     })
-    const result = await page.locator('ld-dashboard-page').evaluate(async (dashboard: any) => {
-      const hosts = Array.from(dashboard.shadowRoot.querySelectorAll('ld-visualization-host')) as any[]
+    const result = await page.locator('lv-dashboard-page').evaluate(async (dashboard: any) => {
+      const hosts = Array.from(dashboard.shadowRoot.querySelectorAll('lv-visualization-host')) as any[]
       const tableHost = hosts.find((host) => host.envelope?.visualID === 'orders')
-      const table = tableHost.shadowRoot.querySelector('ld-report-table') as any
+      const table = tableHost.shadowRoot.querySelector('lv-report-table') as any
       await table.updateComplete
       const scrollport = table.shadowRoot.querySelector('.table-scrollport') as HTMLElement
       const request = new Promise<any>((resolve, reject) => {
         const timeout = window.setTimeout(() => reject(new Error('window request was not emitted')), 1_000)
-        dashboard.addEventListener('ld-visualization-window-request', (event: Event) => {
+        dashboard.addEventListener('lv-visualization-window-request', (event: Event) => {
           window.clearTimeout(timeout)
           resolve((event as CustomEvent).detail)
         }, { once: true })
@@ -173,8 +173,8 @@ test('dashboard refresh progress is owned by the latest stream generation', asyn
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => (document.querySelector('ld-dashboard-page') as any)?.page?.title === 'Executive Sales Dashboard')
-    const states = await page.locator('ld-dashboard-page').evaluate(async (element: any) => {
+    await page.waitForFunction(() => (document.querySelector('lv-dashboard-page') as any)?.page?.title === 'Executive Sales Dashboard')
+    const states = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
       const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev')
       const read = async () => {
         await element.updateComplete
@@ -200,21 +200,21 @@ test('dashboard keeps the source visualization selected through canonicalization
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => (document.querySelector('ld-dashboard-page') as any)?.page?.title === 'Executive Sales Dashboard')
-    const selections = await page.locator('ld-dashboard-page').evaluate(async (element: any) => {
+    await page.waitForFunction(() => (document.querySelector('lv-dashboard-page') as any)?.page?.title === 'Executive Sales Dashboard')
+    const selections = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
       const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev')
       const readSelection = async () => {
         await element.updateComplete
         await Promise.resolve()
         await element.updateComplete
-        const host = Array.from(element.shadowRoot.querySelectorAll('ld-visualization-host') as NodeListOf<any>)
+        const host = Array.from(element.shadowRoot.querySelectorAll('lv-visualization-host') as NodeListOf<any>)
           .find((candidate: any) => candidate.envelope?.visualID === 'orders_chart')
         return host.envelope.selection
       }
       await element.updateComplete
-      const source = Array.from(element.shadowRoot.querySelectorAll('ld-visualization-host') as NodeListOf<any>)
+      const source = Array.from(element.shadowRoot.querySelectorAll('lv-visualization-host') as NodeListOf<any>)
         .find((host: any) => host.envelope?.visualID === 'orders_chart')
-      source.dispatchEvent(new CustomEvent('ld-interaction-select', { bubbles: true, composed: true, detail: {
+      source.dispatchEvent(new CustomEvent('lv-interaction-select', { bubbles: true, composed: true, detail: {
         sourceKind: 'visual', sourceId: 'orders_chart', interactionKind: 'selection', action: 'set', toggle: true,
         mappings: [{ field: 'orders.status', fact: 'orders', value: 'delivered', label: 'Delivered' }],
       } }))
@@ -247,10 +247,10 @@ test('visualization host renders the shared title and expands without moving the
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => (document.querySelector('ld-dashboard-page') as any)?.page?.title === 'Executive Sales Dashboard')
-    const initial = await page.locator('ld-dashboard-page').evaluate(async (element: any) => {
+    await page.waitForFunction(() => (document.querySelector('lv-dashboard-page') as any)?.page?.title === 'Executive Sales Dashboard')
+    const initial = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
       await element.updateComplete
-      const hosts = Array.from(element.shadowRoot.querySelectorAll('ld-visualization-host') as NodeListOf<any>)
+      const hosts = Array.from(element.shadowRoot.querySelectorAll('lv-visualization-host') as NodeListOf<any>)
       const host = hosts.find((candidate: any) => candidate.envelope?.visualID === 'orders_chart')
       await host.updateComplete
       const title = host.shadowRoot.querySelector('[data-visualization-title]')?.textContent?.trim()
@@ -264,13 +264,13 @@ test('visualization host renders the shared title and expands without moving the
 
     await page.locator('[data-visualization-id="orders_chart"][data-visualization-expand]').click()
     await page.waitForFunction(() => {
-      const dashboard = document.querySelector('ld-dashboard-page')
-      return Boolean(dashboard?.shadowRoot?.querySelector('ld-visual-modal')?.shadowRoot?.querySelector('[role="dialog"]'))
+      const dashboard = document.querySelector('lv-dashboard-page')
+      return Boolean(dashboard?.shadowRoot?.querySelector('lv-visual-modal')?.shadowRoot?.querySelector('[role="dialog"]'))
     })
-    const focused = await page.locator('ld-dashboard-page').evaluate((dashboard: any) => {
-      const host = Array.from(dashboard.shadowRoot.querySelectorAll('ld-visualization-host') as NodeListOf<any>)
+    const focused = await page.locator('lv-dashboard-page').evaluate((dashboard: any) => {
+      const host = Array.from(dashboard.shadowRoot.querySelectorAll('lv-visualization-host') as NodeListOf<any>)
         .find((candidate: any) => candidate.envelope?.visualID === 'orders_chart') as HTMLElement | undefined
-      const modal = dashboard.shadowRoot.querySelector('ld-visual-modal') as HTMLElement
+      const modal = dashboard.shadowRoot.querySelector('lv-visual-modal') as HTMLElement
       const clone = modal.querySelector('[data-visual-focus-clone]') as HTMLElement | null
       return {
         dialog: modal.shadowRoot?.querySelector('[role="dialog"]')?.getAttribute('aria-label'),
@@ -283,17 +283,17 @@ test('visualization host renders the shared title and expands without moving the
     })
     expect(focused).toEqual({
       dialog: 'Orders by status',
-      sourceParent: 'ld-dashboard-visual-frame',
+      sourceParent: 'lv-dashboard-visual-frame',
       sourceSlot: null,
-      cloneParent: 'ld-visual-modal',
+      cloneParent: 'lv-visual-modal',
       cloneSlot: 'focus-visual',
       cloneTitle: 'Orders by status',
     })
 
-    const mirroredStatus = await page.locator('ld-dashboard-page').evaluate(async (dashboard: any) => {
-      const source = Array.from(dashboard.shadowRoot.querySelectorAll('ld-visualization-host') as NodeListOf<any>)
+    const mirroredStatus = await page.locator('lv-dashboard-page').evaluate(async (dashboard: any) => {
+      const source = Array.from(dashboard.shadowRoot.querySelectorAll('lv-visualization-host') as NodeListOf<any>)
         .find((candidate: any) => candidate.envelope?.visualID === 'orders_chart') as any
-      const modal = dashboard.shadowRoot.querySelector('ld-visual-modal') as HTMLElement
+      const modal = dashboard.shadowRoot.querySelector('lv-visual-modal') as HTMLElement
       const clone = modal.querySelector('[data-visual-focus-clone]') as any
       source.envelope = { ...source.envelope, status: { kind: 'partial', message: 'Focused refresh' } }
       await source.updateComplete
@@ -304,8 +304,8 @@ test('visualization host renders the shared title and expands without moving the
 
     await page.locator('button[aria-label="Close visual modal"]').click()
     await page.waitForFunction(() => {
-      const dashboard = document.querySelector('ld-dashboard-page')
-      const modal = dashboard?.shadowRoot?.querySelector('ld-visual-modal')
+      const dashboard = document.querySelector('lv-dashboard-page')
+      const modal = dashboard?.shadowRoot?.querySelector('lv-visual-modal')
       return !modal?.shadowRoot?.querySelector('[role="dialog"]') && !modal?.querySelector('[data-visual-focus-clone]')
     })
   } finally { await page.close() }
@@ -335,9 +335,9 @@ function testDocument(): string {
   const attr = (value: unknown) => escapeHTML(JSON.stringify(value))
   return `<!doctype html><html><head><style>
     html, body { margin: 0; min-height: 100%; }
-    body { --fontStack-system: system-ui; --ld-bg-app:#f6f8fa; --ld-bg-panel:#fff; --ld-bg-panel-muted:#f6f8fa; --ld-bg-control-hover:#f3f4f6; --ld-chart-surface:#fff; --ld-report-page-bg:#fff; --ld-report-canvas-bg:#eaeef2; --ld-report-rail-bg:#fff; --ld-bg-overlay:#fff; --ld-fg-default:#24292f; --ld-fg-muted:#57606a; --ld-fg-danger:#cf222e; --ld-fg-link:#0969da; --ld-line-muted:#d8dee4; --ld-border-default:1px solid #d0d7de; --ld-border-muted:1px solid #d8dee4; --ld-border-transparent:1px solid transparent; --ld-radius-default:6px; --ld-radius-full:999px; --ld-dashboard-filter-width:44px; --ld-dashboard-filter-open-width:320px; --base-size-2:2px; --base-size-4:4px; --base-size-6:6px; --base-size-8:8px; --base-size-10:10px; --base-size-12:12px; --base-size-16:16px; --base-size-20:20px; --base-size-24:24px; --control-medium-size:32px; --control-xlarge-size:40px; --ld-font-size-caption:12px; --ld-font-size-body-sm:14px; --ld-font-size-title-sm:16px; --ld-font-size-title-lg:28px; --ld-font-size-display:32px; --ld-font-weight-medium:500; --ld-font-weight-strong:600; --ld-line-height-none:1; --ld-line-height-tight:1.2; --ld-line-height-compact:1.3; --zIndex-dropdown:100; --zIndex-modal:200; --zIndex-sticky:50; --shadow-resting-small:0 1px 2px rgb(0 0 0/.08); --shadow-floating-small:0 8px 24px rgb(0 0 0/.12); --ld-duration-fast:160ms; --motion-easing-move:ease; --motion-transition-stateChange:160ms ease; }
-    ld-dashboard-page { min-height: 720px; }
-  </style></head><body><main data-signals="${attr(signals)}"><ld-dashboard-page></ld-dashboard-page></main>
+    body { --fontStack-system: system-ui; --lv-bg-app:#f6f8fa; --lv-bg-panel:#fff; --lv-bg-panel-muted:#f6f8fa; --lv-bg-control-hover:#f3f4f6; --lv-chart-surface:#fff; --lv-report-page-bg:#fff; --lv-report-canvas-bg:#eaeef2; --lv-report-rail-bg:#fff; --lv-bg-overlay:#fff; --lv-fg-default:#24292f; --lv-fg-muted:#57606a; --lv-fg-danger:#cf222e; --lv-fg-link:#0969da; --lv-line-muted:#d8dee4; --lv-border-default:1px solid #d0d7de; --lv-border-muted:1px solid #d8dee4; --lv-border-transparent:1px solid transparent; --lv-radius-default:6px; --lv-radius-full:999px; --lv-dashboard-filter-width:44px; --lv-dashboard-filter-open-width:320px; --base-size-2:2px; --base-size-4:4px; --base-size-6:6px; --base-size-8:8px; --base-size-10:10px; --base-size-12:12px; --base-size-16:16px; --base-size-20:20px; --base-size-24:24px; --control-medium-size:32px; --control-xlarge-size:40px; --lv-font-size-caption:12px; --lv-font-size-body-sm:14px; --lv-font-size-title-sm:16px; --lv-font-size-title-lg:28px; --lv-font-size-display:32px; --lv-font-weight-medium:500; --lv-font-weight-strong:600; --lv-line-height-none:1; --lv-line-height-tight:1.2; --lv-line-height-compact:1.3; --zIndex-dropdown:100; --zIndex-modal:200; --zIndex-sticky:50; --shadow-resting-small:0 1px 2px rgb(0 0 0/.08); --shadow-floating-small:0 8px 24px rgb(0 0 0/.12); --lv-duration-fast:160ms; --motion-easing-move:ease; --motion-transition-stateChange:160ms ease; }
+    lv-dashboard-page { min-height: 720px; }
+  </style></head><body><main data-signals="${attr(signals)}"><lv-dashboard-page></lv-dashboard-page></main>
   <script type="module" src="/static/vendor/datastar-1.0.2.js?v=dev"></script><script type="module" src="/dashboard-page-under-test.js"></script></body></html>`
 }
 

@@ -1,10 +1,10 @@
 package ui
 
 import (
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	uiactions "github.com/Yacobolo/libredash/internal/ui/actions"
-	uisignals "github.com/Yacobolo/libredash/internal/ui/signals"
-	"github.com/Yacobolo/libredash/pkg/pagestream"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	uiactions "github.com/Yacobolo/leapview/internal/ui/actions"
+	uisignals "github.com/Yacobolo/leapview/internal/ui/signals"
+	"github.com/Yacobolo/leapview/pkg/pagestream"
 	g "maragu.dev/gomponents"
 	h "maragu.dev/gomponents/html"
 )
@@ -32,10 +32,10 @@ func DataExplorerPage(catalog dashboard.Catalog, page uisignals.DataExplorerPage
 		MainAttrs:  []g.Node{h.Class(appRootClass)},
 		UpdatesURL: explorerUpdatesURL,
 		Body: []g.Node{
-			g.El("ld-app-shell",
-				g.El("ld-data-explorer",
+			g.El("lv-app-shell",
+				g.El("lv-data-explorer",
 					g.Attr("slot", "page"),
-					g.Attr("data-on:ld-data-explorer-command", "$dataExplorerCommand = evt.detail; "+uiactions.Post("/data/command")),
+					g.Attr("data-on:lv-data-explorer-command", "$dataExplorerCommand = evt.detail; "+uiactions.Post("/data/command")),
 				),
 			),
 			inspectorElement(),

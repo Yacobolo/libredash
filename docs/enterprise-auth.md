@@ -18,8 +18,8 @@ LeapView grants remain the only source of product authorization.
 Enable local browser login for self-hosted deployments or break-glass access:
 
 ```sh
-LIBREDASH_LOCAL_AUTH=1
-LIBREDASH_CSRF_KEY=<32+ byte secret>
+LEAPVIEW_LOCAL_AUTH=1
+LEAPVIEW_CSRF_KEY=<32+ byte secret>
 ```
 
 Local users are admin-created only. A grant manager creates the user from
@@ -37,12 +37,12 @@ sessions, API tokens, and audit events as OIDC and SCIM identities.
 Configure one browser identity provider with:
 
 ```sh
-LIBREDASH_OIDC_PROVIDER_ID=entra
-LIBREDASH_OIDC_ISSUER_URL=https://login.microsoftonline.com/<tenant-id>/v2.0
-LIBREDASH_OIDC_CLIENT_ID=<client-id>
-LIBREDASH_OIDC_CLIENT_SECRET=<client-secret>
-LIBREDASH_OIDC_CALLBACK_URL=https://<host>/auth/entra/callback
-LIBREDASH_OIDC_SCOPES="openid profile email"
+LEAPVIEW_OIDC_PROVIDER_ID=entra
+LEAPVIEW_OIDC_ISSUER_URL=https://login.microsoftonline.com/<tenant-id>/v2.0
+LEAPVIEW_OIDC_CLIENT_ID=<client-id>
+LEAPVIEW_OIDC_CLIENT_SECRET=<client-secret>
+LEAPVIEW_OIDC_CALLBACK_URL=https://<host>/auth/entra/callback
+LEAPVIEW_OIDC_SCOPES="openid profile email"
 ```
 
 Provider examples:
@@ -66,7 +66,7 @@ metadata and may change.
 Enable SCIM by setting a dedicated provisioning bearer token:
 
 ```sh
-LIBREDASH_SCIM_BEARER_TOKEN=<long-random-secret>
+LEAPVIEW_SCIM_BEARER_TOKEN=<long-random-secret>
 ```
 
 When the token is set, LeapView mounts:

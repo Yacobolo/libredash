@@ -6,8 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
-	visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
+	apigenapi "github.com/Yacobolo/leapview/internal/api/gen"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 )
 
 func TestCapabilitiesReportOnlyEnabledUploadProtocols(t *testing.T) {

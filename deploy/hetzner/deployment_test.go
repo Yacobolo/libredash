@@ -13,7 +13,7 @@ func TestTerraformProductionContracts(t *testing.T) {
 	variables := readFile(t, "variables.tf")
 	main := readFile(t, "main.tf")
 	cloudInit := readFile(t, "cloud-init.yaml.tftpl")
-	requireContains(t, variables, `variable "libredash_image"`)
+	requireContains(t, variables, `variable "leapview_image"`)
 	requireContains(t, variables, `@sha256:`)
 	requireContains(t, variables, `variable "ssh_allowed_cidrs"`)
 	if strings.Contains(variables, `default     = ["0.0.0.0/0", "::/0"]`) {
@@ -24,7 +24,7 @@ func TestTerraformProductionContracts(t *testing.T) {
 	}
 	requireMatch(t, main, `(?m)^\s*backups\s*=\s*true\s*$`)
 	requireMatch(t, main, `(?m)^\s*shutdown_before_deletion\s*=\s*true\s*$`)
-	if strings.Contains(cloudInit, "libredashctl_b64") {
+	if strings.Contains(cloudInit, "leapviewctl_b64") {
 		t.Fatal("cloud-init must not embed a source-tree controller script")
 	}
 	if strings.Contains(cloudInit, "git clone") || strings.Contains(cloudInit, "docker build") {
@@ -43,13 +43,13 @@ func TestHetznerConsumesGenericComposeLifecycle(t *testing.T) {
 	} {
 		requireContains(t, main, fragment)
 	}
-	for _, fragment := range []string{"compose_https_b64", "deployment_example_b64", "libredashctl_wrapper_b64", "backup_hook_b64"} {
+	for _, fragment := range []string{"compose_https_b64", "deployment_example_b64", "leapviewctl_wrapper_b64", "backup_hook_b64"} {
 		requireContains(t, cloudInit, fragment)
 	}
-	requireContains(t, provision, `docker cp "$controller_container:/usr/local/libexec/libredashctl" /opt/libredash/libredashctl`)
-	extract := strings.Index(provision, `docker cp "$controller_container:/usr/local/libexec/libredashctl"`)
-	initialize := strings.Index(provision, `libredashctl init`)
-	start := strings.Index(provision, `libredashctl start`)
+	requireContains(t, provision, `docker cp "$controller_container:/usr/local/libexec/leapviewctl" /opt/leapview/leapviewctl`)
+	extract := strings.Index(provision, `docker cp "$controller_container:/usr/local/libexec/leapviewctl"`)
+	initialize := strings.Index(provision, `leapviewctl init`)
+	start := strings.Index(provision, `leapviewctl start`)
 	if extract < 0 || initialize < 0 || start < 0 || extract > initialize || initialize > start {
 		t.Fatal("generic offline initialization must complete before start")
 	}
@@ -62,18 +62,18 @@ func TestHetznerConsumesGenericComposeLifecycle(t *testing.T) {
 
 func TestProviderScriptsAreSmallValidLayers(t *testing.T) {
 	for _, script := range []string{
-		filepath.Join("files", "libredashctl-wrapper"),
-		filepath.Join("files", "libredash-backup-hook"),
+		filepath.Join("files", "leapviewctl-wrapper"),
+		filepath.Join("files", "leapview-backup-hook"),
 		filepath.Join("files", "provision.sh.tftpl"),
 	} {
 		if output, err := exec.Command("bash", "-n", script).CombinedOutput(); err != nil {
 			t.Fatalf("bash -n %s: %v\n%s", script, err, output)
 		}
 	}
-	wrapper := readFile(t, filepath.Join("files", "libredashctl-wrapper"))
-	requireContains(t, wrapper, "LIBREDASHCTL_ROOT=/opt/libredash")
-	requireContains(t, wrapper, "exec /opt/libredash/libredashctl")
-	hook := readFile(t, filepath.Join("files", "libredash-backup-hook"))
+	wrapper := readFile(t, filepath.Join("files", "leapviewctl-wrapper"))
+	requireContains(t, wrapper, "LEAPVIEWCTL_ROOT=/opt/leapview")
+	requireContains(t, wrapper, "exec /opt/leapview/leapviewctl")
+	hook := readFile(t, filepath.Join("files", "leapview-backup-hook"))
 	for _, fragment := range []string{"restic backup", "--keep-daily 7", "--keep-weekly 4", "--keep-monthly 12", "rm -f"} {
 		requireContains(t, hook, fragment)
 	}
@@ -84,7 +84,7 @@ func TestReleaseWorkflowPublishesComposeArchiveAndAttestedImage(t *testing.T) {
 	for _, fragment := range []string{
 		"release:", "packages: write", "attestations: write", "id-token: write",
 		"docker/build-push-action@", "actions/attest@", "push-to-registry: true",
-		"libredash-compose-", "deployment.env.example", ".tar.gz.sha256", "./cmd/libredashctl",
+		"leapview-compose-", "deployment.env.example", ".tar.gz.sha256", "./cmd/leapviewctl",
 	} {
 		requireContains(t, workflow, fragment)
 	}
@@ -136,7 +136,7 @@ func TestEphemeralDeploymentExercisesPublicAndBackupContracts(t *testing.T) {
 	workflow := readFile(t, filepath.Join("..", "..", ".github", "workflows", "hetzner-deploy.yml"))
 	for _, fragment := range []string{
 		"workflow_dispatch:", "environment: hetzner-deployment", "terraform apply",
-		"public_ready=false", "--connect-timeout 5", "libredashctl backup", "libredashctl restore",
+		"public_ready=false", "--connect-timeout 5", "leapviewctl backup", "leapviewctl restore",
 		`.publisherToken`, "if: always()", "terraform destroy",
 	} {
 		requireContains(t, workflow, fragment)

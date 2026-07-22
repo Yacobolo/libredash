@@ -3,9 +3,9 @@ package app
 import (
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	dashboardstream "github.com/Yacobolo/libredash/internal/dashboard/stream"
-	visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	dashboardstream "github.com/Yacobolo/leapview/internal/dashboard/stream"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 )
 
 func TestDashboardTelemetryObservesAcceptedProgressiveTargetEvents(t *testing.T) {
@@ -41,7 +41,7 @@ func TestDashboardTelemetryObservesAcceptedProgressiveTargetEvents(t *testing.T)
 			t.Fatalf("target outcome %s = %v, want %v (all %#v)", labels, got[labels], count, got)
 		}
 	}
-	for _, name := range []string{"libredash_visualization_frame_rows", "libredash_visualization_frame_size_bytes", "libredash_visualization_cardinality"} {
+	for _, name := range []string{"leapview_visualization_frame_rows", "leapview_visualization_frame_size_bytes", "leapview_visualization_cardinality"} {
 		if got := histogramSampleCount(t, telemetry, name); got != 2 {
 			t.Fatalf("%s sample count = %d, want 2", name, got)
 		}
@@ -84,7 +84,7 @@ func dashboardTargetMetricValues(t *testing.T, telemetry *httpTelemetry) map[str
 	}
 	values := map[string]float64{}
 	for _, family := range families {
-		if family.GetName() != "libredash_dashboard_target_outcomes_total" {
+		if family.GetName() != "leapview_dashboard_target_outcomes_total" {
 			continue
 		}
 		for _, metric := range family.Metric {
@@ -134,16 +134,16 @@ func TestDashboardTelemetryUsesBoundedLabelsAndRecordsRefreshLifecycle(t *testin
 		t.Fatalf("metric %q not found", name)
 		return 0
 	}
-	if got := metricValue("libredash_dashboard_refreshes_in_flight"); got != 0 {
+	if got := metricValue("leapview_dashboard_refreshes_in_flight"); got != 0 {
 		t.Fatalf("refresh in flight = %v, want 0", got)
 	}
-	if got := metricValue("libredash_dashboard_refresh_cancellations_total"); got != 2 {
+	if got := metricValue("leapview_dashboard_refresh_cancellations_total"); got != 2 {
 		t.Fatalf("refresh cancellations = %v, want 2", got)
 	}
-	if got := metricValue("libredash_dashboard_cache_outcomes_total"); got != 1 {
+	if got := metricValue("leapview_dashboard_cache_outcomes_total"); got != 1 {
 		t.Fatalf("first cache outcome series = %v, want 1", got)
 	}
-	if got := metricValue("libredash_dashboard_target_outcomes_total"); got != 1 {
+	if got := metricValue("leapview_dashboard_target_outcomes_total"); got != 1 {
 		t.Fatalf("visual target successes = %v, want 1", got)
 	}
 

@@ -39,19 +39,19 @@ class SiteThemeToggle extends LitElement {
       width: var(--site-interactive-target-size);
       height: var(--site-interactive-target-size);
       place-items: center;
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-control);
-      color: var(--ld-fg-muted);
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-control);
+      color: var(--lv-fg-muted);
       cursor: pointer;
       font: inherit;
     }
 
     button:hover,
     button:focus-visible {
-      border-color: var(--ld-button-border-hover);
-      background: var(--ld-button-bg-hover);
-      color: var(--ld-fg-default);
+      border-color: var(--lv-button-border-hover);
+      background: var(--lv-button-bg-hover);
+      color: var(--lv-fg-default);
     }
 
     button:focus-visible {
@@ -66,11 +66,11 @@ class SiteThemeToggle extends LitElement {
 
   connectedCallback(): void {
     super.connectedCallback()
-    document.addEventListener('libredash-theme-applied', this.handleThemeApplied)
+    document.addEventListener('leapview-theme-applied', this.handleThemeApplied)
   }
 
   disconnectedCallback(): void {
-    document.removeEventListener('libredash-theme-applied', this.handleThemeApplied)
+    document.removeEventListener('leapview-theme-applied', this.handleThemeApplied)
     super.disconnectedCallback()
   }
 
@@ -88,12 +88,12 @@ class SiteThemeToggle extends LitElement {
     const nextMode = nextThemeMode[this.themeMode]
     this.themeMode = nextMode
     this.requestUpdate()
-    document.dispatchEvent(new CustomEvent('libredash-theme-change', { detail: { mode: nextMode } }))
+    document.dispatchEvent(new CustomEvent('leapview-theme-change', { detail: { mode: nextMode } }))
   }
 }
 
-if (!customElements.get('ld-site-theme-toggle')) {
-  customElements.define('ld-site-theme-toggle', SiteThemeToggle)
+if (!customElements.get('lv-site-theme-toggle')) {
+  customElements.define('lv-site-theme-toggle', SiteThemeToggle)
 }
 
 class SiteMobileMenu extends LitElement {
@@ -115,19 +115,19 @@ class SiteMobileMenu extends LitElement {
       width: var(--site-interactive-target-size);
       height: var(--site-interactive-target-size);
       place-items: center;
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-control);
-      color: var(--ld-fg-muted);
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-control);
+      color: var(--lv-fg-muted);
       cursor: pointer;
       font: inherit;
     }
 
     button:hover,
     button:focus-visible {
-      border-color: var(--ld-button-border-hover);
-      background: var(--ld-button-bg-hover);
-      color: var(--ld-fg-default);
+      border-color: var(--lv-button-border-hover);
+      background: var(--lv-button-bg-hover);
+      color: var(--lv-fg-default);
     }
 
     button:focus-visible {
@@ -143,9 +143,9 @@ class SiteMobileMenu extends LitElement {
       display: grid;
       min-width: calc(var(--base-size-128) + var(--base-size-64));
       overflow: hidden;
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-large);
-      background: var(--ld-bg-panel);
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-large);
+      background: var(--lv-bg-panel);
       box-shadow: var(--shadow-floating-medium);
     }
 
@@ -154,16 +154,16 @@ class SiteMobileMenu extends LitElement {
       min-height: var(--control-minTarget-auto);
       align-items: center;
       padding: var(--base-size-12) var(--base-size-16);
-      color: var(--ld-fg-default);
-      font-size: var(--ld-text-body-md-size);
-      font-weight: var(--ld-font-weight-medium);
+      color: var(--lv-fg-default);
+      font-size: var(--lv-text-body-md-size);
+      font-weight: var(--lv-font-weight-medium);
       text-decoration: none;
     }
 
     a:hover,
     a:focus-visible {
-      background: var(--ld-bg-control);
-      color: var(--ld-fg-accent);
+      background: var(--lv-bg-control);
+      color: var(--lv-fg-accent);
     }
 
     nav[hidden] {
@@ -206,8 +206,8 @@ class SiteMobileMenu extends LitElement {
   }
 }
 
-if (!customElements.get('ld-site-mobile-menu')) {
-  customElements.define('ld-site-mobile-menu', SiteMobileMenu)
+if (!customElements.get('lv-site-mobile-menu')) {
+  customElements.define('lv-site-mobile-menu', SiteMobileMenu)
 }
 
 type SiteSearchResult = {
@@ -256,21 +256,21 @@ class SiteSearch extends DatastarLit(LitElement) {
       min-height: var(--site-interactive-target-size);
       align-items: center;
       gap: var(--base-size-8);
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-control);
-      color: var(--ld-fg-muted);
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-control);
+      color: var(--lv-fg-muted);
       cursor: pointer;
       padding-inline: var(--base-size-12) var(--base-size-8);
-      font-size: var(--ld-text-body-sm-size);
-      font-weight: var(--ld-font-weight-medium);
+      font-size: var(--lv-text-body-sm-size);
+      font-weight: var(--lv-font-weight-medium);
     }
 
     .trigger:hover,
     .trigger:focus-visible {
-      border-color: var(--ld-button-border-hover);
-      background: var(--ld-button-bg-hover);
-      color: var(--ld-fg-default);
+      border-color: var(--lv-button-border-hover);
+      background: var(--lv-button-bg-hover);
+      color: var(--lv-fg-default);
     }
 
     button:focus-visible,
@@ -280,13 +280,13 @@ class SiteSearch extends DatastarLit(LitElement) {
     }
 
     kbd {
-      border: var(--ld-border-muted);
+      border: var(--lv-border-muted);
       border-radius: var(--borderRadius-small);
-      background: var(--ld-bg-panel);
-      color: var(--ld-fg-muted);
+      background: var(--lv-bg-panel);
+      color: var(--lv-fg-muted);
       padding: var(--base-size-2) var(--base-size-4);
-      font-family: var(--ld-font-family-mono);
-      font-size: var(--ld-text-caption-size);
+      font-family: var(--lv-font-family-mono);
+      font-size: var(--lv-text-caption-size);
       line-height: 1;
     }
 
@@ -295,10 +295,10 @@ class SiteSearch extends DatastarLit(LitElement) {
       max-width: none;
       margin: min(18vh, calc(var(--base-size-128) + var(--base-size-32))) auto auto;
       overflow: hidden;
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-large);
-      background: var(--ld-bg-panel);
-      color: var(--ld-fg-default);
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-large);
+      background: var(--lv-bg-panel);
+      color: var(--lv-fg-default);
       box-shadow: var(--shadow-floating-large);
       padding: 0;
     }
@@ -323,7 +323,7 @@ class SiteSearch extends DatastarLit(LitElement) {
 
     h2 {
       margin: 0;
-      font-size: var(--ld-text-title-md-size);
+      font-size: var(--lv-text-title-md-size);
     }
 
     .close {
@@ -332,16 +332,16 @@ class SiteSearch extends DatastarLit(LitElement) {
       height: var(--control-minTarget-auto);
       place-items: center;
       border: 0;
-      border-radius: var(--ld-radius-default);
+      border-radius: var(--lv-radius-default);
       background: transparent;
-      color: var(--ld-fg-muted);
+      color: var(--lv-fg-muted);
       cursor: pointer;
     }
 
     .close:hover,
     .close:focus-visible {
-      background: var(--ld-button-bg-hover);
-      color: var(--ld-fg-default);
+      background: var(--lv-button-bg-hover);
+      color: var(--lv-fg-default);
     }
 
     .controls {
@@ -354,10 +354,10 @@ class SiteSearch extends DatastarLit(LitElement) {
       width: 100%;
       min-width: 0;
       min-height: var(--control-minTarget-auto);
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-control);
-      color: var(--ld-fg-default);
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-control);
+      color: var(--lv-fg-default);
       padding: var(--control-medium-paddingBlock) var(--control-medium-paddingInline-normal);
       font: inherit;
     }
@@ -365,14 +365,14 @@ class SiteSearch extends DatastarLit(LitElement) {
     .results {
       max-height: min(50vh, calc(var(--base-size-128) * 3));
       overflow-y: auto;
-      border-top: var(--ld-border-muted);
+      border-top: var(--lv-border-muted);
       padding-top: var(--base-size-12);
     }
 
     .status {
       margin: 0;
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-text-body-sm-size);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-text-body-sm-size);
     }
 
     ul {
@@ -386,15 +386,15 @@ class SiteSearch extends DatastarLit(LitElement) {
     a {
       display: grid;
       gap: var(--base-size-4);
-      border-radius: var(--ld-radius-default);
-      color: var(--ld-fg-default);
+      border-radius: var(--lv-radius-default);
+      color: var(--lv-fg-default);
       padding: var(--base-size-12);
       text-decoration: none;
     }
 
     a:hover,
     a:focus-visible {
-      background: var(--ld-button-bg-hover);
+      background: var(--lv-button-bg-hover);
     }
 
     a:focus-visible {
@@ -403,15 +403,15 @@ class SiteSearch extends DatastarLit(LitElement) {
     }
 
     a strong {
-      font-size: var(--ld-text-body-md-size);
+      font-size: var(--lv-text-body-md-size);
     }
 
     a span {
       display: -webkit-box;
       overflow: hidden;
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-text-body-sm-size);
-      line-height: var(--ld-line-height-relaxed);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-text-body-sm-size);
+      line-height: var(--lv-line-height-relaxed);
       -webkit-box-orient: vertical;
       -webkit-line-clamp: 2;
     }
@@ -506,8 +506,8 @@ class SiteSearch extends DatastarLit(LitElement) {
   }
 }
 
-if (!customElements.get('ld-site-search')) {
-  customElements.define('ld-site-search', SiteSearch)
+if (!customElements.get('lv-site-search')) {
+  customElements.define('lv-site-search', SiteSearch)
 }
 
 class SiteDocsDrawerToggle extends LitElement {
@@ -539,19 +539,19 @@ class SiteDocsDrawerToggle extends LitElement {
       width: var(--site-interactive-target-size);
       height: var(--site-interactive-target-size);
       place-items: center;
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-control);
-      color: var(--ld-fg-muted);
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-control);
+      color: var(--lv-fg-muted);
       cursor: pointer;
       font: inherit;
     }
 
     button:hover,
     button:focus-visible {
-      border-color: var(--ld-button-border-hover);
-      background: var(--ld-button-bg-hover);
-      color: var(--ld-fg-default);
+      border-color: var(--lv-button-border-hover);
+      background: var(--lv-button-bg-hover);
+      color: var(--lv-fg-default);
     }
 
     button:focus-visible {
@@ -562,11 +562,11 @@ class SiteDocsDrawerToggle extends LitElement {
 
   connectedCallback(): void {
     super.connectedCallback()
-    document.addEventListener('libredash-docs-drawer-state', this.handleDrawerState)
+    document.addEventListener('leapview-docs-drawer-state', this.handleDrawerState)
   }
 
   disconnectedCallback(): void {
-    document.removeEventListener('libredash-docs-drawer-state', this.handleDrawerState)
+    document.removeEventListener('leapview-docs-drawer-state', this.handleDrawerState)
     super.disconnectedCallback()
   }
 
@@ -579,15 +579,15 @@ class SiteDocsDrawerToggle extends LitElement {
 
   private toggleDrawer = (): void => {
     document.dispatchEvent(
-      new CustomEvent('libredash-docs-drawer-request', {
+      new CustomEvent('leapview-docs-drawer-request', {
         detail: { open: this.placement === 'drawer' ? false : !this.open },
       }),
     )
   }
 }
 
-if (!customElements.get('ld-site-docs-drawer-toggle')) {
-  customElements.define('ld-site-docs-drawer-toggle', SiteDocsDrawerToggle)
+if (!customElements.get('lv-site-docs-drawer-toggle')) {
+  customElements.define('lv-site-docs-drawer-toggle', SiteDocsDrawerToggle)
 }
 
 function syncDocsDrawer(open = false): void {
@@ -603,17 +603,17 @@ function syncDocsDrawer(open = false): void {
   sidebar.setAttribute('aria-hidden', String(compact && !nextOpen))
   document.body.classList.toggle('site-docs-drawer-open', nextOpen)
   document.dispatchEvent(
-    new CustomEvent('libredash-docs-drawer-state', {
+    new CustomEvent('leapview-docs-drawer-state', {
       detail: { open: nextOpen },
     }),
   )
   if (nextOpen && !wasOpen) requestAnimationFrame(revealCurrentDocsLink)
   if (compact && wasOpen && !nextOpen) {
-    document.querySelector<HTMLElement>('ld-site-docs-drawer-toggle:not([placement])')?.shadowRoot?.querySelector<HTMLButtonElement>('button')?.focus()
+    document.querySelector<HTMLElement>('lv-site-docs-drawer-toggle:not([placement])')?.shadowRoot?.querySelector<HTMLButtonElement>('button')?.focus()
   }
 }
 
-document.addEventListener('libredash-docs-drawer-request', (event) => {
+document.addEventListener('leapview-docs-drawer-request', (event) => {
   const requested = (event as CustomEvent<{ open?: boolean }>).detail?.open
   const currentlyOpen = document.querySelector('.site-docs-layout')?.classList.contains('site-docs-drawer-open') ?? false
   syncDocsDrawer(typeof requested === 'boolean' ? requested : !currentlyOpen)
@@ -660,13 +660,13 @@ class SiteMarkdownCopy extends LitElement {
       align-items: center;
       flex-shrink: 0;
       gap: var(--base-size-6);
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-default);
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-default);
       background: transparent;
-      color: var(--ld-fg-muted);
+      color: var(--lv-fg-muted);
       cursor: pointer;
       font: inherit;
-      font-size: var(--ld-text-body-sm-size);
+      font-size: var(--lv-text-body-sm-size);
       line-height: 1.3;
       padding: 0 var(--base-size-12);
       transition: border-color var(--motion-duration-medium);
@@ -674,7 +674,7 @@ class SiteMarkdownCopy extends LitElement {
 
     button:hover,
     button:focus-visible {
-      border-color: var(--ld-button-border-hover);
+      border-color: var(--lv-button-border-hover);
     }
 
     button:focus-visible {
@@ -721,8 +721,8 @@ class SiteMarkdownCopy extends LitElement {
   }
 }
 
-if (!customElements.get('ld-site-markdown-copy')) {
-  customElements.define('ld-site-markdown-copy', SiteMarkdownCopy)
+if (!customElements.get('lv-site-markdown-copy')) {
+  customElements.define('lv-site-markdown-copy', SiteMarkdownCopy)
 }
 
 type ResolvedThemeMode = 'light' | 'dark'
@@ -769,7 +769,7 @@ class SiteMermaid extends LitElement {
       display: block;
       width: 100%;
       min-width: 0;
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
     }
 
     figure {
@@ -777,9 +777,9 @@ class SiteMermaid extends LitElement {
       min-width: 0;
       margin: 0;
       gap: var(--base-size-12);
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-panel);
+      border: var(--lv-border-muted);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-panel);
       padding: var(--base-size-20);
     }
 
@@ -802,9 +802,9 @@ class SiteMermaid extends LitElement {
     figcaption,
     .error {
       margin: 0;
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-text-body-sm-size);
-      line-height: var(--ld-line-height-relaxed);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-text-body-sm-size);
+      line-height: var(--lv-line-height-relaxed);
     }
 
     figcaption {
@@ -812,7 +812,7 @@ class SiteMermaid extends LitElement {
     }
 
     .error {
-      color: var(--ld-fg-danger);
+      color: var(--lv-fg-danger);
     }
 
     [hidden] {
@@ -828,11 +828,11 @@ class SiteMermaid extends LitElement {
 
   connectedCallback(): void {
     super.connectedCallback()
-    document.addEventListener('libredash-theme-applied', this.handleThemeApplied)
+    document.addEventListener('leapview-theme-applied', this.handleThemeApplied)
   }
 
   disconnectedCallback(): void {
-    document.removeEventListener('libredash-theme-applied', this.handleThemeApplied)
+    document.removeEventListener('leapview-theme-applied', this.handleThemeApplied)
     this.renderGeneration += 1
     super.disconnectedCallback()
   }
@@ -871,11 +871,11 @@ class SiteMermaid extends LitElement {
           securityLevel: 'strict',
           suppressErrorRendering: true,
           theme: 'base',
-          fontFamily: cssToken(this, '--ld-font-family-ui'),
+          fontFamily: cssToken(this, '--lv-font-family-ui'),
           themeVariables: mermaidThemeVariables(this),
           flowchart: { htmlLabels: false, useMaxWidth: true },
         })
-        const id = `libredash-docs-diagram-${++mermaidRenderSequence}`
+        const id = `leapview-docs-diagram-${++mermaidRenderSequence}`
         const result = await mermaid.render(id, source)
         if (generation !== this.renderGeneration || !this.isConnected) return
 
@@ -914,13 +914,13 @@ function cssToken(element: Element, name: string): string {
 }
 
 function mermaidThemeVariables(element: Element): Record<string, string> {
-  const background = cssToken(element, '--ld-bg-panel')
-  const foreground = cssToken(element, '--ld-fg-default')
-  const muted = cssToken(element, '--ld-fg-muted')
-  const accent = cssToken(element, '--ld-fg-accent')
-  const accentBackground = cssToken(element, '--ld-bg-accent-muted')
-  const control = cssToken(element, '--ld-bg-control')
-  const border = cssToken(element, '--ld-line-muted')
+  const background = cssToken(element, '--lv-bg-panel')
+  const foreground = cssToken(element, '--lv-fg-default')
+  const muted = cssToken(element, '--lv-fg-muted')
+  const accent = cssToken(element, '--lv-fg-accent')
+  const accentBackground = cssToken(element, '--lv-bg-accent-muted')
+  const control = cssToken(element, '--lv-bg-control')
+  const border = cssToken(element, '--lv-line-muted')
 
   return {
     background,
@@ -946,24 +946,24 @@ function mermaidThemeVariables(element: Element): Record<string, string> {
   }
 }
 
-if (!customElements.get('ld-site-mermaid')) {
-  customElements.define('ld-site-mermaid', SiteMermaid)
+if (!customElements.get('lv-site-mermaid')) {
+  customElements.define('lv-site-mermaid', SiteMermaid)
 }
 
 function enhanceDocsCodeBlocks(): void {
   document.querySelectorAll<HTMLElement>('.site-docs-article pre').forEach((pre) => {
-    if (pre.closest('ld-code-block, ld-site-mermaid')) return
+    if (pre.closest('lv-code-block, lv-site-mermaid')) return
 
     const code = pre.querySelector('code')
     const languageClass = Array.from(code?.classList ?? []).find((name) => name.startsWith('language-'))
     const language = languageClass?.slice('language-'.length).toLowerCase() ?? ''
     if (language === 'mermaid') {
-      const diagram = document.createElement('ld-site-mermaid') as SiteMermaid
+      const diagram = document.createElement('lv-site-mermaid') as SiteMermaid
       diagram.source = code?.textContent ?? pre.textContent ?? ''
       pre.replaceWith(diagram)
       return
     }
-    const block = document.createElement('ld-code-block') as HTMLElement & {
+    const block = document.createElement('lv-code-block') as HTMLElement & {
       clearFocusedLines(): void
       code: string
       copy: boolean
@@ -976,7 +976,7 @@ function enhanceDocsCodeBlocks(): void {
     block.code = code?.textContent ?? pre.textContent ?? ''
     const keyFields = pre.previousElementSibling
     const visualExample = keyFields?.matches('.site-visual-key-fields') ? keyFields.previousElementSibling : null
-    if (language === 'yaml' && keyFields instanceof HTMLElement && visualExample?.matches('ld-site-visual-example')) {
+    if (language === 'yaml' && keyFields instanceof HTMLElement && visualExample?.matches('lv-site-visual-example')) {
       const fields = JSON.parse(keyFields.dataset.keyFields ?? '[]') as string[]
       const exampleID = visualExample.getAttribute('example-id') ?? ''
       block.dataset.visualExample = exampleID
@@ -1115,10 +1115,10 @@ class SiteFeatureIcon extends LitElement {
       width: var(--control-large-size);
       height: var(--control-large-size);
       place-items: center;
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-large);
-      background: var(--ld-bg-control);
-      color: var(--ld-fg-accent);
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-large);
+      background: var(--lv-bg-control);
+      color: var(--lv-fg-accent);
     }
 
     :host([plain]) {
@@ -1127,7 +1127,7 @@ class SiteFeatureIcon extends LitElement {
       border: 0;
       border-radius: 0;
       background: transparent;
-      color: var(--ld-fg-muted);
+      color: var(--lv-fg-muted);
     }
   `
 
@@ -1139,13 +1139,13 @@ class SiteFeatureIcon extends LitElement {
   }
 }
 
-if (!customElements.get('ld-site-feature-icon')) {
-  customElements.define('ld-site-feature-icon', SiteFeatureIcon)
+if (!customElements.get('lv-site-feature-icon')) {
+  customElements.define('lv-site-feature-icon', SiteFeatureIcon)
 }
 
 function currentThemeMode(): ThemeMode {
   try {
-    return normalizeThemeMode(localStorage.getItem('libredash-color-mode'))
+    return normalizeThemeMode(localStorage.getItem('leapview-color-mode'))
   } catch {
     return normalizeThemeMode(document.documentElement.dataset.colorMode)
   }
@@ -1180,9 +1180,9 @@ class SiteArticleToc extends LitElement {
 
     h2 {
       margin: 0 0 0 var(--base-size-12);
-      color: var(--ld-fg-subtle);
-      font-size: var(--ld-text-body-sm-size);
-      font-weight: var(--ld-font-weight-normal);
+      color: var(--lv-fg-subtle);
+      font-size: var(--lv-text-body-sm-size);
+      font-weight: var(--lv-font-weight-normal);
       letter-spacing: 0.03em;
       line-height: 1.2;
       text-transform: uppercase;
@@ -1200,7 +1200,7 @@ class SiteArticleToc extends LitElement {
 
     ul ul {
       margin: var(--base-size-2) 0 var(--base-size-2) 15px;
-      border-left: var(--ld-border-muted);
+      border-left: var(--lv-border-muted);
     }
 
     ul ul ul {
@@ -1208,8 +1208,8 @@ class SiteArticleToc extends LitElement {
     }
 
     li {
-      font-size: var(--ld-text-body-sm-size);
-      font-weight: var(--ld-font-weight-normal);
+      font-size: var(--lv-text-body-sm-size);
+      font-weight: var(--lv-font-weight-normal);
       letter-spacing: 0.005em;
       line-height: 1;
       list-style: none;
@@ -1219,9 +1219,9 @@ class SiteArticleToc extends LitElement {
       display: inline-block;
       overflow: hidden;
       max-width: 100%;
-      border-radius: var(--ld-radius-full);
+      border-radius: var(--lv-radius-full);
       padding: var(--base-size-6) var(--base-size-12);
-      color: var(--ld-fg-subtle);
+      color: var(--lv-fg-subtle);
       line-height: 1;
       text-decoration: none;
       text-overflow: ellipsis;
@@ -1231,7 +1231,7 @@ class SiteArticleToc extends LitElement {
     a:hover,
     a:focus-visible,
     li.current > a {
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
     }
 
     a:focus-visible {
@@ -1332,7 +1332,7 @@ class SiteArticleToc extends LitElement {
   }
 }
 
-if (!customElements.get('ld-site-article-toc')) customElements.define('ld-site-article-toc', SiteArticleToc)
+if (!customElements.get('lv-site-article-toc')) customElements.define('lv-site-article-toc', SiteArticleToc)
 
 class SiteVisualExample extends DatastarLit(LitElement) {
   static properties = {
@@ -1346,14 +1346,14 @@ class SiteVisualExample extends DatastarLit(LitElement) {
       display: block;
       min-height: 28rem;
       margin-block: var(--base-size-24);
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-chart-surface);
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-chart-surface);
       box-shadow: var(--shadow-resting-small);
       overflow: hidden;
     }
 
-    ld-visualization-host {
+    lv-visualization-host {
       display: block;
       height: 28rem;
     }
@@ -1362,7 +1362,7 @@ class SiteVisualExample extends DatastarLit(LitElement) {
       min-height: 12rem;
     }
 
-    :host([type='kpi']) ld-visualization-host {
+    :host([type='kpi']) lv-visualization-host {
       height: 12rem;
     }
 
@@ -1378,12 +1378,12 @@ class SiteVisualExample extends DatastarLit(LitElement) {
         else this.removeAttribute('type')
       })
     }
-    return visual ? html`<ld-visualization-host .envelope=${visual}></ld-visualization-host>` : null
+    return visual ? html`<lv-visualization-host .envelope=${visual}></lv-visualization-host>` : null
   }
 }
 
-if (!customElements.get('ld-site-visual-example')) {
-  customElements.define('ld-site-visual-example', SiteVisualExample)
+if (!customElements.get('lv-site-visual-example')) {
+  customElements.define('lv-site-visual-example', SiteVisualExample)
 }
 
 class SiteVisualShowcase extends DatastarLit(LitElement) {
@@ -1408,16 +1408,16 @@ class SiteVisualShowcase extends DatastarLit(LitElement) {
     }
 
     h2 {
-      color: var(--ld-fg-default);
-      font-size: var(--ld-text-title-lg-size);
-      font-weight: var(--ld-font-weight-strong);
-      line-height: var(--ld-line-height-tight);
+      color: var(--lv-fg-default);
+      font-size: var(--lv-text-title-lg-size);
+      font-weight: var(--lv-font-weight-strong);
+      line-height: var(--lv-line-height-tight);
     }
 
     p {
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-text-body-md-size);
-      line-height: var(--ld-line-height-relaxed);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-text-body-md-size);
+      line-height: var(--lv-line-height-relaxed);
     }
 
     .chart-grid,
@@ -1436,14 +1436,14 @@ class SiteVisualShowcase extends DatastarLit(LitElement) {
 
     .chart {
       min-height: 20rem;
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-chart-surface);
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-chart-surface);
       box-shadow: var(--shadow-resting-small);
       overflow: hidden;
     }
 
-    ld-visualization-host {
+    lv-visualization-host {
       display: block;
       height: 20rem;
     }
@@ -1451,9 +1451,9 @@ class SiteVisualShowcase extends DatastarLit(LitElement) {
     .table-card {
       min-width: 0;
       height: 26rem;
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-chart-surface);
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-chart-surface);
       box-shadow: var(--shadow-resting-small);
       overflow: hidden;
     }
@@ -1484,7 +1484,7 @@ class SiteVisualShowcase extends DatastarLit(LitElement) {
           <h2 id="chart-showcase-heading">Charts and KPIs</h2>
           <p>Renderer-neutral visual payloads adapted by the built-in ECharts and KPI renderers.</p>
         </div>
-        <div class="chart-grid">${charts.map((visual) => html`<article class="chart"><ld-visualization-host .envelope=${visual}></ld-visualization-host></article>`)}</div>
+        <div class="chart-grid">${charts.map((visual) => html`<article class="chart"><lv-visualization-host .envelope=${visual}></lv-visualization-host></article>`)}</div>
       </section>
       <section class="showcase-section" aria-labelledby="table-showcase-heading">
         <div class="section-heading">
@@ -1495,7 +1495,7 @@ class SiteVisualShowcase extends DatastarLit(LitElement) {
           ${tables.map(
             (visual, index) =>
               html`<article class="table-card ${index === 0 ? 'featured' : ''}">
-                <ld-visualization-host .envelope=${visual}></ld-visualization-host>
+                <lv-visualization-host .envelope=${visual}></lv-visualization-host>
               </article>`,
           )}
         </div>
@@ -1504,8 +1504,8 @@ class SiteVisualShowcase extends DatastarLit(LitElement) {
   }
 }
 
-if (!customElements.get('ld-site-visual-showcase')) {
-  customElements.define('ld-site-visual-showcase', SiteVisualShowcase)
+if (!customElements.get('lv-site-visual-showcase')) {
+  customElements.define('lv-site-visual-showcase', SiteVisualShowcase)
 }
 
 function isTabularVisualType(type: string): boolean {
@@ -1514,10 +1514,10 @@ function isTabularVisualType(type: string): boolean {
 
 async function loadRouteComponents(): Promise<void> {
   const imports: Promise<unknown>[] = []
-  if (document.querySelector('ld-site-visual-showcase, ld-site-visual-example')) {
+  if (document.querySelector('lv-site-visual-showcase, lv-site-visual-example')) {
     imports.push(import('../../web/components/dashboard/visualization/host'))
   }
-  if (document.querySelector('ld-site-flow-background')) {
+  if (document.querySelector('lv-site-flow-background')) {
     imports.push(import('./site-flow-background'))
   }
   await Promise.all(imports)

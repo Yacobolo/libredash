@@ -1,6 +1,6 @@
 # Hetzner single-node deployment
 
-This Terraform deployment runs LibreDash and Caddy on one Hetzner Cloud server.
+This Terraform deployment runs LeapView and Caddy on one Hetzner Cloud server.
 It provides automatic HTTPS, generated production secrets, restricted SSH,
 daily provider backups, consistent application backups, and healthchecked
 upgrades with rollback. It is the supported small-instance topology, not a
@@ -14,7 +14,7 @@ Prerequisites:
 - Terraform 1.7 or newer
 - A Hetzner Cloud API token
 - An SSH public key
-- The immutable image reference from a LibreDash release's
+- The immutable image reference from a LeapView release's
   `image-reference.txt` asset
 
 ```sh
@@ -26,11 +26,11 @@ terraform init
 terraform apply
 ```
 
-Set three values in `terraform.tfvars`: `admin_email`, `libredash_image`, and
+Set three values in `terraform.tfvars`: `admin_email`, `leapview_image`, and
 `ssh_allowed_cidrs`. Use your public address with a `/32` suffix for SSH. The
 module deliberately rejects world-open SSH and mutable image tags.
 
-Provisioning extracts the matching Go `libredashctl` binary from the immutable
+Provisioning extracts the matching Go `leapviewctl` binary from the immutable
 multi-architecture application image. The provider then uses the same Compose
 lifecycle controller and files as the generic self-hosting package.
 
@@ -52,7 +52,7 @@ The command removes the root-only credential file after printing it. Sign in at
 publisher token with the CLI before it expires:
 
 ```sh
-libredash login \
+leapview login \
   --target "$(terraform output -raw url)" \
   --token '<publisherToken>'
 ```
@@ -63,8 +63,8 @@ over HTTP.
 ## Deploy Project
 
 ```sh
-libredash deploy \
-  --project ../../dashboards/libredash.yaml \
+leapview deploy \
+  --project ../../dashboards/leapview.yaml \
   --revision "olist=sha256:<64-lowercase-hex>" \
   --target "$(terraform output -raw url)" \
   --auto-approve
@@ -87,14 +87,14 @@ $(terraform output -raw operations_command) logs
 
 Important paths:
 
-- Docker volume `libredash_libredash-state`: application state, analytical data, and local managed data
-- `/opt/libredash/backups`: consistent local archives and checksums
-- `/opt/libredash/libredash.env`: generated application configuration
-- `/opt/libredash/deployment.env`: pinned images and deployment metadata
+- Docker volume `leapview_leapview-state`: application state, analytical data, and local managed data
+- `/opt/leapview/backups`: consistent local archives and checksums
+- `/opt/leapview/leapview.env`: generated application configuration
+- `/opt/leapview/deployment.env`: pinned images and deployment metadata
 
 The server creates a consistent backup every day and retains seven local
 archives. Hetzner's daily server backups are also enabled. The application is
-stopped while the archive is created, and the complete `/var/lib/libredash`
+stopped while the archive is created, and the complete `/var/lib/leapview`
 tree is captured, including the local managed-data object store.
 
 Create and restore an archive manually:
@@ -107,13 +107,13 @@ $(terraform output -raw operations_command) restore "$ARCHIVE"
 Restore verifies the checksum and archive paths. If the restored instance fails
 its healthcheck, the previous state is reinstated automatically.
 
-If you reconfigure managed data to use S3, these archives retain LibreDash
+If you reconfigure managed data to use S3, these archives retain LeapView
 metadata and the local runtime cache but do not contain authoritative S3 object
 data. Enable bucket versioning and a bucket-native backup or replication policy;
 disaster recovery requires both the metadata archive and the bucket objects.
 
 For independent encrypted backups, place a root-only Restic environment file at
-`/etc/libredash/restic.env`. Subsequent scheduled backups initialize the
+`/etc/leapview/restic.env`. Subsequent scheduled backups initialize the
 repository if needed and retain 7 daily, 4 weekly, and 12 monthly snapshots.
 Standard Restic variables such as `RESTIC_REPOSITORY`, `RESTIC_PASSWORD`, and
 the selected object store's credentials are supported.
@@ -124,7 +124,7 @@ Use the immutable digest published with the target release:
 
 ```sh
 $(terraform output -raw operations_command) upgrade \
-  ghcr.io/yacobolo/libredash@sha256:<digest>
+  ghcr.io/yacobolo/leapview@sha256:<digest>
 ```
 
 The command creates a pre-upgrade state checkpoint, pulls and validates the
@@ -147,4 +147,4 @@ terraform destroy
 
 The deployment stores no application secrets in Terraform state or outputs.
 See the generated [configuration reference](../../docs/configuration.md) for the
-complete process-global LibreDash environment contract.
+complete process-global LeapView environment contract.

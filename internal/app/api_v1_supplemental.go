@@ -5,11 +5,11 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/analytics/materialize"
-	materializehttp "github.com/Yacobolo/libredash/internal/analytics/materialize/http"
-	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
-	"github.com/Yacobolo/libredash/internal/manageddata/control"
-	"github.com/Yacobolo/libredash/internal/workspace"
+	"github.com/Yacobolo/leapview/internal/analytics/materialize"
+	materializehttp "github.com/Yacobolo/leapview/internal/analytics/materialize/http"
+	apigenapi "github.com/Yacobolo/leapview/internal/api/gen"
+	"github.com/Yacobolo/leapview/internal/manageddata/control"
+	"github.com/Yacobolo/leapview/internal/workspace"
 )
 
 func (a apiGenAdapter) ListProjects(w http.ResponseWriter, r *http.Request, params apigenapi.GenListProjectsParams) {

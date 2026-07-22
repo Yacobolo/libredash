@@ -6,14 +6,14 @@ import (
 	nethttp "net/http"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/analytics/materialize"
-	"github.com/Yacobolo/libredash/internal/refreshpipeline"
-	"github.com/Yacobolo/libredash/internal/servingstate"
-	"github.com/Yacobolo/libredash/internal/ui"
-	"github.com/Yacobolo/libredash/internal/workspace"
-	workspacedatastar "github.com/Yacobolo/libredash/internal/workspace/datastar"
-	"github.com/Yacobolo/libredash/internal/workspace/refresh"
-	"github.com/Yacobolo/libredash/pkg/pagestream"
+	"github.com/Yacobolo/leapview/internal/analytics/materialize"
+	"github.com/Yacobolo/leapview/internal/refreshpipeline"
+	"github.com/Yacobolo/leapview/internal/servingstate"
+	"github.com/Yacobolo/leapview/internal/ui"
+	"github.com/Yacobolo/leapview/internal/workspace"
+	workspacedatastar "github.com/Yacobolo/leapview/internal/workspace/datastar"
+	"github.com/Yacobolo/leapview/internal/workspace/refresh"
+	"github.com/Yacobolo/leapview/pkg/pagestream"
 )
 
 type RunRepository interface {

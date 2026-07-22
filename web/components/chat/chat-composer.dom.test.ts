@@ -48,10 +48,10 @@ test('composer renders an elevated centered prompt surface', async () => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-chat-composer'))
-    await page.locator('ld-chat-composer').evaluate((element: any) => element.updateComplete)
+    await page.waitForFunction(() => customElements.get('lv-chat-composer'))
+    await page.locator('lv-chat-composer').evaluate((element: any) => element.updateComplete)
 
-    const state = await page.locator('ld-chat-composer').evaluate((element: any) => {
+    const state = await page.locator('lv-chat-composer').evaluate((element: any) => {
       const root = element.shadowRoot
       const form = root.querySelector('form') as HTMLElement
       const surface = root.querySelector('.composer-surface') as HTMLElement
@@ -107,15 +107,15 @@ test('composer preserves submit, multiline, disabled, and pending behavior', asy
   const page = await browser.newPage({ viewport: { width: 800, height: 600 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-chat-composer'))
-    await page.locator('ld-chat-composer').evaluate((element: any) => element.updateComplete)
+    await page.waitForFunction(() => customElements.get('lv-chat-composer'))
+    await page.locator('lv-chat-composer').evaluate((element: any) => element.updateComplete)
 
-    const events = await page.locator('ld-chat-composer').evaluate(async (element: any) => {
+    const events = await page.locator('lv-chat-composer').evaluate(async (element: any) => {
       const root = element.shadowRoot
       const textarea = root.querySelector('textarea') as HTMLTextAreaElement
       const button = root.querySelector('button') as HTMLButtonElement
       const received: string[] = []
-      element.addEventListener('ld-chat-submit', (event: CustomEvent) => received.push(event.detail.input))
+      element.addEventListener('lv-chat-submit', (event: CustomEvent) => received.push(event.detail.input))
 
       textarea.value = '  Revenue trend  '
       textarea.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true, inputType: 'insertText', data: 'Revenue trend' }))
@@ -142,7 +142,7 @@ test('composer preserves submit, multiline, disabled, and pending behavior', asy
       element.pending = true
       await element.updateComplete
       const pendingDisabled = button.disabled
-      const spinner = root.querySelector('ld-loading-spinner') as any
+      const spinner = root.querySelector('lv-loading-spinner') as any
       await spinner?.updateComplete
       const hasSpinner = Boolean(spinner)
       const spinnerAnimationDuration = spinner?.shadowRoot?.querySelector('svg')
@@ -187,46 +187,46 @@ function testDocument(): string {
           html, body { margin: 0; min-height: 100%; }
           body {
             --fontStack-system: system-ui;
-            --ld-bg-app: #f6f8fa;
-            --ld-bg-panel: #fff;
-            --ld-bg-control: #f6f8fa;
-            --ld-bg-hover: #eff2f5;
-            --ld-bg-accent-muted: #ddf4ff;
-            --ld-fg-default: #24292f;
-            --ld-fg-muted: #57606a;
-            --ld-accent: #0969da;
-            --ld-accent-fg: #fff;
-            --ld-line-default: #d0d7de;
-            --ld-line-muted: #d8dee4;
-            --ld-line-accent: #0969da;
-            --ld-line-accent-muted: #54aeff;
-            --ld-border-default: 1px solid #d0d7de;
-            --ld-border-muted: 1px solid #d8dee4;
-            --ld-border-width-focus: 2px;
-            --ld-radius-default: 6px;
-            --ld-radius-large: 12px;
-            --ld-space-2xs: 2px;
-            --ld-space-xs: 4px;
-            --ld-space-sm: 6px;
-            --ld-space-md: 8px;
-            --ld-space-lg: 12px;
-            --ld-space-xl: 16px;
-            --ld-control-medium: 32px;
-            --ld-chat-stack-width: 760px;
-            --ld-font-size-body-sm: 14px;
-            --ld-font-weight-strong: 600;
-            --ld-line-height-normal: 1.5;
-            --ld-transition-fast: 160ms ease;
-            --ld-shadow-floating-sm: 0 8px 24px rgb(0 0 0 / .12);
-            --ld-spinner-size-md: 16px;
-            --ld-spinner-duration: 1800ms;
+            --lv-bg-app: #f6f8fa;
+            --lv-bg-panel: #fff;
+            --lv-bg-control: #f6f8fa;
+            --lv-bg-hover: #eff2f5;
+            --lv-bg-accent-muted: #ddf4ff;
+            --lv-fg-default: #24292f;
+            --lv-fg-muted: #57606a;
+            --lv-accent: #0969da;
+            --lv-accent-fg: #fff;
+            --lv-line-default: #d0d7de;
+            --lv-line-muted: #d8dee4;
+            --lv-line-accent: #0969da;
+            --lv-line-accent-muted: #54aeff;
+            --lv-border-default: 1px solid #d0d7de;
+            --lv-border-muted: 1px solid #d8dee4;
+            --lv-border-width-focus: 2px;
+            --lv-radius-default: 6px;
+            --lv-radius-large: 12px;
+            --lv-space-2xs: 2px;
+            --lv-space-xs: 4px;
+            --lv-space-sm: 6px;
+            --lv-space-md: 8px;
+            --lv-space-lg: 12px;
+            --lv-space-xl: 16px;
+            --lv-control-medium: 32px;
+            --lv-chat-stack-width: 760px;
+            --lv-font-size-body-sm: 14px;
+            --lv-font-weight-strong: 600;
+            --lv-line-height-normal: 1.5;
+            --lv-transition-fast: 160ms ease;
+            --lv-shadow-floating-sm: 0 8px 24px rgb(0 0 0 / .12);
+            --lv-spinner-size-md: 16px;
+            --lv-spinner-duration: 1800ms;
             --duration-fast: 160ms;
-            --ease-ld: ease;
+            --ease-lv: ease;
           }
         </style>
       </head>
       <body>
-        <ld-chat-composer placeholder="Ask about dashboards, metrics, or models..."></ld-chat-composer>
+        <lv-chat-composer placeholder="Ask about dashboards, metrics, or models..."></lv-chat-composer>
         <script type="module" src="/chat-composer-under-test.js"></script>
       </body>
     </html>

@@ -48,12 +48,12 @@ func TestHealthcheckCommandFailsOnUnreadyEndpoint(t *testing.T) {
 }
 
 func TestHealthcheckURLDefaultsFromListenEnvironment(t *testing.T) {
-	t.Setenv("LIBREDASH_ADDR", ":19090")
+	t.Setenv("LEAPVIEW_ADDR", ":19090")
 	if got, want := healthcheckURL(&rootOptions{}), "http://127.0.0.1:19090/readyz"; got != want {
 		t.Fatalf("healthcheck URL = %q, want %q", got, want)
 	}
 
-	t.Setenv("LIBREDASH_HEALTHCHECK_URL", "http://127.0.0.1:19091/custom-ready")
+	t.Setenv("LEAPVIEW_HEALTHCHECK_URL", "http://127.0.0.1:19091/custom-ready")
 	if got, want := healthcheckURL(&rootOptions{}), "http://127.0.0.1:19091/custom-ready"; got != want {
 		t.Fatalf("explicit healthcheck URL = %q, want %q", got, want)
 	}

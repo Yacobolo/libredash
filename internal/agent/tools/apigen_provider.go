@@ -7,8 +7,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/dataquery"
-	agentcore "github.com/Yacobolo/libredash/pkg/agent"
+	"github.com/Yacobolo/leapview/internal/dataquery"
+	agentcore "github.com/Yacobolo/leapview/pkg/agent"
 	"github.com/Yacobolo/toolbelt/apigen/runtime/agenttool"
 	"github.com/go-chi/chi/v5"
 )

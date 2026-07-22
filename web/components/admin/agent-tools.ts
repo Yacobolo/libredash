@@ -29,8 +29,8 @@ class AgentTools extends LitElement {
     :host {
       display: block;
       min-width: 0;
-      color: var(--ld-fg-default);
-      font-family: var(--ld-font-family-ui, var(--fontStack-system));
+      color: var(--lv-fg-default);
+      font-family: var(--lv-font-family-ui, var(--fontStack-system));
     }
 
     .catalog {
@@ -40,16 +40,16 @@ class AgentTools extends LitElement {
       min-width: 0;
       grid-template-rows: auto minmax(0, 1fr);
       overflow: hidden;
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-panel);
+      border: var(--lv-border-muted);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-panel);
     }
 
     .toolbar {
       display: flex;
       align-items: center;
       gap: var(--base-size-8);
-      border-bottom: var(--ld-border-muted);
+      border-bottom: var(--lv-border-muted);
       padding: var(--base-size-8);
     }
 
@@ -58,11 +58,11 @@ class AgentTools extends LitElement {
       min-width: min(100%, 22rem);
       align-items: center;
       gap: var(--base-size-8);
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-panel);
+      border: var(--lv-border-muted);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-panel);
       padding: 0 var(--base-size-8);
-      color: var(--ld-fg-muted);
+      color: var(--lv-fg-muted);
     }
 
     .search svg {
@@ -77,22 +77,22 @@ class AgentTools extends LitElement {
       border: 0;
       background: transparent;
       padding: var(--base-size-8) 0;
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
       font: inherit;
-      font-size: var(--ld-font-size-body-sm);
-      line-height: var(--ld-line-height-compact);
+      font-size: var(--lv-font-size-body-sm);
+      line-height: var(--lv-line-height-compact);
       outline: 0;
     }
 
     input::placeholder {
-      color: var(--ld-fg-muted);
+      color: var(--lv-fg-muted);
     }
 
     .count {
       margin-left: auto;
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
     }
 
     .body {
@@ -106,29 +106,29 @@ class AgentTools extends LitElement {
       min-width: 0;
       min-height: 0;
       overflow: auto;
-      border-right: var(--ld-border-muted);
+      border-right: var(--lv-border-muted);
     }
 
     .fields table {
       width: 100%;
       border-spacing: 0;
       border-collapse: collapse;
-      font-size: var(--ld-font-size-body-sm);
+      font-size: var(--lv-font-size-body-sm);
     }
 
     .fields th {
-      background: var(--ld-bg-panel-muted);
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-strong);
-      line-height: var(--ld-line-height-compact);
+      background: var(--lv-bg-panel-muted);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-strong);
+      line-height: var(--lv-line-height-compact);
       text-align: left;
       text-transform: uppercase;
     }
 
     .fields th,
     .fields td {
-      border-bottom: var(--ld-border-muted);
+      border-bottom: var(--lv-border-muted);
       padding: var(--base-size-8) var(--base-size-12);
       vertical-align: top;
     }
@@ -147,10 +147,10 @@ class AgentTools extends LitElement {
       width: 100%;
       min-width: 0;
       border: 0;
-      border-radius: var(--ld-radius-default);
+      border-radius: var(--lv-radius-default);
       background: transparent;
       padding: var(--base-size-8);
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
       cursor: pointer;
       font: inherit;
       text-align: left;
@@ -159,53 +159,53 @@ class AgentTools extends LitElement {
     .tool-button:hover,
     .tool-button:focus-visible,
     .tool-button.is-selected {
-      background: var(--ld-bg-panel-muted);
+      background: var(--lv-bg-panel-muted);
     }
 
     .tool-button:focus-visible {
-      outline: 2px solid var(--ld-fg-accent);
+      outline: 2px solid var(--lv-fg-accent);
       outline-offset: -2px;
     }
 
     code {
       font-family: var(--fontStack-monospace);
-      font-size: var(--ld-font-size-body-sm);
+      font-size: var(--lv-font-size-body-sm);
     }
 
     .tool-button code,
     .name code {
-      color: var(--ld-fg-default);
-      font-weight: var(--ld-font-weight-strong);
+      color: var(--lv-fg-default);
+      font-weight: var(--lv-font-weight-strong);
     }
 
     .description,
     .summary,
     .empty {
-      color: var(--ld-fg-muted);
+      color: var(--lv-fg-muted);
     }
 
     .description,
     .summary {
-      line-height: var(--ld-line-height-snug);
+      line-height: var(--lv-line-height-snug);
     }
 
     .required-count,
     .required-flag {
       display: inline-flex;
       align-items: center;
-      border-radius: var(--ld-radius-full);
-      background: var(--ld-bg-panel-muted);
+      border-radius: var(--lv-radius-full);
+      background: var(--lv-bg-panel-muted);
       padding: var(--base-size-2) var(--base-size-8);
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
-      line-height: var(--ld-line-height-compact);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
+      line-height: var(--lv-line-height-compact);
       white-space: nowrap;
     }
 
     .required-flag.is-required {
-      background: var(--ld-bg-accent-muted);
-      color: var(--ld-fg-accent);
+      background: var(--lv-bg-accent-muted);
+      color: var(--lv-fg-accent);
     }
 
     .detail {
@@ -219,7 +219,7 @@ class AgentTools extends LitElement {
     .detail-header {
       display: grid;
       gap: var(--base-size-8);
-      border-bottom: var(--ld-border-muted);
+      border-bottom: var(--lv-border-muted);
       padding: var(--base-size-12);
     }
 
@@ -233,21 +233,21 @@ class AgentTools extends LitElement {
     .detail-title svg {
       width: var(--base-size-16);
       height: var(--base-size-16);
-      color: var(--ld-fg-muted);
+      color: var(--lv-fg-muted);
     }
 
     .detail-title code {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-weight: var(--ld-font-weight-strong);
+      font-weight: var(--lv-font-weight-strong);
     }
 
     .detail-description {
       margin: 0;
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-body-sm);
-      line-height: var(--ld-line-height-snug);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-body-sm);
+      line-height: var(--lv-line-height-snug);
     }
 
     .detail-meta {
@@ -260,33 +260,33 @@ class AgentTools extends LitElement {
       display: inline-flex;
       width: fit-content;
       overflow: hidden;
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-panel-muted);
+      border: var(--lv-border-muted);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-panel-muted);
       padding: 2px;
     }
 
     .tabs button {
       border: 0;
-      border-radius: calc(var(--ld-radius-default) - 2px);
+      border-radius: calc(var(--lv-radius-default) - 2px);
       background: transparent;
-      padding: var(--base-size-6) var(--ld-space-control);
-      color: var(--ld-fg-muted);
+      padding: var(--base-size-6) var(--lv-space-control);
+      color: var(--lv-fg-muted);
       cursor: pointer;
       font: inherit;
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-strong);
-      line-height: var(--ld-line-height-compact);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-strong);
+      line-height: var(--lv-line-height-compact);
     }
 
     .tabs button.is-active {
-      background: var(--ld-bg-panel);
-      color: var(--ld-fg-default);
+      background: var(--lv-bg-panel);
+      color: var(--lv-fg-default);
       box-shadow: var(--shadow-inset);
     }
 
     .tabs button:focus-visible {
-      outline: 2px solid var(--ld-fg-accent);
+      outline: 2px solid var(--lv-fg-accent);
       outline-offset: 2px;
     }
 
@@ -299,19 +299,19 @@ class AgentTools extends LitElement {
     .empty {
       margin: 0;
       padding: var(--base-size-16);
-      font-size: var(--ld-font-size-body-sm);
-      font-weight: var(--ld-font-weight-medium);
+      font-size: var(--lv-font-size-body-sm);
+      font-weight: var(--lv-font-weight-medium);
     }
 
     .json {
       margin: 0;
       overflow: auto;
-      background: var(--ld-bg-control);
+      background: var(--lv-bg-control);
       padding: var(--base-size-16);
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
       font-family: var(--fontStack-monospace);
-      font-size: var(--ld-font-size-caption);
-      line-height: var(--ld-line-height-normal);
+      font-size: var(--lv-font-size-caption);
+      line-height: var(--lv-line-height-normal);
       white-space: pre;
     }
 
@@ -324,7 +324,7 @@ class AgentTools extends LitElement {
       .list {
         max-height: 12rem;
         border-right: 0;
-        border-bottom: var(--ld-border-muted);
+        border-bottom: var(--lv-border-muted);
       }
     }
   `
@@ -648,4 +648,4 @@ function isSchemaObject(value: unknown): value is SchemaObject {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
 }
 
-if (!customElements.get('ld-agent-tools')) customElements.define('ld-agent-tools', AgentTools)
+if (!customElements.get('lv-agent-tools')) customElements.define('lv-agent-tools', AgentTools)

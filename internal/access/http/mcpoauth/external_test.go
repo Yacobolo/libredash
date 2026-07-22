@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/access/http/mcpoauth"
-	accesssqlite "github.com/Yacobolo/libredash/internal/access/sqlite"
-	"github.com/Yacobolo/libredash/internal/platform"
+	"github.com/Yacobolo/leapview/internal/access/http/mcpoauth"
+	accesssqlite "github.com/Yacobolo/leapview/internal/access/sqlite"
+	"github.com/Yacobolo/leapview/internal/platform"
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
 )
@@ -43,7 +43,7 @@ func TestExternalIssuerAuthenticatesAudienceBoundMCPJWT(t *testing.T) {
 	t.Cleanup(issuerServer.Close)
 
 	ctx := context.Background()
-	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "libredash.db"))
+	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "leapview.db"))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}

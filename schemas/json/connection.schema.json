@@ -1,7 +1,7 @@
 {
   "$defs": {
     "#APIVersion": {
-      "const": "libredash.dev/v1"
+      "const": "leapview.dev/v1"
     },
     "#AmbientCredentials": {
       "additionalProperties": false,

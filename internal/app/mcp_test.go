@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/access"
-	"github.com/Yacobolo/libredash/internal/access/http/mcpoauth"
-	agentcap "github.com/Yacobolo/libredash/internal/agent"
+	"github.com/Yacobolo/leapview/internal/access"
+	"github.com/Yacobolo/leapview/internal/access/http/mcpoauth"
+	agentcap "github.com/Yacobolo/leapview/internal/agent"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -170,7 +170,7 @@ func TestMCPGoSDKClientInteroperability(t *testing.T) {
 
 	httpClient := *live.Client()
 	httpClient.Transport = bearerRoundTripper{base: httpClient.Transport, token: "mcp-secret"}
-	client := mcpsdk.NewClient(&mcpsdk.Implementation{Name: "libredash-interoperability-test", Version: "1"}, nil)
+	client := mcpsdk.NewClient(&mcpsdk.Implementation{Name: "leapview-interoperability-test", Version: "1"}, nil)
 	session, err := client.Connect(context.Background(), &mcpsdk.StreamableClientTransport{
 		Endpoint:             live.URL + "/mcp",
 		HTTPClient:           &httpClient,
@@ -281,7 +281,7 @@ func TestMCPAcceptsOAuthTokensAndRejectsGeneralAPITokens(t *testing.T) {
 
 	server := NewWithOptions(fakeMetrics{}, Options{
 		Store: store, Auth: testAuth(store, "test", AuthConfig{APITokenOnly: true}),
-		MCPOAuth: MCPOAuthConfig{PublicURL: "https://libredash.example"},
+		MCPOAuth: MCPOAuthConfig{PublicURL: "https://leapview.example"},
 	})
 	handler := server.Routes()
 	initialize := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}`
@@ -317,7 +317,7 @@ func TestMCPAcceptsOAuthTokensAndRejectsGeneralAPITokens(t *testing.T) {
 	cookieOnly := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewBufferString(initialize))
 	cookieOnly.Header.Set("Content-Type", "application/json")
 	cookieOnly.Header.Set("Accept", "application/json, text/event-stream")
-	cookieOnly.AddCookie(&http.Cookie{Name: "ld_session", Value: "browser-session"})
+	cookieOnly.AddCookie(&http.Cookie{Name: "lv_session", Value: "browser-session"})
 	cookieOnlyRec := httptest.NewRecorder()
 	handler.ServeHTTP(cookieOnlyRec, cookieOnly)
 	if cookieOnlyRec.Code != http.StatusUnauthorized {
@@ -336,12 +336,12 @@ func TestMCPOAuthDiscoveryAndBrowserConsent(t *testing.T) {
 	}
 	server := NewWithOptions(fakeMetrics{}, Options{
 		Store: store, Auth: testAuth(store, "test", AuthConfig{LocalAuth: true, CSRFKey: "0123456789abcdef0123456789abcdef"}),
-		MCPOAuth: MCPOAuthConfig{PublicURL: "https://libredash.example"},
+		MCPOAuth: MCPOAuthConfig{PublicURL: "https://leapview.example"},
 	})
 	handler := server.Routes()
 
 	for path, want := range map[string]string{
-		"/.well-known/oauth-protected-resource/mcp": `"resource":"https://libredash.example/mcp"`,
+		"/.well-known/oauth-protected-resource/mcp": `"resource":"https://leapview.example/mcp"`,
 		"/.well-known/oauth-authorization-server":   `"client_id_metadata_document_supported":true`,
 	} {
 		recorder := httptest.NewRecorder()
@@ -369,10 +369,10 @@ func TestMCPOAuthDiscoveryAndBrowserConsent(t *testing.T) {
 		"response_type": {"code"}, "client_id": {client.ClientID}, "redirect_uri": {"https://claude.example/callback"},
 		"scope": {"mcp:use offline_access"}, "state": {"claude-client-state"},
 		"code_challenge": {base64.RawURLEncoding.EncodeToString(challengeBytes[:])}, "code_challenge_method": {"S256"},
-		"resource": {"https://libredash.example/mcp"},
+		"resource": {"https://leapview.example/mcp"},
 	}
 	consentRequest := httptest.NewRequest(http.MethodGet, "/oauth/authorize?"+values.Encode(), nil)
-	consentRequest.AddCookie(&http.Cookie{Name: "ld_session", Value: session})
+	consentRequest.AddCookie(&http.Cookie{Name: "lv_session", Value: session})
 	consentResponse := httptest.NewRecorder()
 	handler.ServeHTTP(consentResponse, consentRequest)
 	if consentResponse.Code != http.StatusOK || !strings.Contains(consentResponse.Body.String(), "Claude is requesting permission") {
@@ -387,7 +387,7 @@ func TestMCPOAuthDiscoveryAndBrowserConsent(t *testing.T) {
 	approveRequest := httptest.NewRequest(http.MethodPost, "/oauth/authorize", strings.NewReader(values.Encode()))
 	approveRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	approveRequest.Header.Set("X-Request-ID", "oauth-consent-request")
-	approveRequest.AddCookie(&http.Cookie{Name: "ld_session", Value: session})
+	approveRequest.AddCookie(&http.Cookie{Name: "lv_session", Value: session})
 	for _, cookie := range consentResponse.Result().Cookies() {
 		approveRequest.AddCookie(cookie)
 	}
@@ -425,7 +425,7 @@ func issueMCPUserToken(t *testing.T, server *Server, principalID string) string 
 		"response_type": {"code"}, "client_id": {registration.ClientID},
 		"redirect_uri": {"https://client.example/callback"}, "scope": {"mcp:use offline_access"},
 		"state": {"client-state"}, "code_challenge": {base64.RawURLEncoding.EncodeToString(challengeBytes[:])},
-		"code_challenge_method": {"S256"}, "resource": {"https://libredash.example/mcp"},
+		"code_challenge_method": {"S256"}, "resource": {"https://leapview.example/mcp"},
 	}
 	authorizeRequest := httptest.NewRequest(http.MethodPost, "/oauth/authorize?"+values.Encode(), nil)
 	authorizeResponse := httptest.NewRecorder()
@@ -437,7 +437,7 @@ func issueMCPUserToken(t *testing.T, server *Server, principalID string) string 
 	tokenValues := url.Values{
 		"grant_type": {"authorization_code"}, "client_id": {registration.ClientID},
 		"code": {callback.Query().Get("code")}, "redirect_uri": {"https://client.example/callback"},
-		"code_verifier": {verifier}, "resource": {"https://libredash.example/mcp"},
+		"code_verifier": {verifier}, "resource": {"https://leapview.example/mcp"},
 	}
 	tokenRequest := httptest.NewRequest(http.MethodPost, "/oauth/token", strings.NewReader(tokenValues.Encode()))
 	tokenRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")

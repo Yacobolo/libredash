@@ -40,7 +40,7 @@ func TestRootHelpExposesOnlyProjectDeploy(t *testing.T) {
 	t.Cleanup(func() { os.Args = originalArgs })
 
 	help := func(args ...string) string {
-		os.Args = append([]string{"libredash"}, args...)
+		os.Args = append([]string{"leapview"}, args...)
 		return captureStdout(t, func() {
 			if err := Execute(context.Background()); err != nil {
 				t.Fatalf("Execute(%v) error = %v", args, err)
@@ -99,10 +99,10 @@ func TestAgentCommandIsGlobal(t *testing.T) {
 	if command.PersistentFlags().Lookup("workspace") != nil {
 		t.Fatal("global agent command still exposes --workspace")
 	}
-	if got := agentConversationEndpoint("https://libredash.example", nil); got != "https://libredash.example/api/v1/agent/conversations" {
+	if got := agentConversationEndpoint("https://leapview.example", nil); got != "https://leapview.example/api/v1/agent/conversations" {
 		t.Fatalf("conversation endpoint = %q", got)
 	}
-	if got := agentRunEndpoint("https://libredash.example", "conv_1", "run_1"); got != "https://libredash.example/api/v1/agent/conversations/conv_1/runs/run_1" {
+	if got := agentRunEndpoint("https://leapview.example", "conv_1", "run_1"); got != "https://leapview.example/api/v1/agent/conversations/conv_1/runs/run_1" {
 		t.Fatalf("run endpoint = %q", got)
 	}
 }

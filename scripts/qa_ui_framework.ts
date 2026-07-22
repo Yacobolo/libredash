@@ -24,14 +24,14 @@ try {
 async function main(): Promise<void> {
   try {
     const baseURL = await resolveBaseURL()
-    await run(['bun', 'run', 'qa:datastar-lit-routes'], { LIBREDASH_BASE_URL: baseURL })
+    await run(['bun', 'run', 'qa:datastar-lit-routes'], { LEAPVIEW_BASE_URL: baseURL })
   } finally {
     await cleanup()
   }
 }
 
 async function resolveBaseURL(): Promise<string> {
-  const configured = normalizeBaseURL(Bun.env.LIBREDASH_BASE_URL)
+  const configured = normalizeBaseURL(Bun.env.LEAPVIEW_BASE_URL)
   if (configured) return configured
 
   const current = await managedBaseURL()
@@ -40,11 +40,11 @@ async function resolveBaseURL(): Promise<string> {
   startedServer = true
   await prepareManagedHome()
   devTask = spawn(['task', 'dev'], {
-    LIBREDASH_DEV_LOG_LINES: '0',
-    LIBREDASH_DEV_SKIP_PUBLISH: '1',
-    LIBREDASH_HOME: qaHome,
-    LIBREDASH_MANAGED_DATA_DIR: `${qaHome}/managed-data`,
-    LIBREDASH_MANAGED_DATA_MIN_FREE_BYTES: '67108864',
+    LEAPVIEW_DEV_LOG_LINES: '0',
+    LEAPVIEW_DEV_SKIP_PUBLISH: '1',
+    LEAPVIEW_HOME: qaHome,
+    LEAPVIEW_MANAGED_DATA_DIR: `${qaHome}/managed-data`,
+    LEAPVIEW_MANAGED_DATA_MIN_FREE_BYTES: '67108864',
   }, 'ignore')
   void devTask.exited.then((code) => {
     devTaskExitCode = code

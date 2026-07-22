@@ -7,7 +7,7 @@ type ReportTableElement = HTMLElement & { tableId: string; table: TableSignal }
 export const adapter: RendererAdapter = {
   async mount(container, envelope) {
     const { ReportTable } = await import('../../table/report-table')
-    await customElements.whenDefined('ld-report-table')
+    await customElements.whenDefined('lv-report-table')
     const table = new ReportTable() as ReportTableElement
     container.replaceChildren(table)
     const handle = new TanStackHandle(container, table)
@@ -19,7 +19,7 @@ export const adapter: RendererAdapter = {
 class TanStackHandle implements RendererHandle {
   private envelope?: VisualizationEnvelope
   constructor(private readonly container: HTMLElement, private readonly table: ReportTableElement) {
-    this.table.addEventListener('ld-visual-window-change', this.handleWindowChange)
+    this.table.addEventListener('lv-visual-window-change', this.handleWindowChange)
   }
   update(envelope: VisualizationEnvelope): void {
     this.envelope = envelope
@@ -29,7 +29,7 @@ class TanStackHandle implements RendererHandle {
   resize(): void {}
   async snapshot(): Promise<Blob> { return new Blob([JSON.stringify(this.table.table)], { type: 'application/json' }) }
   dispose(): void {
-    this.table.removeEventListener('ld-visual-window-change', this.handleWindowChange)
+    this.table.removeEventListener('lv-visual-window-change', this.handleWindowChange)
     this.container.replaceChildren()
   }
   private readonly handleWindowChange = (event: Event) => {
@@ -37,7 +37,7 @@ class TanStackHandle implements RendererHandle {
     if (!envelope || envelope.dataState.kind !== 'windowed') return
     const detail = (event as CustomEvent<{ visual: string; block: string; start: number; count: number; requestSeq: number; resetVersion: number; sort: TableSort }>).detail
     event.stopPropagation()
-    this.table.dispatchEvent(new CustomEvent('ld-visualization-window-request', {
+    this.table.dispatchEvent(new CustomEvent('lv-visualization-window-request', {
       bubbles: true, composed: true,
       detail: {
         visualID: envelope.visualID, specRevision: envelope.specRevision, dataRevision: envelope.dataRevision,

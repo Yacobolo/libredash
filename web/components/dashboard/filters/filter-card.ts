@@ -22,7 +22,7 @@ const filterCardStyles = css`
     :host {
       display: block;
       height: 100%;
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
       font-family: var(--fontStack-system);
     }
 
@@ -41,12 +41,12 @@ const filterCardStyles = css`
 
     .label {
       overflow: hidden;
-      color: var(--ld-fg-muted);
+      color: var(--lv-fg-muted);
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-strong);
-      line-height: var(--ld-line-height-none);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-strong);
+      line-height: var(--lv-line-height-none);
       text-transform: uppercase;
     }
 
@@ -58,7 +58,7 @@ const filterCardStyles = css`
       gap: var(--base-size-8);
       border: 0;
       background: transparent;
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
       cursor: pointer;
       padding: 0;
       text-align: left;
@@ -70,14 +70,14 @@ const filterCardStyles = css`
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: var(--ld-font-size-body-md);
-      font-weight: var(--ld-font-weight-strong);
-      line-height: var(--ld-line-height-tight);
+      font-size: var(--lv-font-size-body-md);
+      font-weight: var(--lv-font-weight-strong);
+      line-height: var(--lv-line-height-tight);
     }
 
     .chevron {
       flex: 0 0 auto;
-      color: var(--ld-fg-muted);
+      color: var(--lv-fg-muted);
     }
 
     .chevron svg {
@@ -94,9 +94,9 @@ const filterCardStyles = css`
       display: grid;
       width: min(260px, max(100%, 220px));
       gap: var(--base-size-6);
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-overlay);
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-overlay);
       box-shadow: var(--shadow-floating-small);
       padding: var(--base-size-8);
     }
@@ -112,13 +112,13 @@ const filterCardStyles = css`
       width: 100%;
       min-width: 0;
       min-height: var(--control-small-size);
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-tight);
-      background: var(--ld-bg-control);
-      color: var(--ld-fg-default);
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-tight);
+      background: var(--lv-bg-control);
+      color: var(--lv-fg-default);
       padding: 0 var(--control-xsmall-paddingInline-normal);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-regular);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-regular);
       outline-offset: var(--base-size-2);
       box-sizing: border-box;
     }
@@ -126,7 +126,7 @@ const filterCardStyles = css`
     input:focus,
     select:focus,
     button:focus-visible {
-      outline: var(--ld-border-width-focus) solid var(--ld-accent);
+      outline: var(--lv-border-width-focus) solid var(--lv-accent);
     }
 
     .chips {
@@ -137,15 +137,15 @@ const filterCardStyles = css`
 
     .chip,
     .action {
-      min-height: var(--ld-button-height-sm);
-      border: var(--borderWidth-default) solid var(--ld-button-border-rest);
-      border-radius: var(--ld-radius-tight);
-      background: var(--ld-button-bg-rest);
-      color: var(--ld-button-fg-rest);
+      min-height: var(--lv-button-height-sm);
+      border: var(--borderWidth-default) solid var(--lv-button-border-rest);
+      border-radius: var(--lv-radius-tight);
+      background: var(--lv-button-bg-rest);
+      color: var(--lv-button-fg-rest);
       cursor: pointer;
-      padding: 0 var(--ld-button-padding-inline-xs);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-strong);
+      padding: 0 var(--lv-button-padding-inline-xs);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-strong);
     }
 
     .chip.custom {
@@ -169,9 +169,9 @@ const filterCardStyles = css`
     }
 
     .action.primary {
-      border-color: var(--ld-button-accent-border-rest);
-      background: var(--ld-button-accent-bg-rest);
-      color: var(--ld-button-accent-fg-rest);
+      border-color: var(--lv-button-accent-border-rest);
+      background: var(--lv-button-accent-bg-rest);
+      color: var(--lv-button-accent-fg-rest);
     }
 
     .checks {
@@ -186,28 +186,28 @@ const filterCardStyles = css`
       min-width: 0;
       align-items: center;
       gap: var(--base-size-6);
-      border-radius: var(--ld-radius-tight);
+      border-radius: var(--lv-radius-tight);
       padding: var(--base-size-4);
-      color: var(--ld-fg-default);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
+      color: var(--lv-fg-default);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
     }
 
     .check:hover {
-      background: var(--ld-bg-hover);
+      background: var(--lv-bg-hover);
     }
 
     .check input {
       width: var(--base-size-12);
       height: var(--base-size-12);
       min-height: 0;
-      accent-color: var(--ld-accent);
+      accent-color: var(--lv-accent);
     }
 
     .empty {
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
       padding: var(--base-size-4);
     }
   `
@@ -439,7 +439,7 @@ class FilterCard extends HTMLElement {
       selections: [...(filtersSignal.selections ?? [])],
     }
     const config = this.currentFilterConfig()
-    this.dispatchEvent(new CustomEvent('ld-filters-change', {
+    this.dispatchEvent(new CustomEvent('lv-filters-change', {
       detail: { filters, urlParams: filtersToURLParams(config, filters) },
       bubbles: true,
       composed: true,
@@ -530,4 +530,4 @@ function readJSONAttribute<T>(element: Element, name: string, fallback: T): T {
   }
 }
 
-if (!window.customElements.get('ld-filter-card')) window.customElements.define('ld-filter-card', FilterCard)
+if (!window.customElements.get('lv-filter-card')) window.customElements.define('lv-filter-card', FilterCard)

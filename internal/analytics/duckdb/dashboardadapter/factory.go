@@ -8,11 +8,11 @@ import (
 	"sync"
 	"time"
 
-	analyticsduckdb "github.com/Yacobolo/libredash/internal/analytics/duckdb"
-	analyticsmaterialize "github.com/Yacobolo/libredash/internal/analytics/materialize"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
-	dashboardruntime "github.com/Yacobolo/libredash/internal/dashboard/runtime"
-	"github.com/Yacobolo/libredash/internal/dataquery"
+	analyticsduckdb "github.com/Yacobolo/leapview/internal/analytics/duckdb"
+	analyticsmaterialize "github.com/Yacobolo/leapview/internal/analytics/materialize"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	dashboardruntime "github.com/Yacobolo/leapview/internal/dashboard/runtime"
+	"github.com/Yacobolo/leapview/internal/dataquery"
 )
 
 type Options struct {

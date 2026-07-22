@@ -27,13 +27,13 @@ class VisualArtifact extends LitElement {
       height: 100%;
       min-width: 0;
       overflow: hidden;
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-chart-surface, var(--ld-bg-panel));
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-chart-surface, var(--lv-bg-panel));
       box-shadow: var(--shadow-resting-small);
     }
 
-    ld-visualization-host {
+    lv-visualization-host {
       display: block;
       width: 100%;
       height: 100%;
@@ -44,9 +44,9 @@ class VisualArtifact extends LitElement {
       height: 100%;
       min-height: 8rem;
       place-items: center;
-      padding: var(--ld-space-lg);
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-body-sm);
+      padding: var(--lv-space-lg);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-body-sm);
       text-align: center;
     }
   `
@@ -60,7 +60,7 @@ class VisualArtifact extends LitElement {
     }
     return html`
       <div class=${`artifact ${isTabularVisualType(this.payload.spec.kind) ? 'table' : 'chart'}`}>
-        <ld-visualization-host .envelope=${this.payload}></ld-visualization-host>
+        <lv-visualization-host .envelope=${this.payload}></lv-visualization-host>
       </div>
     `
   }
@@ -74,4 +74,4 @@ function isTabularVisualType(type: string): boolean {
   return type === 'table' || type === 'matrix' || type === 'pivot'
 }
 
-if (!customElements.get('ld-visual-artifact')) customElements.define('ld-visual-artifact', VisualArtifact)
+if (!customElements.get('lv-visual-artifact')) customElements.define('lv-visual-artifact', VisualArtifact)

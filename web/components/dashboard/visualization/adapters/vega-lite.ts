@@ -55,10 +55,10 @@ class VegaLiteHandle implements RendererHandle {
     this.pendingSnapshots.clear(); this.channel.port1.close(); this.iframe.remove(); this.container.replaceChildren()
   }
   private receive(message: { kind?: string; id?: number; blob?: Blob; error?: string; datum?: Record<string, unknown> }): void {
-    if (message.kind === 'error') this.container.dispatchEvent(new CustomEvent('ld-visualization-renderer-error', { bubbles: true, composed: true, detail: { error: message.error ?? 'Vega-Lite error' } }))
+    if (message.kind === 'error') this.container.dispatchEvent(new CustomEvent('lv-visualization-renderer-error', { bubbles: true, composed: true, detail: { error: message.error ?? 'Vega-Lite error' } }))
     if (message.kind === 'interaction' && message.datum) {
       const command = interactionCommandForDatum(this.envelope, message.datum)
-      if (command) this.container.dispatchEvent(new CustomEvent('ld-interaction-select', { bubbles: true, composed: true, detail: command }))
+      if (command) this.container.dispatchEvent(new CustomEvent('lv-interaction-select', { bubbles: true, composed: true, detail: command }))
     }
     if (message.kind !== 'snapshot' || message.id === undefined) return
     const pending = this.pendingSnapshots.get(message.id); if (!pending) return

@@ -60,14 +60,14 @@ class FilterPanel extends LitElement {
   static styles = css`
     :host {
       display: block;
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
       font-family: var(--fontStack-system);
     }
 
     .panel {
       display: grid;
       gap: var(--base-size-8);
-      font-size: var(--ld-font-size-caption);
+      font-size: var(--lv-font-size-caption);
     }
 
     header,
@@ -80,7 +80,7 @@ class FilterPanel extends LitElement {
     }
 
     header {
-      border-bottom: var(--ld-border-default);
+      border-bottom: var(--lv-border-default);
       padding-bottom: var(--base-size-8);
     }
 
@@ -90,42 +90,42 @@ class FilterPanel extends LitElement {
 
     h2 {
       margin: 0;
-      font-size: var(--ld-font-size-body-md);
-      font-weight: var(--ld-font-weight-strong);
-      line-height: var(--ld-line-height-tight);
+      font-size: var(--lv-font-size-body-md);
+      font-weight: var(--lv-font-weight-strong);
+      line-height: var(--lv-line-height-tight);
     }
 
     .count {
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-full);
-      background: var(--ld-bg-panel-muted);
-      color: var(--ld-fg-muted);
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-full);
+      background: var(--lv-bg-panel-muted);
+      color: var(--lv-fg-muted);
       padding: var(--base-size-2) var(--base-size-6);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-strong);
-      line-height: var(--ld-line-height-none);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-strong);
+      line-height: var(--lv-line-height-none);
       white-space: nowrap;
     }
 
     .close {
       display: inline-grid;
-      width: var(--ld-button-height-xs);
-      height: var(--ld-button-height-xs);
+      width: var(--lv-button-height-xs);
+      height: var(--lv-button-height-xs);
       place-items: center;
-      border: var(--borderWidth-default) solid var(--ld-button-border-rest);
-      border-radius: var(--ld-radius-tight);
-      background: var(--ld-button-bg-rest);
-      color: var(--ld-button-fg-rest);
+      border: var(--borderWidth-default) solid var(--lv-button-border-rest);
+      border-radius: var(--lv-radius-tight);
+      background: var(--lv-button-bg-rest);
+      color: var(--lv-button-fg-rest);
       cursor: pointer;
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-strong);
-      line-height: var(--ld-line-height-none);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-strong);
+      line-height: var(--lv-line-height-none);
     }
 
     .close:hover {
-      border-color: var(--ld-button-border-hover);
-      background: var(--ld-button-bg-hover);
-      color: var(--ld-fg-default);
+      border-color: var(--lv-button-border-hover);
+      background: var(--lv-button-bg-hover);
+      color: var(--lv-fg-default);
     }
 
     .close svg,
@@ -138,9 +138,9 @@ class FilterPanel extends LitElement {
     .card {
       display: grid;
       gap: var(--base-size-6);
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-panel);
+      border: var(--lv-border-muted);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-panel);
       padding: var(--base-size-8);
     }
 
@@ -153,9 +153,9 @@ class FilterPanel extends LitElement {
 
     h3 {
       margin: 0;
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-strong);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-strong);
       text-transform: uppercase;
     }
 
@@ -167,15 +167,15 @@ class FilterPanel extends LitElement {
 
     .clear,
     .reset {
-      min-height: var(--ld-button-height-xs);
-      border: var(--borderWidth-default) solid var(--ld-button-border-rest);
-      border-radius: var(--ld-radius-tight);
-      background: var(--ld-button-bg-rest);
-      color: var(--ld-button-fg-rest);
+      min-height: var(--lv-button-height-xs);
+      border: var(--borderWidth-default) solid var(--lv-button-border-rest);
+      border-radius: var(--lv-radius-tight);
+      background: var(--lv-button-bg-rest);
+      color: var(--lv-button-fg-rest);
       cursor: pointer;
-      padding: 0 var(--ld-button-padding-inline-xs);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-strong);
+      padding: 0 var(--lv-button-padding-inline-xs);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-strong);
     }
 
     .clear:disabled,
@@ -213,22 +213,22 @@ class FilterPanel extends LitElement {
     .calendar-nav,
     .day,
     .popover-action {
-      border: var(--borderWidth-default) solid var(--ld-button-border-rest);
-      border-radius: var(--ld-radius-tight);
-      background: var(--ld-button-bg-rest);
-      color: var(--ld-button-fg-rest);
+      border: var(--borderWidth-default) solid var(--lv-button-border-rest);
+      border-radius: var(--lv-radius-tight);
+      background: var(--lv-button-bg-rest);
+      color: var(--lv-button-fg-rest);
       cursor: pointer;
-      font-weight: var(--ld-font-weight-strong);
+      font-weight: var(--lv-font-weight-strong);
     }
 
     .preset {
       min-width: 0;
-      min-height: var(--ld-button-height-sm);
+      min-height: var(--lv-button-height-sm);
       overflow: hidden;
-      padding: 0 var(--ld-button-padding-inline-xs);
+      padding: 0 var(--lv-button-padding-inline-xs);
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: var(--ld-font-size-caption);
+      font-size: var(--lv-font-size-caption);
     }
 
     .preset.custom {
@@ -238,7 +238,7 @@ class FilterPanel extends LitElement {
     .preset[aria-pressed='true'] {
       border-color: var(--borderColor-accent-muted);
       background: var(--bgColor-accent-muted);
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
     }
 
     .date-trigger {
@@ -249,7 +249,7 @@ class FilterPanel extends LitElement {
       min-height: var(--control-medium-size);
       padding: 0 var(--control-small-paddingInline-normal);
       text-align: left;
-      font-size: var(--ld-font-size-caption);
+      font-size: var(--lv-font-size-caption);
     }
 
     .date-trigger span:first-child {
@@ -266,9 +266,9 @@ class FilterPanel extends LitElement {
       z-index: var(--zIndex-dropdown);
       display: grid;
       gap: var(--base-size-6);
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-overlay);
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-overlay);
       box-shadow: var(--shadow-floating-small);
       padding: var(--base-size-8);
     }
@@ -281,16 +281,16 @@ class FilterPanel extends LitElement {
     }
 
     .calendar-title {
-      color: var(--ld-fg-default);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-strong);
+      color: var(--lv-fg-default);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-strong);
     }
 
     .calendar-nav {
       width: var(--control-xsmall-size);
       height: var(--control-xsmall-size);
       padding: 0;
-      font-size: var(--ld-font-size-body-md);
+      font-size: var(--lv-font-size-body-md);
     }
 
     .calendar-grid {
@@ -300,10 +300,10 @@ class FilterPanel extends LitElement {
     }
 
     .weekday {
-      color: var(--ld-fg-muted);
+      color: var(--lv-fg-muted);
       text-align: center;
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-strong);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-strong);
       text-transform: uppercase;
     }
 
@@ -313,12 +313,12 @@ class FilterPanel extends LitElement {
       padding: 0;
       border-color: transparent;
       background: transparent;
-      color: var(--ld-fg-default);
-      font-size: var(--ld-font-size-caption);
+      color: var(--lv-fg-default);
+      font-size: var(--lv-font-size-caption);
     }
 
     .day.outside {
-      color: var(--ld-fg-muted);
+      color: var(--lv-fg-muted);
       opacity: 0.45;
     }
 
@@ -327,9 +327,9 @@ class FilterPanel extends LitElement {
     }
 
     .day.selected {
-      border-color: var(--ld-button-accent-border-rest);
-      background: var(--ld-button-accent-bg-rest);
-      color: var(--ld-button-accent-fg-rest);
+      border-color: var(--lv-button-accent-border-rest);
+      background: var(--lv-button-accent-bg-rest);
+      color: var(--lv-button-accent-fg-rest);
     }
 
     .date-row {
@@ -341,9 +341,9 @@ class FilterPanel extends LitElement {
     .date-field {
       display: grid;
       gap: var(--base-size-4);
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-strong);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-strong);
       text-transform: uppercase;
     }
 
@@ -354,15 +354,15 @@ class FilterPanel extends LitElement {
     }
 
     .popover-action {
-      min-height: var(--ld-button-height-xs);
-      padding: 0 var(--ld-button-padding-inline-xs);
-      font-size: var(--ld-font-size-caption);
+      min-height: var(--lv-button-height-xs);
+      padding: 0 var(--lv-button-padding-inline-xs);
+      font-size: var(--lv-font-size-caption);
     }
 
     .popover-action.primary {
-      border-color: var(--ld-button-accent-border-rest);
-      background: var(--ld-button-accent-bg-rest);
-      color: var(--ld-button-accent-fg-rest);
+      border-color: var(--lv-button-accent-border-rest);
+      background: var(--lv-button-accent-bg-rest);
+      color: var(--lv-button-accent-fg-rest);
     }
 
     input,
@@ -370,19 +370,19 @@ class FilterPanel extends LitElement {
       width: 100%;
       min-width: 0;
       min-height: var(--control-xsmall-size);
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-tight);
-      background: var(--ld-bg-control);
-      color: var(--ld-fg-default);
+      border: var(--lv-border-default);
+      border-radius: var(--lv-radius-tight);
+      background: var(--lv-bg-control);
+      color: var(--lv-fg-default);
       padding: 0 var(--control-xsmall-paddingInline-normal);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-regular);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-regular);
       outline-offset: var(--base-size-2);
     }
 
     input:focus,
     select:focus {
-      outline: var(--ld-border-width-focus) solid var(--ld-accent);
+      outline: var(--lv-border-width-focus) solid var(--lv-accent);
     }
 
     .checks {
@@ -397,28 +397,28 @@ class FilterPanel extends LitElement {
       min-width: 0;
       align-items: center;
       gap: var(--base-size-6);
-      border-radius: var(--ld-radius-tight);
+      border-radius: var(--lv-radius-tight);
       padding: var(--base-size-4);
-      color: var(--ld-fg-default);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
+      color: var(--lv-fg-default);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
     }
 
     label.check:hover {
-      background: var(--ld-bg-panel-muted);
+      background: var(--lv-bg-panel-muted);
     }
 
     label.check input {
       width: var(--base-size-12);
       height: var(--base-size-12);
       min-height: 0;
-      accent-color: var(--ld-accent);
+      accent-color: var(--lv-accent);
     }
 
     .empty {
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
       padding: var(--base-size-4);
     }
 
@@ -431,22 +431,22 @@ class FilterPanel extends LitElement {
     .chip {
       max-width: 100%;
       overflow: hidden;
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-full);
-      background: var(--ld-bg-panel-muted);
-      color: var(--ld-fg-muted);
+      border: var(--lv-border-muted);
+      border-radius: var(--lv-radius-full);
+      background: var(--lv-bg-panel-muted);
+      color: var(--lv-fg-muted);
       padding: var(--base-size-2) var(--base-size-6);
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-strong);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-strong);
     }
 
     .summary {
       min-height: var(--control-xsmall-size);
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
     }
 
     .refresh {
@@ -454,15 +454,15 @@ class FilterPanel extends LitElement {
       align-items: center;
       justify-content: center;
       gap: var(--base-size-4);
-      min-height: var(--ld-button-height-sm);
+      min-height: var(--lv-button-height-sm);
       width: 100%;
       cursor: pointer;
-      border: var(--borderWidth-default) solid var(--ld-button-accent-border-rest);
-      border-radius: var(--ld-radius-tight);
-      background: var(--ld-button-accent-bg-rest);
-      color: var(--ld-button-accent-fg-rest);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-strong);
+      border: var(--borderWidth-default) solid var(--lv-button-accent-border-rest);
+      border-radius: var(--lv-radius-tight);
+      background: var(--lv-button-accent-bg-rest);
+      color: var(--lv-button-accent-fg-rest);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-strong);
     }
   `
 
@@ -649,7 +649,7 @@ class FilterPanel extends LitElement {
   }
 
   private emitChange(filters: FiltersSignal): void {
-    this.dispatchEvent(new CustomEvent('ld-filters-change', { detail: { filters, urlParams: filtersToURLParams(this.config, filters) }, bubbles: true, composed: true }))
+    this.dispatchEvent(new CustomEvent('lv-filters-change', { detail: { filters, urlParams: filtersToURLParams(this.config, filters) }, bubbles: true, composed: true }))
   }
 
   private updateControl(name: string, control: FilterControl): void {
@@ -817,7 +817,7 @@ class FilterPanel extends LitElement {
   }
 
   private clearSelections = (): void => {
-    this.dispatchEvent(new CustomEvent('ld-selection-clear', { bubbles: true, composed: true }))
+    this.dispatchEvent(new CustomEvent('lv-selection-clear', { bubbles: true, composed: true }))
   }
 
   private reset = (): void => {
@@ -827,15 +827,15 @@ class FilterPanel extends LitElement {
     }
     this.openDate = null
     this.dateDraft = null
-    this.dispatchEvent(new CustomEvent('ld-filters-reset', { detail: { filters, urlParams: filtersToURLParams(this.config, filters) }, bubbles: true, composed: true }))
+    this.dispatchEvent(new CustomEvent('lv-filters-reset', { detail: { filters, urlParams: filtersToURLParams(this.config, filters) }, bubbles: true, composed: true }))
   }
 
   private refresh = (): void => {
-    this.dispatchEvent(new CustomEvent('ld-filters-refresh', { bubbles: true, composed: true }))
+    this.dispatchEvent(new CustomEvent('lv-filters-refresh', { bubbles: true, composed: true }))
   }
 
   private close = (): void => {
-    this.dispatchEvent(new CustomEvent('ld-filters-close', { bubbles: true, composed: true }))
+    this.dispatchEvent(new CustomEvent('lv-filters-close', { bubbles: true, composed: true }))
   }
 
   private activeCount(): number {
@@ -948,4 +948,4 @@ function isInRange(value: string, from: string, to: string): boolean {
   return value > from && value < to
 }
 
-customElements.define('ld-filter-panel', FilterPanel)
+customElements.define('lv-filter-panel', FilterPanel)

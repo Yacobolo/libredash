@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/access/http/mcpoauth"
-	"github.com/Yacobolo/libredash/internal/dashboard"
+	"github.com/Yacobolo/leapview/internal/access/http/mcpoauth"
+	"github.com/Yacobolo/leapview/internal/dashboard"
 	g "maragu.dev/gomponents"
 )
 

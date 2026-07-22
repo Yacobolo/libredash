@@ -8,11 +8,11 @@ import (
 	"sort"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/access"
-	agentcap "github.com/Yacobolo/libredash/internal/agent"
-	"github.com/Yacobolo/libredash/internal/brand"
-	"github.com/Yacobolo/libredash/internal/staticasset"
-	agentcore "github.com/Yacobolo/libredash/pkg/agent"
+	"github.com/Yacobolo/leapview/internal/access"
+	agentcap "github.com/Yacobolo/leapview/internal/agent"
+	"github.com/Yacobolo/leapview/internal/brand"
+	"github.com/Yacobolo/leapview/internal/staticasset"
+	agentcore "github.com/Yacobolo/leapview/pkg/agent"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -50,7 +50,7 @@ func (s *Server) mcpServer(r *http.Request) (*mcp.Server, error) {
 		version = "dev"
 	}
 	server := mcp.NewServer(&mcp.Implementation{
-		Name:    "libredash",
+		Name:    "leapview",
 		Title:   brand.Name,
 		Version: version,
 	}, &mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{}})

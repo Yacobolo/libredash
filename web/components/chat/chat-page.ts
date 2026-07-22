@@ -15,7 +15,7 @@ const emptyAgent: ChatSignal = {
   composer: { value: '', disabled: true, placeholder: 'Agent is not configured.' },
 }
 
-class LibreDashChatPage extends DatastarLit(LitElement) {
+class LeapViewChatPage extends DatastarLit(LitElement) {
   private redirectedConversationID = ''
 
   static styles = css`
@@ -23,15 +23,15 @@ class LibreDashChatPage extends DatastarLit(LitElement) {
       display: block;
       min-width: 0;
       min-height: 100svh;
-      color: var(--ld-fg-default);
-      font-family: var(--ld-font-family-ui, var(--fontStack-system));
-      background: var(--ld-bg-app);
+      color: var(--lv-fg-default);
+      font-family: var(--lv-font-family-ui, var(--fontStack-system));
+      background: var(--lv-bg-app);
     }
 
     .route {
       display: block;
       min-height: 100svh;
-      background: var(--ld-bg-app);
+      background: var(--lv-bg-app);
     }
 
     .main {
@@ -41,7 +41,7 @@ class LibreDashChatPage extends DatastarLit(LitElement) {
       min-height: 0;
       grid-template-rows: auto minmax(0, 1fr);
       overflow: hidden;
-      background: var(--ld-bg-app);
+      background: var(--lv-bg-app);
     }
 
     .main.list-main {
@@ -68,12 +68,12 @@ class LibreDashChatPage extends DatastarLit(LitElement) {
 
     h1 {
       overflow: hidden;
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: var(--ld-font-size-title-sm);
-      font-weight: var(--ld-font-weight-strong);
-      line-height: var(--ld-line-height-compact);
+      font-size: var(--lv-font-size-title-sm);
+      font-weight: var(--lv-font-weight-strong);
+      line-height: var(--lv-line-height-compact);
     }
 
     .body {
@@ -81,7 +81,7 @@ class LibreDashChatPage extends DatastarLit(LitElement) {
       min-width: 0;
       min-height: 0;
       overflow: auto;
-      background: var(--ld-bg-app);
+      background: var(--lv-bg-app);
     }
 
     .list-main .body {
@@ -95,7 +95,7 @@ class LibreDashChatPage extends DatastarLit(LitElement) {
       min-height: 0;
       grid-template-rows: minmax(0, 1fr) auto;
       overflow: hidden;
-      background: var(--ld-bg-app);
+      background: var(--lv-bg-app);
     }
 
     .new-chat-stage {
@@ -105,31 +105,31 @@ class LibreDashChatPage extends DatastarLit(LitElement) {
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: var(--ld-space-lg);
-      background: var(--ld-bg-app);
+      gap: var(--lv-space-lg);
+      background: var(--lv-bg-app);
     }
 
     .new-chat-stage > * {
-      animation: new-chat-enter var(--ld-transition-medium) both;
+      animation: new-chat-enter var(--lv-transition-medium) both;
     }
 
-    .new-chat-stage ld-chat-composer {
+    .new-chat-stage lv-chat-composer {
       width: 100%;
       animation-delay: 70ms;
     }
 
     .new-chat-title {
       box-sizing: border-box;
-      width: min(100%, var(--ld-chat-stack-width));
-      padding-inline: var(--ld-space-lg);
+      width: min(100%, var(--lv-chat-stack-width));
+      padding-inline: var(--lv-space-lg);
       text-align: center;
-      font-size: var(--ld-font-size-title-md);
+      font-size: var(--lv-font-size-title-md);
     }
 
     @keyframes new-chat-enter {
       from {
         opacity: 0;
-        transform: translateY(var(--ld-space-sm));
+        transform: translateY(var(--lv-space-sm));
       }
 
       to {
@@ -144,16 +144,16 @@ class LibreDashChatPage extends DatastarLit(LitElement) {
       }
     }
 
-    ld-chat-thread {
+    lv-chat-thread {
       display: block;
       min-width: 0;
       min-height: 0;
       overflow: hidden;
     }
 
-    ld-chat-composer {
+    lv-chat-composer {
       display: block;
-      background: var(--ld-bg-app);
+      background: var(--lv-bg-app);
     }
 
     @media (max-width: 640px) {
@@ -228,7 +228,7 @@ class LibreDashChatPage extends DatastarLit(LitElement) {
           <div class="body">
             ${isList ? this.renderListView(agent) : isNew ? this.renderNewView(composer, status) : this.renderConversationView(agent, status, composer)}
           </div>
-          <ld-visual-modal></ld-visual-modal>
+          <lv-visual-modal></lv-visual-modal>
         </section>
       </div>
     `
@@ -244,10 +244,10 @@ class LibreDashChatPage extends DatastarLit(LitElement) {
 
   private renderListView(agent: ChatSignal) {
     return html`
-      <ld-chat-list
+      <lv-chat-list
         .conversations=${agent.conversations ?? []}
         active-conversation-id=${agent.activeConversationId ?? ''}
-      ></ld-chat-list>
+      ></lv-chat-list>
     `
   }
 
@@ -263,12 +263,12 @@ class LibreDashChatPage extends DatastarLit(LitElement) {
   private renderConversationView(agent: ChatSignal, status: ChatSignal['status'], composer: ChatSignal['composer']) {
     return html`
       <div class="thread-stack">
-        <ld-chat-thread
+        <lv-chat-thread
           .transcript=${agent.transcript ?? []}
           .visuals=${this.visuals ?? {}}
           .status=${status}
           conversation-id=${agent.activeConversationId ?? ''}
-        >${status.error ?? ''}</ld-chat-thread>
+        >${status.error ?? ''}</lv-chat-thread>
         ${this.renderComposer(composer, status)}
       </div>
     `
@@ -276,12 +276,12 @@ class LibreDashChatPage extends DatastarLit(LitElement) {
 
   private renderComposer(composer: ChatSignal['composer'], status: ChatSignal['status']) {
     return html`
-      <ld-chat-composer
+      <lv-chat-composer
         .value=${composer.value ?? ''}
         .disabled=${this.composerDisabled || status.running || composer.disabled}
         .pending=${this.pending || status.running}
         .placeholder=${composer.placeholder ?? emptyAgent.composer.placeholder}
-      ></ld-chat-composer>
+      ></lv-chat-composer>
     `
   }
 }
@@ -294,4 +294,4 @@ function conversationTitle(agent: ChatSignal): string {
   return title || 'New chat'
 }
 
-if (!customElements.get('ld-chat-page')) customElements.define('ld-chat-page', LibreDashChatPage)
+if (!customElements.get('lv-chat-page')) customElements.define('lv-chat-page', LeapViewChatPage)

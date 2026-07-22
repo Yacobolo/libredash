@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"testing"
 
-	sitehttp "github.com/Yacobolo/libredash/internal/site/http"
+	sitehttp "github.com/Yacobolo/leapview/internal/site/http"
 )
 
 func TestNewHandlerReturnsSiteServer(t *testing.T) {

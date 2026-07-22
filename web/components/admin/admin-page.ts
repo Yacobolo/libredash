@@ -35,7 +35,7 @@ const emptyStorage: AdminStorageSignal = {
   selectedTable: undefined,
 }
 
-class LibreDashAdminPage extends DatastarLit(LitElement) {
+class LeapViewAdminPage extends DatastarLit(LitElement) {
   @state() private queryFilters: AdminQueryHistoryFilters = {}
   @state() private copiedQueryDetailValue = ''
   private queryFilterTimer: ReturnType<typeof setTimeout> | null = null
@@ -46,9 +46,9 @@ class LibreDashAdminPage extends DatastarLit(LitElement) {
       display: block;
       min-width: 0;
       min-height: 100svh;
-      color: var(--ld-fg-default);
-      font-family: var(--ld-font-family-ui, var(--fontStack-system));
-      background: var(--ld-bg-app);
+      color: var(--lv-fg-default);
+      font-family: var(--lv-font-family-ui, var(--fontStack-system));
+      background: var(--lv-bg-app);
     }
 
     .route {
@@ -56,10 +56,10 @@ class LibreDashAdminPage extends DatastarLit(LitElement) {
       min-height: 100svh;
       grid-template-columns: auto minmax(0, 1fr);
       align-items: start;
-      background: var(--ld-bg-app);
+      background: var(--lv-bg-app);
     }
 
-    ld-sub-sidebar {
+    lv-sub-sidebar {
       position: sticky;
       top: 0;
       align-self: start;
@@ -68,7 +68,7 @@ class LibreDashAdminPage extends DatastarLit(LitElement) {
 
     .main {
       display: grid;
-      width: min(100%, var(--ld-page-content-max-width));
+      width: min(100%, var(--lv-page-content-max-width));
       min-width: 0;
       min-height: 100svh;
       align-content: start;
@@ -100,35 +100,35 @@ class LibreDashAdminPage extends DatastarLit(LitElement) {
     }
 
     .eyebrow {
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
-      line-height: var(--ld-line-height-tight);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
+      line-height: var(--lv-line-height-tight);
       text-transform: uppercase;
     }
 
     h1 {
       overflow: hidden;
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: var(--ld-font-size-title-sm);
-      font-weight: var(--ld-font-weight-strong);
-      line-height: var(--ld-line-height-compact);
+      font-size: var(--lv-font-size-title-sm);
+      font-weight: var(--lv-font-weight-strong);
+      line-height: var(--lv-line-height-compact);
     }
 
     .detail {
       overflow: hidden;
-      color: var(--ld-fg-muted);
+      color: var(--lv-fg-muted);
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: var(--ld-font-size-body-sm);
-      line-height: var(--ld-line-height-compact);
+      font-size: var(--lv-font-size-body-sm);
+      line-height: var(--lv-line-height-compact);
     }
 
     .metrics {
       display: grid;
-      max-width: var(--ld-workspace-detail-max-width);
+      max-width: var(--lv-workspace-detail-max-width);
       grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
       gap: var(--base-size-12);
     }
@@ -137,9 +137,9 @@ class LibreDashAdminPage extends DatastarLit(LitElement) {
     .panel {
       min-width: 0;
       overflow: hidden;
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-panel);
+      border: var(--lv-border-muted);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-panel);
     }
 
     .metric {
@@ -150,26 +150,26 @@ class LibreDashAdminPage extends DatastarLit(LitElement) {
     }
 
     .metric .label {
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
       text-transform: uppercase;
     }
 
     .metric .value {
       overflow: hidden;
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-size: var(--ld-font-size-title-sm);
-      font-weight: var(--ld-font-weight-strong);
+      font-size: var(--lv-font-size-title-sm);
+      font-weight: var(--lv-font-weight-strong);
     }
 
     .metric .meta,
     .empty {
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
     }
 
     .empty {
@@ -178,21 +178,21 @@ class LibreDashAdminPage extends DatastarLit(LitElement) {
 
     .warnings {
       display: grid;
-      max-width: var(--ld-workspace-detail-max-width);
+      max-width: var(--lv-workspace-detail-max-width);
       gap: var(--base-size-8);
     }
 
     .warning {
-      border: var(--ld-border-attention);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-attention-muted);
-      padding: var(--ld-space-control) var(--base-size-12);
-      color: var(--ld-fg-default);
-      font-size: var(--ld-font-size-body-sm);
-      font-weight: var(--ld-font-weight-medium);
+      border: var(--lv-border-attention);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-attention-muted);
+      padding: var(--lv-space-control) var(--base-size-12);
+      color: var(--lv-fg-default);
+      font-size: var(--lv-font-size-body-sm);
+      font-weight: var(--lv-font-weight-medium);
     }
 
-    ld-storage-explorer {
+    lv-storage-explorer {
       width: 100%;
       max-width: 100%;
       min-height: 0;
@@ -206,9 +206,9 @@ class LibreDashAdminPage extends DatastarLit(LitElement) {
     }
 
     h2 {
-      color: var(--ld-fg-default);
-      font-size: var(--ld-font-size-body-sm);
-      font-weight: var(--ld-font-weight-strong);
+      color: var(--lv-fg-default);
+      font-size: var(--lv-font-size-body-sm);
+      font-weight: var(--lv-font-weight-strong);
     }
 
     .facts {
@@ -219,11 +219,11 @@ class LibreDashAdminPage extends DatastarLit(LitElement) {
 
     .local-user-panel {
       display: grid;
-      max-width: var(--ld-workspace-detail-max-width);
+      max-width: var(--lv-workspace-detail-max-width);
       gap: var(--base-size-12);
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-panel);
+      border: var(--lv-border-muted);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-panel);
       padding: var(--base-size-12);
     }
 
@@ -237,40 +237,40 @@ class LibreDashAdminPage extends DatastarLit(LitElement) {
     .local-user-form label {
       display: grid;
       gap: var(--base-size-4);
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
       text-transform: uppercase;
     }
 
     .local-user-form input {
       min-width: 0;
       min-height: var(--control-medium-size);
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-small);
-      background: var(--ld-bg-input);
-      color: var(--ld-fg-default);
+      border: var(--lv-border-muted);
+      border-radius: var(--lv-radius-small);
+      background: var(--lv-bg-input);
+      color: var(--lv-fg-default);
       font: inherit;
-      font-size: var(--ld-font-size-body-sm);
+      font-size: var(--lv-font-size-body-sm);
       padding: 0 var(--base-size-8);
     }
 
     .local-user-action {
       min-height: var(--control-medium-size);
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-control);
-      color: var(--ld-fg-default);
+      border: var(--lv-border-muted);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-control);
+      color: var(--lv-fg-default);
       cursor: pointer;
       font: inherit;
-      font-size: var(--ld-font-size-body-sm);
-      font-weight: var(--ld-font-weight-medium);
+      font-size: var(--lv-font-size-body-sm);
+      font-weight: var(--lv-font-weight-medium);
       padding: 0 var(--base-size-12);
     }
 
     .local-user-action:hover,
     .local-user-action:focus-visible {
-      background: var(--ld-bg-control-hover);
+      background: var(--lv-bg-control-hover);
       outline: 0;
     }
 
@@ -280,13 +280,13 @@ class LibreDashAdminPage extends DatastarLit(LitElement) {
     }
 
     .local-user-result {
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-body-sm);
-      line-height: var(--ld-line-height-compact);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-body-sm);
+      line-height: var(--lv-line-height-compact);
     }
 
     .local-user-result code {
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
     }
 
     .query-audit {
@@ -299,9 +299,9 @@ class LibreDashAdminPage extends DatastarLit(LitElement) {
       display: flex;
       flex-wrap: wrap;
       gap: var(--base-size-8);
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-panel);
+      border: var(--lv-border-muted);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-panel);
       padding: var(--base-size-12);
     }
 
@@ -313,22 +313,22 @@ class LibreDashAdminPage extends DatastarLit(LitElement) {
     }
 
     .query-filter label {
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-medium);
       text-transform: uppercase;
     }
 
     .query-filter input {
       min-width: 0;
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-small);
-      background: var(--ld-bg-input);
-      color: var(--ld-fg-default);
+      border: var(--lv-border-muted);
+      border-radius: var(--lv-radius-small);
+      background: var(--lv-bg-input);
+      color: var(--lv-fg-default);
       font: inherit;
-      font-size: var(--ld-font-size-body-sm);
-      line-height: var(--ld-line-height-compact);
-      padding: var(--base-size-8) var(--ld-space-control);
+      font-size: var(--lv-font-size-body-sm);
+      line-height: var(--lv-line-height-compact);
+      padding: var(--base-size-8) var(--lv-space-control);
     }
 
     .query-history-footer {
@@ -337,23 +337,23 @@ class LibreDashAdminPage extends DatastarLit(LitElement) {
       align-items: center;
       justify-content: space-between;
       gap: var(--base-size-12);
-      border-top: var(--ld-border-muted);
+      border-top: var(--lv-border-muted);
       padding: var(--base-size-8) var(--base-size-12);
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-body-sm);
-      font-weight: var(--ld-font-weight-medium);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-body-sm);
+      font-weight: var(--lv-font-weight-medium);
     }
 
     .query-history-error {
-      color: var(--ld-fg-danger);
+      color: var(--lv-fg-danger);
     }
 
     .query-history-load-more {
-      min-height: var(--ld-control-medium);
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-panel);
-      color: var(--ld-fg-default);
+      min-height: var(--lv-control-medium);
+      border: var(--lv-border-muted);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-panel);
+      color: var(--lv-fg-default);
       cursor: pointer;
       font: inherit;
       padding: 0 var(--base-size-12);
@@ -361,7 +361,7 @@ class LibreDashAdminPage extends DatastarLit(LitElement) {
 
     .query-history-load-more:hover,
     .query-history-load-more:focus-visible {
-      background: var(--ld-bg-control-hover, var(--ld-bg-panel-muted));
+      background: var(--lv-bg-control-hover, var(--lv-bg-panel-muted));
       outline: 0;
     }
 
@@ -377,15 +377,15 @@ class LibreDashAdminPage extends DatastarLit(LitElement) {
       display: grid;
       width: min(34rem, 100vw);
       grid-template-rows: auto minmax(0, 1fr);
-      border-left: var(--ld-border-muted);
-      background: var(--ld-bg-panel);
-      box-shadow: var(--ld-shadow-floating-lg);
-      color: var(--ld-fg-default);
+      border-left: var(--lv-border-muted);
+      background: var(--lv-bg-panel);
+      box-shadow: var(--lv-shadow-floating-lg);
+      color: var(--lv-fg-default);
       animation: query-detail-slide-in 180ms cubic-bezier(0.2, 0, 0, 1) both;
     }
 
     .query-detail-header {
-      border-bottom: var(--ld-border-muted);
+      border-bottom: var(--lv-border-muted);
       padding: var(--base-size-16);
     }
 
@@ -406,8 +406,8 @@ class LibreDashAdminPage extends DatastarLit(LitElement) {
       min-width: 0;
       align-items: center;
       gap: var(--base-size-6);
-      color: var(--ld-fg-default);
-      font-weight: var(--ld-font-weight-strong);
+      color: var(--lv-fg-default);
+      font-weight: var(--lv-font-weight-strong);
     }
 
     .query-detail-status svg {
@@ -417,19 +417,19 @@ class LibreDashAdminPage extends DatastarLit(LitElement) {
     }
 
     .query-detail-status-success svg {
-      color: var(--ld-fg-success);
+      color: var(--lv-fg-success);
     }
 
     .query-detail-status-danger svg {
-      color: var(--ld-fg-danger);
+      color: var(--lv-fg-danger);
     }
 
     .query-detail-status-attention svg {
-      color: var(--ld-fg-warning);
+      color: var(--lv-fg-warning);
     }
 
     .query-detail-status-muted svg {
-      color: var(--ld-fg-muted);
+      color: var(--lv-fg-muted);
     }
 
     .query-detail-close,
@@ -437,17 +437,17 @@ class LibreDashAdminPage extends DatastarLit(LitElement) {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      border: var(--ld-border-transparent);
-      border-radius: var(--ld-radius-default);
+      border: var(--lv-border-transparent);
+      border-radius: var(--lv-radius-default);
       background: transparent;
-      color: var(--ld-fg-muted);
+      color: var(--lv-fg-muted);
       cursor: pointer;
       font: inherit;
     }
 
     .query-detail-close {
-      width: var(--ld-control-medium);
-      height: var(--ld-control-medium);
+      width: var(--lv-control-medium);
+      height: var(--lv-control-medium);
     }
 
     .query-detail-copy {
@@ -461,9 +461,9 @@ class LibreDashAdminPage extends DatastarLit(LitElement) {
     .query-detail-close:focus-visible,
     .query-detail-copy:hover,
     .query-detail-copy:focus-visible {
-      border-color: var(--ld-line-muted);
-      background: var(--ld-bg-control-hover, var(--ld-bg-panel-muted));
-      color: var(--ld-fg-default);
+      border-color: var(--lv-line-muted);
+      background: var(--lv-bg-control-hover, var(--lv-bg-panel-muted));
+      color: var(--lv-fg-default);
       outline: 0;
     }
 
@@ -484,9 +484,9 @@ class LibreDashAdminPage extends DatastarLit(LitElement) {
 
     .query-detail-section h2,
     .query-detail-section summary {
-      color: var(--ld-fg-default);
-      font-size: var(--ld-font-size-body-sm);
-      font-weight: var(--ld-font-weight-strong);
+      color: var(--lv-fg-default);
+      font-size: var(--lv-font-size-body-sm);
+      font-weight: var(--lv-font-weight-strong);
     }
 
     .query-detail-facts {
@@ -500,12 +500,12 @@ class LibreDashAdminPage extends DatastarLit(LitElement) {
       gap: var(--base-size-12);
       min-width: 0;
       align-items: start;
-      font-size: var(--ld-font-size-body-sm);
-      line-height: var(--ld-line-height-compact);
+      font-size: var(--lv-font-size-body-sm);
+      line-height: var(--lv-line-height-compact);
     }
 
     .query-detail-fact span {
-      color: var(--ld-fg-muted);
+      color: var(--lv-fg-muted);
     }
 
     .query-detail-fact code,
@@ -523,24 +523,24 @@ class LibreDashAdminPage extends DatastarLit(LitElement) {
       max-height: 15rem;
       min-width: 0;
       overflow: auto;
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-panel-muted);
-      color: var(--ld-fg-default);
+      border: var(--lv-border-muted);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-panel-muted);
+      color: var(--lv-fg-default);
       margin: 0;
       padding: var(--base-size-12);
-      font-size: var(--ld-font-size-body-sm);
-      line-height: var(--ld-line-height-normal);
+      font-size: var(--lv-font-size-body-sm);
+      line-height: var(--lv-line-height-normal);
       white-space: pre;
     }
 
     .query-detail-error {
-      border-color: var(--ld-line-danger-muted, var(--ld-line-muted));
-      background: var(--ld-bg-danger-muted, var(--ld-bg-panel-muted));
+      border-color: var(--lv-line-danger-muted, var(--lv-line-muted));
+      background: var(--lv-bg-danger-muted, var(--lv-bg-panel-muted));
     }
 
     .query-detail-raw {
-      border-top: var(--ld-border-muted);
+      border-top: var(--lv-border-muted);
       padding-top: var(--base-size-12);
     }
 
@@ -577,7 +577,7 @@ class LibreDashAdminPage extends DatastarLit(LitElement) {
         grid-template-columns: 1fr;
       }
 
-      ld-sub-sidebar {
+      lv-sub-sidebar {
         position: relative;
         width: 100%;
         height: auto;
@@ -591,9 +591,9 @@ class LibreDashAdminPage extends DatastarLit(LitElement) {
         inset: auto 0 0 0;
         width: 100vw;
         height: min(88svh, 44rem);
-        border-top: var(--ld-border-muted);
+        border-top: var(--lv-border-muted);
         border-left: 0;
-        box-shadow: var(--ld-shadow-floating-lg);
+        box-shadow: var(--lv-shadow-floating-lg);
         animation-name: query-detail-mobile-slide-in;
       }
     }
@@ -648,7 +648,7 @@ class LibreDashAdminPage extends DatastarLit(LitElement) {
     if (!page) return html`<slot></slot>`
     return html`
       <div class="route">
-        <ld-sub-sidebar .config=${page.sidebar}></ld-sub-sidebar>
+        <lv-sub-sidebar .config=${page.sidebar}></lv-sub-sidebar>
         <section class=${page.active === 'storage' ? 'main main-storage' : 'main'} aria-label="Admin">
           ${page.active === 'storage' ? nothing : html`
             <header>
@@ -718,12 +718,12 @@ class LibreDashAdminPage extends DatastarLit(LitElement) {
         <section class="section" aria-label="System prompt">
           <h2>System prompt</h2>
           <slot name="agent-prompt">
-            <ld-agent-prompt-editor value=${systemPrompt} .value=${systemPrompt} ?disabled=${!agent.canWrite}></ld-agent-prompt-editor>
+            <lv-agent-prompt-editor value=${systemPrompt} .value=${systemPrompt} ?disabled=${!agent.canWrite}></lv-agent-prompt-editor>
           </slot>
         </section>
         <section class="section" aria-label="Tools">
           <h2>Tools</h2>
-          <ld-agent-tools .tools=${agent.tools}></ld-agent-tools>
+          <lv-agent-tools .tools=${agent.tools}></lv-agent-tools>
         </section>
       ` : nothing}
     `
@@ -732,7 +732,7 @@ class LibreDashAdminPage extends DatastarLit(LitElement) {
   private renderStorage(page: AdminPageSignal) {
     const storage = storageHasPayload(this.storage) ? this.storage : page.storage ?? emptyStorage
     return html`
-      <ld-storage-explorer .storage=${storage}></ld-storage-explorer>
+      <lv-storage-explorer .storage=${storage}></lv-storage-explorer>
     `
   }
 
@@ -742,12 +742,12 @@ class LibreDashAdminPage extends DatastarLit(LitElement) {
     const detail = this.queryDetail ?? emptyQueryDetail
     return html`
       <section class="query-audit" aria-label="Query audit">
-        <div class="query-filters" aria-label="Query event filters" @ld-filter-menu-command=${this.handleFilterMenuCommand}>
+        <div class="query-filters" aria-label="Query event filters" @lv-filter-menu-command=${this.handleFilterMenuCommand}>
           ${history.filterMenus?.map((menu) => this.renderFilterMenu(menu))}
           ${this.renderTextFilter('search', 'Statement / ID')}
         </div>
-        <div class="panel" @ld-record-table-action=${this.handleQueryTableAction}>
-          <ld-record-table variant="compact" .table=${history.table}></ld-record-table>
+        <div class="panel" @lv-record-table-action=${this.handleQueryTableAction}>
+          <lv-record-table variant="compact" .table=${history.table}></lv-record-table>
           <div class="query-history-footer" aria-live="polite">
             <span class=${history.error ? 'query-history-error' : ''}>${history.error || history.loadedCountLabel || `${rows.length} queries loaded`}</span>
             ${history.hasMore ? html`
@@ -782,7 +782,7 @@ class LibreDashAdminPage extends DatastarLit(LitElement) {
   }
 
   private renderFilterMenu(menu: FilterMenuSignal) {
-    return html`<ld-filter-menu .menu=${menu}></ld-filter-menu>`
+    return html`<lv-filter-menu .menu=${menu}></lv-filter-menu>`
   }
 
   private setQueryFilter(key: keyof AdminQueryHistoryFilters, value: string) {
@@ -809,7 +809,7 @@ class LibreDashAdminPage extends DatastarLit(LitElement) {
 
   private emitQueryHistoryCommand(action: 'reset' | 'load_more' | 'select_detail' | 'close_detail' | 'filter_search' | 'filter_toggle' | 'filter_clear', filters: AdminQueryHistoryFilters, pageToken: string, eventId = '', filterMenu?: FilterMenuCommand) {
     const history = this.currentQueryHistory()
-    this.dispatchEvent(new CustomEvent('ld-query-history-command', {
+    this.dispatchEvent(new CustomEvent('lv-query-history-command', {
       bubbles: true,
       composed: true,
       detail: {
@@ -886,7 +886,7 @@ class LibreDashAdminPage extends DatastarLit(LitElement) {
           </section>
           <section class="query-detail-section" aria-label="Query text">
             <h2>Query text</h2>
-            <ld-code-block language="sql" format copy .code=${event.sql || event.eventId || ''}></ld-code-block>
+            <lv-code-block language="sql" format copy .code=${event.sql || event.eventId || ''}></lv-code-block>
           </section>
           <section class="query-detail-section" aria-label="Timing">
             <h2>Timing</h2>
@@ -1078,7 +1078,7 @@ function renderSection(section: AdminContentSectionSignal) {
     <section class="section" aria-label=${section.title}>
       <h2>${section.title}</h2>
       ${section.table?.columns?.length
-        ? html`<div class="panel"><ld-record-table variant="compact" .table=${section.table}></ld-record-table></div>`
+        ? html`<div class="panel"><lv-record-table variant="compact" .table=${section.table}></lv-record-table></div>`
         : html`<div class="facts">${section.facts?.map((fact) => html`
           <div class="metric">
             <span class="label">${fact.label}</span>
@@ -1089,4 +1089,4 @@ function renderSection(section: AdminContentSectionSignal) {
   `
 }
 
-if (!customElements.get('ld-admin-page')) customElements.define('ld-admin-page', LibreDashAdminPage)
+if (!customElements.get('lv-admin-page')) customElements.define('lv-admin-page', LeapViewAdminPage)

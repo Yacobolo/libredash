@@ -10,18 +10,18 @@ export const visualActionStyles = css`
 
   .icon-action {
     display: grid;
-    width: var(--ld-button-height-xs, var(--control-xsmall-size));
-    height: var(--ld-button-height-xs, var(--control-xsmall-size));
-    min-height: var(--ld-button-height-xs, var(--control-xsmall-size));
+    width: var(--lv-button-height-xs, var(--control-xsmall-size));
+    height: var(--lv-button-height-xs, var(--control-xsmall-size));
+    min-height: var(--lv-button-height-xs, var(--control-xsmall-size));
     place-items: center;
-    border: var(--borderWidth-default, var(--ld-border-width)) solid var(--ld-button-invisible-border-rest, var(--control-transparent-borderColor-rest, var(--ld-line-muted)));
-    border-radius: var(--ld-radius-tight);
-    background: var(--ld-button-invisible-bg-rest, var(--control-transparent-bgColor-rest, var(--ld-bg-panel)));
-    color: var(--ld-button-invisible-icon-rest, var(--ld-icon-muted, var(--ld-fg-muted)));
+    border: var(--borderWidth-default, var(--lv-border-width)) solid var(--lv-button-invisible-border-rest, var(--control-transparent-borderColor-rest, var(--lv-line-muted)));
+    border-radius: var(--lv-radius-tight);
+    background: var(--lv-button-invisible-bg-rest, var(--control-transparent-bgColor-rest, var(--lv-bg-panel)));
+    color: var(--lv-button-invisible-icon-rest, var(--lv-icon-muted, var(--lv-fg-muted)));
     cursor: pointer;
     padding: 0;
     font: inherit;
-    line-height: var(--ld-line-height-none);
+    line-height: var(--lv-line-height-none);
   }
 
   .icon-action svg {
@@ -31,11 +31,11 @@ export const visualActionStyles = css`
 
   .icon-action:hover,
   .icon-action:focus-visible {
-    border-color: var(--ld-button-invisible-border-hover, var(--control-transparent-borderColor-hover, var(--ld-line-default)));
-    background: var(--ld-button-invisible-bg-hover, var(--control-transparent-bgColor-hover, var(--ld-bg-panel-muted)));
-    color: var(--ld-icon-default, var(--ld-fg-default));
-    outline: var(--focus-outline, var(--ld-border-default));
-    outline-color: var(--borderColor-accent-emphasis, var(--ld-line-accent));
+    border-color: var(--lv-button-invisible-border-hover, var(--control-transparent-borderColor-hover, var(--lv-line-default)));
+    background: var(--lv-button-invisible-bg-hover, var(--control-transparent-bgColor-hover, var(--lv-bg-panel-muted)));
+    color: var(--lv-icon-default, var(--lv-fg-default));
+    outline: var(--focus-outline, var(--lv-border-default));
+    outline-color: var(--borderColor-accent-emphasis, var(--lv-line-accent));
     outline-offset: var(--focus-outline-offset, var(--base-size-2));
   }
 `

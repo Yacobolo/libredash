@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/manageddata"
-	"github.com/Yacobolo/libredash/internal/manageddata/maintenance"
-	managedsqlite "github.com/Yacobolo/libredash/internal/manageddata/sqlite"
-	"github.com/Yacobolo/libredash/internal/manageddata/storage"
-	"github.com/Yacobolo/libredash/internal/platform"
+	"github.com/Yacobolo/leapview/internal/manageddata"
+	"github.com/Yacobolo/leapview/internal/manageddata/maintenance"
+	managedsqlite "github.com/Yacobolo/leapview/internal/manageddata/sqlite"
+	"github.com/Yacobolo/leapview/internal/manageddata/storage"
+	"github.com/Yacobolo/leapview/internal/platform"
 )
 
 func TestSnapshotRetainsReadyRevisionsAndNonterminalUploads(t *testing.T) {
@@ -237,7 +237,7 @@ func TestNewRejectsNilDatabase(t *testing.T) {
 
 func testDatabase(t *testing.T) (*sql.DB, *managedsqlite.Repository) {
 	t.Helper()
-	store, err := platform.Open(t.Context(), filepath.Join(t.TempDir(), "libredash.db"))
+	store, err := platform.Open(t.Context(), filepath.Join(t.TempDir(), "leapview.db"))
 	if err != nil {
 		t.Fatalf("open migrated platform database: %v", err)
 	}

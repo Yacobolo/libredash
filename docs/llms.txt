@@ -111,22 +111,22 @@ Focused slices are available at `/docs/cli/commands/{id}.json|md` and `/docs/api
 #### CLI commands
 
 - [CLI command reference](/docs/cli/reference): Browse every generated LeapView command.
-- [libredash admin](/docs/cli/admin): Administrative utilities
-- [libredash agent](/docs/cli/agent): Use the LeapView read-only agent
-- [libredash api](/docs/cli/api): Call any generated LeapView API operation
-- [libredash config](/docs/cli/config): Inspect and validate process-global configuration
-- [libredash dashboards](/docs/cli/dashboards): Inspect dashboards
-- [libredash data](/docs/cli/data): Manage project-global data revisions
-- [libredash deploy](/docs/cli/deploy): Atomically deploy a configuration-as-code project
-- [libredash healthcheck](/docs/cli/healthcheck): Check the local LeapView readiness endpoint
-- [libredash login](/docs/cli/login): Store a LeapView API token for a target
-- [libredash plan](/docs/cli/plan): Emit a deterministic configuration-as-code plan
-- [libredash schema](/docs/cli/schema): Inspect LeapView YAML schemas
-- [libredash search](/docs/cli/search): Search workspace assets
-- [libredash semantic-models](/docs/cli/semantic-models): Inspect semantic models
-- [libredash serve](/docs/cli/serve): Run the LeapView HTTP server
-- [libredash validate](/docs/cli/validate): Validate a configuration-as-code project
-- [libredash workspaces](/docs/cli/workspaces): Inspect workspaces
+- [leapview admin](/docs/cli/admin): Administrative utilities
+- [leapview agent](/docs/cli/agent): Use the LeapView read-only agent
+- [leapview api](/docs/cli/api): Call any generated LeapView API operation
+- [leapview config](/docs/cli/config): Inspect and validate process-global configuration
+- [leapview dashboards](/docs/cli/dashboards): Inspect dashboards
+- [leapview data](/docs/cli/data): Manage project-global data revisions
+- [leapview deploy](/docs/cli/deploy): Atomically deploy a configuration-as-code project
+- [leapview healthcheck](/docs/cli/healthcheck): Check the local LeapView readiness endpoint
+- [leapview login](/docs/cli/login): Store a LeapView API token for a target
+- [leapview plan](/docs/cli/plan): Emit a deterministic configuration-as-code plan
+- [leapview schema](/docs/cli/schema): Inspect LeapView YAML schemas
+- [leapview search](/docs/cli/search): Search workspace assets
+- [leapview semantic-models](/docs/cli/semantic-models): Inspect semantic models
+- [leapview serve](/docs/cli/serve): Run the LeapView HTTP server
+- [leapview validate](/docs/cli/validate): Validate a configuration-as-code project
+- [leapview workspaces](/docs/cli/workspaces): Inspect workspaces
 
 #### API reference
 

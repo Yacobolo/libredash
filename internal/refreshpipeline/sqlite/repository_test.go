@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/platform"
-	"github.com/Yacobolo/libredash/internal/refreshpipeline"
+	"github.com/Yacobolo/leapview/internal/platform"
+	"github.com/Yacobolo/leapview/internal/refreshpipeline"
 )
 
 func TestRepositoryReconcileAndClaimDueCoalescesCatchUp(t *testing.T) {

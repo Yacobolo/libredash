@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	platformdb "github.com/Yacobolo/libredash/internal/platform/db"
+	platformdb "github.com/Yacobolo/leapview/internal/platform/db"
 )
 
 type OperationalRetentionOptions struct {

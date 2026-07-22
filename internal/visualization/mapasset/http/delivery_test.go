@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	visualizationmapasset "github.com/Yacobolo/libredash/internal/visualization/mapasset"
+	visualizationmapasset "github.com/Yacobolo/leapview/internal/visualization/mapasset"
 )
 
 func TestVerifyDeliveryChecksFullAssetsAndBothArchiveRanges(t *testing.T) {
@@ -25,8 +25,8 @@ func TestVerifyDeliveryChecksFullAssetsAndBothArchiveRanges(t *testing.T) {
 		archive[index] = byte(index % 251)
 	}
 	files := []visualizationmapasset.File{
-		writeDeliveryFixture(t, root, "libredash-streets/styles/style/style.json", style),
-		writeDeliveryFixture(t, root, "libredash-streets/archives/archive/basemap.pmtiles", archive),
+		writeDeliveryFixture(t, root, "leapview-streets/styles/style/style.json", style),
+		writeDeliveryFixture(t, root, "leapview-streets/archives/archive/basemap.pmtiles", archive),
 	}
 	handler := deliveryFixtureHandler(t, root, false)
 	server := httptest.NewServer(handler)
@@ -48,7 +48,7 @@ func TestVerifyDeliveryChecksFullAssetsAndBothArchiveRanges(t *testing.T) {
 func TestVerifyDeliveryRejectsMutableOrCorruptResponses(t *testing.T) {
 	root := t.TempDir()
 	content := []byte("immutable style")
-	file := writeDeliveryFixture(t, root, "libredash-streets/styles/style/style.json", content)
+	file := writeDeliveryFixture(t, root, "leapview-streets/styles/style/style.json", content)
 
 	for _, test := range []struct {
 		name    string
@@ -83,7 +83,7 @@ func TestVerifyDeliveryRejectsCorruptArchiveRanges(t *testing.T) {
 	for index := range archive {
 		archive[index] = byte(index % 251)
 	}
-	file := writeDeliveryFixture(t, root, "libredash-streets/archives/archive/basemap.pmtiles", archive)
+	file := writeDeliveryFixture(t, root, "leapview-streets/archives/archive/basemap.pmtiles", archive)
 	remote := append([]byte(nil), archive...)
 	remote[len(remote)-1] ^= 0xff
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
@@ -102,7 +102,7 @@ func TestVerifyDeliveryRejectsCorruptArchiveRanges(t *testing.T) {
 func TestVerifyDeliveryBlocksCrossOriginRedirects(t *testing.T) {
 	root := t.TempDir()
 	content := []byte("style")
-	file := writeDeliveryFixture(t, root, "libredash-streets/styles/style/style.json", content)
+	file := writeDeliveryFixture(t, root, "leapview-streets/styles/style/style.json", content)
 	var redirected atomic.Int32
 	target := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { redirected.Add(1) }))
 	defer target.Close()

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/access"
+	"github.com/Yacobolo/leapview/internal/access"
 )
 
 func BenchmarkAuthorizeDirectGrant(b *testing.B) {

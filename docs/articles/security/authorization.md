@@ -13,7 +13,7 @@ Review the effective privilege result rather than assuming a direct binding is t
 Workspace role bindings apply reusable privilege sets such as viewer, member, editor, contributor, deployer, admin, or owner. Bind a stable group wherever access follows team membership:
 
 ```yaml
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: WorkspaceRoleBinding
 metadata:
   workspace: sales
@@ -32,7 +32,7 @@ Roles express common responsibilities. Owners and grant managers should be rare;
 Use a Grant when one subject needs one privilege on a specific securable object outside the standard role shape:
 
 ```yaml
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Grant
 metadata:
   workspace: sales

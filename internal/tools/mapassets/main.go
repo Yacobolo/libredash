@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	visualizationmapasset "github.com/Yacobolo/libredash/internal/visualization/mapasset"
-	visualizationmapassethttp "github.com/Yacobolo/libredash/internal/visualization/mapasset/http"
+	visualizationmapasset "github.com/Yacobolo/leapview/internal/visualization/mapasset"
+	visualizationmapassethttp "github.com/Yacobolo/leapview/internal/visualization/mapasset/http"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
@@ -110,7 +110,7 @@ func install(ctx context.Context, out string) error {
 	if err != nil {
 		return err
 	}
-	legacyArchive := filepath.Join(out, "libredash-streets", "basemap.pmtiles")
+	legacyArchive := filepath.Join(out, "leapview-streets", "basemap.pmtiles")
 	if err := ensureArchive(ctx, archive, legacyArchive); err != nil {
 		return err
 	}
@@ -118,7 +118,7 @@ func install(ctx context.Context, out string) error {
 	if err != nil {
 		return err
 	}
-	if err := copyFile("static/map-assets/libredash-streets/style.json", style); err != nil {
+	if err := copyFile("static/map-assets/leapview-streets/style.json", style); err != nil {
 		return fmt.Errorf("install map style: %w", err)
 	}
 	if err := verifyFile(style, visualizationmapasset.StyleSHA256); err != nil {

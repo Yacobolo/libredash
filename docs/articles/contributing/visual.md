@@ -2,7 +2,7 @@
 
 A visual type is complete only when resource validation, semantic query shape, server payload, renderer adaptation, interactions, documentation, examples, and tests agree. Start by deciding whether the requirement is truly a new type, a new renderer-neutral option, or only an adapter improvement for an existing shape.
 
-LibreDash compiles every built-in visual into the versioned IR described by the [visualization architecture](/docs/architecture/visual-plugins). Charts, KPIs, tables, matrices, and pivots share visual identity, page placement, envelopes, commands, interactions, and headless APIs. New product semantics must remain renderer-independent, closed, typed, and suitable for immutable specifications and validated inline or windowed data.
+LeapView compiles every built-in visual into the versioned IR described by the [visualization architecture](/docs/architecture/visual-plugins). Charts, KPIs, tables, matrices, and pivots share visual identity, page placement, envelopes, commands, interactions, and headless APIs. New product semantics must remain renderer-independent, closed, typed, and suitable for immutable specifications and validated inline or windowed data.
 
 ## Define the product contract
 

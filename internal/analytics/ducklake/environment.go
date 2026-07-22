@@ -14,9 +14,9 @@ import (
 	"sync"
 	"time"
 
-	semanticquery "github.com/Yacobolo/libredash/internal/analytics/query"
-	"github.com/Yacobolo/libredash/internal/dataquery"
-	"github.com/Yacobolo/libredash/internal/securefs"
+	semanticquery "github.com/Yacobolo/leapview/internal/analytics/query"
+	"github.com/Yacobolo/leapview/internal/dataquery"
+	"github.com/Yacobolo/leapview/internal/securefs"
 	duckdb "github.com/duckdb/duckdb-go/v2"
 )
 

@@ -72,9 +72,9 @@ func TestCatalogExcludesRemovedLegacySettings(t *testing.T) {
 	removed := map[string]struct{}{
 		"ADDR":                   {},
 		"PORT":                   {},
-		"LIBREDASH_CATALOG_PATH": {},
-		"LIBREDASH_DATA_DIR":     {},
-		"LIBREDASH_DUCKDB_PATH":  {},
+		"LEAPVIEW_CATALOG_PATH": {},
+		"LEAPVIEW_DATA_DIR":     {},
+		"LEAPVIEW_DUCKDB_PATH":  {},
 	}
 	for _, setting := range Settings() {
 		if _, ok := removed[setting.Name]; ok {
@@ -106,13 +106,13 @@ func TestManagedDataStorageCatalogAndRelationships(t *testing.T) {
 		known[setting.Name] = setting
 	}
 	for _, name := range []string{
-		"LIBREDASH_MANAGED_DATA_BACKEND",
-		"LIBREDASH_MANAGED_DATA_DIR",
-		"LIBREDASH_MANAGED_DATA_S3_BUCKET",
-		"LIBREDASH_MANAGED_DATA_MAX_FILE_BYTES",
-		"LIBREDASH_MANAGED_DATA_UPLOAD_SESSION_TTL",
-		"LIBREDASH_MANAGED_DATA_GC_INTERVAL",
-		"LIBREDASH_MANAGED_DATA_MIN_FREE_BYTES",
+		"LEAPVIEW_MANAGED_DATA_BACKEND",
+		"LEAPVIEW_MANAGED_DATA_DIR",
+		"LEAPVIEW_MANAGED_DATA_S3_BUCKET",
+		"LEAPVIEW_MANAGED_DATA_MAX_FILE_BYTES",
+		"LEAPVIEW_MANAGED_DATA_UPLOAD_SESSION_TTL",
+		"LEAPVIEW_MANAGED_DATA_GC_INTERVAL",
+		"LEAPVIEW_MANAGED_DATA_MIN_FREE_BYTES",
 	} {
 		if _, ok := known[name]; !ok {
 			t.Fatalf("managed data setting %s is missing", name)
@@ -120,15 +120,15 @@ func TestManagedDataStorageCatalogAndRelationships(t *testing.T) {
 	}
 
 	valid := map[string]any{
-		"LIBREDASH_MANAGED_DATA_BACKEND":            "local",
-		"LIBREDASH_MANAGED_DATA_DIR":                "/var/lib/libredash/managed-data",
-		"LIBREDASH_MANAGED_DATA_MAX_FILES":          100,
-		"LIBREDASH_MANAGED_DATA_MAX_FILE_BYTES":     1024,
-		"LIBREDASH_MANAGED_DATA_MAX_REVISION_BYTES": 4096,
-		"LIBREDASH_MANAGED_DATA_UPLOAD_SESSION_TTL": time.Hour,
-		"LIBREDASH_MANAGED_DATA_GC_INTERVAL":        time.Minute,
-		"LIBREDASH_MANAGED_DATA_GC_GRACE_PERIOD":    time.Hour,
-		"LIBREDASH_MANAGED_DATA_MIN_FREE_BYTES":     2048,
+		"LEAPVIEW_MANAGED_DATA_BACKEND":            "local",
+		"LEAPVIEW_MANAGED_DATA_DIR":                "/var/lib/leapview/managed-data",
+		"LEAPVIEW_MANAGED_DATA_MAX_FILES":          100,
+		"LEAPVIEW_MANAGED_DATA_MAX_FILE_BYTES":     1024,
+		"LEAPVIEW_MANAGED_DATA_MAX_REVISION_BYTES": 4096,
+		"LEAPVIEW_MANAGED_DATA_UPLOAD_SESSION_TTL": time.Hour,
+		"LEAPVIEW_MANAGED_DATA_GC_INTERVAL":        time.Minute,
+		"LEAPVIEW_MANAGED_DATA_GC_GRACE_PERIOD":    time.Hour,
+		"LEAPVIEW_MANAGED_DATA_MIN_FREE_BYTES":     2048,
 	}
 	if err := Validate(valid); err != nil {
 		t.Fatalf("valid local managed data config: %v", err)
@@ -138,21 +138,21 @@ func TestManagedDataStorageCatalogAndRelationships(t *testing.T) {
 		name   string
 		mutate func(map[string]any)
 	}{
-		{name: "unknown backend", mutate: func(values map[string]any) { values["LIBREDASH_MANAGED_DATA_BACKEND"] = "database" }},
-		{name: "file exceeds revision", mutate: func(values map[string]any) { values["LIBREDASH_MANAGED_DATA_MAX_FILE_BYTES"] = 8192 }},
-		{name: "zero session ttl", mutate: func(values map[string]any) { values["LIBREDASH_MANAGED_DATA_UPLOAD_SESSION_TTL"] = time.Duration(0) }},
-		{name: "s3 incomplete", mutate: func(values map[string]any) { values["LIBREDASH_MANAGED_DATA_BACKEND"] = "s3" }},
+		{name: "unknown backend", mutate: func(values map[string]any) { values["LEAPVIEW_MANAGED_DATA_BACKEND"] = "database" }},
+		{name: "file exceeds revision", mutate: func(values map[string]any) { values["LEAPVIEW_MANAGED_DATA_MAX_FILE_BYTES"] = 8192 }},
+		{name: "zero session ttl", mutate: func(values map[string]any) { values["LEAPVIEW_MANAGED_DATA_UPLOAD_SESSION_TTL"] = time.Duration(0) }},
+		{name: "s3 incomplete", mutate: func(values map[string]any) { values["LEAPVIEW_MANAGED_DATA_BACKEND"] = "s3" }},
 		{name: "s3 missing runtime cache", mutate: func(values map[string]any) {
-			values["LIBREDASH_MANAGED_DATA_BACKEND"] = "s3"
-			values["LIBREDASH_MANAGED_DATA_S3_BUCKET"] = "bucket"
-			values["LIBREDASH_MANAGED_DATA_S3_REGION"] = "eu-west-1"
-			delete(values, "LIBREDASH_MANAGED_DATA_DIR")
+			values["LEAPVIEW_MANAGED_DATA_BACKEND"] = "s3"
+			values["LEAPVIEW_MANAGED_DATA_S3_BUCKET"] = "bucket"
+			values["LEAPVIEW_MANAGED_DATA_S3_REGION"] = "eu-west-1"
+			delete(values, "LEAPVIEW_MANAGED_DATA_DIR")
 		}},
 		{name: "partial s3 credentials", mutate: func(values map[string]any) {
-			values["LIBREDASH_MANAGED_DATA_BACKEND"] = "s3"
-			values["LIBREDASH_MANAGED_DATA_S3_BUCKET"] = "bucket"
-			values["LIBREDASH_MANAGED_DATA_S3_REGION"] = "eu-west-1"
-			values["LIBREDASH_MANAGED_DATA_S3_ACCESS_KEY_ID"] = "key"
+			values["LEAPVIEW_MANAGED_DATA_BACKEND"] = "s3"
+			values["LEAPVIEW_MANAGED_DATA_S3_BUCKET"] = "bucket"
+			values["LEAPVIEW_MANAGED_DATA_S3_REGION"] = "eu-west-1"
+			values["LEAPVIEW_MANAGED_DATA_S3_ACCESS_KEY_ID"] = "key"
 		}},
 	}
 	for _, test := range tests {
@@ -172,11 +172,11 @@ func TestManagedDataStorageCatalogAndRelationships(t *testing.T) {
 	for key, value := range valid {
 		s3[key] = value
 	}
-	s3["LIBREDASH_MANAGED_DATA_BACKEND"] = "s3"
-	s3["LIBREDASH_MANAGED_DATA_S3_BUCKET"] = "bucket"
-	s3["LIBREDASH_MANAGED_DATA_S3_REGION"] = "eu-west-1"
-	s3["LIBREDASH_MANAGED_DATA_S3_ACCESS_KEY_ID"] = "key"
-	s3["LIBREDASH_MANAGED_DATA_S3_SECRET_ACCESS_KEY"] = "secret"
+	s3["LEAPVIEW_MANAGED_DATA_BACKEND"] = "s3"
+	s3["LEAPVIEW_MANAGED_DATA_S3_BUCKET"] = "bucket"
+	s3["LEAPVIEW_MANAGED_DATA_S3_REGION"] = "eu-west-1"
+	s3["LEAPVIEW_MANAGED_DATA_S3_ACCESS_KEY_ID"] = "key"
+	s3["LEAPVIEW_MANAGED_DATA_S3_SECRET_ACCESS_KEY"] = "secret"
 	if err := Validate(s3); err != nil {
 		t.Fatalf("valid S3 managed data config: %v", err)
 	}

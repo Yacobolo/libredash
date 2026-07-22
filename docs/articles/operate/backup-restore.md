@@ -13,7 +13,7 @@ Dashboard source history belongs in Git, but Git cannot restore user principals,
 Write the archive outside the active instance directory:
 
 ```sh
-libredash admin backup --out /srv/backups/libredash-2026-07-16.tar
+leapview admin backup --out /srv/backups/leapview-2026-07-16.tar
 ```
 
 The output path must not already exist. Record a checksum, creation time, LeapView version, storage-backend configuration, and the identity of any corresponding external catalog or object-store recovery point.
@@ -44,8 +44,8 @@ Periodically restore into an isolated environment. Open representative workspace
 Choose a maintenance window, stop traffic and writes, validate the archive checksum, confirm version compatibility, and ensure enough space for both current and restored state. Preserve the current instance before replacement:
 
 ```sh
-libredash admin restore \
-  --from /srv/backups/libredash-2026-07-16.tar \
+leapview admin restore \
+  --from /srv/backups/leapview-2026-07-16.tar \
   --current-out /srv/backups/pre-restore-2026-07-17.tar \
   --confirm
 ```

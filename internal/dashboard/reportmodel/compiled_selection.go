@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	dashboarddefinition "github.com/Yacobolo/libredash/internal/dashboard/definition"
-	visualizationdefinition "github.com/Yacobolo/libredash/internal/visualization/definition"
-	visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
+	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 )
 
 // ResolveCompiledSelectionInteraction resolves the semantic types of the

@@ -48,8 +48,8 @@ test('record table renders cells and sorts through TanStack headers', async () =
   const page = await browser.newPage({ viewport: { width: 900, height: 620 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-record-table'))
-    await page.locator('ld-record-table').evaluate((element: any) => {
+    await page.waitForFunction(() => customElements.get('lv-record-table'))
+    await page.locator('lv-record-table').evaluate((element: any) => {
       element.table = {
         columns: [
           { id: 'name', header: 'Name', kind: 'entity', width: '260px' },
@@ -87,7 +87,7 @@ test('record table renders cells and sorts through TanStack headers', async () =
         minWidth: '1300px',
       }
     })
-    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
+    await page.locator('lv-record-table').evaluate((element: any) => element.updateComplete)
 
     const initial = await tableState(page)
     expect(initial.firstNames).toEqual(['Orders', 'Customers'])
@@ -102,12 +102,12 @@ test('record table renders cells and sorts through TanStack headers', async () =
     expect(initial.headerPosition).toBe('sticky')
     expect(initial.hasSelector).toBe(false)
 
-    await page.locator('ld-record-table th:nth-child(3) button').click()
-    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
+    await page.locator('lv-record-table th:nth-child(3) button').click()
+    await page.locator('lv-record-table').evaluate((element: any) => element.updateComplete)
     expect((await tableState(page)).firstNames).toEqual(['Customers', 'Orders'])
 
-    await page.locator('ld-record-table th:nth-child(3) button').click()
-    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
+    await page.locator('lv-record-table th:nth-child(3) button').click()
+    await page.locator('lv-record-table').evaluate((element: any) => element.updateComplete)
     expect((await tableState(page)).firstNames).toEqual(['Orders', 'Customers'])
   } finally {
     await page.close()
@@ -118,8 +118,8 @@ test('primary record table gives entity cells the full column width', async () =
   const page = await browser.newPage({ viewport: { width: 760, height: 520 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-record-table'))
-    await page.locator('ld-record-table').evaluate((element: any) => {
+    await page.waitForFunction(() => customElements.get('lv-record-table'))
+    await page.locator('lv-record-table').evaluate((element: any) => {
       element.setAttribute('variant', 'primary')
       element.table = {
         columns: [
@@ -139,8 +139,8 @@ test('primary record table gives entity cells the full column width', async () =
         minWidth: '620px',
       }
     })
-    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
-    const state = await page.locator('ld-record-table').evaluate((element) => {
+    await page.locator('lv-record-table').evaluate((element: any) => element.updateComplete)
+    const state = await page.locator('lv-record-table').evaluate((element) => {
       const cell = element.querySelector('tbody td:first-child') as HTMLElement
       const link = element.querySelector('.record-entity-link') as HTMLElement
       const title = element.querySelector('.record-entity-label') as HTMLElement
@@ -170,8 +170,8 @@ test('compact record table keeps metadata dense and scalar placeholders muted', 
   const page = await browser.newPage({ viewport: { width: 760, height: 520 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-record-table'))
-    await page.locator('ld-record-table').evaluate((element: any) => {
+    await page.waitForFunction(() => customElements.get('lv-record-table'))
+    await page.locator('lv-record-table').evaluate((element: any) => {
       element.setAttribute('variant', 'compact')
       element.table = {
         columns: [
@@ -188,8 +188,8 @@ test('compact record table keeps metadata dense and scalar placeholders muted', 
         minWidth: '740px',
       }
     })
-    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
-    const initial = await page.locator('ld-record-table').evaluate((element) => {
+    await page.locator('lv-record-table').evaluate((element: any) => element.updateComplete)
+    const initial = await page.locator('lv-record-table').evaluate((element) => {
       const wrap = element.querySelector('.record-table-wrap') as HTMLElement
       const firstHeader = element.querySelector('thead th') as HTMLElement
       const firstCell = element.querySelector('tbody td') as HTMLElement
@@ -218,9 +218,9 @@ test('compact record table keeps metadata dense and scalar placeholders muted', 
     expect(initial.mutedCount).toBe(4)
     expect(initial.unsortedIndicatorOpacity).toBe('0')
 
-    await page.locator('ld-record-table th:nth-child(3) button').click()
-    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
-    const sorted = await page.locator('ld-record-table').evaluate((element) => {
+    await page.locator('lv-record-table th:nth-child(3) button').click()
+    await page.locator('lv-record-table').evaluate((element: any) => element.updateComplete)
+    const sorted = await page.locator('lv-record-table').evaluate((element) => {
       const sortedIndicator = element.querySelector('thead th:nth-child(3) .record-table-sort-indicator') as HTMLElement
       return {
         sortedIndicatorOpacity: getComputedStyle(sortedIndicator).opacity,
@@ -238,9 +238,9 @@ test('record table renders tight expandable query rows', async () => {
   const page = await browser.newPage({ viewport: { width: 900, height: 620 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-record-table'))
+    await page.waitForFunction(() => customElements.get('lv-record-table'))
     await page.evaluate(() => localStorage.removeItem('record-table-query-columns'))
-    await page.locator('ld-record-table').evaluate((element: any) => {
+    await page.locator('lv-record-table').evaluate((element: any) => {
       element.setAttribute('variant', 'compact')
       element.table = {
         density: 'tight',
@@ -268,7 +268,7 @@ test('record table renders tight expandable query rows', async () => {
         },
       }
     })
-    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
+    await page.locator('lv-record-table').evaluate((element: any) => element.updateComplete)
 
     const collapsed = await queryRowState(page)
     expect(collapsed.headers).toEqual(['Query', 'Runtime', ''])
@@ -280,8 +280,8 @@ test('record table renders tight expandable query rows', async () => {
     expect(collapsed.cellPaddingTop).toBe('4px')
     expect(collapsed.rowHeight).toBeLessThanOrEqual(40)
 
-    await page.locator('ld-record-table .record-query-expand').click()
-    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
+    await page.locator('lv-record-table .record-query-expand').click()
+    await page.locator('lv-record-table').evaluate((element: any) => element.updateComplete)
     const expanded = await queryRowState(page)
     expect(expanded.hasExpandedRow).toBe(true)
     expect(expanded.hasCodeBlock).toBe(true)
@@ -290,8 +290,8 @@ test('record table renders tight expandable query rows', async () => {
     expect(expanded.formattedCode).toMatch(/\nFROM\n\s+customers/)
     expect(expanded.expandedColspan).toBe(3)
 
-    await page.locator('ld-record-table .record-query-expand').click()
-    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
+    await page.locator('lv-record-table .record-query-expand').click()
+    await page.locator('lv-record-table').evaluate((element: any) => element.updateComplete)
     expect((await queryRowState(page)).hasExpandedRow).toBe(false)
   } finally {
     await page.close()
@@ -302,8 +302,8 @@ test('record table emits configured row actions without stealing interactive con
   const page = await browser.newPage({ viewport: { width: 900, height: 620 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-record-table'))
-    await page.locator('ld-record-table').evaluate((element: any) => {
+    await page.waitForFunction(() => customElements.get('lv-record-table'))
+    await page.locator('lv-record-table').evaluate((element: any) => {
       element.table = {
         rowAction: 'detail',
         columns: [
@@ -323,38 +323,38 @@ test('record table emits configured row actions without stealing interactive con
         }],
       }
       ;(window as any).recordTableActions = []
-      element.addEventListener('ld-record-table-action', (event: CustomEvent) => {
+      element.addEventListener('lv-record-table-action', (event: CustomEvent) => {
         ;(window as any).recordTableActions.push(event.detail)
       })
     })
-    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
+    await page.locator('lv-record-table').evaluate((element: any) => element.updateComplete)
 
-    await page.locator('ld-record-table tbody tr.record-row').click()
-    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
+    await page.locator('lv-record-table tbody tr.record-row').click()
+    await page.locator('lv-record-table').evaluate((element: any) => element.updateComplete)
     expect(await rowActionState(page)).toEqual({ count: 1, action: 'detail', rowID: 'query_1', expanded: false })
 
-    await page.locator('ld-record-table .record-query-expand').click()
-    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
+    await page.locator('lv-record-table .record-query-expand').click()
+    await page.locator('lv-record-table').evaluate((element: any) => element.updateComplete)
     expect(await rowActionState(page)).toEqual({ count: 1, action: 'detail', rowID: 'query_1', expanded: true })
 
-    await page.locator('ld-record-table tbody tr.record-row').focus()
+    await page.locator('lv-record-table tbody tr.record-row').focus()
     await page.keyboard.press('Enter')
-    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
+    await page.locator('lv-record-table').evaluate((element: any) => element.updateComplete)
     expect(await rowActionState(page)).toEqual({ count: 2, action: 'detail', rowID: 'query_1', expanded: true })
 
     await page.keyboard.press('Space')
-    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
+    await page.locator('lv-record-table').evaluate((element: any) => element.updateComplete)
     expect(await rowActionState(page)).toEqual({ count: 3, action: 'detail', rowID: 'query_1', expanded: true })
 
-    await page.locator('ld-record-table').evaluate((element: any) => {
+    await page.locator('lv-record-table').evaluate((element: any) => {
       element.table = {
         columns: [{ id: 'name', header: 'Name' }],
         rows: [{ id: 'plain_1', name: 'Plain row' }],
       }
       ;(window as any).recordTableActions = []
     })
-    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
-    await page.locator('ld-record-table tbody tr.record-row').click()
+    await page.locator('lv-record-table').evaluate((element: any) => element.updateComplete)
+    await page.locator('lv-record-table tbody tr.record-row').click()
     expect(await rowActionState(page)).toEqual({ count: 0, action: '', rowID: '', expanded: false })
   } finally {
     await page.close()
@@ -365,12 +365,12 @@ test('record table renders configured empty state', async () => {
   const page = await browser.newPage({ viewport: { width: 500, height: 360 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-record-table'))
-    await page.locator('ld-record-table').evaluate((element: any) => {
+    await page.waitForFunction(() => customElements.get('lv-record-table'))
+    await page.locator('lv-record-table').evaluate((element: any) => {
       element.table = { columns: [{ id: 'name', header: 'Name' }], rows: [], empty: 'No records.' }
     })
-    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
-    const empty = await page.locator('ld-record-table .record-table-empty').textContent()
+    await page.locator('lv-record-table').evaluate((element: any) => element.updateComplete)
+    const empty = await page.locator('lv-record-table .record-table-empty').textContent()
     expect(empty).toBe('No records.')
   } finally {
     await page.close()
@@ -381,9 +381,9 @@ test('record table column selector hides, restores, and persists columns', async
   const page = await browser.newPage({ viewport: { width: 900, height: 620 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-record-table'))
+    await page.waitForFunction(() => customElements.get('lv-record-table'))
     await page.evaluate(() => localStorage.removeItem('record-table-test-columns'))
-    await page.locator('ld-record-table').evaluate((element: any) => {
+    await page.locator('lv-record-table').evaluate((element: any) => {
       element.table = {
         columns: [
           { id: 'name', header: 'Name', width: '220px' },
@@ -401,7 +401,7 @@ test('record table column selector hides, restores, and persists columns', async
         },
       }
     })
-    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
+    await page.locator('lv-record-table').evaluate((element: any) => element.updateComplete)
 
     const initial = await columnSelectorState(page)
     expect(initial.hasSelector).toBe(true)
@@ -411,29 +411,29 @@ test('record table column selector hides, restores, and persists columns', async
     expect(initial.menuLabels).toEqual(['Name', 'Runtime', 'Rows'])
     expect(initial.hasActionsColumn).toBe(true)
 
-    await page.locator('ld-record-table .record-table-column-selector summary').click()
-    await page.locator('ld-record-table .record-table-column-menu label', { hasText: 'Runtime' }).locator('input').uncheck()
-    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
+    await page.locator('lv-record-table .record-table-column-selector summary').click()
+    await page.locator('lv-record-table .record-table-column-menu label', { hasText: 'Runtime' }).locator('input').uncheck()
+    await page.locator('lv-record-table').evaluate((element: any) => element.updateComplete)
     const hidden = await columnSelectorState(page)
     expect(hidden.headers).toEqual(['Name', 'Rows', ''])
     expect(hidden.hasRuntimeCell).toBe(false)
     expect(hidden.hasActionsColumn).toBe(true)
     expect(hidden.storedColumns).toEqual(['name', 'rows'])
 
-    await page.locator('ld-record-table .record-table-column-menu label', { hasText: 'Runtime' }).locator('input').check()
-    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
+    await page.locator('lv-record-table .record-table-column-menu label', { hasText: 'Runtime' }).locator('input').check()
+    await page.locator('lv-record-table').evaluate((element: any) => element.updateComplete)
     expect((await columnSelectorState(page)).headers).toEqual(['Name', 'Runtime', 'Rows', ''])
 
-    await page.locator('ld-record-table .record-table-column-menu label', { hasText: 'Runtime' }).locator('input').uncheck()
-    await page.locator('ld-record-table .record-table-column-menu label', { hasText: 'Rows' }).locator('input').uncheck()
-    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
+    await page.locator('lv-record-table .record-table-column-menu label', { hasText: 'Runtime' }).locator('input').uncheck()
+    await page.locator('lv-record-table .record-table-column-menu label', { hasText: 'Rows' }).locator('input').uncheck()
+    await page.locator('lv-record-table').evaluate((element: any) => element.updateComplete)
     const lastVisible = await columnSelectorState(page)
     expect(lastVisible.headers).toEqual(['Name', ''])
     expect(lastVisible.disabledChecks).toEqual(['Name'])
 
     await page.reload()
-    await page.waitForFunction(() => customElements.get('ld-record-table'))
-    await page.locator('ld-record-table').evaluate((element: any) => {
+    await page.waitForFunction(() => customElements.get('lv-record-table'))
+    await page.locator('lv-record-table').evaluate((element: any) => {
       element.table = {
         columns: [
           { id: 'name', header: 'Name', width: '220px' },
@@ -451,17 +451,17 @@ test('record table column selector hides, restores, and persists columns', async
         },
       }
     })
-    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
+    await page.locator('lv-record-table').evaluate((element: any) => element.updateComplete)
     expect((await columnSelectorState(page)).headers).toEqual(['Name', ''])
 
     await page.evaluate(() => localStorage.setItem('record-table-test-columns', JSON.stringify(['missing'])))
-    await page.locator('ld-record-table').evaluate((element: any) => {
+    await page.locator('lv-record-table').evaluate((element: any) => {
       element.table = {
         ...element.table,
         columns: [...element.table.columns, { id: 'request', header: 'Request', width: '120px' }],
       }
     })
-    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
+    await page.locator('lv-record-table').evaluate((element: any) => element.updateComplete)
     expect((await columnSelectorState(page)).headers).toEqual(['Name', 'Runtime', 'Rows', '', 'Request'])
   } finally {
     await page.close()
@@ -469,7 +469,7 @@ test('record table column selector hides, restores, and persists columns', async
 })
 
 async function tableState(page: Page) {
-  return page.locator('ld-record-table').evaluate((element) => {
+  return page.locator('lv-record-table').evaluate((element) => {
     const rows = Array.from(element.querySelectorAll('tbody tr'))
     const firstNames = rows.map((row) => row.querySelector('.record-entity-label')?.textContent?.trim() ?? '')
     const table = element.querySelector('table') as HTMLTableElement
@@ -491,7 +491,7 @@ async function tableState(page: Page) {
 }
 
 async function rowActionState(page: Page) {
-  return page.locator('ld-record-table').evaluate((element) => {
+  return page.locator('lv-record-table').evaluate((element) => {
     const actions = (window as any).recordTableActions ?? []
     const last = actions[actions.length - 1] ?? {}
     return {
@@ -504,12 +504,12 @@ async function rowActionState(page: Page) {
 }
 
 async function queryRowState(page: Page) {
-  return page.locator('ld-record-table').evaluate((element) => {
+  return page.locator('lv-record-table').evaluate((element) => {
     const wrap = element.querySelector('.record-table-wrap') as HTMLElement
     const firstCell = element.querySelector('tbody tr:first-child td:first-child') as HTMLElement
     const firstRow = element.querySelector('tbody tr:first-child') as HTMLElement
     const expandedCell = element.querySelector('.record-query-expanded-cell') as HTMLTableCellElement | null
-    const codeBlock = expandedCell?.querySelector('ld-code-block') as HTMLElement | null
+    const codeBlock = expandedCell?.querySelector('lv-code-block') as HTMLElement | null
     return {
       headers: Array.from(element.querySelectorAll('thead th')).map((header) => header.querySelector('.record-table-sort span:first-child')?.textContent?.trim() ?? ''),
       menuLabels: Array.from(element.querySelectorAll('.record-table-column-menu label')).map((label) => label.textContent?.trim() ?? ''),
@@ -528,7 +528,7 @@ async function queryRowState(page: Page) {
 }
 
 async function columnSelectorState(page: Page) {
-  return page.locator('ld-record-table').evaluate((element) => ({
+  return page.locator('lv-record-table').evaluate((element) => ({
     hasSelector: Boolean(element.querySelector('.record-table-column-selector')),
     selectorInCorner: Boolean(element.querySelector('.record-table-corner-selector .record-table-column-selector')),
     hasSeparateToolbar: Boolean(element.querySelector('.record-table-toolbar')),
@@ -547,11 +547,11 @@ function testDocument(): string {
     <html>
       <head>
         <style>
-          body { --fontStack-system: system-ui; --fontStack-monospace: monospace; --ld-bg-panel: #fff; --ld-bg-panel-muted: #f6f8fa; --ld-bg-control-hover: #f3f4f6; --ld-fg-default: #24292f; --ld-fg-muted: #57606a; --ld-fg-link: #0969da; --ld-line-muted: #d8dee4; --ld-border-muted: 1px solid #d8dee4; --ld-border-transparent: 1px solid transparent; --ld-radius-default: 6px; --ld-radius-full: 999px; --base-size-4: 4px; --base-size-6: 6px; --base-size-8: 8px; --base-size-12: 12px; --base-size-16: 16px; --base-size-20: 20px; --control-medium-size: 32px; --ld-font-size-caption: 12px; --ld-font-size-body-sm: 14px; --ld-font-size-body-md: 14px; --ld-font-weight-medium: 500; --ld-font-weight-strong: 600; --ld-font-weight-regular: 400; --ld-line-height-normal: 1.5; --ld-line-height-compact: 1.3; }
+          body { --fontStack-system: system-ui; --fontStack-monospace: monospace; --lv-bg-panel: #fff; --lv-bg-panel-muted: #f6f8fa; --lv-bg-control-hover: #f3f4f6; --lv-fg-default: #24292f; --lv-fg-muted: #57606a; --lv-fg-link: #0969da; --lv-line-muted: #d8dee4; --lv-border-muted: 1px solid #d8dee4; --lv-border-transparent: 1px solid transparent; --lv-radius-default: 6px; --lv-radius-full: 999px; --base-size-4: 4px; --base-size-6: 6px; --base-size-8: 8px; --base-size-12: 12px; --base-size-16: 16px; --base-size-20: 20px; --control-medium-size: 32px; --lv-font-size-caption: 12px; --lv-font-size-body-sm: 14px; --lv-font-size-body-md: 14px; --lv-font-weight-medium: 500; --lv-font-weight-strong: 600; --lv-font-weight-regular: 400; --lv-line-height-normal: 1.5; --lv-line-height-compact: 1.3; }
         </style>
       </head>
       <body>
-        <ld-record-table></ld-record-table>
+        <lv-record-table></lv-record-table>
         <script type="module" src="/record-table-under-test.js"></script>
       </body>
     </html>

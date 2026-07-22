@@ -3,7 +3,7 @@ package report
 import (
 	"context"
 
-	"github.com/Yacobolo/libredash/internal/dataquery"
+	"github.com/Yacobolo/leapview/internal/dataquery"
 )
 
 type DataQueryExecutor interface {

@@ -12,21 +12,21 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/access"
-	accesssqlite "github.com/Yacobolo/libredash/internal/access/sqlite"
-	"github.com/Yacobolo/libredash/internal/agent"
-	agentsqlite "github.com/Yacobolo/libredash/internal/agent/sqlite"
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	"github.com/Yacobolo/libredash/internal/api"
-	"github.com/Yacobolo/libredash/internal/manageddata"
-	manageddatasqlite "github.com/Yacobolo/libredash/internal/manageddata/sqlite"
-	"github.com/Yacobolo/libredash/internal/platform"
-	"github.com/Yacobolo/libredash/internal/runtimehost"
-	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
-	servingstatesqlite "github.com/Yacobolo/libredash/internal/servingstate/sqlite"
-	"github.com/Yacobolo/libredash/internal/workspace"
-	workspacecompiler "github.com/Yacobolo/libredash/internal/workspace/compiler"
-	workspacesqlite "github.com/Yacobolo/libredash/internal/workspace/sqlite"
+	"github.com/Yacobolo/leapview/internal/access"
+	accesssqlite "github.com/Yacobolo/leapview/internal/access/sqlite"
+	"github.com/Yacobolo/leapview/internal/agent"
+	agentsqlite "github.com/Yacobolo/leapview/internal/agent/sqlite"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	"github.com/Yacobolo/leapview/internal/api"
+	"github.com/Yacobolo/leapview/internal/manageddata"
+	manageddatasqlite "github.com/Yacobolo/leapview/internal/manageddata/sqlite"
+	"github.com/Yacobolo/leapview/internal/platform"
+	"github.com/Yacobolo/leapview/internal/runtimehost"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
+	servingstatesqlite "github.com/Yacobolo/leapview/internal/servingstate/sqlite"
+	"github.com/Yacobolo/leapview/internal/workspace"
+	workspacecompiler "github.com/Yacobolo/leapview/internal/workspace/compiler"
+	workspacesqlite "github.com/Yacobolo/leapview/internal/workspace/sqlite"
 	"github.com/gorilla/csrf"
 )
 
@@ -41,7 +41,7 @@ func seedTestOlistManagedRevision(t *testing.T, store *platform.Store) {
 	ctx := context.Background()
 	repository := manageddatasqlite.NewRepository(store.SQLDB())
 	collection, err := repository.CreateCollection(ctx, manageddata.CreateCollectionInput{
-		ID: "collection_test_olist", ProjectID: "libredash-showcase", ConnectionName: "olist", Name: "Olist",
+		ID: "collection_test_olist", ProjectID: "leapview-showcase", ConnectionName: "olist", Name: "Olist",
 	})
 	if err != nil {
 		t.Fatalf("create managed Olist collection: %v", err)
@@ -342,7 +342,7 @@ func TestSessionCookieUsesConfiguredSecureFlag(t *testing.T) {
 }
 
 func TestWorkspaceAssetAPIListsActiveDeploymentAssets(t *testing.T) {
-	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
+	t.Setenv("LEAPVIEW_DEV_AUTH_BYPASS", "1")
 	store := testStore(t)
 	seedActiveDeployment(t, store, "test")
 	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
@@ -516,7 +516,7 @@ func TestWorkspaceGraphAPIsFilterUnauthorizedNodesBeforeEdgesAndLineage(t *testi
 }
 
 func TestWorkspaceAssetAPIIncludeAllReturnsFullActiveServingStateGraph(t *testing.T) {
-	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
+	t.Setenv("LEAPVIEW_DEV_AUTH_BYPASS", "1")
 	store := testStore(t)
 	seedActiveDeployment(t, store, "test")
 	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
@@ -567,7 +567,7 @@ func TestWorkspaceAssetAPIIncludeAllReturnsFullActiveServingStateGraph(t *testin
 }
 
 func TestWorkspaceActiveServingStateGraphAPIReturnsPayloadsAndEdges(t *testing.T) {
-	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
+	t.Setenv("LEAPVIEW_DEV_AUTH_BYPASS", "1")
 	store := testStore(t)
 	seedActiveDeployment(t, store, "test")
 	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
@@ -602,7 +602,7 @@ func TestWorkspaceActiveServingStateGraphAPIReturnsPayloadsAndEdges(t *testing.T
 }
 
 func TestWorkspaceListUsesActiveDeploymentCatalogMetadata(t *testing.T) {
-	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
+	t.Setenv("LEAPVIEW_DEV_AUTH_BYPASS", "1")
 	store := testStore(t)
 	seedActiveDeployment(t, store, "test")
 	if err := workspacesqlite.NewRepository(store.SQLDB()).Ensure(context.Background(), workspace.EnsureInput{
@@ -671,7 +671,7 @@ func TestWorkspaceListUsesRepositoryActiveMetadataWithoutGraphLoads(t *testing.T
 }
 
 func TestWorkspaceListPageDoesNotRenderWorkspaceScopedChat(t *testing.T) {
-	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
+	t.Setenv("LEAPVIEW_DEV_AUTH_BYPASS", "1")
 	store := testStore(t)
 	seedActiveDeployment(t, store, "test")
 	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
@@ -733,7 +733,7 @@ func (r *metadataWorkspaceRepo) ByIDWithActiveMetadata(context.Context, workspac
 }
 
 func TestWorkspacePageDefaultsToTopLevelAssets(t *testing.T) {
-	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
+	t.Setenv("LEAPVIEW_DEV_AUTH_BYPASS", "1")
 	store := testStore(t)
 	seedActiveDeployment(t, store, "test")
 	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
@@ -761,7 +761,7 @@ func TestWorkspacePageDefaultsToTopLevelAssets(t *testing.T) {
 }
 
 func TestWorkspaceAssetSearchStaysWorkspaceFacing(t *testing.T) {
-	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
+	t.Setenv("LEAPVIEW_DEV_AUTH_BYPASS", "1")
 	store := testStore(t)
 	seedActiveDeployment(t, store, "test")
 	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
@@ -783,7 +783,7 @@ func TestWorkspaceAssetSearchStaysWorkspaceFacing(t *testing.T) {
 }
 
 func TestWorkspaceConnectionFilterRedirectsToGlobalConnections(t *testing.T) {
-	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
+	t.Setenv("LEAPVIEW_DEV_AUTH_BYPASS", "1")
 	store := testStore(t)
 	seedActiveDeployment(t, store, "test")
 	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
@@ -803,7 +803,7 @@ func TestWorkspaceConnectionFilterRedirectsToGlobalConnections(t *testing.T) {
 }
 
 func TestWorkspaceSourceFilterRedirectsToConnectionSources(t *testing.T) {
-	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
+	t.Setenv("LEAPVIEW_DEV_AUTH_BYPASS", "1")
 	store := testStore(t)
 	seedActiveDeployment(t, store, "test")
 	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
@@ -823,7 +823,7 @@ func TestWorkspaceSourceFilterRedirectsToConnectionSources(t *testing.T) {
 }
 
 func TestConnectionsPageRendersGlobalConnectionSurface(t *testing.T) {
-	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
+	t.Setenv("LEAPVIEW_DEV_AUTH_BYPASS", "1")
 	store := testStore(t)
 	seedActiveDeployment(t, store, "test")
 	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
@@ -838,7 +838,7 @@ func TestConnectionsPageRendersGlobalConnectionSurface(t *testing.T) {
 		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
 	}
 	body := renderedWithBootstrap(t, server, rec.Body.String(), "Bearer dev")
-	for _, want := range []string{"<ld-connections-page", "Connections", "Connection", "Source", "assetList", "Project-global managed Olist ecommerce demo data.", "orders"} {
+	for _, want := range []string{"<lv-connections-page", "Connections", "Connection", "Source", "assetList", "Project-global managed Olist ecommerce demo data.", "orders"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("connections page missing %q:\n%s", want, body)
 		}
@@ -858,7 +858,7 @@ func TestConnectionsPageRendersGlobalConnectionSurface(t *testing.T) {
 }
 
 func TestConnectionsPageFiltersSources(t *testing.T) {
-	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
+	t.Setenv("LEAPVIEW_DEV_AUTH_BYPASS", "1")
 	store := testStore(t)
 	seedActiveDeployment(t, store, "test")
 	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
@@ -884,7 +884,7 @@ func TestConnectionsPageFiltersSources(t *testing.T) {
 }
 
 func TestConnectionAssetRoutesUseConnectionSurface(t *testing.T) {
-	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
+	t.Setenv("LEAPVIEW_DEV_AUTH_BYPASS", "1")
 	store := testStore(t)
 	seedActiveDeployment(t, store, "test")
 	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
@@ -929,7 +929,7 @@ func TestConnectionAssetRoutesUseConnectionSurface(t *testing.T) {
 		t.Fatalf("connection lineage status = %d body=%s", lineageRec.Code, lineageRec.Body.String())
 	}
 	lineageBody := renderedWithBootstrap(t, server, lineageRec.Body.String(), "Bearer dev")
-	for _, want := range []string{"<ld-workspace-asset-page", "/static/asset-lineage-graph.js", "lineage", "usesTable"} {
+	for _, want := range []string{"<lv-workspace-asset-page", "/static/asset-lineage-graph.js", "lineage", "usesTable"} {
 		if !strings.Contains(lineageBody, want) {
 			t.Fatalf("connection lineage missing %q:\n%s", want, lineageBody)
 		}
@@ -937,7 +937,7 @@ func TestConnectionAssetRoutesUseConnectionSurface(t *testing.T) {
 }
 
 func TestConnectionSourceAssetRoutesUseConnectionScopedSurface(t *testing.T) {
-	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
+	t.Setenv("LEAPVIEW_DEV_AUTH_BYPASS", "1")
 	store := testStore(t)
 	seedActiveDeployment(t, store, "test")
 	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
@@ -983,7 +983,7 @@ func TestConnectionSourceAssetRoutesUseConnectionScopedSurface(t *testing.T) {
 		t.Fatalf("source lineage status = %d body=%s", lineageRec.Code, lineageRec.Body.String())
 	}
 	lineageBody := renderedWithBootstrap(t, server, lineageRec.Body.String(), "Bearer dev")
-	for _, want := range []string{"<ld-workspace-asset-page", "/static/asset-lineage-graph.js", "lineage", "usesTable"} {
+	for _, want := range []string{"<lv-workspace-asset-page", "/static/asset-lineage-graph.js", "lineage", "usesTable"} {
 		if !strings.Contains(lineageBody, want) {
 			t.Fatalf("source lineage missing %q:\n%s", want, lineageBody)
 		}
@@ -1007,7 +1007,7 @@ func TestConnectionSourceAssetRoutesUseConnectionScopedSurface(t *testing.T) {
 }
 
 func TestWorkspaceConnectionAssetRedirectsToConnectionSurface(t *testing.T) {
-	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
+	t.Setenv("LEAPVIEW_DEV_AUTH_BYPASS", "1")
 	store := testStore(t)
 	seedActiveDeployment(t, store, "test")
 	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
@@ -1028,7 +1028,7 @@ func TestWorkspaceConnectionAssetRedirectsToConnectionSurface(t *testing.T) {
 }
 
 func TestWorkspaceSourceAssetRedirectsToConnectionScopedSourceSurface(t *testing.T) {
-	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
+	t.Setenv("LEAPVIEW_DEV_AUTH_BYPASS", "1")
 	store := testStore(t)
 	seedActiveDeployment(t, store, "test")
 	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
@@ -1050,7 +1050,7 @@ func TestWorkspaceSourceAssetRedirectsToConnectionScopedSourceSurface(t *testing
 }
 
 func TestWorkspaceAssetVersionsRouteShowsConfigHistory(t *testing.T) {
-	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
+	t.Setenv("LEAPVIEW_DEV_AUTH_BYPASS", "1")
 	store := testStore(t)
 	seedActiveDeployment(t, store, "test")
 	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
@@ -1072,7 +1072,7 @@ func TestWorkspaceAssetVersionsRouteShowsConfigHistory(t *testing.T) {
 }
 
 func TestConnectionsPageDoesNotFallbackToRuntimeAssetsWithoutActiveDeployment(t *testing.T) {
-	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
+	t.Setenv("LEAPVIEW_DEV_AUTH_BYPASS", "1")
 	store := testStore(t)
 	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
 	server := NewWithOptions(runtimeAssetMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
@@ -1132,7 +1132,7 @@ func TestAssetViewsDefaultToConfiguredEnvironment(t *testing.T) {
 }
 
 func TestWorkspaceAssetsDoesNotRefreshCleanGraphWithoutPageItems(t *testing.T) {
-	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
+	t.Setenv("LEAPVIEW_DEV_AUTH_BYPASS", "1")
 	store := testStore(t)
 	ctx := context.Background()
 	if err := workspacesqlite.NewRepository(store.SQLDB()).Ensure(ctx, workspace.EnsureInput{ID: "test", Title: "Test"}); err != nil {
@@ -1596,7 +1596,7 @@ func TestWorkspaceAccessCommandPatchesInvalidInput(t *testing.T) {
 
 func testStore(t *testing.T) *platform.Store {
 	t.Helper()
-	store, err := platform.Open(context.Background(), filepath.Join(t.TempDir(), "libredash.db"))
+	store, err := platform.Open(context.Background(), filepath.Join(t.TempDir(), "leapview.db"))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
@@ -1698,7 +1698,7 @@ func seedActiveDeployment(t *testing.T, store *platform.Store, workspaceID strin
 	if err != nil {
 		t.Fatalf("create deployment: %v", err)
 	}
-	compiled, err := workspacecompiler.CompileProject(filepath.Join("..", "..", "dashboards", "libredash.yaml"), workspacecompiler.Options{})
+	compiled, err := workspacecompiler.CompileProject(filepath.Join("..", "..", "dashboards", "leapview.yaml"), workspacecompiler.Options{})
 	if err != nil {
 		t.Fatalf("compile project: %v", err)
 	}

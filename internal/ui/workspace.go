@@ -9,13 +9,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/assetnav"
-	"github.com/Yacobolo/libredash/internal/brand"
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	uiactions "github.com/Yacobolo/libredash/internal/ui/actions"
-	uisignals "github.com/Yacobolo/libredash/internal/ui/signals"
-	workspaceview "github.com/Yacobolo/libredash/internal/workspace"
-	"github.com/Yacobolo/libredash/pkg/pagestream"
+	"github.com/Yacobolo/leapview/internal/assetnav"
+	"github.com/Yacobolo/leapview/internal/brand"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	uiactions "github.com/Yacobolo/leapview/internal/ui/actions"
+	uisignals "github.com/Yacobolo/leapview/internal/ui/signals"
+	workspaceview "github.com/Yacobolo/leapview/internal/workspace"
+	"github.com/Yacobolo/leapview/pkg/pagestream"
 	g "maragu.dev/gomponents"
 	h "maragu.dev/gomponents/html"
 )
@@ -29,7 +29,7 @@ func WorkspacesPageForEnvironment(catalog dashboard.Catalog, workspaces []worksp
 	page.Environment = uisignals.Optional(environment)
 	catalog = catalogWithoutWorkspaceContext(catalog)
 	return workspaceRouteDocument(brand.Name+" Workspaces", catalog, "workspaces", roleLabel, page, uisignals.RouteWorkspace,
-		g.El("ld-workspace-page",
+		g.El("lv-workspace-page",
 			g.Attr("slot", "page"),
 		),
 		workspaceDocumentExtras{},
@@ -60,7 +60,7 @@ func WorkspacePageForEnvironment(catalog dashboard.Catalog, workspace workspacev
 	accessAttrs, extras := workspaceAccessRouteBridge(workspace.ID, access, csrfToken)
 	attrs = append(attrs, accessAttrs...)
 	return workspaceRouteDocument(workspace.Title, catalog, "workspaces", roleLabel, page, uisignals.RouteWorkspace,
-		g.El("ld-workspace-page", attrs...),
+		g.El("lv-workspace-page", attrs...),
 		extras,
 		chromeOptions,
 	)
@@ -89,7 +89,7 @@ func ConnectionsPageForEnvironment(catalog dashboard.Catalog, workspaceID string
 		catalog = catalogWithoutWorkspaceContext(catalog)
 	}
 	return workspaceRouteDocument("Connections", catalog, "connections", roleLabel, page, uisignals.RouteConnections,
-		g.El("ld-connections-page",
+		g.El("lv-connections-page",
 			g.Attr("slot", "page"),
 		),
 		workspaceDocumentExtras{},
@@ -142,9 +142,9 @@ func workspaceAccessRouteBridge(workspaceID string, access WorkspaceAccessRespon
 	upsert := "$workspaceAccess.status = {loading: true, error: '', message: ''}; $workspaceAccess.command = evt.detail; " + uiactions.Post("/workspaces/"+workspaceID+"/access/upsert")
 	remove := "$workspaceAccess.status = {loading: true, error: '', message: ''}; $workspaceAccess.command = evt.detail; " + uiactions.Post("/workspaces/"+workspaceID+"/access/remove")
 	return []g.Node{
-			g.Attr("data-on:ld-workspace-access-search__debounce.200ms", "$workspaceAccess.search = evt.detail.search"),
-			g.Attr("data-on:ld-workspace-access-upsert", upsert),
-			g.Attr("data-on:ld-workspace-access-remove", remove),
+			g.Attr("data-on:lv-workspace-access-search__debounce.200ms", "$workspaceAccess.search = evt.detail.search"),
+			g.Attr("data-on:lv-workspace-access-upsert", upsert),
+			g.Attr("data-on:lv-workspace-access-remove", remove),
 		}, workspaceDocumentExtras{
 			CSRFToken:        csrfToken,
 			BootstrapSignals: map[string]any{"workspaceAccess": accessSignal},
@@ -519,14 +519,14 @@ func WorkspaceAssetPageWithRefreshAndVersionsForEnvironment(catalog dashboard.Ca
 		refreshPath := "/workspaces/" + workspace.ID + "/assets/" + asset.ID + "/refresh"
 		extras.CSRFToken = refresh.CSRFToken
 		attrs = append(attrs,
-			g.Attr("data-on:ld-run-refresh-pipeline", uiactions.Post(refreshPath)),
+			g.Attr("data-on:lv-run-refresh-pipeline", uiactions.Post(refreshPath)),
 		)
 		if activeSection == "versions" {
-			return workspaceAssetRouteDocument(asset, catalog, "workspaces", roleLabel, page, uisignals.RouteWorkspaceAsset, g.El("ld-workspace-asset-page", attrs...), extras, activeSection, chromeOptions)
+			return workspaceAssetRouteDocument(asset, catalog, "workspaces", roleLabel, page, uisignals.RouteWorkspaceAsset, g.El("lv-workspace-asset-page", attrs...), extras, activeSection, chromeOptions)
 		}
-		return workspaceAssetRouteDocument(asset, catalog, "workspaces", roleLabel, page, uisignals.RouteWorkspaceAsset, g.El("ld-workspace-asset-page", attrs...), extras, activeSection, chromeOptions)
+		return workspaceAssetRouteDocument(asset, catalog, "workspaces", roleLabel, page, uisignals.RouteWorkspaceAsset, g.El("lv-workspace-asset-page", attrs...), extras, activeSection, chromeOptions)
 	}
-	return workspaceAssetRouteDocument(asset, catalog, "workspaces", roleLabel, page, uisignals.RouteWorkspaceAsset, g.El("ld-workspace-asset-page", attrs...), workspaceDocumentExtras{}, activeSection, chromeOptions)
+	return workspaceAssetRouteDocument(asset, catalog, "workspaces", roleLabel, page, uisignals.RouteWorkspaceAsset, g.El("lv-workspace-asset-page", attrs...), workspaceDocumentExtras{}, activeSection, chromeOptions)
 }
 
 func WorkspaceAssetBootstrapSignals(catalog dashboard.Catalog, workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeSection, roleLabel string, refresh AssetRefreshState, versions AssetVersionsState, chromeOptions ...ChromeOption) map[string]any {
@@ -574,7 +574,7 @@ func ConnectionAssetPageWithVersionsForEnvironment(catalog dashboard.Catalog, wo
 	lineage := assetLineage(workspace.ID, asset, assets, edges)
 	page := connectionAssetPageSignalWithVersions(workspace, asset, assets, edges, activeSection, lineage, versions)
 	page.Environment = uisignals.Optional(environment)
-	return workspaceAssetRouteDocument(asset, catalog, "connections", roleLabel, page, uisignals.RouteConnectionAsset, g.El("ld-workspace-asset-page",
+	return workspaceAssetRouteDocument(asset, catalog, "connections", roleLabel, page, uisignals.RouteConnectionAsset, g.El("lv-workspace-asset-page",
 		g.Attr("slot", "page"),
 	), workspaceDocumentExtras{}, activeSection, nil)
 }
@@ -588,7 +588,7 @@ func ConnectionSourceAssetPageWithVersionsForEnvironment(catalog dashboard.Catal
 	lineage := assetLineage(workspace.ID, source, assets, edges)
 	page := connectionSourceAssetPageSignalWithVersions(workspace, connection, source, assets, edges, activeSection, lineage, versions)
 	page.Environment = uisignals.Optional(environment)
-	return workspaceAssetRouteDocument(source, catalog, "connections", roleLabel, page, uisignals.RouteConnectionAsset, g.El("ld-workspace-asset-page",
+	return workspaceAssetRouteDocument(source, catalog, "connections", roleLabel, page, uisignals.RouteConnectionAsset, g.El("lv-workspace-asset-page",
 		g.Attr("slot", "page"),
 	), workspaceDocumentExtras{}, activeSection, nil)
 }
@@ -625,7 +625,7 @@ func ConnectionAssetPage(catalog dashboard.Catalog, workspace workspaceview.Work
 		)
 	}
 	return workspaceRouteDocument(asset.Title, catalog, "connections", roleLabel, page, uisignals.RouteConnectionAsset,
-		g.El("ld-workspace-asset-page",
+		g.El("lv-workspace-asset-page",
 			g.Attr("slot", "page"),
 		),
 		workspaceDocumentExtras{AssetWorkspaceID: asset.WorkspaceID},
@@ -646,7 +646,7 @@ func ConnectionSourceAssetPage(catalog dashboard.Catalog, workspace workspacevie
 		)
 	}
 	return workspaceRouteDocument(source.Title, catalog, "connections", roleLabel, page, uisignals.RouteConnectionAsset,
-		g.El("ld-workspace-asset-page",
+		g.El("lv-workspace-asset-page",
 			g.Attr("slot", "page"),
 		),
 		workspaceDocumentExtras{AssetWorkspaceID: source.WorkspaceID},
@@ -674,7 +674,7 @@ func WorkspacePermissionsPage(catalog dashboard.Catalog, workspace workspaceview
 	accessAttrs, extras := workspaceAccessRouteBridge(workspace.ID, access, csrfToken)
 	attrs = append(attrs, accessAttrs...)
 	return workspaceRouteDocument("Workspace permissions", catalog, "settings", roleLabel, page, uisignals.RouteWorkspace,
-		g.El("ld-workspace-page", attrs...),
+		g.El("lv-workspace-page", attrs...),
 		extras,
 		nil,
 	)
@@ -696,7 +696,7 @@ func workspaceRouteDocumentWithBodyExtras(title string, catalog dashboard.Catalo
 	head = append(head, extraHead...)
 	body := append([]g.Node{}, bodyExtras...)
 	body = append(body,
-		g.El("ld-app-shell",
+		g.El("lv-app-shell",
 			routeRoot,
 		),
 		inspectorElement(),

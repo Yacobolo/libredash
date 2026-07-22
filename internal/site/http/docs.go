@@ -9,9 +9,9 @@ import (
 	"regexp"
 	"strings"
 
-	content "github.com/Yacobolo/libredash/docs"
-	docsearch "github.com/Yacobolo/libredash/internal/site/search/sqlite"
-	"github.com/Yacobolo/libredash/internal/visualdocs"
+	content "github.com/Yacobolo/leapview/docs"
+	docsearch "github.com/Yacobolo/leapview/internal/site/search/sqlite"
+	"github.com/Yacobolo/leapview/internal/visualdocs"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
@@ -242,7 +242,7 @@ func siteDocsArticle(document siteDocument) g.Node {
 		if !documentHasVisualExample(document.slug, id) {
 			panic(fmt.Sprintf("visual shortcode %q is not generated for documentation %s", id, document.slug))
 		}
-		placeholder := fmt.Sprintf("LIBREDASH_DOCS_CHART_PLACEHOLDER_%d", index)
+		placeholder := fmt.Sprintf("LEAPVIEW_DOCS_CHART_PLACEHOLDER_%d", index)
 		source = strings.Replace(source, shortcode[0], placeholder, 1)
 	}
 	if strings.Contains(source, "{{< visual") {
@@ -255,7 +255,7 @@ func siteDocsArticle(document siteDocument) g.Node {
 	}
 	renderedHTML := rendered.String()
 	for index, shortcode := range shortcodes {
-		placeholderID := fmt.Sprintf("LIBREDASH_DOCS_CHART_PLACEHOLDER_%d", index)
+		placeholderID := fmt.Sprintf("LEAPVIEW_DOCS_CHART_PLACEHOLDER_%d", index)
 		placeholder := "<p>" + placeholderID + "</p>\n"
 		_, ok := visualExampleForDocument(document.slug, shortcode[1])
 		if !ok {
@@ -265,7 +265,7 @@ func siteDocsArticle(document siteDocument) g.Node {
 		if !ok {
 			panic(fmt.Sprintf("generated visual example reference %q is missing for documentation: %s", shortcode[1], document.slug))
 		}
-		component := fmt.Sprintf("<ld-site-visual-example example-id=\"%s\"></ld-site-visual-example>\n%s", shortcode[1], renderVisualKeyFields(exampleReference.KeyFields))
+		component := fmt.Sprintf("<lv-site-visual-example example-id=\"%s\"></lv-site-visual-example>\n%s", shortcode[1], renderVisualKeyFields(exampleReference.KeyFields))
 		if !strings.Contains(renderedHTML, placeholder) {
 			panic(fmt.Sprintf("render visual shortcode %q for documentation: %s", shortcode[1], document.slug))
 		}
@@ -278,7 +278,7 @@ func siteDocsArticle(document siteDocument) g.Node {
 	return h.Article(
 		h.ID("main-content"),
 		h.Class("site-docs-article"),
-		h.Div(h.Class("site-docs-article-actions"), g.El("ld-site-markdown-copy", g.Attr("markdown", document.markdown))),
+		h.Div(h.Class("site-docs-article-actions"), g.El("lv-site-markdown-copy", g.Attr("markdown", document.markdown))),
 		g.Raw(renderedHTML),
 		siteDocsArticleFooter(document),
 	)
@@ -397,15 +397,15 @@ func documentationIssueLink(document siteDocument) string {
 	query.Set("title", "Docs: "+document.title)
 	query.Set("labels", "documentation")
 	query.Set("body", "Page: /docs/"+document.slug+"\n\nDescribe the content issue or suggested improvement.")
-	return "https://github.com/Yacobolo/libredash/issues/new?" + query.Encode()
+	return "https://github.com/Yacobolo/leapview/issues/new?" + query.Encode()
 }
 
 func documentationMarkdownLink(document siteDocument) string {
-	return "https://raw.githubusercontent.com/Yacobolo/libredash/main/docs/" + document.source
+	return "https://raw.githubusercontent.com/Yacobolo/leapview/main/docs/" + document.source
 }
 
 func documentationSourceLink(document siteDocument) (string, string) {
-	const repository = "https://github.com/Yacobolo/libredash/"
+	const repository = "https://github.com/Yacobolo/leapview/"
 	if !strings.HasPrefix(document.markdown, "<!-- Code generated") {
 		return "Edit this page on GitHub", repository + "edit/main/docs/" + document.source
 	}

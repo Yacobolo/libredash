@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	content "github.com/Yacobolo/libredash/docs"
+	content "github.com/Yacobolo/leapview/docs"
 )
 
 type machineDocumentation struct {

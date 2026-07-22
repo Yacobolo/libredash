@@ -4,7 +4,7 @@ LeapView is a monorepo containing the product application, browser components, r
 
 ## Important locations
 
-- `cmd/libredash/` — application and CLI entry point.
+- `cmd/leapview/` — application and CLI entry point.
 - `internal/` — domain, transport, query, runtime, storage, access, agent, and generator packages.
 - `api/typespec/` — headless API source contract.
 - `api/signals/` — UI signal source contract.

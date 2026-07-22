@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-const modulePath = "github.com/Yacobolo/libredash"
+const modulePath = "github.com/Yacobolo/leapview"
 
 type goFile struct {
 	path    string
@@ -464,14 +464,14 @@ func TestProductionContainerContractExists(t *testing.T) {
 		"COPY --from=sourcegen /src/internal/ui/signals/models.gen.go ./internal/ui/signals/models.gen.go",
 		"CGO_ENABLED=1 go build",
 		"FROM debian:bookworm-slim@sha256:",
-		"USER libredash",
+		"USER leapview",
 		"WORKDIR /app",
 		"COPY --from=web /src/static ./static",
 		"COPY --from=sourcegen /src/.data/map-assets ./.data/map-assets",
-		"LIBREDASH_HOME=/var/lib/libredash/home",
-		"LIBREDASH_MANAGED_DATA_DIR=/var/lib/libredash/home/managed-data",
-		"LIBREDASH_PRODUCTION=1",
-		"HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD [\"libredash\", \"healthcheck\"]",
+		"LEAPVIEW_HOME=/var/lib/leapview/home",
+		"LEAPVIEW_MANAGED_DATA_DIR=/var/lib/leapview/home/managed-data",
+		"LEAPVIEW_PRODUCTION=1",
+		"HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD [\"leapview\", \"healthcheck\"]",
 		"CMD [\"serve\", \"--production\"]",
 	} {
 		if !strings.Contains(text, want) {
@@ -484,7 +484,7 @@ func TestProductionContainerContractExists(t *testing.T) {
 		t.Fatalf("read .dockerignore: %v", err)
 	}
 	ignoreText := string(ignored)
-	for _, want := range []string{".data", ".libredash", "node_modules", "api/gen", "internal/api/gen", "static/chunks"} {
+	for _, want := range []string{".data", ".leapview", "node_modules", "api/gen", "internal/api/gen", "static/chunks"} {
 		if !strings.Contains(ignoreText, want) {
 			t.Fatalf(".dockerignore missing generated or runtime path %q", want)
 		}
@@ -541,11 +541,11 @@ func TestPublicSiteProductionContainerContractExists(t *testing.T) {
 		"bun run build:site",
 		"FROM golang:1.25-bookworm@sha256:",
 		"CGO_ENABLED=0 go build -trimpath",
-		"./cmd/libredash-site",
+		"./cmd/leapview-site",
 		"FROM gcr.io/distroless/static-debian12:nonroot@sha256:",
 		"USER nonroot:nonroot",
-		"ENV LIBREDASH_SITE_BASE_URL=",
-		"ENTRYPOINT [\"/libredash-site\"]",
+		"ENV LEAPVIEW_SITE_BASE_URL=",
+		"ENTRYPOINT [\"/leapview-site\"]",
 		"CMD [\"-addr=:8081\"]",
 	} {
 		if !strings.Contains(text, want) {
@@ -575,8 +575,8 @@ func TestBuildSourceGenerationContract(t *testing.T) {
 	commands := []string{
 		"go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 generate",
 		"go run ./internal/tools/configgen",
-		"apigenstage -target libredash-v1",
-		"typespec-compile -manifest api/apigen.yaml -target libredash-v1",
+		"apigenstage -target leapview-v1",
+		"typespec-compile -manifest api/apigen.yaml -target leapview-v1",
 		"apigenstage -target ui-signals",
 		"typespec-compile -manifest api/apigen.yaml -target ui-signals",
 		"typespec-compile -manifest api/apigen.yaml -target visualization-ir",
@@ -637,14 +637,14 @@ func TestDevelopmentServerTracksCompiledFallbackProcess(t *testing.T) {
 	}
 	serverText := string(server)
 	for _, want := range []string{
-		`go build -o "$TMP_DIR/libredash-dev" ./cmd/libredash`,
-		`"$TMP_DIR/libredash-dev" >> "$LOG_FILE" 2>&1 &`,
+		`go build -o "$TMP_DIR/leapview-dev" ./cmd/leapview`,
+		`"$TMP_DIR/leapview-dev" >> "$LOG_FILE" 2>&1 &`,
 	} {
 		if !strings.Contains(serverText, want) {
 			t.Fatalf("development server script missing tracked binary fragment %q", want)
 		}
 	}
-	if strings.Contains(serverText, `go run ./cmd/libredash >> "$LOG_FILE" 2>&1 &`) {
+	if strings.Contains(serverText, `go run ./cmd/leapview >> "$LOG_FILE" 2>&1 &`) {
 		t.Fatal("development server must not track the go run wrapper as the server process")
 	}
 
@@ -658,7 +658,7 @@ func TestDevelopmentServerTracksCompiledFallbackProcess(t *testing.T) {
 		t.Fatal("UI framework QA must allow a cold Go build before checking server readiness")
 	}
 	for _, want := range []string{
-		"LIBREDASH_MANAGED_DATA_DIR: `${qaHome}/managed-data`",
+		"LEAPVIEW_MANAGED_DATA_DIR: `${qaHome}/managed-data`",
 		"['chmod', '-R', 'u+w', qaHome]",
 	} {
 		if !strings.Contains(qaText, want) {
@@ -713,8 +713,8 @@ func TestContinuousIntegrationWorkflowRunsProductionGates(t *testing.T) {
 		"golang.org/x/vuln/cmd/govulncheck@v1.5.0 ./...",
 		"production-image:",
 		"name: Production image",
-		"docker build --pull --tag libredash:ci .",
-		"./scripts/smoke_production_image.sh libredash:ci",
+		"docker build --pull --tag leapview:ci .",
+		"./scripts/smoke_production_image.sh leapview:ci",
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("CI workflow missing production gate fragment %q", want)
@@ -742,24 +742,24 @@ func TestContinuousIntegrationWorkflowRunsProductionGates(t *testing.T) {
 	}
 	scriptText := string(script)
 	for _, want := range []string{
-		"LIBREDASH_API_TOKEN_ONLY_AUTH=1",
-		"LIBREDASH_CSRF_KEY=",
-		"LIBREDASH_METRICS_BEARER_TOKEN=",
-		"LIBREDASH_ALLOWED_HOSTS=",
-		"LIBREDASH_PUBLIC_URL=",
+		"LEAPVIEW_API_TOKEN_ONLY_AUTH=1",
+		"LEAPVIEW_CSRF_KEY=",
+		"LEAPVIEW_METRICS_BEARER_TOKEN=",
+		"LEAPVIEW_ALLOWED_HOSTS=",
+		"LEAPVIEW_PUBLIC_URL=",
 		"/healthz",
 		"/readyz",
 		"/metrics",
 		"Authorization: Bearer",
 		".State.Health.Status",
 		"--read-only",
-		"--tmpfs \"/var/lib/libredash:rw,exec,nosuid,nodev,mode=0700,uid=${runtime_uid},gid=${runtime_gid},size=128m\"",
+		"--tmpfs \"/var/lib/leapview:rw,exec,nosuid,nodev,mode=0700,uid=${runtime_uid},gid=${runtime_gid},size=128m\"",
 		"--tmpfs /tmp:rw,nosuid,nodev,mode=1777",
 		"--entrypoint id",
 		"\"$image\" -u",
 		"\"$image\" -g",
-		"-o /tmp/libredash-metrics-authorized.out",
-		"grep -q '^# HELP libredash_http_request_duration_seconds ' /tmp/libredash-metrics-authorized.out",
+		"-o /tmp/leapview-metrics-authorized.out",
+		"grep -q '^# HELP leapview_http_request_duration_seconds ' /tmp/leapview-metrics-authorized.out",
 	} {
 		if !strings.Contains(scriptText, want) {
 			t.Fatalf("production image smoke script missing fragment %q", want)
@@ -1021,10 +1021,10 @@ func TestStorageArchitectureSpecDocumentsGlobalDuckLakeCatalog(t *testing.T) {
 	text := string(spec)
 	for _, want := range []string{
 		"one global DuckLake catalog",
-		"libredash.db              # LeapView control-plane tables",
+		"leapview.db              # LeapView control-plane tables",
 		"ducklake/catalog.sqlite   # global DuckLake analytical metadata catalog",
 		"data/                     # DuckLake-managed Parquet files",
-		"ATTACH 'ducklake:sqlite:.libredash/ducklake/catalog.sqlite' AS lake",
+		"ATTACH 'ducklake:sqlite:.leapview/ducklake/catalog.sqlite' AS lake",
 		"Use one global DuckLake catalog per LeapView instance.",
 		"Do not create per-workspace DuckLake catalogs.",
 	} {
@@ -1034,7 +1034,7 @@ func TestStorageArchitectureSpecDocumentsGlobalDuckLakeCatalog(t *testing.T) {
 	}
 	for _, forbidden := range []string{
 		"LeapView control-plane tables + DuckLake metadata tables",
-		"ducklake:sqlite:.libredash/libredash.db",
+		"ducklake:sqlite:.leapview/leapview.db",
 		"Use one metadata catalog per LeapView instance.",
 	} {
 		if strings.Contains(text, forbidden) {

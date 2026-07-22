@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
-	"github.com/Yacobolo/libredash/internal/asyncjob"
-	asyncjobsqlite "github.com/Yacobolo/libredash/internal/asyncjob/sqlite"
+	apigenapi "github.com/Yacobolo/leapview/internal/api/gen"
+	"github.com/Yacobolo/leapview/internal/asyncjob"
+	asyncjobsqlite "github.com/Yacobolo/leapview/internal/asyncjob/sqlite"
 )
 
 func appendTestAsyncEvent(t *testing.T, repo asyncjob.Repository, kind, id, event string, sequence int) asyncjob.Event {

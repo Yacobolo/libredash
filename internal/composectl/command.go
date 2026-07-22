@@ -8,7 +8,7 @@ import (
 
 func Command(ctx context.Context, controller *Controller) *cobra.Command {
 	root := &cobra.Command{
-		Use:           "libredashctl",
+		Use:           "leapviewctl",
 		Short:         "Operate one Docker Compose LeapView instance",
 		SilenceErrors: true,
 		SilenceUsage:  true,

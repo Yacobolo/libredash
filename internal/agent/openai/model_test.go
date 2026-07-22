@@ -7,8 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	agentapp "github.com/Yacobolo/libredash/internal/agent"
-	agentcore "github.com/Yacobolo/libredash/pkg/agent"
+	agentapp "github.com/Yacobolo/leapview/internal/agent"
+	agentcore "github.com/Yacobolo/leapview/pkg/agent"
 )
 
 func TestNewModelUsesBoundedDefaultHTTPClient(t *testing.T) {

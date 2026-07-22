@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	analyticsmaterialize "github.com/Yacobolo/libredash/internal/analytics/materialize"
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
+	analyticsmaterialize "github.com/Yacobolo/leapview/internal/analytics/materialize"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	_ "github.com/duckdb/duckdb-go/v2"
 )
 
@@ -106,7 +106,7 @@ func TestPlanModelTableCompilesCountStarToInlineRowPresence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(plan.SQL, "FROM (SELECT 1 AS __libredash_row_present FROM read_csv('/managed/revision/orders.csv'))") {
+	if !strings.Contains(plan.SQL, "FROM (SELECT 1 AS __leapview_row_present FROM read_csv('/managed/revision/orders.csv'))") {
 		t.Fatalf("plan SQL = %s, want row-presence inline relation", plan.SQL)
 	}
 }

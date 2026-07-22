@@ -24,10 +24,10 @@ beforeAll(async () => {
         <body>
           <button id="trigger">Expand</button>
           <section id="parent">
-            <ld-visualization-host id="first"></ld-visualization-host>
-            <ld-visualization-host id="second"></ld-visualization-host>
+            <lv-visualization-host id="first"></lv-visualization-host>
+            <lv-visualization-host id="second"></lv-visualization-host>
           </section>
-          <ld-visual-modal id="modal"></ld-visual-modal>
+          <lv-visual-modal id="modal"></lv-visual-modal>
           <script type="module" src="/visual-modal-under-test.js"></script>
         </body>
       </html>
@@ -48,7 +48,7 @@ afterAll(async () => {
 async function setupPage() {
   const page = await browser.newPage()
   await page.goto(baseURL)
-  await page.waitForFunction(() => customElements.get('ld-visual-modal'))
+  await page.waitForFunction(() => customElements.get('lv-visual-modal'))
   return page
 }
 
@@ -56,7 +56,7 @@ async function dispatchVisualAction(page: Awaited<ReturnType<typeof setupPage>>,
   await page.evaluate(({ sourceId, action }) => {
     const source = document.getElementById(sourceId)
     if (!source) throw new Error(`missing source ${sourceId}`)
-    source.dispatchEvent(new CustomEvent('ld-visual-action', {
+    source.dispatchEvent(new CustomEvent('lv-visual-action', {
       bubbles: true,
       composed: true,
       detail: {
@@ -70,7 +70,7 @@ async function dispatchVisualAction(page: Awaited<ReturnType<typeof setupPage>>,
       },
     }))
   }, { sourceId, action })
-  await page.locator('ld-visual-modal').evaluate((modal: any) => modal.updateComplete)
+  await page.locator('lv-visual-modal').evaluate((modal: any) => modal.updateComplete)
 }
 
 test('focus action renders a modal clone and leaves the live source in place', async () => {
@@ -80,7 +80,7 @@ test('focus action renders a modal clone and leaves the live source in place', a
     await dispatchVisualAction(page, 'first', 'focus')
 
     const focusedState = await page.evaluate(() => {
-      const modal = document.querySelector('ld-visual-modal')!
+      const modal = document.querySelector('lv-visual-modal')!
       const first = document.getElementById('first')!
       const parent = document.getElementById('parent')!
       const clone = modal.querySelector('[data-visual-focus-clone]')
@@ -99,19 +99,19 @@ test('focus action renders a modal clone and leaves the live source in place', a
       sourceParent: 'section',
       slot: null,
       sourcePosition: true,
-      cloneParent: 'ld-visual-modal',
+      cloneParent: 'lv-visual-modal',
       cloneSlot: 'focus-visual',
       cloneSource: 'first',
       activeInModal: true,
     })
 
     await page.keyboard.press('Tab')
-    expect(await page.locator('ld-visual-modal').evaluate((modal: any) => (
+    expect(await page.locator('lv-visual-modal').evaluate((modal: any) => (
       modal.shadowRoot.activeElement?.classList.contains('focus-close') ?? false
     ))).toBe(true)
 
-    await page.locator('ld-visual-modal').evaluate((modal: any) => modal.shadowRoot.querySelector('.focus-close').click())
-    await page.locator('ld-visual-modal').evaluate((modal: any) => modal.updateComplete)
+    await page.locator('lv-visual-modal').evaluate((modal: any) => modal.shadowRoot.querySelector('.focus-close').click())
+    await page.locator('lv-visual-modal').evaluate((modal: any) => modal.updateComplete)
 
     const restoredState = await page.evaluate(() => {
       const first = document.getElementById('first')!
@@ -120,7 +120,7 @@ test('focus action renders a modal clone and leaves the live source in place', a
         sourceParent: first.parentElement?.id,
         slot: first.getAttribute('slot'),
         restoredPosition: parent.children[0] === first,
-        cloneRemoved: !document.querySelector('ld-visual-modal')?.querySelector('[data-visual-focus-clone]'),
+        cloneRemoved: !document.querySelector('lv-visual-modal')?.querySelector('[data-visual-focus-clone]'),
         activeId: document.activeElement?.id,
       }
     })
@@ -147,7 +147,7 @@ test('opening another focused source restores the previous element first', async
       const parent = document.getElementById('parent')!
       const first = document.getElementById('first')!
       const second = document.getElementById('second')!
-      const clone = document.querySelector('ld-visual-modal')?.querySelector('[data-visual-focus-clone]')
+      const clone = document.querySelector('lv-visual-modal')?.querySelector('[data-visual-focus-clone]')
       return {
         firstParent: first.parentElement?.id,
         firstPosition: parent.children[0] === first,
@@ -176,7 +176,7 @@ test('non-focus visual actions do not move the source element', async () => {
 
     const state = await page.evaluate(() => {
       const first = document.getElementById('first')!
-      const modal = document.querySelector('ld-visual-modal')!
+      const modal = document.querySelector('lv-visual-modal')!
       return {
         sourceParent: first.parentElement?.id,
         slot: first.getAttribute('slot'),

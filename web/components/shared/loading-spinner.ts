@@ -6,8 +6,8 @@ class LeapViewLoadingSpinner extends LitElement {
   static styles = css`
     :host {
       display: inline-grid;
-      width: var(--ld-spinner-size, var(--ld-spinner-size-md));
-      height: var(--ld-spinner-size, var(--ld-spinner-size-md));
+      width: var(--lv-spinner-size, var(--lv-spinner-size-md));
+      height: var(--lv-spinner-size, var(--lv-spinner-size-md));
       flex: 0 0 auto;
       color: inherit;
       place-items: center;
@@ -17,10 +17,10 @@ class LeapViewLoadingSpinner extends LitElement {
       width: 100%;
       height: 100%;
       transform-origin: center;
-      animation: ld-aperture-spin var(--ld-spinner-duration) linear infinite;
+      animation: lv-aperture-spin var(--lv-spinner-duration) linear infinite;
     }
 
-    @keyframes ld-aperture-spin {
+    @keyframes lv-aperture-spin {
       to {
         transform: rotate(360deg);
       }
@@ -38,10 +38,10 @@ class LeapViewLoadingSpinner extends LitElement {
   }
 }
 
-if (!customElements.get('ld-loading-spinner')) customElements.define('ld-loading-spinner', LeapViewLoadingSpinner)
+if (!customElements.get('lv-loading-spinner')) customElements.define('lv-loading-spinner', LeapViewLoadingSpinner)
 
 declare global {
   interface HTMLElementTagNameMap {
-    'ld-loading-spinner': LeapViewLoadingSpinner
+    'lv-loading-spinner': LeapViewLoadingSpinner
   }
 }

@@ -4,11 +4,11 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/brand"
+	"github.com/Yacobolo/leapview/internal/brand"
 	"time"
 
-	"github.com/Yacobolo/libredash/pkg/pagestream"
-	siteassets "github.com/Yacobolo/libredash/site"
+	"github.com/Yacobolo/leapview/pkg/pagestream"
+	siteassets "github.com/Yacobolo/leapview/site"
 	g "maragu.dev/gomponents"
 	dsattr "maragu.dev/gomponents-datastar"
 	h "maragu.dev/gomponents/html"
@@ -84,7 +84,7 @@ func sitePage(metadata sitePageMetadata) g.Node {
 			h.A(h.Class("skip-link"), h.Href("#main-content"), g.Text("Skip to content")),
 			siteHeader(false),
 			h.Section(h.ID("main-content"), h.Class("site-hero"),
-				g.El("ld-site-flow-background", h.Class("site-hero-background"), g.Attr("aria-hidden", "true")),
+				g.El("lv-site-flow-background", h.Class("site-hero-background"), g.Attr("aria-hidden", "true")),
 				h.Div(h.Class("site-hero-layout"),
 					h.Div(h.Class("site-hero-content"),
 						h.P(h.Class("site-eyebrow"), g.Text("Open-source analytics as code")),
@@ -206,7 +206,7 @@ func visualsPage(metadata sitePageMetadata) g.Node {
 					h.H1(g.Text("Every visual type, using one contract.")),
 					h.P(h.Class("site-lede"), g.Text("Each item below is a real "+siteBrandName+" visual rendered from the same type-discriminated payload contract.")),
 				),
-				g.El("ld-site-visual-showcase"),
+				g.El("lv-site-visual-showcase"),
 			),
 			siteFooter(),
 		},
@@ -328,9 +328,9 @@ func siteHeader(isDocs bool) g.Node {
 			h.A(h.Href("/visuals"), g.Text("Visuals")),
 		))
 	}
-	actions = append(actions, g.El("ld-site-theme-toggle"))
+	actions = append(actions, g.El("lv-site-theme-toggle"))
 	if !isDocs {
-		actions = append(actions, g.El("ld-site-mobile-menu"))
+		actions = append(actions, g.El("lv-site-mobile-menu"))
 	}
 
 	return h.Header(h.Class("site-header"),
@@ -342,7 +342,7 @@ func siteHeader(isDocs bool) g.Node {
 }
 
 func siteActiveSearch() g.Node {
-	return g.El("ld-site-search",
+	return g.El("lv-site-search",
 		h.A(h.Class("site-search-fallback"), h.Href("/docs/search"), g.Text("Search")),
 		h.Input(
 			h.Class("site-search-active-input"),
@@ -361,7 +361,7 @@ func siteActiveSearch() g.Node {
 
 func siteBrandLink() g.Node {
 	return h.A(h.Class("site-brand"), h.Href("/"),
-		g.El("ld-brand-mark", g.Attr("aria-hidden", "true")),
+		g.El("lv-brand-mark", g.Attr("aria-hidden", "true")),
 		h.Span(g.Text(siteBrandName)),
 	)
 }
@@ -407,7 +407,7 @@ func siteAgentPreview() g.Node {
 }
 
 func siteWorkflowArtifact() g.Node {
-	const semanticModel = `apiVersion: libredash.dev/v1
+	const semanticModel = `apiVersion: leapview.dev/v1
 kind: SemanticModel
 metadata:
   workspace: sales
@@ -502,7 +502,7 @@ func siteDataStackStage() g.Node {
 func siteStackProductNode() g.Node {
 	return h.Li(h.Class("site-stack-stage site-stack-node site-stack-product-node"),
 		h.H3(h.Class("site-stack-product-brand"),
-			g.El("ld-brand-mark", g.Attr("large", ""), g.Attr("aria-hidden", "true")),
+			g.El("lv-brand-mark", g.Attr("large", ""), g.Attr("aria-hidden", "true")),
 			h.Span(g.Text(siteBrandName)),
 		),
 		h.Div(h.Class("site-stack-client-surface"),
@@ -529,7 +529,7 @@ func siteStackClientInterface(label string, icon g.Node) g.Node {
 }
 
 func siteStackFeatureIcon(name string) g.Node {
-	return g.El("ld-site-feature-icon", g.Attr("name", name), g.Attr("plain", ""), g.Attr("aria-hidden", "true"))
+	return g.El("lv-site-feature-icon", g.Attr("name", name), g.Attr("plain", ""), g.Attr("aria-hidden", "true"))
 }
 
 func siteStackMCPMark() g.Node {
@@ -642,7 +642,7 @@ func siteProofItem(icon, title, body string) g.Node {
 func siteHomepageActions() g.Node {
 	return h.Div(h.Class("site-actions"),
 		h.A(h.Class("site-button site-button-primary"), h.Href("/docs/getting-started"), g.Text("Get started")),
-		h.A(h.Class("site-button"), h.Href("https://github.com/Yacobolo/libredash"),
+		h.A(h.Class("site-button"), h.Href("https://github.com/Yacobolo/leapview"),
 			h.Span(h.Class("site-github-mark"), g.Attr("aria-hidden", "true")),
 			g.Text("View on GitHub"),
 		),
@@ -650,7 +650,7 @@ func siteHomepageActions() g.Node {
 }
 
 func siteFeatureIcon(name string) g.Node {
-	return g.El("ld-site-feature-icon", g.Attr("name", name), g.Attr("aria-hidden", "true"))
+	return g.El("lv-site-feature-icon", g.Attr("name", name), g.Attr("aria-hidden", "true"))
 }
 
 func siteFooter() g.Node {
@@ -666,8 +666,8 @@ func siteFooter() g.Node {
 				{label: "Visual gallery", href: "/visuals"},
 			}),
 			siteFooterGroup("Project", []siteFooterLink{
-				{label: "GitHub", href: "https://github.com/Yacobolo/libredash"},
-				{label: "Issues", href: "https://github.com/Yacobolo/libredash/issues"},
+				{label: "GitHub", href: "https://github.com/Yacobolo/leapview"},
+				{label: "Issues", href: "https://github.com/Yacobolo/leapview/issues"},
 			}),
 		),
 		h.Div(h.Class("site-footer-bottom"), h.P(g.Text(siteBrandName+" — open-source analytics as code."))),
@@ -697,7 +697,7 @@ func siteDocsLayout(document *siteDocument, content ...g.Node) g.Node {
 					siteDocsArticleHeader(document),
 					g.Group(content),
 				),
-				g.El("ld-site-article-toc"),
+				g.El("lv-site-article-toc"),
 			),
 		),
 	)
@@ -722,7 +722,7 @@ func siteDocsArticleHeader(document *siteDocument) g.Node {
 	}
 
 	return h.Header(h.Class("site-docs-article-header"),
-		g.El("ld-site-docs-drawer-toggle"),
+		g.El("lv-site-docs-drawer-toggle"),
 		h.Nav(h.Class("site-docs-breadcrumb"), g.Attr("aria-label", "Breadcrumb"), h.Ol(g.Group(breadcrumb))),
 	)
 }
@@ -764,7 +764,7 @@ func siteDocsSidebar(current *siteDocument) g.Node {
 	}
 	return h.Aside(h.Class("site-docs-sidebar"), h.ID("site-docs-sidebar"),
 		h.Div(h.Class("site-docs-drawer-actions"),
-			g.El("ld-site-docs-drawer-toggle", g.Attr("placement", "drawer")),
+			g.El("lv-site-docs-drawer-toggle", g.Attr("placement", "drawer")),
 		),
 		h.Nav(g.Attr("aria-label", "Documentation"), g.Group(sections)),
 	)

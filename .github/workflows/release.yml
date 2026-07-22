@@ -20,7 +20,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  IMAGE_NAME: ghcr.io/yacobolo/libredash
+  IMAGE_NAME: ghcr.io/yacobolo/leapview
 
 jobs:
   image:
@@ -120,14 +120,14 @@ jobs:
           )
           for target in "${targets[@]}"; do
             read -r os arch <<<"$target"
-            package="libredash-compose-${{ github.event.release.tag_name }}-${os}-${arch}"
+            package="leapview-compose-${{ github.event.release.tag_name }}-${os}-${arch}"
             mkdir -p "dist/$package"
-            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags='-s -w' -o "dist/$package/libredashctl" ./cmd/libredashctl
+            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags='-s -w' -o "dist/$package/leapviewctl" ./cmd/leapviewctl
             cp deploy/compose/compose.yaml deploy/compose/compose.https.yaml deploy/compose/Caddyfile deploy/compose/README.md "dist/$package/"
-            cp deploy/compose/libredash.env.example "dist/$package/libredash.env.example"
-            sed "s|ghcr.io/yacobolo/libredash@sha256:<release-digest>|${{ env.IMAGE_NAME }}@${{ steps.publish.outputs.digest }}|" deploy/compose/deployment.env.example > "dist/$package/deployment.env.example"
+            cp deploy/compose/leapview.env.example "dist/$package/leapview.env.example"
+            sed "s|ghcr.io/yacobolo/leapview@sha256:<release-digest>|${{ env.IMAGE_NAME }}@${{ steps.publish.outputs.digest }}|" deploy/compose/deployment.env.example > "dist/$package/deployment.env.example"
             cp image-reference.txt "dist/$package/"
-            (cd "dist/$package" && sha256sum Caddyfile README.md compose.https.yaml compose.yaml deployment.env.example image-reference.txt libredash.env.example libredashctl > SHA256SUMS)
+            (cd "dist/$package" && sha256sum Caddyfile README.md compose.https.yaml compose.yaml deployment.env.example image-reference.txt leapview.env.example leapviewctl > SHA256SUMS)
             tar -C dist -czf "dist/$package.tar.gz" "$package"
             sha256sum "dist/$package.tar.gz" > "dist/$package.tar.gz.sha256"
           done

@@ -14,14 +14,14 @@ import (
 	"strings"
 	"sync"
 
-	visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 )
 
 const (
 	StyleSHA256              = "c62e1d3f357246401f8237f5416ab0e4421c7463ac4f00f899bcfe6eeace2bab"
 	ArchiveSHA256            = "af527dbc24444b4f87e89190319f65bd6e6e6ef0db8d8054f19e2017932ab392"
 	BasemapAssetsRevision    = "028c18f713baecad011301ff7a69acc39bcc2ae7"
-	assetID                  = "libredash-streets"
+	assetID                  = "leapview-streets"
 	mapAssetURLPrefix        = "/map-assets/" + assetID
 	installedAssetPathPrefix = assetID
 )
@@ -34,8 +34,8 @@ var assets = map[string]visualizationir.VisualizationMapStyleAsset{
 		ArchiveURL:    mapAssetURLPrefix + "/archives/" + ArchiveSHA256 + "/basemap.pmtiles",
 		ArchiveDigest: "sha256:" + ArchiveSHA256,
 		GlyphsURL:     mapAssetURLPrefix + "/assets/" + BasemapAssetsRevision + "/glyphs/{fontstack}/{range}.pbf",
-		SpriteURL:     mapAssetURLPrefix + "/assets/" + BasemapAssetsRevision + "/sprites/libredash",
-		Source:        "OpenStreetMap contributors; global context through zoom 6 with South America regional detail through zoom 10, packaged as an immutable LibreDash vector basemap",
+		SpriteURL:     mapAssetURLPrefix + "/assets/" + BasemapAssetsRevision + "/sprites/leapview",
+		Source:        "OpenStreetMap contributors; global context through zoom 6 with South America regional detail through zoom 10, packaged as an immutable LeapView vector basemap",
 		License:       "Open Database License 1.0 (data); BSD-3-Clause (style)",
 		Attribution:   "© OpenStreetMap contributors",
 		MinimumZoom:   0,
@@ -108,10 +108,10 @@ var supportingDigests = map[string]string{
 	"glyphs/Noto Sans Regular/4096-4351.pbf":   "f08764a2e60f5d2e5b1d072668aee1be18a04fe542af38dcee419f529c13433c",
 	"glyphs/Noto Sans Regular/512-767.pbf":     "6abc80badad0e823e228ab739515be257c8b33bc68bb077dd873030e9b2d143a",
 	"glyphs/Noto Sans Regular/768-1023.pbf":    "537ccbee79180f4f8b3f6d2bdd27df979260ce1a0358c40d7aa7db505d9b03aa",
-	"sprites/libredash.json":                   "bfac76cf7ed5c2aa2992695904056a1c6b07785b7fd20e6c640cb44fd6244a2e",
-	"sprites/libredash.png":                    "b6a34640917bdc57d0bd080836db33376371a3312ebe7b849045268015de3481",
-	"sprites/libredash@2x.json":                "1fb5b123fbe35d2e1f6ac171513ce01df89e671273a417ee89c44886a4c132f0",
-	"sprites/libredash@2x.png":                 "23f6e9df27c2e9a14385763980a24e3608966bfc8192a106058bc2ca959ab563",
+	"sprites/leapview.json":                   "bfac76cf7ed5c2aa2992695904056a1c6b07785b7fd20e6c640cb44fd6244a2e",
+	"sprites/leapview.png":                    "b6a34640917bdc57d0bd080836db33376371a3312ebe7b849045268015de3481",
+	"sprites/leapview@2x.json":                "1fb5b123fbe35d2e1f6ac171513ce01df89e671273a417ee89c44886a4c132f0",
+	"sprites/leapview@2x.png":                 "23f6e9df27c2e9a14385763980a24e3608966bfc8192a106058bc2ca959ab563",
 }
 
 var (

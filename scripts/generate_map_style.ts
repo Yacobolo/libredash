@@ -2,7 +2,7 @@ import { mkdir } from 'node:fs/promises'
 import { layers, namedFlavor } from '@protomaps/basemaps'
 import type { LayerSpecification, StyleSpecification } from 'maplibre-gl'
 
-const outputDir = 'static/map-assets/libredash-streets'
+const outputDir = 'static/map-assets/leapview-streets'
 await mkdir(outputDir, { recursive: true })
 
 const roleFor = (layer: LayerSpecification): string | undefined => {
@@ -18,18 +18,18 @@ const roleFor = (layer: LayerSpecification): string | undefined => {
 
 const styleLayers = layers('protomaps', namedFlavor('light'), { lang: 'en' }).map((layer) => {
   const role = roleFor(layer)
-  return role ? { ...layer, metadata: { ...(layer.metadata ?? {}), 'libredash:role': role } } : layer
+  return role ? { ...layer, metadata: { ...(layer.metadata ?? {}), 'leapview:role': role } } : layer
 }) as LayerSpecification[]
 
 const style: StyleSpecification = {
   version: 8,
-  name: 'LibreDash Streets',
+  name: 'LeapView Streets',
   glyphs: 'https://invalid.local/glyphs/{fontstack}/{range}.pbf',
-  sprite: 'https://invalid.local/sprites/libredash',
+  sprite: 'https://invalid.local/sprites/leapview',
   sources: {
     protomaps: {
       type: 'vector',
-      url: 'pmtiles://__LIBREDASH_ARCHIVE__',
+      url: 'pmtiles://__LEAPVIEW_ARCHIVE__',
       attribution: '© OpenStreetMap contributors',
     },
   },

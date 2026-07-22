@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	content "github.com/Yacobolo/libredash/docs"
-	"github.com/Yacobolo/libredash/internal/visualdocs"
+	content "github.com/Yacobolo/leapview/docs"
+	"github.com/Yacobolo/leapview/internal/visualdocs"
 )
 
 type visualDocumentationArtifact = visualdocs.Artifact

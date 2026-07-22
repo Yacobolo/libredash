@@ -7,7 +7,7 @@
 - Source: `https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.2/bundles/datastar.js`
 - Upstream: `https://github.com/starfederation/datastar`
 
-LibreDash serves Datastar locally so page streaming does not depend on a CDN at runtime.
+LeapView serves Datastar locally so page streaming does not depend on a CDN at runtime.
 
 ## Model Context Protocol mark
 

@@ -4,7 +4,7 @@ Runtime behavior begins with active deployment resolution and ends with a bounde
 
 ## Process assembly
 
-`cmd/libredash/main.go` loads process-global configuration, opens platform and analytical storage, constructs repositories and domain services, registers routes, and starts the HTTP server. Production configuration validation occurs before unsafe modes are permitted.
+`cmd/leapview/main.go` loads process-global configuration, opens platform and analytical storage, constructs repositories and domain services, registers routes, and starts the HTTP server. Production configuration validation occurs before unsafe modes are permitted.
 
 The application router composes liveness/readiness, protected metrics, authentication, workspaces, dashboards, deployments, managed data, access, audit, administration, agent, and headless API routes. Middleware establishes trusted request context such as principal, rate limits, and security headers before handlers reach domain operations.
 

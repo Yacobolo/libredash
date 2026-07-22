@@ -5,7 +5,7 @@ Run the CLI from the LeapView release or from a checked-out repository.
 Store an API token for a target before calling remote operations.
 
 ```sh
-libredash login --target https://dash.example.com --token "$LIBREDASH_API_TOKEN"
+leapview login --target https://dash.example.com --token "$LEAPVIEW_API_TOKEN"
 ```
 
-For automation, provide `LIBREDASH_TARGET` and `LIBREDASH_API_TOKEN` through the environment instead of writing credentials to a local target configuration.
+For automation, provide `LEAPVIEW_TARGET` and `LEAPVIEW_API_TOKEN` through the environment instead of writing credentials to a local target configuration.

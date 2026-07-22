@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	analyticsmaterialize "github.com/Yacobolo/libredash/internal/analytics/materialize"
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
+	analyticsmaterialize "github.com/Yacobolo/leapview/internal/analytics/materialize"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	_ "github.com/duckdb/duckdb-go/v2"
 )
 
@@ -340,7 +340,7 @@ func TestCompileSourceRelation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want = "SELECT * FROM quack_query('quack:quack.example.com:443', 'SELECT 1 AS __libredash_row_present FROM oeducklake.oe_aravind.fact_general_ledger_line')"
+	want = "SELECT * FROM quack_query('quack:quack.example.com:443', 'SELECT 1 AS __leapview_row_present FROM oeducklake.oe_aravind.fact_general_ledger_line')"
 	if relation != want {
 		t.Fatalf("quack row-presence relation = %q, want %q", relation, want)
 	}
@@ -426,7 +426,7 @@ func TestCompileConnectionSecret(t *testing.T) {
 	if !ok {
 		t.Fatal("secret ok = false, want true")
 	}
-	want := "CREATE OR REPLACE SECRET libredash_prod_lake (TYPE s3, PROVIDER config, KEY_ID 'key', REGION 'us-east-1', SECRET 'secret', SCOPE 's3://analytics-prod/')"
+	want := "CREATE OR REPLACE SECRET leapview_prod_lake (TYPE s3, PROVIDER config, KEY_ID 'key', REGION 'us-east-1', SECRET 'secret', SCOPE 's3://analytics-prod/')"
 	if stmt != want {
 		t.Fatalf("s3 secret = %q, want %q", stmt, want)
 	}
@@ -438,20 +438,20 @@ func TestCompileConnectionSecret(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want = "CREATE OR REPLACE SECRET libredash_azure_lake (TYPE azure, PROVIDER config, CONNECTION_STRING 'DefaultEndpointsProtocol=https;AccountName=mystorageaccount')"
+	want = "CREATE OR REPLACE SECRET leapview_azure_lake (TYPE azure, PROVIDER config, CONNECTION_STRING 'DefaultEndpointsProtocol=https;AccountName=mystorageaccount')"
 	if !ok || stmt != want {
 		t.Fatalf("azure secret = %q ok=%v, want %q ok=true", stmt, ok, want)
 	}
 
-	t.Setenv("LIBREDASH_TEST_AZURE_CREDENTIALS", `{"connection_string":"DefaultEndpointsProtocol=https;AccountName=envstorage"}`)
+	t.Setenv("LEAPVIEW_TEST_AZURE_CREDENTIALS", `{"connection_string":"DefaultEndpointsProtocol=https;AccountName=envstorage"}`)
 	stmt, ok, err = compileConnectionSecret("azure_lake", semanticmodel.Connection{
 		Kind:        "azure_blob",
-		Credentials: semanticmodel.ConnectionCredentials{Provider: "env", Secret: "LIBREDASH_TEST_AZURE_CREDENTIALS"},
+		Credentials: semanticmodel.ConnectionCredentials{Provider: "env", Secret: "LEAPVIEW_TEST_AZURE_CREDENTIALS"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want = "CREATE OR REPLACE SECRET libredash_azure_lake (TYPE azure, PROVIDER config, CONNECTION_STRING 'DefaultEndpointsProtocol=https;AccountName=envstorage')"
+	want = "CREATE OR REPLACE SECRET leapview_azure_lake (TYPE azure, PROVIDER config, CONNECTION_STRING 'DefaultEndpointsProtocol=https;AccountName=envstorage')"
 	if !ok || stmt != want {
 		t.Fatalf("azure env credential secret = %q ok=%v, want %q ok=true", stmt, ok, want)
 	}
@@ -468,7 +468,7 @@ func TestCompileConnectionSecret(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want = "CREATE OR REPLACE SECRET libredash_azure_lake (TYPE azure, PROVIDER service_principal, ACCOUNT_NAME 'mystorageaccount', CLIENT_ID 'client', CLIENT_SECRET 'secret', TENANT_ID 'tenant')"
+	want = "CREATE OR REPLACE SECRET leapview_azure_lake (TYPE azure, PROVIDER service_principal, ACCOUNT_NAME 'mystorageaccount', CLIENT_ID 'client', CLIENT_SECRET 'secret', TENANT_ID 'tenant')"
 	if !ok || stmt != want {
 		t.Fatalf("azure service principal secret = %q ok=%v, want %q ok=true", stmt, ok, want)
 	}
@@ -497,7 +497,7 @@ func TestCompileConnectionSecret(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want = "CREATE OR REPLACE SECRET libredash_lakehouse (TYPE ducklake, PROVIDER config, KEY_ID 'key', REGION 'us-east-1', SECRET 'secret', SCOPE 's3://analytics-prod/ducklake/')"
+	want = "CREATE OR REPLACE SECRET leapview_lakehouse (TYPE ducklake, PROVIDER config, KEY_ID 'key', REGION 'us-east-1', SECRET 'secret', SCOPE 's3://analytics-prod/ducklake/')"
 	if !ok || stmt != want {
 		t.Fatalf("ducklake secret = %q ok=%v, want %q ok=true", stmt, ok, want)
 	}
@@ -510,7 +510,7 @@ func TestCompileConnectionSecret(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want = "CREATE OR REPLACE SECRET libredash_remote_quack (TYPE quack, TOKEN 'secret-token', SCOPE 'quack:quack.example.com:443')"
+	want = "CREATE OR REPLACE SECRET leapview_remote_quack (TYPE quack, TOKEN 'secret-token', SCOPE 'quack:quack.example.com:443')"
 	if !ok || stmt != want {
 		t.Fatalf("quack secret = %q ok=%v, want %q ok=true", stmt, ok, want)
 	}
@@ -523,7 +523,7 @@ func TestCompileAmbientConnectionSecrets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "CREATE OR REPLACE SECRET libredash_lake (TYPE s3, PROVIDER credential_chain, ENDPOINT 's3.eu-west-1.amazonaws.com', REGION 'eu-west-1', SCOPE 's3://analytics/')"
+	want := "CREATE OR REPLACE SECRET leapview_lake (TYPE s3, PROVIDER credential_chain, ENDPOINT 's3.eu-west-1.amazonaws.com', REGION 'eu-west-1', SCOPE 's3://analytics/')"
 	if !ok || stmt != want {
 		t.Fatalf("ambient s3 secret = %q ok=%v, want %q", stmt, ok, want)
 	}
@@ -533,7 +533,7 @@ func TestCompileAmbientConnectionSecrets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want = "CREATE OR REPLACE SECRET libredash_azure (TYPE azure, PROVIDER credential_chain, ACCOUNT_NAME 'analytics', SCOPE 'az://container/')"
+	want = "CREATE OR REPLACE SECRET leapview_azure (TYPE azure, PROVIDER credential_chain, ACCOUNT_NAME 'analytics', SCOPE 'az://container/')"
 	if !ok || stmt != want {
 		t.Fatalf("ambient azure secret = %q ok=%v, want %q", stmt, ok, want)
 	}
@@ -568,7 +568,7 @@ func TestCompileSourceSecretStatements(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"CREATE OR REPLACE SECRET libredash_prod_lake_lance (TYPE lance, PROVIDER config, KEY_ID 'key', SECRET 'secret', SCOPE 's3://analytics-prod/')"}
+	want := []string{"CREATE OR REPLACE SECRET leapview_prod_lake_lance (TYPE lance, PROVIDER config, KEY_ID 'key', SECRET 'secret', SCOPE 's3://analytics-prod/')"}
 	if fmt.Sprint(statements) != fmt.Sprint(want) {
 		t.Fatalf("lance secrets = %#v, want %#v", statements, want)
 	}
@@ -788,10 +788,10 @@ func bindTestManagedRoot(model *semanticmodel.Model, connectionName, root string
 }
 
 func TestDuckDBQuackSmoke(t *testing.T) {
-	uri := os.Getenv("LIBREDASH_QUACK_TEST_URI")
-	token := os.Getenv("LIBREDASH_QUACK_TEST_TOKEN")
+	uri := os.Getenv("LEAPVIEW_QUACK_TEST_URI")
+	token := os.Getenv("LEAPVIEW_QUACK_TEST_TOKEN")
 	if uri == "" || token == "" {
-		t.Skip("set LIBREDASH_QUACK_TEST_URI and LIBREDASH_QUACK_TEST_TOKEN to run Quack smoke test")
+		t.Skip("set LEAPVIEW_QUACK_TEST_URI and LEAPVIEW_QUACK_TEST_TOKEN to run Quack smoke test")
 	}
 
 	db, err := sql.Open("duckdb", filepath.Join(t.TempDir(), "quack-smoke.duckdb"))
@@ -813,7 +813,7 @@ func TestDuckDBQuackSmoke(t *testing.T) {
 		t.Fatalf("load quack: %v", err)
 	}
 	stmt := fmt.Sprintf(
-		"CREATE OR REPLACE SECRET libredash_quack_smoke (TYPE quack, TOKEN '%s', SCOPE '%s')",
+		"CREATE OR REPLACE SECRET leapview_quack_smoke (TYPE quack, TOKEN '%s', SCOPE '%s')",
 		SQLString(token),
 		SQLString(uri),
 	)

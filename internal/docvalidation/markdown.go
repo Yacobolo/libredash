@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/configschema"
+	"github.com/Yacobolo/leapview/internal/configschema"
 	"gopkg.in/yaml.v3"
 )
 
@@ -149,7 +149,7 @@ func validateYAMLBlock(filename string, contentLine int, content []byte) []Issue
 	if apiVersion == "" {
 		return nil
 	}
-	if !strings.HasPrefix(apiVersion, "libredash.dev/") {
+	if !strings.HasPrefix(apiVersion, "leapview.dev/") {
 		return nil
 	}
 	schemaKind, ok := schemaKinds[kind]

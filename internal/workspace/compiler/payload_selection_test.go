@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	"github.com/Yacobolo/libredash/internal/dashboard/report"
-	visualizationdefinition "github.com/Yacobolo/libredash/internal/visualization/definition"
-	visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	"github.com/Yacobolo/leapview/internal/dashboard/report"
+	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 )
 
 func TestVisualPayloadIncludesPointSelectionContract(t *testing.T) {
@@ -147,7 +147,7 @@ func TestGeographicVisualCompilesEveryLayerKind(t *testing.T) {
 	if got, want := spec.Presentation.Legend, visualizationir.VisualizationLegendPositionHidden; got != want {
 		t.Fatalf("geographic legend = %q, want %q", got, want)
 	}
-	if spec.Presentation.Basemap == nil || spec.Presentation.Basemap.ID != "libredash-streets" || spec.Presentation.Basemap.ArchiveDigest == "" {
+	if spec.Presentation.Basemap == nil || spec.Presentation.Basemap.ID != "leapview-streets" || spec.Presentation.Basemap.ArchiveDigest == "" {
 		t.Fatalf("geographic basemap = %#v, want content-addressed streets asset", spec.Presentation.Basemap)
 	}
 	if spec.Presentation.Camera.Mode != visualizationir.VisualizationMapCameraModeFitData || !spec.Presentation.Controls.Reset {

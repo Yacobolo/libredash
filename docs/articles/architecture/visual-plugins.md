@@ -1,12 +1,12 @@
 # Visualization architecture
 
-This document defines the architecture for LibreDash visualizations. A versioned, renderer-independent visualization intermediate representation (IR) connects compiled authoring intent to every runtime and browser surface. ECharts remains the built-in BI chart engine, TanStack owns tabular interaction, MapLibre owns geographic rendering, and a sandboxed Vega-Lite surface supports custom declarative visuals.
+This document defines the architecture for LeapView visualizations. A versioned, renderer-independent visualization intermediate representation (IR) connects compiled authoring intent to every runtime and browser surface. ECharts remains the built-in BI chart engine, TanStack owns tabular interaction, MapLibre owns geographic rendering, and a sandboxed Vega-Lite surface supports custom declarative visuals.
 
 The architecture optimizes for semantic correctness, deterministic behavior, strong contracts, scalability, accessibility, security, and renderer replaceability. Implementation cost is not a design constraint.
 
 ## Status and scope
 
-This is the normative production contract. LibreDash gives charts, KPIs, tables, matrices, and pivots one compiled definition namespace, page-component kind, signal root, interaction source kind, window command, and headless API surface. The standalone TypeSpec contract generates Go, TypeScript, and strict JSON Schema models. Signals, APIs, agent artifacts, documentation examples, and the visualization host exchange the same versioned envelope and reject legacy payloads.
+This is the normative production contract. LeapView gives charts, KPIs, tables, matrices, and pivots one compiled definition namespace, page-component kind, signal root, interaction source kind, window command, and headless API surface. The standalone TypeSpec contract generates Go, TypeScript, and strict JSON Schema models. Signals, APIs, agent artifacts, documentation examples, and the visualization host exchange the same versioned envelope and reject legacy payloads.
 
 The visualization IR covers:
 
@@ -24,7 +24,7 @@ One visual surface does not imply one data shape or browser component. The IR us
 - Make temporal, quantitative, categorical, geographic, and nullable data explicit instead of inferred from values.
 - Generate compatible Go and TypeScript contracts from TypeSpec.
 - Keep one stable visual identity across configuration, pages, signals, commands, status, APIs, agents, and renderers.
-- Keep renderer libraries behind LibreDash-owned adapters.
+- Keep renderer libraries behind LeapView-owned adapters.
 - Allow one visualization specification to target more than one conforming renderer.
 - Separate immutable specification state from frequently changing runtime data state.
 - Reject invalid or stale state before it reaches a renderer.
@@ -64,7 +64,7 @@ One visual surface does not imply one data shape or browser component. The IR us
 
 ```mermaid
 flowchart LR
-  accTitle: LibreDash visualization target architecture
+  accTitle: LeapView visualization target architecture
   accDescr: Dashboard configuration and semantic metadata compile into an immutable visualization specification. Governed query results become revisioned inline or windowed data. Typed pagestream signals deliver both to a Lit host that selects a renderer adapter.
   source["Dashboard YAML and semantic model"] --> compiler["Workspace compiler"]
   compiler --> spec["Visualization specification IR"]
@@ -185,7 +185,7 @@ An inline `VisualizationFrame` contains:
 - Ordered column IDs matching the declared dataset schema.
 - Rows containing JSON scalar values only.
 - Completeness state: complete, truncated, partial, or empty.
-- Optional continuation or aggregation metadata owned by LibreDash.
+- Optional continuation or aggregation metadata owned by LeapView.
 
 Each window block contains start, ordered rows, request sequence, reset version, and sort identity. The host rejects late blocks from an older request, reset, sort, frame, or specification revision. Cardinality explicitly distinguishes unknown, lower-bound, estimated, and exact counts. Capping and truncation remain visible product state.
 
@@ -297,7 +297,7 @@ The Lit visualization host owns:
 - Loading, empty, partial, stale, and error presentation.
 - Accessible title, description, summary, and data fallback.
 - Focus, show data, copy, raw/formatted export, and clear-selection actions.
-- Mapping renderer datum events to typed LibreDash interactions.
+- Mapping renderer datum events to typed LeapView interactions.
 - Renderer lifecycle, failure isolation, and disposal.
 
 The host never constructs renderer-specific series, table definitions, or option objects. Page components always reference a visual ID; the specification discriminator selects the adapter while status, actions, selection, focus, and layout remain shared.
@@ -358,7 +358,7 @@ The HTML adapter owns single-value KPI presentation and accessible data fallback
 
 MapLibre owns geographic visuals. Maps use versioned, verified geometry or vector-tile assets registered in the serving artifact. Geometry identity, projection assumptions, attribution, and join systems are explicit contract metadata.
 
-The map adapter supports choropleth, point, heat, and density layers without pretending schematic rectangles are geographic boundaries. It reports unmatched identifiers and never guesses region mappings. Geometry is loaded from LibreDash-controlled same-origin assets and cached by content digest; query refreshes transmit measure frames, not repeated boundary geometry.
+The map adapter supports choropleth, point, heat, and density layers without pretending schematic rectangles are geographic boundaries. It reports unmatched identifiers and never guesses region mappings. Geometry is loaded from LeapView-controlled same-origin assets and cached by content digest; query refreshes transmit measure frames, not repeated boundary geometry.
 
 MapLibre exclusively owns built-in geographic rendering; ECharts `geo` is not a fallback map adapter. The rationale and the boundary for future typed map glyphs are recorded in the [geographic rendering decision](/docs/architecture/geographic-rendering).
 
@@ -371,7 +371,7 @@ Custom rendering occurs in an isolated sandbox with:
 - A strict CSP and no ambient network access.
 - No arbitrary JavaScript evaluation.
 - AST-based expression interpretation.
-- Data supplied only by validated LibreDash frames.
+- Data supplied only by validated LeapView frames.
 - Field allowlists derived from the compiled query.
 - Specification, row, mark, memory, and execution limits.
 - Validated message types for resize, theme, readiness, errors, and supported interactions.
@@ -432,7 +432,7 @@ Performance budgets are tested for initial module bytes, mount latency, update l
 
 ## Security and trust boundaries
 
-Dashboard authors configure LibreDash product concepts. They do not supply executable renderer callbacks.
+Dashboard authors configure LeapView product concepts. They do not supply executable renderer callbacks.
 
 The compiler uses allowlisted, typed configuration. Arbitrary `Record<unknown>` renderer configuration is not part of the target contract. Renderer-specific extensions, if unavoidable, require a versioned TypeSpec model, a narrow capability declaration, validation, and an explicit owner. A reusable behavior must be promoted to renderer-independent IR instead.
 
@@ -459,7 +459,7 @@ The [visual catalog](/docs/visuals/overview) exercises production lazy loading, 
 
 The product is pre-release and supports exactly one current visualization schema and one current compiled-workspace artifact version. The version fields remain explicit compatibility guards, not a promise to operate several schemas concurrently.
 
-When a breaking contract change is required, TypeSpec, generated models, compiler output, serving artifacts, browser validators, fixtures, examples, and first-party dashboards move atomically. Older artifacts are rejected with a redeployment-required error. LibreDash does not carry adjacent-version migrations, dual readers, or legacy renderer adapters.
+When a breaking contract change is required, TypeSpec, generated models, compiler output, serving artifacts, browser validators, fixtures, examples, and first-party dashboards move atomically. Older artifacts are rejected with a redeployment-required error. LeapView does not carry adjacent-version migrations, dual readers, or legacy renderer adapters.
 
 ## Observability
 

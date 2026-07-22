@@ -1,4 +1,4 @@
-module github.com/Yacobolo/libredash
+module github.com/Yacobolo/leapview
 
 go 1.25.12
 

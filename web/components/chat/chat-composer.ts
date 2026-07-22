@@ -14,45 +14,45 @@ class ChatComposer extends LitElement {
   static styles = css`
     :host {
       display: block;
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
       font-family: var(--fontStack-system);
     }
 
     form {
-      width: min(calc(100% - var(--ld-space-lg) - var(--ld-space-lg)), var(--ld-chat-stack-width));
+      width: min(calc(100% - var(--lv-space-lg) - var(--lv-space-lg)), var(--lv-chat-stack-width));
       margin-inline: auto;
-      padding: var(--ld-space-lg) var(--ld-space-lg) var(--ld-space-md);
+      padding: var(--lv-space-lg) var(--lv-space-lg) var(--lv-space-md);
     }
 
     .composer-surface {
       display: grid;
-      gap: var(--ld-space-md);
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-large);
-      background: var(--ld-bg-panel);
-      padding: var(--ld-space-md);
-      box-shadow: var(--ld-shadow-floating-sm);
+      gap: var(--lv-space-md);
+      border: var(--lv-border-muted);
+      border-radius: var(--lv-radius-large);
+      background: var(--lv-bg-panel);
+      padding: var(--lv-space-md);
+      box-shadow: var(--lv-shadow-floating-sm);
       transition:
-        background var(--ld-transition-fast),
-        border-color var(--ld-transition-fast),
-        box-shadow var(--ld-transition-fast);
+        background var(--lv-transition-fast),
+        border-color var(--lv-transition-fast),
+        box-shadow var(--lv-transition-fast);
     }
 
     .composer-surface:hover:not(.is-disabled) {
-      border-color: var(--ld-line-muted);
-      box-shadow: var(--ld-shadow-floating-sm);
+      border-color: var(--lv-line-muted);
+      box-shadow: var(--lv-shadow-floating-sm);
     }
 
     .composer-surface:focus-within {
-      border-color: var(--ld-line-accent-muted);
+      border-color: var(--lv-line-accent-muted);
       box-shadow:
-        var(--ld-shadow-floating-sm),
-        0 0 0 var(--ld-border-width-focus) var(--ld-bg-accent-muted);
+        var(--lv-shadow-floating-sm),
+        0 0 0 var(--lv-border-width-focus) var(--lv-bg-accent-muted);
     }
 
     .composer-surface.is-disabled {
-      background: var(--ld-bg-control);
-      color: var(--ld-fg-muted);
+      background: var(--lv-bg-control);
+      color: var(--lv-fg-muted);
       box-shadow: none;
     }
 
@@ -64,13 +64,13 @@ class ChatComposer extends LitElement {
       resize: none;
       overflow-y: auto;
       border: 0;
-      border-radius: calc(var(--ld-radius-default) - var(--ld-space-2xs));
+      border-radius: calc(var(--lv-radius-default) - var(--lv-space-2xs));
       background: transparent;
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
       font: inherit;
-      font-size: var(--ld-font-size-body-sm);
-      line-height: var(--ld-line-height-normal);
-      padding: var(--ld-space-sm) var(--ld-space-md);
+      font-size: var(--lv-font-size-body-sm);
+      line-height: var(--lv-line-height-normal);
+      padding: var(--lv-space-sm) var(--lv-space-md);
       outline: 0;
     }
 
@@ -79,61 +79,61 @@ class ChatComposer extends LitElement {
     }
 
     textarea::placeholder {
-      color: var(--ld-fg-muted);
+      color: var(--lv-fg-muted);
     }
 
     .actions {
       display: flex;
-      min-height: var(--ld-control-medium);
+      min-height: var(--lv-control-medium);
       align-items: center;
       justify-content: flex-end;
     }
 
     button {
       display: inline-flex;
-      width: var(--ld-button-height, var(--ld-control-medium));
-      height: var(--ld-button-height, var(--ld-control-medium));
-      min-width: var(--ld-button-height, var(--ld-control-medium));
+      width: var(--lv-button-height, var(--lv-control-medium));
+      height: var(--lv-button-height, var(--lv-control-medium));
+      min-width: var(--lv-button-height, var(--lv-control-medium));
       align-items: center;
       justify-content: center;
-      border: var(--borderWidth-default, var(--ld-border-width)) solid var(--ld-button-accent-border-rest, var(--ld-accent));
-      border-radius: var(--ld-button-radius, var(--ld-radius-default));
-      background: var(--ld-button-accent-bg-rest, var(--ld-accent));
-      color: var(--ld-button-accent-fg-rest, var(--ld-accent-fg));
+      border: var(--borderWidth-default, var(--lv-border-width)) solid var(--lv-button-accent-border-rest, var(--lv-accent));
+      border-radius: var(--lv-button-radius, var(--lv-radius-default));
+      background: var(--lv-button-accent-bg-rest, var(--lv-accent));
+      color: var(--lv-button-accent-fg-rest, var(--lv-accent-fg));
       cursor: pointer;
       font: inherit;
-      font-size: var(--ld-font-size-body-sm);
-      font-weight: var(--ld-font-weight-strong);
+      font-size: var(--lv-font-size-body-sm);
+      font-weight: var(--lv-font-weight-strong);
       padding: 0;
-      box-shadow: var(--ld-button-shadow-resting, var(--shadow-resting-small));
+      box-shadow: var(--lv-button-shadow-resting, var(--shadow-resting-small));
       transition:
-        background var(--duration-fast) var(--ease-ld),
-        border-color var(--duration-fast) var(--ease-ld),
-        color var(--duration-fast) var(--ease-ld),
-        transform var(--duration-fast) var(--ease-ld);
+        background var(--duration-fast) var(--ease-lv),
+        border-color var(--duration-fast) var(--ease-lv),
+        color var(--duration-fast) var(--ease-lv),
+        transform var(--duration-fast) var(--ease-lv);
     }
 
     button svg {
-      width: var(--ld-button-icon-size, var(--base-size-16));
-      height: var(--ld-button-icon-size, var(--base-size-16));
+      width: var(--lv-button-icon-size, var(--base-size-16));
+      height: var(--lv-button-icon-size, var(--base-size-16));
     }
 
     button:hover:not(:disabled) {
-      border-color: var(--ld-button-accent-border-hover, var(--ld-accent));
-      background: var(--ld-button-accent-bg-hover, var(--ld-accent));
+      border-color: var(--lv-button-accent-border-hover, var(--lv-accent));
+      background: var(--lv-button-accent-bg-hover, var(--lv-accent));
       transform: translateY(-1px);
     }
 
     button:focus-visible {
-      outline: var(--focus-outline, var(--ld-border-default));
-      outline-color: var(--borderColor-accent-emphasis, var(--ld-line-accent));
-      outline-offset: var(--focus-outline-offset, var(--ld-space-xs));
+      outline: var(--focus-outline, var(--lv-border-default));
+      outline-color: var(--borderColor-accent-emphasis, var(--lv-line-accent));
+      outline-offset: var(--focus-outline-offset, var(--lv-space-xs));
     }
 
     button:disabled {
-      border-color: var(--ld-button-accent-border-disabled, var(--ld-line-default));
-      background: var(--ld-button-accent-bg-disabled, var(--ld-bg-control));
-      color: var(--ld-button-accent-fg-disabled, var(--ld-fg-muted));
+      border-color: var(--lv-button-accent-border-disabled, var(--lv-line-default));
+      background: var(--lv-button-accent-bg-disabled, var(--lv-bg-control));
+      color: var(--lv-button-accent-fg-disabled, var(--lv-fg-muted));
       cursor: not-allowed;
       opacity: 1;
       box-shadow: none;
@@ -141,13 +141,13 @@ class ChatComposer extends LitElement {
 
     textarea:disabled {
       cursor: not-allowed;
-      color: var(--ld-fg-muted);
+      color: var(--lv-fg-muted);
       opacity: 1;
     }
     @media (max-width: 560px) {
       form {
-        width: min(calc(100% - var(--ld-space-md) - var(--ld-space-md)), var(--ld-chat-stack-width));
-        padding-inline: var(--ld-space-md);
+        width: min(calc(100% - var(--lv-space-md) - var(--lv-space-md)), var(--lv-chat-stack-width));
+        padding-inline: var(--lv-space-md);
       }
     }
   `
@@ -188,7 +188,7 @@ class ChatComposer extends LitElement {
               title="Send"
               ?disabled=${this.disabled || this.pending || this.draft.trim() === ''}
             >
-              ${this.pending ? html`<ld-loading-spinner aria-hidden="true"></ld-loading-spinner>` : lucideIcon(Send)}
+              ${this.pending ? html`<lv-loading-spinner aria-hidden="true"></lv-loading-spinner>` : lucideIcon(Send)}
             </button>
           </div>
         </div>
@@ -216,7 +216,7 @@ class ChatComposer extends LitElement {
   private dispatchSubmit() {
     const input = this.draft.trim()
     if (this.disabled || this.pending || input === '') return
-    this.dispatchEvent(new CustomEvent('ld-chat-submit', {
+    this.dispatchEvent(new CustomEvent('lv-chat-submit', {
       bubbles: true,
       composed: true,
       detail: { input },
@@ -233,4 +233,4 @@ class ChatComposer extends LitElement {
   }
 }
 
-if (!customElements.get('ld-chat-composer')) customElements.define('ld-chat-composer', ChatComposer)
+if (!customElements.get('lv-chat-composer')) customElements.define('lv-chat-composer', ChatComposer)

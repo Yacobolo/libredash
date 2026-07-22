@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/platform"
-	"github.com/Yacobolo/libredash/internal/refreshpipeline"
-	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
-	"github.com/Yacobolo/libredash/internal/workspace"
-	workspacesqlite "github.com/Yacobolo/libredash/internal/workspace/sqlite"
+	"github.com/Yacobolo/leapview/internal/platform"
+	"github.com/Yacobolo/leapview/internal/refreshpipeline"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
+	"github.com/Yacobolo/leapview/internal/workspace"
+	workspacesqlite "github.com/Yacobolo/leapview/internal/workspace/sqlite"
 )
 
 func TestRepositorySaveValidatedCommitsDeploymentGraph(t *testing.T) {
@@ -749,7 +749,7 @@ func TestRepositorySaveValidatedRejectsMismatchedAssetGraph(t *testing.T) {
 
 func openRepo(t *testing.T, ctx context.Context) (*platform.Store, *Repository) {
 	t.Helper()
-	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "libredash.db"))
+	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "leapview.db"))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}

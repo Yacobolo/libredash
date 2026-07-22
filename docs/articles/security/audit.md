@@ -43,7 +43,7 @@ Audit records should not contain bearer tokens, passwords, raw OIDC tokens, or s
 Use policy-driven bounded retention. The maintenance command defaults to separate windows for audit, query, auth-state, and archived agent-conversation history and runs as a dry-run unless `--apply` is supplied:
 
 ```sh
-libredash admin maintenance \
+leapview admin maintenance \
   --audit-days 365 \
   --query-days 90
 ```

@@ -4,13 +4,13 @@ Use a map for regional comparisons or observations with geographic coordinates.
 
 Every preview on this page is generated from the YAML shown below it using a fixed documentation dataset.
 
-Maps use LibreDash's pinned, OSM-derived vector basemap by default. It retains global context through zoom 6 and adds South America business-region detail through zoom 10, including the roads and place labels needed by the Brazil showcase. The PMTiles archive, style, glyphs, and sprites are content addressed and served from LibreDash's own origin, so rendering never sends governed coordinates or browsing activity to a third-party tile service. Set `geo.basemap: blank` when geographic context should be omitted.
+Maps use LeapView's pinned, OSM-derived vector basemap by default. It retains global context through zoom 6 and adds South America business-region detail through zoom 10, including the roads and place labels needed by the Brazil showcase. The PMTiles archive, style, glyphs, and sprites are content addressed and served from LeapView's own origin, so rendering never sends governed coordinates or browsing activity to a third-party tile service. Set `geo.basemap: blank` when geographic context should be omitted.
 
 Production operators can publish the verified inventory to S3-compatible managed object storage with `task map-assets:publish MAP_ASSET_S3_BUCKET=...`. Publication is conditional and idempotent: existing keys must match the compiled digest, size, content type, and immutable cache policy, and conflicting objects are rejected instead of overwritten. Route the published `map-assets/` prefix through the application origin or edge proxy so browser requests remain same-origin.
 
 After the edge route is live, run `task map-assets:verify MAP_ASSET_BASE_URL=https://dash.example`. The verifier checks every content-addressed URL, immutable caching, media types, byte-range support, complete digests for styles, glyphs, and sprites, and exact first/last ranges for the PMTiles archive. `map-assets:publish` accepts the same optional `MAP_ASSET_BASE_URL` to make this a single publish-and-verify gate.
 
-LibreDash verifies the complete installed package before opening instance state. The same verifier backs the `mapAssets` readiness check: unchanged files use cached metadata, while any changed file is rehashed and a missing or mismatched asset immediately makes `/readyz` return `503`.
+LeapView verifies the complete installed package before opening instance state. The same verifier backs the `mapAssets` readiness check: unchanged files use cached metadata, while any changed file is rehashed and a missing or mismatched asset immediately makes `/readyz` return `503`.
 
 Point and choropleth maps can originate semantic crossfilters. Select a mark by click or tap, or use the visible **Select map data** menu for keyboard access. Blank map space clears only that map's selection. Camera, zoom, reset, compass, label density, and light/dark basemap themes are typed under `geo`.
 
@@ -65,7 +65,7 @@ visuals:
 
 Point layers bind numeric latitude and longitude query aliases. An optional value controls marker size without exposing MapLibre configuration. Coordinate layers include a subtle geographic reference grid when no basemap asset is present.
 
-The Visual Showcase includes a dedicated `chart-map-scale` page backed by exactly one million deterministic locations. It demonstrates the production spatial-window path: LibreDash aggregates the governed viewport at low zoom, returns raw governed points only when the visible cardinality fits, and never sends more than 5,000 rendered features to the browser.
+The Visual Showcase includes a dedicated `chart-map-scale` page backed by exactly one million deterministic locations. It demonstrates the production spatial-window path: LeapView aggregates the governed viewport at low zoom, returns raw governed points only when the visible cardinality fits, and never sends more than 5,000 rendered features to the browser.
 
 {{< visual id="order_point_map" >}}
 

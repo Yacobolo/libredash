@@ -2,7 +2,7 @@ using Http;
 using TypeSpec.OpenAPI;
 
 @route("/api/v1")
-namespace LibreDashAPI;
+namespace LeapViewAPI;
 
 model AuditEventResponse {
   id: string;

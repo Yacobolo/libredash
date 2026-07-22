@@ -9,11 +9,11 @@ import (
 	"strings"
 	"testing"
 
-	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
-	"github.com/Yacobolo/libredash/internal/manageddata"
-	"github.com/Yacobolo/libredash/internal/manageddata/control"
-	managedhttp "github.com/Yacobolo/libredash/internal/manageddata/http"
-	"github.com/Yacobolo/libredash/internal/manageddata/s3multipart"
+	apigenapi "github.com/Yacobolo/leapview/internal/api/gen"
+	"github.com/Yacobolo/leapview/internal/manageddata"
+	"github.com/Yacobolo/leapview/internal/manageddata/control"
+	managedhttp "github.com/Yacobolo/leapview/internal/manageddata/http"
+	"github.com/Yacobolo/leapview/internal/manageddata/s3multipart"
 )
 
 const (

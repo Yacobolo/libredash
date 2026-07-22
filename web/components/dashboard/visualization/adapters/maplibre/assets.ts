@@ -15,7 +15,7 @@ export function registerPMTilesProtocol(): void {
 }
 
 export function blankMapStyle(background: string): StyleSpecification {
-  return { version: 8, sources: {}, layers: [{ id: '__ld-background', type: 'background', metadata: { 'libredash:role': 'background' }, paint: { 'background-color': background } }] }
+  return { version: 8, sources: {}, layers: [{ id: '__lv-background', type: 'background', metadata: { 'leapview:role': 'background' }, paint: { 'background-color': background } }] }
 }
 
 export async function loadMapStyleAsset(asset: VisualizationMapStyleAsset, baseURL: string): Promise<StyleSpecification> {
@@ -34,7 +34,7 @@ export async function loadMapStyleAsset(asset: VisualizationMapStyleAsset, baseU
       const style = JSON.parse(new TextDecoder().decode(bytes)) as StyleSpecification
       if (style.version !== 8 || !style.sources || !Array.isArray(style.layers)) throw new Error(`map style asset ${JSON.stringify(asset.id)} is not a MapLibre style`)
       for (const source of Object.values(style.sources) as Array<{ url?: string }>) {
-        if (source.url === 'pmtiles://__LIBREDASH_ARCHIVE__') source.url = `pmtiles://${archiveURL.href}`
+        if (source.url === 'pmtiles://__LEAPVIEW_ARCHIVE__') source.url = `pmtiles://${archiveURL.href}`
       }
       style.glyphs = glyphsURL.href
         .replace(/%7Bfontstack%7D/gi, '{fontstack}')
@@ -51,7 +51,7 @@ export async function loadMapStyleAsset(asset: VisualizationMapStyleAsset, baseU
 function contentAddressedMapAssetURL(value: string, declared: string, kind: 'styles' | 'archives', base: string): URL {
   const url = sameOriginGeometryURL(value, base)
   const match = /^sha256:([0-9a-f]{64})$/.exec(declared)
-  if (!match || !url.pathname.includes(`/map-assets/libredash-streets/${kind}/${match[1]}/`)) {
+  if (!match || !url.pathname.includes(`/map-assets/leapview-streets/${kind}/${match[1]}/`)) {
     throw new Error('map asset URL must be content-addressed by its declared digest')
   }
   return url
@@ -59,7 +59,7 @@ function contentAddressedMapAssetURL(value: string, declared: string, kind: 'sty
 
 function revisionAddressedMapAssetURL(value: string, base: string): URL {
   const url = sameOriginGeometryURL(value, base)
-  if (!/\/map-assets\/libredash-streets\/assets\/[0-9a-f]{40}\//.test(url.pathname)) {
+  if (!/\/map-assets\/leapview-streets\/assets\/[0-9a-f]{40}\//.test(url.pathname)) {
     throw new Error('map supporting asset URL must be content-addressed by its pinned revision')
   }
   return url

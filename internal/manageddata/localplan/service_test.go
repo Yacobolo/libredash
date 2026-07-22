@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	"github.com/Yacobolo/libredash/internal/manageddata"
-	workspacecompiler "github.com/Yacobolo/libredash/internal/workspace/compiler"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	"github.com/Yacobolo/leapview/internal/manageddata"
+	workspacecompiler "github.com/Yacobolo/leapview/internal/workspace/compiler"
 )
 
 func TestServicePlanDiscoversExactAndRecursiveSourcesDeterministically(t *testing.T) {

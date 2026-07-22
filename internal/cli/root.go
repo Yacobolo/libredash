@@ -51,7 +51,7 @@ func Execute(ctx context.Context) error {
 func NewCommand(ctx context.Context) *cobra.Command {
 	opts := &rootOptions{}
 	root := &cobra.Command{
-		Use:   "libredash",
+		Use:   "leapview",
 		Short: "LeapView BI-as-code server and deployment CLI",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.environment = ""

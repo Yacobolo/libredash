@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/access"
-	accesssqlite "github.com/Yacobolo/libredash/internal/access/sqlite"
-	agentcap "github.com/Yacobolo/libredash/internal/agent"
-	queryauthz "github.com/Yacobolo/libredash/internal/analytics/query/authz"
-	"github.com/Yacobolo/libredash/internal/dataquery"
+	"github.com/Yacobolo/leapview/internal/access"
+	accesssqlite "github.com/Yacobolo/leapview/internal/access/sqlite"
+	agentcap "github.com/Yacobolo/leapview/internal/agent"
+	queryauthz "github.com/Yacobolo/leapview/internal/analytics/query/authz"
+	"github.com/Yacobolo/leapview/internal/dataquery"
 )
 
 func TestDataAuthorizationPassesSelectedColumnMaskToExecution(t *testing.T) {

@@ -5,12 +5,12 @@ import (
 	"strings"
 	"testing"
 
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
-	uiactions "github.com/Yacobolo/libredash/internal/ui/actions"
-	workspacecompiler "github.com/Yacobolo/libredash/internal/workspace/compiler"
-	"github.com/Yacobolo/libredash/pkg/pagestream"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	uiactions "github.com/Yacobolo/leapview/internal/ui/actions"
+	workspacecompiler "github.com/Yacobolo/leapview/internal/workspace/compiler"
+	"github.com/Yacobolo/leapview/pkg/pagestream"
 	g "maragu.dev/gomponents"
 	dsattr "maragu.dev/gomponents-datastar"
 	h "maragu.dev/gomponents/html"
@@ -70,7 +70,7 @@ func benchmarkDashboardDocument(catalog dashboard.Catalog, report reportdef.Dash
 	mainAttrs := []g.Node{
 		h.ID("dashboard"),
 		h.Class(appRootClass),
-		g.Attr("data-on:datastar-url-params-sync__window", "$urlParams = evt.detail.params; $filters = window.LibreDashFilterURL.fromParams($filterConfig, $filters, $urlParams); "+visualReset+reloadAction),
+		g.Attr("data-on:datastar-url-params-sync__window", "$urlParams = evt.detail.params; $filters = window.LeapViewFilterURL.fromParams($filterConfig, $filters, $urlParams); "+visualReset+reloadAction),
 	}
 	if legacy {
 		mainAttrs = append(mainAttrs,
@@ -111,8 +111,8 @@ func jsonString(value any) string {
 
 func benchmarkDatastarLitDashboardRoot(catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model, filtersUpdate, reloadAction string) g.Node {
 	attrs := append([]g.Node{g.Attr("slot", "page")}, benchmarkDashboardCommandAttrs(catalog, report, model, filtersUpdate, reloadAction)...)
-	return g.El("ld-app-shell",
-		g.El("ld-dashboard-page", attrs...),
+	return g.El("lv-app-shell",
+		g.El("lv-dashboard-page", attrs...),
 	)
 }
 
@@ -135,21 +135,21 @@ func benchmarkLegacyDashboardRoot(catalog dashboard.Catalog, report reportdef.Da
 		g.Attr("data-attr:status", "$status"),
 	}
 	attrs = append(attrs, benchmarkDashboardCommandAttrs(catalog, report, model, filtersUpdate, reloadAction)...)
-	return g.El("ld-app-shell",
+	return g.El("lv-app-shell",
 		g.Attr("chrome", jsonString(signals["chrome"])),
 		g.Attr("data-attr:chrome", "$chrome"),
-		g.El("ld-dashboard-page", attrs...),
+		g.El("lv-dashboard-page", attrs...),
 	)
 }
 
 func benchmarkDashboardCommandAttrs(catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model, filtersUpdate, reloadAction string) []g.Node {
 	return []g.Node{
-		g.Attr("data-on:ld-filters-change", filtersUpdate+reloadAction),
-		g.Attr("data-on:ld-filters-reset", filtersUpdate+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/reset-filters", "runtime")),
-		g.Attr("data-on:ld-filters-refresh", reloadAction),
-		g.Attr("data-on:ld-selection-clear", "$filters.selections = []; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/clear-selection", "runtime")),
-		g.Attr("data-on:ld-interaction-select", "$interactionCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/select", "runtime", "interactionCommand")),
-		g.Attr("data-on:ld-visualization-window-request", "$visualWindowCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/visual-window", "runtime", "visualWindowCommand")),
+		g.Attr("data-on:lv-filters-change", filtersUpdate+reloadAction),
+		g.Attr("data-on:lv-filters-reset", filtersUpdate+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/reset-filters", "runtime")),
+		g.Attr("data-on:lv-filters-refresh", reloadAction),
+		g.Attr("data-on:lv-selection-clear", "$filters.selections = []; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/clear-selection", "runtime")),
+		g.Attr("data-on:lv-interaction-select", "$interactionCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/select", "runtime", "interactionCommand")),
+		g.Attr("data-on:lv-visualization-window-request", "$visualWindowCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/visual-window", "runtime", "visualWindowCommand")),
 	}
 }
 

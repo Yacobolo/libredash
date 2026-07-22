@@ -28,7 +28,7 @@ class ReportFooter extends LitElement {
     :host {
       display: block;
       min-width: 0;
-      color: var(--ld-fg-default);
+      color: var(--lv-fg-default);
       font-family: var(--fontStack-system);
     }
 
@@ -39,7 +39,7 @@ class ReportFooter extends LitElement {
       align-items: center;
       justify-content: space-between;
       gap: var(--base-size-12);
-      border-top: var(--ld-border-muted);
+      border-top: var(--lv-border-muted);
       box-sizing: border-box;
       padding: 0 calc(var(--base-size-16) + var(--base-size-2));
     }
@@ -49,9 +49,9 @@ class ReportFooter extends LitElement {
       min-width: 0;
       align-items: center;
       gap: var(--base-size-8);
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-strong);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-strong);
       white-space: nowrap;
     }
 
@@ -59,19 +59,19 @@ class ReportFooter extends LitElement {
       width: var(--base-size-6);
       height: var(--base-size-6);
       flex: 0 0 auto;
-      border-radius: var(--ld-radius-full);
-      background: var(--ld-fg-success);
+      border-radius: var(--lv-radius-full);
+      background: var(--lv-fg-success);
     }
 
     .status.loading .dot {
-      background: var(--ld-fg-warning);
+      background: var(--lv-fg-warning);
     }
 
     .status.error .dot {
-      background: var(--ld-fg-danger);
+      background: var(--lv-fg-danger);
     }
 
-    ld-report-zoom {
+    lv-report-zoom {
       flex: 0 1 auto;
     }
 
@@ -101,7 +101,7 @@ class ReportFooter extends LitElement {
           <span class="dot" aria-hidden="true"></span>
           <span>${this.statusText()}</span>
         </div>
-        <ld-report-zoom></ld-report-zoom>
+        <lv-report-zoom></lv-report-zoom>
       </footer>
     `
   }
@@ -117,4 +117,4 @@ class ReportFooter extends LitElement {
   }
 }
 
-customElements.define('ld-report-footer', ReportFooter)
+customElements.define('lv-report-footer', ReportFooter)

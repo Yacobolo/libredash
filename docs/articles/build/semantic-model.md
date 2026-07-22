@@ -27,7 +27,7 @@ For a small Sales model, `orders` is the fact and `customers` is a dimension rea
 Create `dashboards/workspaces/sales/semantic-models/sales.yaml`:
 
 ```yaml
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: SemanticModel
 metadata:
   workspace: sales
@@ -88,7 +88,7 @@ Prefer one unambiguous relationship path. If the model needs role-playing dimens
 Ensure the workspace includes semantic model files and validate the project:
 
 ```sh
-libredash validate --project dashboards/libredash.yaml
+leapview validate --project dashboards/leapview.yaml
 ```
 
 Validation should reject unknown tables, fields, measures, and malformed relationship definitions before deployment. Resolve every diagnostic at its source resource rather than compensating in a dashboard.
@@ -98,10 +98,10 @@ Validation should reject unknown tables, fields, measures, and malformed relatio
 Deploy to development and inspect the model:
 
 ```sh
-libredash semantic-models describe sales \
+leapview semantic-models describe sales \
   --workspace sales \
-  --target "$LIBREDASH_TARGET" \
-  --token "$LIBREDASH_API_TOKEN"
+  --target "$LEAPVIEW_TARGET" \
+  --token "$LEAPVIEW_API_TOKEN"
 ```
 
 Use the dataset, field, preview, explain, and query subcommands to test representative questions before building a dashboard. At minimum, compare unfiltered totals with a trusted baseline, filter by a dimension reached through each relationship, and verify empty-result behavior.

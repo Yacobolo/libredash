@@ -6,14 +6,14 @@ import (
 	"fmt"
 	nethttp "net/http"
 
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	"github.com/Yacobolo/libredash/internal/api"
-	"github.com/Yacobolo/libredash/internal/dashboard"
-	dashboarddefinition "github.com/Yacobolo/libredash/internal/dashboard/definition"
-	"github.com/Yacobolo/libredash/internal/dataquery"
-	visualizationdefinition "github.com/Yacobolo/libredash/internal/visualization/definition"
-	visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
-	visualizationruntime "github.com/Yacobolo/libredash/internal/visualization/runtime"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	"github.com/Yacobolo/leapview/internal/api"
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
+	"github.com/Yacobolo/leapview/internal/dataquery"
+	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
+	visualizationruntime "github.com/Yacobolo/leapview/internal/visualization/runtime"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -397,7 +397,7 @@ func (h Handler) dashboardReportPage(w nethttp.ResponseWriter, r *nethttp.Reques
 }
 
 func (h Handler) requestQueryMetadata(r *nethttp.Request, surface, operation, objectType, objectID string) dataquery.Metadata {
-	if surface == dataquery.SurfaceAPI && r.Header.Get("X-LibreDash-Client") == dataquery.SurfaceCLI {
+	if surface == dataquery.SurfaceAPI && r.Header.Get("X-LeapView-Client") == dataquery.SurfaceCLI {
 		surface = dataquery.SurfaceCLI
 	}
 	metadata := dataquery.Metadata{

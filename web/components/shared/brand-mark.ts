@@ -8,15 +8,15 @@ class LeapViewBrandMark extends LitElement {
   static styles = css`
     :host {
       display: inline-grid;
-      width: var(--ld-brand-mark-size, var(--base-size-28));
-      height: var(--ld-brand-mark-size, var(--base-size-28));
+      width: var(--lv-brand-mark-size, var(--base-size-28));
+      height: var(--lv-brand-mark-size, var(--base-size-28));
       flex: 0 0 auto;
       place-items: center;
       color: inherit;
     }
 
     :host([large]) {
-      --ld-brand-mark-size: var(--base-size-40);
+      --lv-brand-mark-size: var(--base-size-40);
     }
 
     svg {
@@ -30,10 +30,10 @@ class LeapViewBrandMark extends LitElement {
   }
 }
 
-if (!customElements.get('ld-brand-mark')) customElements.define('ld-brand-mark', LeapViewBrandMark)
+if (!customElements.get('lv-brand-mark')) customElements.define('lv-brand-mark', LeapViewBrandMark)
 
 declare global {
   interface HTMLElementTagNameMap {
-    'ld-brand-mark': LeapViewBrandMark
+    'lv-brand-mark': LeapViewBrandMark
   }
 }

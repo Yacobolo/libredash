@@ -13,7 +13,7 @@ import (
 	"regexp"
 	"strings"
 
-	docsearch "github.com/Yacobolo/libredash/internal/site/search/sqlite"
+	docsearch "github.com/Yacobolo/leapview/internal/site/search/sqlite"
 	"gopkg.in/yaml.v3"
 )
 
@@ -196,7 +196,7 @@ func generate(navigationPath, catalogPath, searchPath string) error {
 }
 
 func checkGenerated(navigationPath, catalogPath, searchPath string) error {
-	temporary, err := os.MkdirTemp("", "libredash-docsite-check-*")
+	temporary, err := os.MkdirTemp("", "leapview-docsite-check-*")
 	if err != nil {
 		return fmt.Errorf("create temporary directory: %w", err)
 	}

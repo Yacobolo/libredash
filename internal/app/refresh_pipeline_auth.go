@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/access"
-	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
-	"github.com/Yacobolo/libredash/internal/workspace"
-	workspacehttp "github.com/Yacobolo/libredash/internal/workspace/http"
+	"github.com/Yacobolo/leapview/internal/access"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
+	"github.com/Yacobolo/leapview/internal/workspace"
+	workspacehttp "github.com/Yacobolo/leapview/internal/workspace/http"
 	"github.com/go-chi/chi/v5"
 )
 

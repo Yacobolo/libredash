@@ -8,14 +8,14 @@ import (
 	"net/http/httptest"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/access"
-	agentcap "github.com/Yacobolo/libredash/internal/agent"
-	agenttools "github.com/Yacobolo/libredash/internal/agent/tools"
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
-	"github.com/Yacobolo/libredash/internal/dataquery"
-	agentcore "github.com/Yacobolo/libredash/pkg/agent"
+	"github.com/Yacobolo/leapview/internal/access"
+	agentcap "github.com/Yacobolo/leapview/internal/agent"
+	agenttools "github.com/Yacobolo/leapview/internal/agent/tools"
+	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	apigenapi "github.com/Yacobolo/leapview/internal/api/gen"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	"github.com/Yacobolo/leapview/internal/dataquery"
+	agentcore "github.com/Yacobolo/leapview/pkg/agent"
 )
 
 func (s *Server) configureAgentTools() {

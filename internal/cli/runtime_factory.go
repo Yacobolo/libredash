@@ -6,12 +6,12 @@ import (
 	"os"
 	"path/filepath"
 
-	dashboardadapter "github.com/Yacobolo/libredash/internal/analytics/duckdb/dashboardadapter"
-	dashboardruntime "github.com/Yacobolo/libredash/internal/dashboard/runtime"
-	manageddataruntimebinding "github.com/Yacobolo/libredash/internal/manageddata/runtimebinding"
-	"github.com/Yacobolo/libredash/internal/runtimehost"
-	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
-	servingstatefs "github.com/Yacobolo/libredash/internal/servingstate/filesystem"
+	dashboardadapter "github.com/Yacobolo/leapview/internal/analytics/duckdb/dashboardadapter"
+	dashboardruntime "github.com/Yacobolo/leapview/internal/dashboard/runtime"
+	manageddataruntimebinding "github.com/Yacobolo/leapview/internal/manageddata/runtimebinding"
+	"github.com/Yacobolo/leapview/internal/runtimehost"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
+	servingstatefs "github.com/Yacobolo/leapview/internal/servingstate/filesystem"
 )
 
 type servingStateRuntimeFactory struct {

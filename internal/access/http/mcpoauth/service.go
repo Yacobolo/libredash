@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/access"
+	"github.com/Yacobolo/leapview/internal/access"
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/compose"
 )
@@ -251,7 +251,7 @@ func (s *Service) clientCredentialsToken(w http.ResponseWriter, r *http.Request)
 	}
 	principal, err := s.repo.PrincipalForServicePrincipalSecret(r.Context(), clientID, clientSecret)
 	if err != nil || principal.DisabledAt != "" {
-		w.Header().Set("WWW-Authenticate", `Basic realm="libredash-oauth"`)
+		w.Header().Set("WWW-Authenticate", `Basic realm="leapview-oauth"`)
 		writeOAuthJSONError(w, http.StatusUnauthorized, "invalid_client", "client authentication failed")
 		return
 	}

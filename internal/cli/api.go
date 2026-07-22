@@ -13,7 +13,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
+	apigenapi "github.com/Yacobolo/leapview/internal/api/gen"
 	"github.com/spf13/cobra"
 )
 
@@ -244,7 +244,7 @@ func doRawAPI(ctx context.Context, method, endpoint, token, contentType string, 
 		return err
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("X-LibreDash-Client", "cli")
+	req.Header.Set("X-LeapView-Client", "cli")
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}

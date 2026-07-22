@@ -19,12 +19,12 @@ func TestS3PublicationStoreUsesImmutableConditionalObjects(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	object := PublicationObject{Key: "libredash/archive.pmtiles", Digest: "2d97ee8907670936ab722da7ca06eafec0734392f73fa1cd337d4debd85d676f", Size: 4, ContentType: "application/vnd.pmtiles", CacheControl: ImmutableCacheControl}
+	object := PublicationObject{Key: "leapview/archive.pmtiles", Digest: "2d97ee8907670936ab722da7ca06eafec0734392f73fa1cd337d4debd85d676f", Size: 4, ContentType: "application/vnd.pmtiles", CacheControl: ImmutableCacheControl}
 	if err := store.Put(context.Background(), object, bytes.NewReader([]byte("data"))); err != nil {
 		t.Fatal(err)
 	}
 	input := client.put
-	if aws.ToString(input.Bucket) != "map-assets" || aws.ToString(input.Key) != "production/maps/libredash/archive.pmtiles" || aws.ToString(input.IfNoneMatch) != "*" {
+	if aws.ToString(input.Bucket) != "map-assets" || aws.ToString(input.Key) != "production/maps/leapview/archive.pmtiles" || aws.ToString(input.IfNoneMatch) != "*" {
 		t.Fatalf("put destination = %#v", input)
 	}
 	if aws.ToString(input.CacheControl) != ImmutableCacheControl || aws.ToString(input.ContentType) != object.ContentType || input.Metadata["sha256"] != object.Digest || input.ServerSideEncryption != types.ServerSideEncryptionAes256 {

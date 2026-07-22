@@ -1,12 +1,12 @@
 import { defineElementOnce } from '../shared/lazy-registry'
 
 type DashboardComponentKind =
-  | 'ld-filter-card'
+  | 'lv-filter-card'
   | string
 
 const dashboardComponentLoaders: Record<string, () => Promise<unknown>> = {
-  'ld-filter-panel': () => import('./filters/filter-panel'),
-  'ld-filter-card': () => import('./filters/filter-card'),
+  'lv-filter-panel': () => import('./filters/filter-panel'),
+  'lv-filter-card': () => import('./filters/filter-card'),
 }
 
 export function loadDashboardComponent(kind: DashboardComponentKind): Promise<void> {

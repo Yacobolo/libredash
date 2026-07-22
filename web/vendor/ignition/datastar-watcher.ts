@@ -135,10 +135,10 @@
  *
  * Datastar version: 1.0.0-RC.8
  *
- * Vendored by LibreDash from dataSPA/ignition commit 9a2d4fe.
+ * Vendored by LeapView from dataSPA/ignition commit 9a2d4fe.
  *
  * Local adaptation: imports resolve through `datastar-runtime.ts`, which points
- * at LibreDash's single vendored Datastar runtime URL.
+ * at LeapView's single vendored Datastar runtime URL.
  */
 
 import type { Effect, JSONPatch, MergePatchArgs, Paths } from "./datastar-runtime";

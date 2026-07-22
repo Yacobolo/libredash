@@ -6,10 +6,10 @@ import (
 )
 
 func TestDatabasePathIgnoresRemovedLegacyOverride(t *testing.T) {
-	t.Setenv("LIBREDASH_DUCKDB_PATH", filepath.Join(t.TempDir(), "override.duckdb"))
-	dbDir := filepath.Join("var", "libredash", "duckdb")
+	t.Setenv("LEAPVIEW_DUCKDB_PATH", filepath.Join(t.TempDir(), "override.duckdb"))
+	dbDir := filepath.Join("var", "leapview", "duckdb")
 
-	if got, want := DatabasePath(dbDir, "sales"), filepath.Join(dbDir, "libredash-sales.duckdb"); got != want {
+	if got, want := DatabasePath(dbDir, "sales"), filepath.Join(dbDir, "leapview-sales.duckdb"); got != want {
 		t.Fatalf("DatabasePath() = %q, want %q", got, want)
 	}
 }

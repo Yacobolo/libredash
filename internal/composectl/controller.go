@@ -19,10 +19,10 @@ import (
 
 const (
 	deploymentEnvName   = "deployment.env"
-	appEnvName          = "libredash.env"
+	appEnvName          = "leapview.env"
 	credentialsName     = "initial-credentials.json"
 	rollbackEnvName     = "rollback.env"
-	controllerLockName  = ".libredashctl.lock"
+	controllerLockName  = ".leapviewctl.lock"
 	defaultEnvironment  = "prod"
 	defaultHealthChecks = 120
 )
@@ -137,14 +137,14 @@ func (c *Controller) Initialize(ctx context.Context, options InitOptions) error 
 		if err := c.acknowledgeCredentials(ctx); err != nil {
 			return err
 		}
-		_, err := fmt.Fprintln(c.stdout, "initialization acknowledgement completed; run ./libredashctl start")
+		_, err := fmt.Fprintln(c.stdout, "initialization acknowledgement completed; run ./leapviewctl start")
 		return err
 	}
 	if appExists {
 		if err := c.captureInitialCredentials(ctx); err != nil {
 			return err
 		}
-		_, err := fmt.Fprintln(c.stdout, "initialization completed; run ./libredashctl start")
+		_, err := fmt.Fprintln(c.stdout, "initialization completed; run ./leapviewctl start")
 		return err
 	}
 	if credentialsExist {
@@ -152,7 +152,7 @@ func (c *Controller) Initialize(ctx context.Context, options InitOptions) error 
 	}
 
 	if options.Image == "" {
-		options.Image, err = envFileValue(c.path(deploymentEnvName), "LIBREDASH_IMAGE")
+		options.Image, err = envFileValue(c.path(deploymentEnvName), "LEAPVIEW_IMAGE")
 		if err != nil {
 			return err
 		}
@@ -165,7 +165,7 @@ func (c *Controller) Initialize(ctx context.Context, options InitOptions) error 
 		httpsValue = "0"
 	}
 	if err := updateEnvFile(c.path(deploymentEnvName), map[string]string{
-		"LIBREDASH_IMAGE": options.Image,
+		"LEAPVIEW_IMAGE": options.Image,
 		"CADDY_DOMAIN":    options.Domain,
 		"COMPOSE_HTTPS":   httpsValue,
 	}); err != nil {
@@ -186,11 +186,11 @@ func (c *Controller) Initialize(ctx context.Context, options InitOptions) error 
 	if err != nil {
 		return err
 	}
-	appEnvironment := fmt.Sprintf("LIBREDASH_PRODUCTION=1\nLIBREDASH_ENVIRONMENT=%s\nLIBREDASH_ADDR=:8080\n", options.Environment) +
-		"LIBREDASH_HOME=/var/lib/libredash/home\nLIBREDASH_MANAGED_DATA_BACKEND=local\nLIBREDASH_MANAGED_DATA_DIR=/var/lib/libredash/home/managed-data\n" +
-		"LIBREDASH_LOCAL_AUTH=1\nLIBREDASH_COOKIE_SECURE=true\nLIBREDASH_TRUST_PROXY_HEADERS=true\n" +
-		fmt.Sprintf("LIBREDASH_ALLOWED_HOSTS=%s\nLIBREDASH_BOOTSTRAP_ADMIN_EMAIL=%s\n", options.Domain, options.AdminEmail) +
-		fmt.Sprintf("LIBREDASH_CSRF_KEY=%s\nLIBREDASH_METRICS_BEARER_TOKEN=%s\n", csrfKey, metricsToken)
+	appEnvironment := fmt.Sprintf("LEAPVIEW_PRODUCTION=1\nLEAPVIEW_ENVIRONMENT=%s\nLEAPVIEW_ADDR=:8080\n", options.Environment) +
+		"LEAPVIEW_HOME=/var/lib/leapview/home\nLEAPVIEW_MANAGED_DATA_BACKEND=local\nLEAPVIEW_MANAGED_DATA_DIR=/var/lib/leapview/home/managed-data\n" +
+		"LEAPVIEW_LOCAL_AUTH=1\nLEAPVIEW_COOKIE_SECURE=true\nLEAPVIEW_TRUST_PROXY_HEADERS=true\n" +
+		fmt.Sprintf("LEAPVIEW_ALLOWED_HOSTS=%s\nLEAPVIEW_BOOTSTRAP_ADMIN_EMAIL=%s\n", options.Domain, options.AdminEmail) +
+		fmt.Sprintf("LEAPVIEW_CSRF_KEY=%s\nLEAPVIEW_METRICS_BEARER_TOKEN=%s\n", csrfKey, metricsToken)
 	if err := writePrivateAtomic(c.path(appEnvName), []byte(appEnvironment)); err != nil {
 		return err
 	}
@@ -198,11 +198,11 @@ func (c *Controller) Initialize(ctx context.Context, options InitOptions) error 
 		_ = os.Remove(c.path(appEnvName))
 		_ = os.Remove(c.path(credentialsName))
 	}
-	if err := c.compose(ctx, nil, c.stdout, c.stderr, "pull", "libredash"); err != nil {
+	if err := c.compose(ctx, nil, c.stdout, c.stderr, "pull", "leapview"); err != nil {
 		cleanupInitialization()
 		return fmt.Errorf("initial image pull failed; initialization can be retried: %w", err)
 	}
-	if err := c.compose(ctx, nil, c.stdout, c.stderr, "run", "--rm", "--no-deps", "libredash", "config", "validate", "--production"); err != nil {
+	if err := c.compose(ctx, nil, c.stdout, c.stderr, "run", "--rm", "--no-deps", "leapview", "config", "validate", "--production"); err != nil {
 		cleanupInitialization()
 		return fmt.Errorf("configuration validation failed; initialization can be retried: %w", err)
 	}
@@ -213,7 +213,7 @@ func (c *Controller) Initialize(ctx context.Context, options InitOptions) error 
 	if err := c.captureInitialCredentials(ctx); err != nil {
 		return err
 	}
-	_, err = fmt.Fprintf(c.stdout, "initialized environment %s; run ./libredashctl start\n", options.Environment)
+	_, err = fmt.Fprintf(c.stdout, "initialized environment %s; run ./leapviewctl start\n", options.Environment)
 	return err
 }
 
@@ -229,12 +229,12 @@ func (c *Controller) Status(ctx context.Context) error {
 	if err != nil || id == "" {
 		return err
 	}
-	return c.docker(ctx, nil, c.stdout, c.stderr, "exec", id, "libredash", "healthcheck")
+	return c.docker(ctx, nil, c.stdout, c.stderr, "exec", id, "leapview", "healthcheck")
 }
 
 func (c *Controller) Logs(ctx context.Context, args []string) error {
 	if len(args) == 0 {
-		args = []string{"libredash"}
+		args = []string{"leapview"}
 	}
 	return c.compose(ctx, nil, c.stdout, c.stderr, append([]string{"logs"}, args...)...)
 }
@@ -274,7 +274,7 @@ func (c *Controller) Backup(ctx context.Context, requestedName string) error {
 		}
 		name := strings.TrimSpace(requestedName)
 		if name == "" {
-			name = "libredash-" + c.timestamp() + ".tar.gz"
+			name = "leapview-" + c.timestamp() + ".tar.gz"
 		}
 		name = filepath.Base(name)
 		if name == "." || name == string(filepath.Separator) || name == "" {
@@ -298,7 +298,7 @@ func (c *Controller) Backup(ctx context.Context, requestedName string) error {
 				return err
 			}
 		}
-		if hook := strings.TrimSpace(os.Getenv("LIBREDASHCTL_BACKUP_HOOK")); hook != "" {
+		if hook := strings.TrimSpace(os.Getenv("LEAPVIEWCTL_BACKUP_HOOK")); hook != "" {
 			command := exec.CommandContext(ctx, hook, path)
 			command.Dir = c.root
 			command.Stdin = c.stdin
@@ -354,7 +354,7 @@ func (c *Controller) Upgrade(ctx context.Context, next string) error {
 		return err
 	}
 	return c.withLock(func() error {
-		current, err := envFileValue(c.path(deploymentEnvName), "LIBREDASH_IMAGE")
+		current, err := envFileValue(c.path(deploymentEnvName), "LEAPVIEW_IMAGE")
 		if err != nil {
 			return err
 		}
@@ -387,7 +387,7 @@ func (c *Controller) Upgrade(ctx context.Context, next string) error {
 		if err := c.setImage(next); err != nil {
 			return err
 		}
-		if err := c.compose(ctx, nil, c.stdout, c.stderr, "pull", "libredash"); err != nil {
+		if err := c.compose(ctx, nil, c.stdout, c.stderr, "pull", "leapview"); err != nil {
 			_ = c.setImage(current)
 			if wasRunning {
 				_ = c.startUnlocked(ctx)
@@ -415,7 +415,7 @@ func (c *Controller) Rollback(ctx context.Context, confirmed bool) error {
 		return err
 	}
 	return c.withLock(func() error {
-		current, err := envFileValue(c.path(deploymentEnvName), "LIBREDASH_IMAGE")
+		current, err := envFileValue(c.path(deploymentEnvName), "LEAPVIEW_IMAGE")
 		if err != nil {
 			return err
 		}
@@ -500,7 +500,7 @@ func (c *Controller) captureInitialCredentials(ctx context.Context) error {
 	if err := tmp.Chmod(0o600); err != nil {
 		return err
 	}
-	if err := c.compose(ctx, nil, tmp, c.stderr, "run", "--rm", "--no-deps", "libredash", "admin", "initialize", "--format", "json"); err != nil {
+	if err := c.compose(ctx, nil, tmp, c.stderr, "run", "--rm", "--no-deps", "leapview", "admin", "initialize", "--format", "json"); err != nil {
 		return fmt.Errorf("offline initialization did not deliver credentials; initialization can be retried: %w", err)
 	}
 	if err := tmp.Sync(); err != nil {
@@ -530,7 +530,7 @@ func (c *Controller) captureInitialCredentials(ctx context.Context) error {
 }
 
 func (c *Controller) acknowledgeCredentials(ctx context.Context) error {
-	return c.compose(ctx, nil, c.stdout, c.stderr, "run", "--rm", "--no-deps", "libredash", "admin", "initialize", "--acknowledge-credentials")
+	return c.compose(ctx, nil, c.stdout, c.stderr, "run", "--rm", "--no-deps", "leapview", "admin", "initialize", "--acknowledge-credentials")
 }
 
 func (c *Controller) backupArchive(ctx context.Context, path string) error {
@@ -546,7 +546,7 @@ func (c *Controller) backupArchive(ctx context.Context, path string) error {
 	if err := os.Chmod(directory, 0o700); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(directory, ".libredash-backup-*.tmp")
+	tmp, err := os.CreateTemp(directory, ".leapview-backup-*.tmp")
 	if err != nil {
 		return err
 	}
@@ -561,7 +561,7 @@ func (c *Controller) backupArchive(ctx context.Context, path string) error {
 	if err := tmp.Chmod(0o600); err != nil {
 		return err
 	}
-	if err := c.compose(ctx, nil, tmp, c.stderr, "run", "--rm", "-T", "--no-deps", "libredash", "admin", "backup", "--out", "-"); err != nil {
+	if err := c.compose(ctx, nil, tmp, c.stderr, "run", "--rm", "-T", "--no-deps", "leapview", "admin", "backup", "--out", "-"); err != nil {
 		return err
 	}
 	if err := tmp.Sync(); err != nil {
@@ -590,7 +590,7 @@ func (c *Controller) restoreArchive(ctx context.Context, archive string) error {
 		return err
 	}
 	defer file.Close()
-	return c.compose(ctx, file, c.stdout, c.stderr, "run", "--rm", "-T", "--no-deps", "libredash", "admin", "restore", "--from", "-", "--current-out", "-", "--confirm")
+	return c.compose(ctx, file, c.stdout, c.stderr, "run", "--rm", "-T", "--no-deps", "leapview", "admin", "restore", "--from", "-", "--current-out", "-", "--confirm")
 }
 
 func (c *Controller) startUnlocked(ctx context.Context) error {
@@ -625,12 +625,12 @@ func (c *Controller) waitHealthy(ctx context.Context) error {
 			return err
 		}
 	}
-	_ = c.compose(ctx, nil, c.stderr, c.stderr, "logs", "--tail=100", "libredash")
+	_ = c.compose(ctx, nil, c.stderr, c.stderr, "logs", "--tail=100", "leapview")
 	return fmt.Errorf("application container is unhealthy")
 }
 
 func (c *Controller) stop(ctx context.Context, seconds int) error {
-	return c.compose(ctx, nil, c.stdout, c.stderr, "stop", "-t", fmt.Sprintf("%d", seconds), "libredash")
+	return c.compose(ctx, nil, c.stdout, c.stderr, "stop", "-t", fmt.Sprintf("%d", seconds), "leapview")
 }
 
 func (c *Controller) isRunning(ctx context.Context) (bool, error) {
@@ -647,7 +647,7 @@ func (c *Controller) isRunning(ctx context.Context) (bool, error) {
 
 func (c *Controller) containerID(ctx context.Context) (string, error) {
 	var output bytes.Buffer
-	if err := c.compose(ctx, nil, &output, c.stderr, "ps", "-q", "libredash"); err != nil {
+	if err := c.compose(ctx, nil, &output, c.stderr, "ps", "-q", "leapview"); err != nil {
 		return "", err
 	}
 	return strings.TrimSpace(output.String()), nil
@@ -683,7 +683,7 @@ func (c *Controller) docker(ctx context.Context, stdin io.Reader, stdout, stderr
 }
 
 func (c *Controller) setImage(image string) error {
-	return updateEnvFile(c.path(deploymentEnvName), map[string]string{"LIBREDASH_IMAGE": image})
+	return updateEnvFile(c.path(deploymentEnvName), map[string]string{"LEAPVIEW_IMAGE": image})
 }
 
 func (c *Controller) resolveArchive(requested string) (string, error) {
@@ -800,7 +800,7 @@ func writePrivateAtomic(path string, contents []byte) error {
 	if err := os.MkdirAll(directory, 0o700); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(directory, ".libredashctl-*.tmp")
+	tmp, err := os.CreateTemp(directory, ".leapviewctl-*.tmp")
 	if err != nil {
 		return err
 	}

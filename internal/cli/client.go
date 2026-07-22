@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/config"
+	"github.com/Yacobolo/leapview/internal/config"
 )
 
 func doJSON(ctx context.Context, method, endpoint, token string, body io.Reader, out any) error {
@@ -89,7 +89,7 @@ func clientTargetAndToken(opts *rootOptions) (string, string, error) {
 		return "", "", fmt.Errorf("target is required")
 	}
 	if token == "" {
-		return "", "", fmt.Errorf("API token is required; use --token, LIBREDASH_API_TOKEN, or libredash login --target %s --token <token>", target)
+		return "", "", fmt.Errorf("API token is required; use --token, LEAPVIEW_API_TOKEN, or leapview login --target %s --token <token>", target)
 	}
 	return target, token, nil
 }

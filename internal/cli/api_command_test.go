@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
+	apigenapi "github.com/Yacobolo/leapview/internal/api/gen"
 )
 
 func TestAPICommandListsEveryGeneratedOperation(t *testing.T) {
@@ -43,8 +43,8 @@ func TestAPICommandCallUsesGeneratedContract(t *testing.T) {
 		if got := r.Header.Get("Authorization"); got != "Bearer token" {
 			t.Fatalf("Authorization = %q", got)
 		}
-		if got := r.Header.Get("X-LibreDash-Client"); got != "cli" {
-			t.Fatalf("X-LibreDash-Client = %q", got)
+		if got := r.Header.Get("X-LeapView-Client"); got != "cli" {
+			t.Fatalf("X-LeapView-Client = %q", got)
 		}
 		if got := r.Header.Get("Content-Type"); got != "application/json" {
 			t.Fatalf("Content-Type = %q", got)
@@ -143,8 +143,8 @@ func TestAPICommandCallDefaultsBinaryBodyFileContentTypeFromGeneratedContract(t 
 }
 
 func TestAPICommandRejectsMissingPathParameter(t *testing.T) {
-	cmd := apiCommand(context.Background(), &rootOptions{target: "https://libredash.example", token: "token", workspaceID: "test"})
-	cmd.SetArgs([]string{"call", "getAgentRun", "--target", "https://libredash.example", "--token", "token", "--path", "conversation=conv_1"})
+	cmd := apiCommand(context.Background(), &rootOptions{target: "https://leapview.example", token: "token", workspaceID: "test"})
+	cmd.SetArgs([]string{"call", "getAgentRun", "--target", "https://leapview.example", "--token", "token", "--path", "conversation=conv_1"})
 	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "run") {
 		t.Fatalf("err = %v, want missing run path parameter", err)
 	}

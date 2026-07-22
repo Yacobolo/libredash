@@ -16,11 +16,11 @@ import (
 	"strings"
 	"time"
 
-	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
-	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
-	servingstatefs "github.com/Yacobolo/libredash/internal/servingstate/filesystem"
-	"github.com/Yacobolo/libredash/internal/workspace"
-	workspacecompiler "github.com/Yacobolo/libredash/internal/workspace/compiler"
+	apigenapi "github.com/Yacobolo/leapview/internal/api/gen"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
+	servingstatefs "github.com/Yacobolo/leapview/internal/servingstate/filesystem"
+	"github.com/Yacobolo/leapview/internal/workspace"
+	workspacecompiler "github.com/Yacobolo/leapview/internal/workspace/compiler"
 	"github.com/spf13/cobra"
 )
 
@@ -62,7 +62,7 @@ func deployCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 	}
 	command.Flags().StringVar(&opts.target, "target", "", "LeapView server URL")
 	command.Flags().StringVar(&opts.token, "token", "", "API token")
-	command.Flags().StringVar(&opts.catalog, "project", filepath.Join("dashboards", "libredash.yaml"), "project path")
+	command.Flags().StringVar(&opts.catalog, "project", filepath.Join("dashboards", "leapview.yaml"), "project path")
 	command.Flags().StringVar(&opts.environment, "environment", "", "assert the target instance environment")
 	command.Flags().StringArrayVar(&revisions, "revision", nil, "managed revision pin as connection=sha256:<digest> (repeatable)")
 	command.Flags().BoolVar(&opts.autoApprove, "auto-approve", false, "approve and activate the deployment without prompting")

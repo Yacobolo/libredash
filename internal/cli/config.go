@@ -3,7 +3,7 @@ package cli
 import (
 	"fmt"
 
-	"github.com/Yacobolo/libredash/internal/config"
+	"github.com/Yacobolo/leapview/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -29,7 +29,7 @@ func configCommand() *cobra.Command {
 			return err
 		},
 	}
-	validate.Flags().BoolVar(&production, "production", false, "validate production requirements even when LIBREDASH_PRODUCTION is unset")
+	validate.Flags().BoolVar(&production, "production", false, "validate production requirements even when LEAPVIEW_PRODUCTION is unset")
 	cmd.AddCommand(validate)
 	return cmd
 }

@@ -46,15 +46,15 @@ async function withWorkspace(run: (workspace: string) => Promise<void>): Promise
 }
 
 describe("checkPrimerAlignment", () => {
-  test("accepts Primer-backed LibreDash aliases", async () => {
+  test("accepts Primer-backed LeapView aliases", async () => {
     await withWorkspace(async workspace => {
       await writeFile(
         path.join(workspace, "static", "app.input.css"),
-        ":root { --ld-accent: var(--fgColor-accent); --ld-space-control: calc(var(--base-size-8) + var(--base-size-4)); }\n",
+        ":root { --lv-accent: var(--fgColor-accent); --lv-space-control: calc(var(--base-size-8) + var(--base-size-4)); }\n",
       );
       await writeFile(
         path.join(workspace, "web", "components", "example", "good.ts"),
-        "import {css} from 'lit';\nexport const styles = css`:host { color: var(--ld-accent); padding: var(--ld-space-control); }`;\n",
+        "import {css} from 'lit';\nexport const styles = css`:host { color: var(--lv-accent); padding: var(--lv-space-control); }`;\n",
       );
 
       await expect(checkPrimerAlignment({root: workspace})).resolves.toEqual([]);
@@ -63,10 +63,10 @@ describe("checkPrimerAlignment", () => {
 
   test("rejects raw color values and raw design fallbacks in product CSS", async () => {
     await withWorkspace(async workspace => {
-      await writeFile(path.join(workspace, "static", "app.input.css"), ":root { --ld-accent: var(--fgColor-accent); }\n");
+      await writeFile(path.join(workspace, "static", "app.input.css"), ":root { --lv-accent: var(--fgColor-accent); }\n");
       await writeFile(
         path.join(workspace, "web", "components", "example", "bad.ts"),
-        "import {css} from 'lit';\nexport const styles = css`.button { color: #0969da; background: var(--ld-accent, #0969da); }`;\n",
+        "import {css} from 'lit';\nexport const styles = css`.button { color: #0969da; background: var(--lv-accent, #0969da); }`;\n",
       );
 
       const violations = await checkPrimerAlignment({root: workspace});
@@ -78,11 +78,11 @@ describe("checkPrimerAlignment", () => {
     await withWorkspace(async workspace => {
       await writeFile(
         path.join(workspace, "static", "app.input.css"),
-        ":root { --base-size-10: 0.625rem; --ld-accent: var(--fgColor-accent); }\n",
+        ":root { --base-size-10: 0.625rem; --lv-accent: var(--fgColor-accent); }\n",
       );
       await writeFile(
         path.join(workspace, "web", "components", "example", "bad.ts"),
-        "import {css} from 'lit';\nexport const styles = css`:host { transition-duration: var(--motion-duration-fast); color: var(--ld-missing); }`;\n",
+        "import {css} from 'lit';\nexport const styles = css`:host { transition-duration: var(--motion-duration-fast); color: var(--lv-missing); }`;\n",
       );
 
       const violations = await checkPrimerAlignment({root: workspace});
@@ -98,9 +98,9 @@ describe("checkPrimerAlignment", () => {
     await withWorkspace(async workspace => {
       await writeFile(
         path.join(workspace, "static", "app.input.css"),
-        ":root { --ld-accent: var(--fgColor-accent); --container-site-reading: 32rem; }\n",
+        ":root { --lv-accent: var(--fgColor-accent); --container-site-reading: 32rem; }\n",
       );
-      await writeFile(path.join(workspace, "static", "app.css"), ":root { --ld-accent: var(--fgColor-accent); }\n");
+      await writeFile(path.join(workspace, "static", "app.css"), ":root { --lv-accent: var(--fgColor-accent); }\n");
       await writeFile(
         path.join(workspace, "site", "static", "site.css"),
         ":root { color: #0969da; } .article { max-width: var(--container-site-reading); }\n",
@@ -114,7 +114,7 @@ describe("checkPrimerAlignment", () => {
   test("excludes the Datastar inspector from product alignment checks", async () => {
     await withWorkspace(async workspace => {
       await mkdir(path.join(workspace, "web", "components", "inspector"), {recursive: true});
-      await writeFile(path.join(workspace, "static", "app.input.css"), ":root { --ld-accent: var(--fgColor-accent); }\n");
+      await writeFile(path.join(workspace, "static", "app.input.css"), ":root { --lv-accent: var(--fgColor-accent); }\n");
       await writeFile(
         path.join(workspace, "web", "components", "inspector", "datastar-inspector.ts"),
         "import {css} from 'lit';\nexport const styles = css`:host { color: #fff; }`;\n",
@@ -130,8 +130,8 @@ describe("checkPrimerAlignment", () => {
         path.join(workspace, "static", "app.input.css"),
         [
           ":root {",
-          "  --ld-bg-hover: color-mix(in srgb, var(--control-bgColor-hover), transparent 20%);",
-          "  --ld-asset-dashboard-bg: var(--data-blue-color-muted);",
+          "  --lv-bg-hover: color-mix(in srgb, var(--control-bgColor-hover), transparent 20%);",
+          "  --lv-asset-dashboard-bg: var(--data-blue-color-muted);",
           "}\n",
         ].join("\n"),
       );
@@ -163,10 +163,10 @@ describe("checkPrimerAlignment", () => {
         path.join(workspace, "static", "app.input.css"),
         [
           ":root {",
-          "  --ld-bg-hover: var(--control-bgColor-hover);",
-          "  --ld-asset-dashboard-bg: var(--label-blue-bgColor-rest);",
-          "  --ld-asset-dashboard-accent: var(--label-blue-fgColor-rest);",
-          "  --ld-asset-dashboard-border: var(--label-blue-borderColor);",
+          "  --lv-bg-hover: var(--control-bgColor-hover);",
+          "  --lv-asset-dashboard-bg: var(--label-blue-bgColor-rest);",
+          "  --lv-asset-dashboard-accent: var(--label-blue-fgColor-rest);",
+          "  --lv-asset-dashboard-border: var(--label-blue-borderColor);",
           "}\n",
         ].join("\n"),
       );
@@ -190,7 +190,7 @@ describe("checkPrimerAlignment", () => {
     await withWorkspace(async workspace => {
       await writeFile(
         path.join(workspace, "static", "app.input.css"),
-        ":root { --ld-button-accent-bg-rest: var(--fgColor-accent); }\n",
+        ":root { --lv-button-accent-bg-rest: var(--fgColor-accent); }\n",
       );
       await writeFile(
         path.join(workspace, "web", "components", "example", "bad.ts"),
@@ -202,15 +202,15 @@ describe("checkPrimerAlignment", () => {
     });
   });
 
-  test("accepts LibreDash accent button aliases", async () => {
+  test("accepts LeapView accent button aliases", async () => {
     await withWorkspace(async workspace => {
       await writeFile(
         path.join(workspace, "static", "app.input.css"),
-        ":root { --ld-button-accent-bg-rest: var(--fgColor-accent); --ld-button-bg-rest: var(--button-default-bgColor-rest); }\n",
+        ":root { --lv-button-accent-bg-rest: var(--fgColor-accent); --lv-button-bg-rest: var(--button-default-bgColor-rest); }\n",
       );
       await writeFile(
         path.join(workspace, "web", "components", "example", "good.ts"),
-        "import {css} from 'lit';\nexport const styles = css`.submit { background: var(--ld-button-accent-bg-rest); }`;\n",
+        "import {css} from 'lit';\nexport const styles = css`.submit { background: var(--lv-button-accent-bg-rest); }`;\n",
       );
 
       await expect(checkPrimerAlignment({root: workspace})).resolves.toEqual([]);
@@ -219,7 +219,7 @@ describe("checkPrimerAlignment", () => {
 
   test("rejects direct styling for standard button selectors", async () => {
     await withWorkspace(async workspace => {
-      await writeFile(path.join(workspace, "static", "app.input.css"), ":root { --ld-accent: var(--fgColor-accent); }\n");
+      await writeFile(path.join(workspace, "static", "app.input.css"), ":root { --lv-accent: var(--fgColor-accent); }\n");
       await writeFile(
         path.join(workspace, "web", "components", "example", "bad.ts"),
         [
@@ -236,18 +236,18 @@ describe("checkPrimerAlignment", () => {
     });
   });
 
-  test("accepts LibreDash invisible button aliases for standard button selectors", async () => {
+  test("accepts LeapView invisible button aliases for standard button selectors", async () => {
     await withWorkspace(async workspace => {
       await writeFile(
         path.join(workspace, "static", "app.input.css"),
-        ":root { --ld-button-height-sm: var(--base-size-8); --ld-button-invisible-bg-rest: var(--bgColor-default); --ld-button-invisible-border-rest: var(--label-blue-borderColor); }\n",
+        ":root { --lv-button-height-sm: var(--base-size-8); --lv-button-invisible-bg-rest: var(--bgColor-default); --lv-button-invisible-border-rest: var(--label-blue-borderColor); }\n",
       );
       await writeFile(
         path.join(workspace, "web", "components", "example", "good.ts"),
         [
           "import {css} from 'lit';",
           "export const styles = css`",
-          "  .menu button { min-height: var(--ld-button-height-sm); border: var(--base-size-4) solid var(--ld-button-invisible-border-rest); background: var(--ld-button-invisible-bg-rest); }",
+          "  .menu button { min-height: var(--lv-button-height-sm); border: var(--base-size-4) solid var(--lv-button-invisible-border-rest); background: var(--lv-button-invisible-bg-rest); }",
           "`;",
           "",
         ].join("\n"),

@@ -156,134 +156,134 @@ class AssetLineageGraph extends LitElement {
 }
 
 const assetLineageGraphStyles = `
-  ld-asset-lineage-graph .asset-lineage-root,
-  ld-asset-lineage-graph .asset-lineage-layout {
+  lv-asset-lineage-graph .asset-lineage-root,
+  lv-asset-lineage-graph .asset-lineage-layout {
     height: 100%;
     min-height: 0;
     min-width: 0;
   }
 
-  ld-asset-lineage-graph .asset-lineage-layout {
+  lv-asset-lineage-graph .asset-lineage-layout {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(17rem, 20rem);
   }
 
-  ld-asset-lineage-graph .asset-lineage-flow {
+  lv-asset-lineage-graph .asset-lineage-flow {
     height: 100%;
     min-height: 0;
     min-width: 0;
     background:
-      linear-gradient(var(--ld-bg-page), var(--ld-bg-page)),
-      radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--ld-fg-muted), transparent 87%) 1px, transparent 0);
+      linear-gradient(var(--lv-bg-page), var(--lv-bg-page)),
+      radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--lv-fg-muted), transparent 87%) 1px, transparent 0);
     background-size: auto, 18px 18px;
   }
 
-  ld-asset-lineage-graph .asset-lineage-panel {
+  lv-asset-lineage-graph .asset-lineage-panel {
     display: grid;
     align-content: start;
     gap: var(--base-size-16);
     min-width: 0;
-    border-left: var(--borderWidth-thin) solid var(--ld-line-muted);
-    background: var(--ld-bg-panel);
+    border-left: var(--borderWidth-thin) solid var(--lv-line-muted);
+    background: var(--lv-bg-panel);
     padding: var(--base-size-16);
   }
 
-  ld-asset-lineage-graph .asset-lineage-panel-eyebrow {
-    color: var(--ld-fg-muted);
-    font-size: var(--ld-font-size-caption);
-    font-weight: var(--ld-font-weight-strong);
-    line-height: var(--ld-line-height-tight);
+  lv-asset-lineage-graph .asset-lineage-panel-eyebrow {
+    color: var(--lv-fg-muted);
+    font-size: var(--lv-font-size-caption);
+    font-weight: var(--lv-font-weight-strong);
+    line-height: var(--lv-line-height-tight);
     text-transform: uppercase;
   }
 
-  ld-asset-lineage-graph .asset-lineage-panel-title {
+  lv-asset-lineage-graph .asset-lineage-panel-title {
     overflow: hidden;
     margin: var(--base-size-4) 0 0;
-    color: var(--ld-fg-default);
+    color: var(--lv-fg-default);
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: var(--ld-font-size-body-md);
-    font-weight: var(--ld-font-weight-strong);
-    line-height: var(--ld-line-height-tight);
+    font-size: var(--lv-font-size-body-md);
+    font-weight: var(--lv-font-weight-strong);
+    line-height: var(--lv-line-height-tight);
   }
 
-  ld-asset-lineage-graph .asset-lineage-panel-key {
+  lv-asset-lineage-graph .asset-lineage-panel-key {
     overflow: hidden;
     margin-top: var(--base-size-6);
-    color: var(--ld-fg-muted);
+    color: var(--lv-fg-muted);
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-family: var(--ld-font-family-mono);
-    font-size: var(--ld-font-size-caption);
+    font-family: var(--lv-font-family-mono);
+    font-size: var(--lv-font-size-caption);
   }
 
-  ld-asset-lineage-graph .asset-lineage-panel-stats {
+  lv-asset-lineage-graph .asset-lineage-panel-stats {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--base-size-8);
   }
 
-  ld-asset-lineage-graph .asset-lineage-panel-stat {
+  lv-asset-lineage-graph .asset-lineage-panel-stat {
     display: grid;
     gap: var(--base-size-4);
     min-width: 0;
-    border: var(--borderWidth-thin) solid var(--ld-line-muted);
+    border: var(--borderWidth-thin) solid var(--lv-line-muted);
     border-radius: var(--borderRadius-default);
-    background: var(--ld-bg-panel-muted);
+    background: var(--lv-bg-panel-muted);
     padding: var(--base-size-8);
   }
 
-  ld-asset-lineage-graph .asset-lineage-panel-stat span {
-    color: var(--ld-fg-muted);
-    font-size: var(--ld-font-size-caption);
-    font-weight: var(--ld-font-weight-medium);
+  lv-asset-lineage-graph .asset-lineage-panel-stat span {
+    color: var(--lv-fg-muted);
+    font-size: var(--lv-font-size-caption);
+    font-weight: var(--lv-font-weight-medium);
   }
 
-  ld-asset-lineage-graph .asset-lineage-panel-stat strong {
-    color: var(--ld-fg-default);
-    font-size: var(--ld-font-size-body-md);
-    line-height: var(--ld-line-height-tight);
+  lv-asset-lineage-graph .asset-lineage-panel-stat strong {
+    color: var(--lv-fg-default);
+    font-size: var(--lv-font-size-body-md);
+    line-height: var(--lv-line-height-tight);
   }
 
-  ld-asset-lineage-graph .asset-lineage-panel-summary {
+  lv-asset-lineage-graph .asset-lineage-panel-summary {
     min-width: 0;
-    color: var(--ld-fg-muted);
-    font-size: var(--ld-font-size-body-sm);
-    line-height: var(--ld-line-height-default);
+    color: var(--lv-fg-muted);
+    font-size: var(--lv-font-size-body-sm);
+    line-height: var(--lv-line-height-default);
   }
 
-  ld-asset-lineage-graph .asset-lineage-panel-action {
+  lv-asset-lineage-graph .asset-lineage-panel-action {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     min-height: 2rem;
-    border: var(--borderWidth-thin) solid var(--ld-line-accent);
+    border: var(--borderWidth-thin) solid var(--lv-line-accent);
     border-radius: var(--borderRadius-default);
-    background: var(--ld-line-accent);
-    color: var(--ld-fg-on-emphasis);
+    background: var(--lv-line-accent);
+    color: var(--lv-fg-on-emphasis);
     padding: 0 var(--base-size-12);
-    font-size: var(--ld-font-size-body-sm);
-    font-weight: var(--ld-font-weight-strong);
+    font-size: var(--lv-font-size-body-sm);
+    font-weight: var(--lv-font-weight-strong);
     text-decoration: none;
   }
 
-  ld-asset-lineage-graph .asset-lineage-panel-action:hover,
-  ld-asset-lineage-graph .asset-lineage-panel-action:focus-visible {
+  lv-asset-lineage-graph .asset-lineage-panel-action:hover,
+  lv-asset-lineage-graph .asset-lineage-panel-action:focus-visible {
     outline: 0;
     filter: brightness(1.06);
   }
 
-  ld-asset-lineage-graph .react-flow {
+  lv-asset-lineage-graph .react-flow {
     position: relative;
     overflow: hidden;
     width: 100%;
     height: 100%;
     direction: ltr;
-    color: var(--ld-fg-default);
+    color: var(--lv-fg-default);
     background-color: transparent;
   }
 
-  ld-asset-lineage-graph .react-flow__container {
+  lv-asset-lineage-graph .react-flow__container {
     position: absolute;
     top: 0;
     left: 0;
@@ -291,27 +291,27 @@ const assetLineageGraphStyles = `
     height: 100%;
   }
 
-  ld-asset-lineage-graph .react-flow__pane {
+  lv-asset-lineage-graph .react-flow__pane {
     z-index: 1;
     touch-action: none;
   }
 
-  ld-asset-lineage-graph .react-flow__viewport {
+  lv-asset-lineage-graph .react-flow__viewport {
     z-index: 2;
     pointer-events: none;
     transform-origin: 0 0;
   }
 
-  ld-asset-lineage-graph .react-flow__renderer {
+  lv-asset-lineage-graph .react-flow__renderer {
     z-index: 4;
   }
 
-  ld-asset-lineage-graph .react-flow__nodes {
+  lv-asset-lineage-graph .react-flow__nodes {
     pointer-events: none;
     transform-origin: 0 0;
   }
 
-  ld-asset-lineage-graph .react-flow__node {
+  lv-asset-lineage-graph .react-flow__node {
     position: absolute;
     box-sizing: border-box;
     pointer-events: all;
@@ -319,87 +319,87 @@ const assetLineageGraphStyles = `
     user-select: none;
   }
 
-  ld-asset-lineage-graph .react-flow .react-flow__edges,
-  ld-asset-lineage-graph .react-flow .react-flow__edges svg {
+  lv-asset-lineage-graph .react-flow .react-flow__edges,
+  lv-asset-lineage-graph .react-flow .react-flow__edges svg {
     position: absolute;
   }
 
-  ld-asset-lineage-graph .react-flow .react-flow__edges svg {
+  lv-asset-lineage-graph .react-flow .react-flow__edges svg {
     overflow: visible;
     pointer-events: none;
   }
 
-  ld-asset-lineage-graph .react-flow__edge {
+  lv-asset-lineage-graph .react-flow__edge {
     pointer-events: visibleStroke;
   }
 
-  ld-asset-lineage-graph .react-flow__edge-path,
-  ld-asset-lineage-graph .react-flow__connection-path {
+  lv-asset-lineage-graph .react-flow__edge-path,
+  lv-asset-lineage-graph .react-flow__connection-path {
     fill: none;
   }
 
-  ld-asset-lineage-graph .react-flow__edge-textwrapper {
+  lv-asset-lineage-graph .react-flow__edge-textwrapper {
     pointer-events: all;
   }
 
-  ld-asset-lineage-graph .react-flow__edge .react-flow__edge-text {
+  lv-asset-lineage-graph .react-flow__edge .react-flow__edge-text {
     pointer-events: none;
     user-select: none;
   }
 
-  ld-asset-lineage-graph .react-flow__background {
+  lv-asset-lineage-graph .react-flow__background {
     pointer-events: none;
     z-index: -1;
   }
 
-  ld-asset-lineage-graph .react-flow__handle {
+  lv-asset-lineage-graph .react-flow__handle {
     position: absolute;
     width: 6px;
     height: 6px;
     min-width: 5px;
     min-height: 5px;
-    border: 1px solid var(--ld-bg-panel);
+    border: 1px solid var(--lv-bg-panel);
     border-radius: 100%;
-    background: var(--ld-fg-muted);
+    background: var(--lv-fg-muted);
     pointer-events: none;
   }
 
-  ld-asset-lineage-graph .react-flow__handle-left {
+  lv-asset-lineage-graph .react-flow__handle-left {
     top: 50%;
     left: 0;
     transform: translate(-50%, -50%);
   }
 
-  ld-asset-lineage-graph .react-flow__handle-right {
+  lv-asset-lineage-graph .react-flow__handle-right {
     top: 50%;
     right: 0;
     transform: translate(50%, -50%);
   }
 
-  ld-asset-lineage-graph .react-flow__panel {
+  lv-asset-lineage-graph .react-flow__panel {
     position: absolute;
     z-index: 5;
     margin: var(--base-size-16);
   }
 
-  ld-asset-lineage-graph .react-flow__panel.left {
+  lv-asset-lineage-graph .react-flow__panel.left {
     left: 0;
   }
 
-  ld-asset-lineage-graph .react-flow__panel.bottom {
+  lv-asset-lineage-graph .react-flow__panel.bottom {
     bottom: 0;
   }
 
-  ld-asset-lineage-graph .react-flow__controls {
+  lv-asset-lineage-graph .react-flow__controls {
     display: flex;
     flex-direction: column;
   }
 
-  ld-asset-lineage-graph .react-flow__controls.horizontal {
+  lv-asset-lineage-graph .react-flow__controls.horizontal {
     flex-direction: row;
   }
 
-  ld-asset-lineage-graph .react-flow__controls-button {
+  lv-asset-lineage-graph .react-flow__controls-button {
     display: flex;
     width: 26px;
     height: 26px;
@@ -411,105 +411,105 @@ const assetLineageGraphStyles = `
     user-select: none;
   }
 
-  ld-asset-lineage-graph .react-flow__controls-button svg {
+  lv-asset-lineage-graph .react-flow__controls-button svg {
     width: 100%;
     max-width: 12px;
     max-height: 12px;
     fill: currentColor;
   }
 
-  ld-asset-lineage-graph .react-flow__attribution {
+  lv-asset-lineage-graph .react-flow__attribution {
     display: none;
   }
 
-  ld-asset-lineage-graph .react-flow__controls {
-    border: var(--ld-border-default);
-    background: var(--ld-bg-panel);
+  lv-asset-lineage-graph .react-flow__controls {
+    border: var(--lv-border-default);
+    background: var(--lv-bg-panel);
     box-shadow: var(--shadow-resting-small);
   }
 
-  ld-asset-lineage-graph .react-flow__controls-button {
-    border-bottom-color: var(--ld-line-muted);
-    background: var(--ld-bg-panel);
-    color: var(--ld-fg-default);
+  lv-asset-lineage-graph .react-flow__controls-button {
+    border-bottom-color: var(--lv-line-muted);
+    background: var(--lv-bg-panel);
+    color: var(--lv-fg-default);
   }
 
-  ld-asset-lineage-graph .asset-lineage-node {
+  lv-asset-lineage-graph .asset-lineage-node {
     width: 200px;
     border: var(--borderWidth-default) solid var(--lineage-node-border);
     border-left: var(--borderWidth-thicker) solid var(--lineage-node-accent);
     border-radius: var(--borderRadius-default);
     background: var(--lineage-node-bg);
     box-shadow: var(--shadow-resting-small);
-    color: var(--ld-fg-default);
+    color: var(--lv-fg-default);
     padding: var(--base-size-8) var(--base-size-12);
     cursor: pointer;
   }
 
-  ld-asset-lineage-graph .asset-lineage-node-selected {
-    border-color: var(--ld-line-accent);
-    box-shadow: 0 0 0 var(--borderWidth-default) color-mix(in srgb, var(--ld-line-accent), transparent 28%), var(--shadow-resting-small);
+  lv-asset-lineage-graph .asset-lineage-node-selected {
+    border-color: var(--lv-line-accent);
+    box-shadow: 0 0 0 var(--borderWidth-default) color-mix(in srgb, var(--lv-line-accent), transparent 28%), var(--shadow-resting-small);
   }
 
-  ld-asset-lineage-graph .asset-lineage-node:focus-visible {
-    outline: var(--borderWidth-thicker) solid var(--ld-line-accent);
+  lv-asset-lineage-graph .asset-lineage-node:focus-visible {
+    outline: var(--borderWidth-thicker) solid var(--lv-line-accent);
     outline-offset: var(--base-size-2);
   }
 
-  ld-asset-lineage-graph .asset-lineage-node-unrelated {
+  lv-asset-lineage-graph .asset-lineage-node-unrelated {
     opacity: 0.34;
   }
 
-  ld-asset-lineage-graph .asset-lineage-node-upstream,
-  ld-asset-lineage-graph .asset-lineage-node-downstream {
-    box-shadow: 0 0 0 var(--borderWidth-thin) color-mix(in srgb, var(--ld-line-accent), transparent 58%), var(--shadow-resting-small);
+  lv-asset-lineage-graph .asset-lineage-node-upstream,
+  lv-asset-lineage-graph .asset-lineage-node-downstream {
+    box-shadow: 0 0 0 var(--borderWidth-thin) color-mix(in srgb, var(--lv-line-accent), transparent 58%), var(--shadow-resting-small);
   }
 
-  ld-asset-lineage-graph .asset-lineage-node-kind {
-    color: var(--ld-fg-muted);
-    font-size: var(--ld-font-size-caption);
-    font-weight: var(--ld-font-weight-strong);
+  lv-asset-lineage-graph .asset-lineage-node-kind {
+    color: var(--lv-fg-muted);
+    font-size: var(--lv-font-size-caption);
+    font-weight: var(--lv-font-weight-strong);
     text-transform: uppercase;
   }
 
-  ld-asset-lineage-graph .asset-lineage-node-title {
+  lv-asset-lineage-graph .asset-lineage-node-title {
     display: block;
     overflow: hidden;
     margin-top: var(--base-size-4);
-    color: var(--ld-fg-default);
+    color: var(--lv-fg-default);
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: var(--ld-font-size-body-md);
-    font-weight: var(--ld-font-weight-strong);
-    line-height: var(--ld-line-height-tight);
+    font-size: var(--lv-font-size-body-md);
+    font-weight: var(--lv-font-weight-strong);
+    line-height: var(--lv-line-height-tight);
     text-decoration: none;
   }
 
-  ld-asset-lineage-graph .asset-lineage-node-title[href]:hover,
-  ld-asset-lineage-graph .asset-lineage-node-title[href]:focus-visible {
-    color: var(--ld-fg-link);
+  lv-asset-lineage-graph .asset-lineage-node-title[href]:hover,
+  lv-asset-lineage-graph .asset-lineage-node-title[href]:focus-visible {
+    color: var(--lv-fg-link);
     outline: 0;
     text-decoration: underline;
   }
 
-  ld-asset-lineage-graph .asset-lineage-node-meta {
+  lv-asset-lineage-graph .asset-lineage-node-meta {
     overflow: hidden;
     margin-top: var(--base-size-6);
-    color: var(--ld-fg-muted);
+    color: var(--lv-fg-muted);
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: var(--ld-font-size-caption);
-    font-weight: var(--ld-font-weight-medium);
+    font-size: var(--lv-font-size-caption);
+    font-weight: var(--lv-font-weight-medium);
   }
 
   @media (max-width: 860px) {
-    ld-asset-lineage-graph .asset-lineage-layout {
+    lv-asset-lineage-graph .asset-lineage-layout {
       grid-template-columns: minmax(0, 1fr);
       grid-template-rows: minmax(26rem, 1fr) auto;
     }
 
-    ld-asset-lineage-graph .asset-lineage-panel {
-      border-top: var(--borderWidth-thin) solid var(--ld-line-muted);
+    lv-asset-lineage-graph .asset-lineage-panel {
+      border-top: var(--borderWidth-thin) solid var(--lv-line-muted);
       border-left: 0;
     }
   }
@@ -552,12 +552,12 @@ function toFlowEdge(edge: LineageEdge, pathState: LineagePathState): Edge {
       opacity: muted ? 0.18 : context ? 0.28 : 0.9,
     },
     labelStyle: {
-      fill: context ? 'color-mix(in srgb, var(--ld-fg-muted), transparent 12%)' : 'var(--ld-fg-muted)',
+      fill: context ? 'color-mix(in srgb, var(--lv-fg-muted), transparent 12%)' : 'var(--lv-fg-muted)',
       fontSize: 10,
       fontWeight: 500,
     },
     labelBgStyle: {
-      fill: 'var(--ld-bg-page)',
+      fill: 'var(--lv-bg-page)',
       fillOpacity: 0.92,
     },
   }
@@ -725,39 +725,39 @@ function panelStat(label: string, value: number) {
 }
 
 const nodePalette: Record<string, [string, string, string]> = {
-  catalog: ['var(--ld-asset-catalog-bg)', 'var(--ld-asset-catalog-accent)', 'var(--ld-asset-catalog-border)'],
-  connection: ['var(--ld-asset-connection-bg)', 'var(--ld-asset-connection-accent)', 'var(--ld-asset-connection-border)'],
-  dashboard: ['var(--ld-asset-dashboard-bg)', 'var(--ld-asset-dashboard-accent)', 'var(--ld-asset-dashboard-border)'],
-  field: ['var(--ld-asset-dimension-bg)', 'var(--ld-asset-dimension-accent)', 'var(--ld-asset-dimension-border)'],
-  filter: ['var(--ld-asset-filter-bg)', 'var(--ld-asset-filter-accent)', 'var(--ld-asset-filter-border)'],
-  measure: ['var(--ld-asset-measure-bg)', 'var(--ld-asset-measure-accent)', 'var(--ld-asset-measure-border)'],
-  model_table: ['var(--ld-asset-model-table-bg)', 'var(--ld-asset-model-table-accent)', 'var(--ld-asset-model-table-border)'],
-  page: ['var(--ld-asset-page-bg)', 'var(--ld-asset-page-accent)', 'var(--ld-asset-page-border)'],
-  page_item: ['var(--ld-asset-page-bg)', 'var(--ld-asset-page-accent)', 'var(--ld-asset-page-border)'],
-  relationship: ['var(--ld-asset-dimension-bg)', 'var(--ld-asset-dimension-accent)', 'var(--ld-asset-dimension-border)'],
-  semantic_model: ['var(--ld-asset-semantic-model-bg)', 'var(--ld-asset-semantic-model-accent)', 'var(--ld-asset-semantic-model-border)'],
-  semantic_table: ['var(--ld-asset-model-table-bg)', 'var(--ld-asset-model-table-accent)', 'var(--ld-asset-model-table-border)'],
-  source: ['var(--ld-asset-source-bg)', 'var(--ld-asset-source-accent)', 'var(--ld-asset-source-border)'],
-  table: ['var(--ld-asset-table-bg)', 'var(--ld-asset-table-accent)', 'var(--ld-asset-table-border)'],
-  visual: ['var(--ld-asset-visual-bg)', 'var(--ld-asset-visual-accent)', 'var(--ld-asset-visual-border)'],
+  catalog: ['var(--lv-asset-catalog-bg)', 'var(--lv-asset-catalog-accent)', 'var(--lv-asset-catalog-border)'],
+  connection: ['var(--lv-asset-connection-bg)', 'var(--lv-asset-connection-accent)', 'var(--lv-asset-connection-border)'],
+  dashboard: ['var(--lv-asset-dashboard-bg)', 'var(--lv-asset-dashboard-accent)', 'var(--lv-asset-dashboard-border)'],
+  field: ['var(--lv-asset-dimension-bg)', 'var(--lv-asset-dimension-accent)', 'var(--lv-asset-dimension-border)'],
+  filter: ['var(--lv-asset-filter-bg)', 'var(--lv-asset-filter-accent)', 'var(--lv-asset-filter-border)'],
+  measure: ['var(--lv-asset-measure-bg)', 'var(--lv-asset-measure-accent)', 'var(--lv-asset-measure-border)'],
+  model_table: ['var(--lv-asset-model-table-bg)', 'var(--lv-asset-model-table-accent)', 'var(--lv-asset-model-table-border)'],
+  page: ['var(--lv-asset-page-bg)', 'var(--lv-asset-page-accent)', 'var(--lv-asset-page-border)'],
+  page_item: ['var(--lv-asset-page-bg)', 'var(--lv-asset-page-accent)', 'var(--lv-asset-page-border)'],
+  relationship: ['var(--lv-asset-dimension-bg)', 'var(--lv-asset-dimension-accent)', 'var(--lv-asset-dimension-border)'],
+  semantic_model: ['var(--lv-asset-semantic-model-bg)', 'var(--lv-asset-semantic-model-accent)', 'var(--lv-asset-semantic-model-border)'],
+  semantic_table: ['var(--lv-asset-model-table-bg)', 'var(--lv-asset-model-table-accent)', 'var(--lv-asset-model-table-border)'],
+  source: ['var(--lv-asset-source-bg)', 'var(--lv-asset-source-accent)', 'var(--lv-asset-source-border)'],
+  table: ['var(--lv-asset-table-bg)', 'var(--lv-asset-table-accent)', 'var(--lv-asset-table-border)'],
+  visual: ['var(--lv-asset-visual-bg)', 'var(--lv-asset-visual-accent)', 'var(--lv-asset-visual-border)'],
 }
 
 function nodeStyle(node: LineageNode): Record<string, string> {
   const [bg, accent, border] = nodePalette[node.kind] ?? nodePalette.semantic_model
   return {
     '--lineage-node-bg': bg,
-    '--lineage-node-accent': node.selected ? 'var(--ld-line-accent)' : accent,
+    '--lineage-node-accent': node.selected ? 'var(--lv-line-accent)' : accent,
     '--lineage-node-border': border,
   } as Record<string, string>
 }
 
 function edgeStroke(kind: string): string {
-  if (kind === 'contains') return 'var(--ld-line-muted)'
-  if (kind.startsWith('lineage')) return 'var(--ld-line-accent)'
-  if (kind.startsWith('uses')) return 'var(--ld-line-accent)'
-  if (kind.startsWith('reads')) return 'var(--ld-fg-warning)'
-  if (kind.startsWith('filters')) return 'var(--ld-fg-success)'
-  return 'var(--ld-line-muted)'
+  if (kind === 'contains') return 'var(--lv-line-muted)'
+  if (kind.startsWith('lineage')) return 'var(--lv-line-accent)'
+  if (kind.startsWith('uses')) return 'var(--lv-line-accent)'
+  if (kind.startsWith('reads')) return 'var(--lv-fg-warning)'
+  if (kind.startsWith('filters')) return 'var(--lv-fg-success)'
+  return 'var(--lv-line-muted)'
 }
 
 function kindLabel(kind: string): string {
@@ -775,4 +775,4 @@ function kindLabel(kind: string): string {
   }
 }
 
-customElements.define('ld-asset-lineage-graph', AssetLineageGraph)
+customElements.define('lv-asset-lineage-graph', AssetLineageGraph)

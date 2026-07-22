@@ -20,10 +20,10 @@ func TestPackageHasNoLeapViewSpecificDependencies(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if strings.Contains(string(body), "window.LibreDash") {
+		if strings.Contains(string(body), "window.LeapView") {
 			t.Fatalf("%s references a LeapView-specific browser global", file)
 		}
-		if strings.Contains(string(body), "github.com/Yacobolo/libredash/internal/") {
+		if strings.Contains(string(body), "github.com/Yacobolo/leapview/internal/") {
 			t.Fatalf("%s imports a LeapView-internal package", file)
 		}
 	}

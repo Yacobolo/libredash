@@ -5,10 +5,10 @@ import { mkdir } from 'node:fs/promises'
 await Bun.$`rm -rf site/static/site-page.js site/static/chunks site/static/geometry site/static/map-assets site/static/shared site/static/vendor`.quiet()
 await Bun.$`mkdir -p site/static/geometry site/static/map-assets site/static/shared/files site/static/vendor/integrations`.quiet()
 
-const mapStyleSource = 'static/map-assets/libredash-streets/style.json'
+const mapStyleSource = 'static/map-assets/leapview-streets/style.json'
 const mapStyleBytes = new Uint8Array(await Bun.file(mapStyleSource).arrayBuffer())
 const mapStyleDigest = createHash('sha256').update(mapStyleBytes).digest('hex')
-const mapStyleDirectory = `site/static/map-assets/libredash-streets/styles/${mapStyleDigest}`
+const mapStyleDirectory = `site/static/map-assets/leapview-streets/styles/${mapStyleDigest}`
 await mkdir(mapStyleDirectory, { recursive: true })
 
 const geometryCopies: Promise<number>[] = []
@@ -63,7 +63,7 @@ for (const log of result.logs) {
   console.error(log)
 }
 if (!result.success) {
-  throw new Error('failed to build LibreDash site assets')
+  throw new Error('failed to build LeapView site assets')
 }
 
 const sandboxResult = await Bun.build({

@@ -27,12 +27,12 @@ The provider ID must contain only route-safe letters, numbers, dots, underscores
 Configure LeapView:
 
 ```sh
-LIBREDASH_OIDC_PROVIDER_ID=entra
-LIBREDASH_OIDC_ISSUER_URL=https://login.microsoftonline.com/<tenant>/v2.0
-LIBREDASH_OIDC_CLIENT_ID=<client-id>
-LIBREDASH_OIDC_CLIENT_SECRET=<client-secret>
-LIBREDASH_OIDC_CALLBACK_URL=https://dash.example.com/auth/entra/callback
-LIBREDASH_OIDC_SCOPES="openid profile email"
+LEAPVIEW_OIDC_PROVIDER_ID=entra
+LEAPVIEW_OIDC_ISSUER_URL=https://login.microsoftonline.com/<tenant>/v2.0
+LEAPVIEW_OIDC_CLIENT_ID=<client-id>
+LEAPVIEW_OIDC_CLIENT_SECRET=<client-secret>
+LEAPVIEW_OIDC_CALLBACK_URL=https://dash.example.com/auth/entra/callback
+LEAPVIEW_OIDC_SCOPES="openid profile email"
 ```
 
 Production validation requires the issuer and callback to use HTTPS and treats issuer, client ID, client secret, and callback as an all-or-none set. Store the client secret in the deployment secret manager.

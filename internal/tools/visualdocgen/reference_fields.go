@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/Yacobolo/libredash/internal/visualdocs"
+	"github.com/Yacobolo/leapview/internal/visualdocs"
 )
 
 var queryFieldReferences = map[string]visualdocs.FieldReference{

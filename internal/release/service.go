@@ -10,8 +10,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/servingstate"
-	"github.com/Yacobolo/libredash/internal/workspace"
+	"github.com/Yacobolo/leapview/internal/servingstate"
+	"github.com/Yacobolo/leapview/internal/workspace"
 )
 
 type Repository interface {

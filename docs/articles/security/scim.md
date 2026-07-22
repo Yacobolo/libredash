@@ -7,7 +7,7 @@ SCIM synchronizes enterprise users, groups, memberships, and active state into L
 Create a dedicated high-entropy provisioning token and store it in the deployment secret manager:
 
 ```sh
-LIBREDASH_SCIM_BEARER_TOKEN=<at-least-32-character-random-secret>
+LEAPVIEW_SCIM_BEARER_TOKEN=<at-least-32-character-random-secret>
 ```
 
 When configured, the SCIM base URL is:

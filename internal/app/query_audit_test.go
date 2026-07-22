@@ -5,14 +5,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/dataquery"
-	"github.com/Yacobolo/libredash/internal/platform"
-	"github.com/Yacobolo/libredash/internal/queryaudit"
+	"github.com/Yacobolo/leapview/internal/dataquery"
+	"github.com/Yacobolo/leapview/internal/platform"
+	"github.com/Yacobolo/leapview/internal/queryaudit"
 )
 
 func TestAuditedQueryMetricsRecordsSuccessWithoutRows(t *testing.T) {
 	ctx := context.Background()
-	store, err := platform.Open(ctx, t.TempDir()+"/libredash.db")
+	store, err := platform.Open(ctx, t.TempDir()+"/leapview.db")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func TestAuditedQueryMetricsRecordsSuccessWithoutRows(t *testing.T) {
 
 func TestAuditedQueryMetricsRecordsExecutionError(t *testing.T) {
 	ctx := context.Background()
-	store, err := platform.Open(ctx, t.TempDir()+"/libredash.db")
+	store, err := platform.Open(ctx, t.TempDir()+"/leapview.db")
 	if err != nil {
 		t.Fatal(err)
 	}

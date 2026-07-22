@@ -6,13 +6,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/access"
-	"github.com/Yacobolo/libredash/internal/access/httpauth"
-	"github.com/Yacobolo/libredash/internal/access/scimprov"
-	dashboardhttp "github.com/Yacobolo/libredash/internal/dashboard/http"
-	"github.com/Yacobolo/libredash/internal/staticasset"
-	mapassethttp "github.com/Yacobolo/libredash/internal/visualization/mapasset/http"
-	workspacehttp "github.com/Yacobolo/libredash/internal/workspace/http"
+	"github.com/Yacobolo/leapview/internal/access"
+	"github.com/Yacobolo/leapview/internal/access/httpauth"
+	"github.com/Yacobolo/leapview/internal/access/scimprov"
+	dashboardhttp "github.com/Yacobolo/leapview/internal/dashboard/http"
+	"github.com/Yacobolo/leapview/internal/staticasset"
+	mapassethttp "github.com/Yacobolo/leapview/internal/visualization/mapasset/http"
+	workspacehttp "github.com/Yacobolo/leapview/internal/workspace/http"
 	"github.com/go-chi/chi/v5"
 )
 

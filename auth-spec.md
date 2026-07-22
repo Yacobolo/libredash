@@ -1,6 +1,6 @@
-# LibreDash Auth To-Be Architecture
+# LeapView Auth To-Be Architecture
 
-LibreDash should use a proven hybrid model:
+LeapView should use a proven hybrid model:
 
 - **Product model:** Microsoft Fabric / Power BI.
 - **Authorization mechanics:** Databricks Unity Catalog.
@@ -8,24 +8,24 @@ LibreDash should use a proven hybrid model:
 Fabric is the mental model users should see: workspaces, items, semantic models,
 reports, dashboards, sharing, viewers, contributors, members, and admins.
 
-Unity Catalog is the model LibreDash should implement internally: principals,
+Unity Catalog is the model LeapView should implement internally: principals,
 securable objects, ownership, grants, inherited privileges, service principals,
 and data-level policies.
 
 ## Enterprise Auth Model
 
-LibreDash should follow the standard enterprise split of responsibility:
+LeapView should follow the standard enterprise split of responsibility:
 
 ```text
 OIDC = interactive human login
 SCIM = enterprise user and group provisioning
-Grant engine = LibreDash authorization
+Grant engine = LeapView authorization
 Service principals = non-human workload identity
 API tokens = scoped credentials, not identities
 ```
 
 OIDC proves who the user is. SCIM keeps users, groups, and memberships in sync.
-The LibreDash grant engine remains the source of truth for product access.
+The LeapView grant engine remains the source of truth for product access.
 Service principals receive grants like any other principal. API tokens only
 constrain an existing principal's access through workspace scope and privilege
 allowlists.
@@ -44,7 +44,7 @@ allowlists.
 
 ## Non-Goals
 
-- Do not invent a LibreDash-specific RBAC theory.
+- Do not invent a LeapView-specific RBAC theory.
 - Do not rely on UI hiding as authorization.
 - Do not treat API tokens as independent identities.
 - Do not allow workspace-wide read access to imply unrestricted raw data access.
@@ -54,10 +54,10 @@ allowlists.
 Principals are actors that can receive grants.
 
 - `user`: a human authenticated by an identity provider.
-- `group`: an identity-provider or LibreDash-managed group.
+- `group`: an identity-provider or LeapView-managed group.
 - `service_principal`: an automation identity for API and publish workflows.
 
-External identities map to stable LibreDash principal IDs. Email is display
+External identities map to stable LeapView principal IDs. Email is display
 metadata, not identity.
 
 Groups should be synchronized from the identity provider when available. Local
@@ -66,7 +66,7 @@ model.
 
 ## Authentication
 
-LibreDash should support:
+LeapView should support:
 
 - Browser SSO through OIDC/OAuth.
 - API authentication through OAuth client credentials for service principals.
@@ -139,7 +139,7 @@ semantic_model grant -> datasets/tables/columns in that model
 table grant -> columns in that table
 ```
 
-Inheritance must be deterministic and inspectable. LibreDash should support a
+Inheritance must be deterministic and inspectable. LeapView should support a
 `show grants`-style API that explains direct, inherited, and ownership-derived
 access.
 
@@ -182,7 +182,7 @@ Examples:
 
 Data access is not equivalent to item read access.
 
-LibreDash should enforce data privileges before query execution:
+LeapView should enforce data privileges before query execution:
 
 - `QUERY_DATA` for aggregate/report queries.
 - `PREVIEW_DATA` for raw row previews.
@@ -244,7 +244,7 @@ Workspace ID must always be part of scoped reads and writes.
 
 ## Audit
 
-LibreDash should audit:
+LeapView should audit:
 
 - Sign-in and sign-out.
 - Session and token creation/revocation.

@@ -22,13 +22,13 @@ export class MapSpatialSelectionControl {
     this.element = document.createElement('div')
     this.element.setAttribute('role', 'toolbar')
     this.element.setAttribute('aria-label', 'Spatial map selection')
-    this.element.style.cssText = 'position:absolute;z-index:5;left:10px;top:50px;display:flex;gap:3px;padding:3px;border:1px solid var(--ld-line-default,#d0d7de);border-radius:6px;background:color-mix(in srgb,var(--ld-bg-panel,#fff) 96%,transparent);box-shadow:0 1px 3px rgba(31,35,40,.16)'
+    this.element.style.cssText = 'position:absolute;z-index:5;left:10px;top:50px;display:flex;gap:3px;padding:3px;border:1px solid var(--lv-line-default,#d0d7de);border-radius:6px;background:color-mix(in srgb,var(--lv-bg-panel,#fff) 96%,transparent);box-shadow:0 1px 3px rgba(31,35,40,.16)'
     this.overlay = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
     this.overlay.setAttribute('aria-hidden', 'true')
     this.overlay.style.cssText = 'position:absolute;z-index:4;inset:0;width:100%;height:100%;pointer-events:none'
     this.path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-    this.path.setAttribute('fill', 'color-mix(in srgb,var(--ld-accent-emphasis,#0969da) 18%,transparent)')
-    this.path.setAttribute('stroke', 'var(--ld-accent-emphasis,#0969da)')
+    this.path.setAttribute('fill', 'color-mix(in srgb,var(--lv-accent-emphasis,#0969da) 18%,transparent)')
+    this.path.setAttribute('stroke', 'var(--lv-accent-emphasis,#0969da)')
     this.path.setAttribute('stroke-width', '2')
     this.path.setAttribute('stroke-dasharray', '5 3')
     this.path.setAttribute('vector-effect', 'non-scaling-stroke')
@@ -123,7 +123,7 @@ export class MapSpatialSelectionControl {
   }
 
   private buttonStyle(active: boolean): string {
-    return `border:0;border-radius:4px;padding:4px 7px;background:${active ? 'var(--ld-accent-emphasis,#0969da)' : 'transparent'};color:${active ? '#fff' : 'var(--ld-fg-default,#1f2328)'};font:600 11px/1.2 var(--ld-font-family-ui,system-ui);cursor:pointer`
+    return `border:0;border-radius:4px;padding:4px 7px;background:${active ? 'var(--lv-accent-emphasis,#0969da)' : 'transparent'};color:${active ? '#fff' : 'var(--lv-fg-default,#1f2328)'};font:600 11px/1.2 var(--lv-font-family-ui,system-ui);cursor:pointer`
   }
 
   private setActive(gesture?: VisualizationSpatialSelectionGesture): void {

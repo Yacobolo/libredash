@@ -26,7 +26,7 @@ Keep the project entry point, shared data inputs, and workspace-owned models and
 
 ```text
 dashboards/
-  libredash.yaml
+  leapview.yaml
   connections/
     olist.yaml
   sources/
@@ -44,4 +44,4 @@ dashboards/
 
 ## Explore the visual system
 
-See the chart, table, matrix, and pivot components that the dashboard contract can render in the [visual gallery](/visuals). The project source and issue tracker are available on [GitHub](https://github.com/Yacobolo/libredash).
+See the chart, table, matrix, and pivot components that the dashboard contract can render in the [visual gallery](/visuals). The project source and issue tracker are available on [GitHub](https://github.com/Yacobolo/leapview).

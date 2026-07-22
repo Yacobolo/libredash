@@ -33,11 +33,11 @@ export function interactionCommandForRenderedFeatures(
   const selectable = new Set(selectableLayerIDs)
   for (const feature of features) {
     const renderedLayerID = feature.layer?.id
-    const datasetID = feature.properties?.__ld_dataset
-    const rowIndex = feature.properties?.__ld_row_index
-    const authoredLayerID = feature.properties?.__ld_layer_id
+    const datasetID = feature.properties?.__lv_dataset
+    const rowIndex = feature.properties?.__lv_row_index
+    const authoredLayerID = feature.properties?.__lv_layer_id
     if (typeof renderedLayerID !== 'string' || !selectable.has(renderedLayerID)) continue
-    if (renderedLayerID !== `ld-${authoredLayerID}` || typeof datasetID !== 'string' || typeof rowIndex !== 'number') continue
+    if (renderedLayerID !== `lv-${authoredLayerID}` || typeof datasetID !== 'string' || typeof rowIndex !== 'number') continue
     const command = interactionCommandForRowIndex(envelope, datasetID, rowIndex)
     if (command) return command
   }

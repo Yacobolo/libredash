@@ -68,11 +68,11 @@ class CodeBlock extends LitElement {
 
   connectedCallback(): void {
     super.connectedCallback()
-    document.addEventListener('libredash-theme-applied', this.handleThemeApplied)
+    document.addEventListener('leapview-theme-applied', this.handleThemeApplied)
   }
 
   disconnectedCallback(): void {
-    document.removeEventListener('libredash-theme-applied', this.handleThemeApplied)
+    document.removeEventListener('leapview-theme-applied', this.handleThemeApplied)
     window.clearTimeout(this.copiedTimeout)
     super.disconnectedCallback()
   }
@@ -147,7 +147,7 @@ class CodeBlock extends LitElement {
       this.setPreparedCode(code)
       const highlightedLines = new Set(this.highlightedLines)
       const lineHighlightTransformer: ShikiTransformer = {
-        name: 'libredash-highlighted-lines',
+        name: 'leapview-highlighted-lines',
         line(hast, line) {
           hast.properties['data-code-line'] = String(line)
           if (highlightedLines.has(line)) this.addClassToHast(hast, 'code-block-highlighted-line')
@@ -270,24 +270,24 @@ function languageLabel(language: string): string {
 }
 
 const codeBlockStyles = `
-  ld-code-block {
+  lv-code-block {
     display: block;
     min-width: 0;
     max-width: 100%;
   }
 
-  ld-code-block .code-block-shell {
+  lv-code-block .code-block-shell {
     position: relative;
     min-width: 0;
     max-width: 100%;
     overflow: hidden;
-    border: var(--ld-border-muted);
+    border: var(--lv-border-muted);
     border-radius: var(--borderRadius-medium, 6px);
-    background: var(--ld-bg-panel-muted);
+    background: var(--lv-bg-panel-muted);
   }
 
-  ld-code-block .shiki,
-  ld-code-block .code-block-fallback {
+  lv-code-block .shiki,
+  lv-code-block .code-block-fallback {
     box-sizing: border-box;
     max-width: 100%;
     max-height: min(44rem, 68vh);
@@ -297,41 +297,41 @@ const codeBlockStyles = `
     border-radius: 0;
     padding: var(--base-size-16);
     font-family: var(--fontStack-monospace, ui-monospace, SFMono-Regular, SFMono-Regular, Consolas, Liberation Mono, monospace);
-    font-size: var(--ld-font-size-body-md, 0.875rem);
+    font-size: var(--lv-font-size-body-md, 0.875rem);
     line-height: 1.65;
     tab-size: 2;
   }
 
-  ld-code-block[compact] .shiki,
-  ld-code-block[compact] .code-block-fallback {
-    max-height: var(--ld-chat-tool-max-height, 18rem);
-    padding: var(--ld-chat-pre-padding-block, var(--base-size-8)) var(--ld-chat-pre-padding-inline, var(--base-size-12));
-    font-size: var(--ld-font-size-caption, 0.75rem);
-    line-height: var(--ld-line-height-snug, 1.35);
+  lv-code-block[compact] .shiki,
+  lv-code-block[compact] .code-block-fallback {
+    max-height: var(--lv-chat-tool-max-height, 18rem);
+    padding: var(--lv-chat-pre-padding-block, var(--base-size-8)) var(--lv-chat-pre-padding-inline, var(--base-size-12));
+    font-size: var(--lv-font-size-caption, 0.75rem);
+    line-height: var(--lv-line-height-snug, 1.35);
     white-space: pre;
   }
 
-  ld-code-block[dense] .shiki,
-  ld-code-block[dense] .code-block-fallback {
+  lv-code-block[dense] .shiki,
+  lv-code-block[dense] .code-block-fallback {
     max-height: min(22rem, 52vh);
     padding: var(--base-size-12);
-    font-size: var(--ld-font-size-caption, 0.75rem);
-    line-height: var(--ld-line-height-normal, 1.5);
+    font-size: var(--lv-font-size-caption, 0.75rem);
+    line-height: var(--lv-line-height-normal, 1.5);
   }
 
-  ld-code-block[copy]:not([toolbar]) .shiki,
-  ld-code-block[copy]:not([toolbar]) .code-block-fallback {
+  lv-code-block[copy]:not([toolbar]) .shiki,
+  lv-code-block[copy]:not([toolbar]) .code-block-fallback {
     padding-top: calc(var(--base-size-16) + var(--control-medium-size, 32px));
   }
 
-  ld-code-block[copy][compact] .shiki,
-  ld-code-block[copy][compact] .code-block-fallback,
-  ld-code-block[copy][dense] .shiki,
-  ld-code-block[copy][dense] .code-block-fallback {
+  lv-code-block[copy][compact] .shiki,
+  lv-code-block[copy][compact] .code-block-fallback,
+  lv-code-block[copy][dense] .shiki,
+  lv-code-block[copy][dense] .code-block-fallback {
     padding-top: calc(var(--base-size-12) + var(--control-medium-size, 32px));
   }
 
-  ld-code-block .code-block-copy {
+  lv-code-block .code-block-copy {
     position: absolute;
     top: var(--base-size-8);
     right: var(--base-size-8);
@@ -340,108 +340,108 @@ const codeBlockStyles = `
     min-height: var(--control-medium-size, 32px);
     align-items: center;
     gap: var(--base-size-6, 6px);
-    border: var(--ld-border-muted);
-    border-radius: var(--ld-radius-default);
-    background: var(--ld-bg-panel);
-    color: var(--ld-fg-muted);
+    border: var(--lv-border-muted);
+    border-radius: var(--lv-radius-default);
+    background: var(--lv-bg-panel);
+    color: var(--lv-fg-muted);
     cursor: pointer;
     font: inherit;
-    font-size: var(--ld-font-size-caption);
-    font-weight: var(--ld-font-weight-medium, 500);
+    font-size: var(--lv-font-size-caption);
+    font-weight: var(--lv-font-weight-medium, 500);
     padding: 0 var(--base-size-8);
   }
 
-  ld-code-block .code-block-copy:hover,
-  ld-code-block .code-block-copy:focus-visible {
-    background: var(--ld-bg-control-hover, var(--ld-bg-panel-muted));
-    color: var(--ld-fg-default);
+  lv-code-block .code-block-copy:hover,
+  lv-code-block .code-block-copy:focus-visible {
+    background: var(--lv-bg-control-hover, var(--lv-bg-panel-muted));
+    color: var(--lv-fg-default);
     outline: 0;
   }
 
-  ld-code-block .code-block-toolbar {
+  lv-code-block .code-block-toolbar {
     display: flex;
     min-height: var(--control-medium-size, 32px);
     align-items: center;
     justify-content: space-between;
-    border-bottom: var(--ld-border-muted);
+    border-bottom: var(--lv-border-muted);
     padding-left: var(--base-size-16);
   }
 
-  ld-code-block .code-block-language {
-    color: var(--ld-fg-muted);
-    font-size: var(--ld-font-size-caption, 0.75rem);
-    font-weight: var(--ld-font-weight-medium, 500);
+  lv-code-block .code-block-language {
+    color: var(--lv-fg-muted);
+    font-size: var(--lv-font-size-caption, 0.75rem);
+    font-weight: var(--lv-font-weight-medium, 500);
   }
 
-  ld-code-block[toolbar] .code-block-copy {
+  lv-code-block[toolbar] .code-block-copy {
     position: static;
     min-height: var(--control-medium-size, 32px);
     border: 0;
-    border-radius: var(--ld-radius-default);
+    border-radius: var(--lv-radius-default);
     background: transparent;
   }
 
-  ld-code-block .shiki code,
-  ld-code-block .code-block-fallback code {
+  lv-code-block .shiki code,
+  lv-code-block .code-block-fallback code {
     font-family: inherit;
   }
 
-  ld-code-block .shiki code {
+  lv-code-block .shiki code {
     display: block;
     min-width: max-content;
   }
 
-  ld-code-block .shiki .line {
+  lv-code-block .shiki .line {
     box-sizing: border-box;
     display: inline-block;
     min-width: 100%;
   }
 
-  ld-code-block .shiki .code-block-highlighted-line {
+  lv-code-block .shiki .code-block-highlighted-line {
     position: relative;
-    background: var(--ld-bg-accent-muted);
+    background: var(--lv-bg-accent-muted);
   }
 
-  ld-code-block .shiki .code-block-highlighted-line::before {
+  lv-code-block .shiki .code-block-highlighted-line::before {
     position: absolute;
     inset-block: 0;
     inset-inline-start: 0;
     width: var(--base-size-4);
-    background: var(--ld-line-accent);
+    background: var(--lv-line-accent);
     content: '';
   }
 
-  ld-code-block[data-line-focus] .shiki .code-block-highlighted-line {
+  lv-code-block[data-line-focus] .shiki .code-block-highlighted-line {
     background: transparent;
   }
 
-  ld-code-block[data-line-focus] .shiki .code-block-highlighted-line::before {
+  lv-code-block[data-line-focus] .shiki .code-block-highlighted-line::before {
     background: transparent;
   }
 
-  ld-code-block[data-line-focus] .shiki .code-block-focused-line {
-    background: var(--ld-bg-accent-muted);
+  lv-code-block[data-line-focus] .shiki .code-block-focused-line {
+    background: var(--lv-bg-accent-muted);
   }
 
-  ld-code-block[data-line-focus] .shiki .code-block-focused-line::before {
-    background: var(--ld-line-accent);
+  lv-code-block[data-line-focus] .shiki .code-block-focused-line::before {
+    background: var(--lv-line-accent);
   }
 
-  ld-code-block .code-block-fallback {
-    color: var(--ld-fg-default);
-    background: var(--ld-bg-panel-muted);
+  lv-code-block .code-block-fallback {
+    color: var(--lv-fg-default);
+    background: var(--lv-bg-panel-muted);
     white-space: pre;
   }
 
-  ld-code-block .code-block-error {
+  lv-code-block .code-block-error {
     margin: 0;
-    border-top: var(--ld-border-muted);
+    border-top: var(--lv-border-muted);
     padding: var(--base-size-8) var(--base-size-16);
-    color: var(--ld-fg-muted);
-    font-size: var(--ld-font-size-caption);
+    color: var(--lv-fg-muted);
+    font-size: var(--lv-font-size-caption);
   }
 `
 
-if (!customElements.get('ld-code-block')) {
-  customElements.define('ld-code-block', CodeBlock)
+if (!customElements.get('lv-code-block')) {
+  customElements.define('lv-code-block', CodeBlock)
 }

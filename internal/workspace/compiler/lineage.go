@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"strings"
 
-	visualizationdefinition "github.com/Yacobolo/libredash/internal/visualization/definition"
-	visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
-	"github.com/Yacobolo/libredash/internal/workspace"
+	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
+	"github.com/Yacobolo/leapview/internal/workspace"
 )
 
 func ExtractLineage(workspaceID workspace.WorkspaceID, servingStateID workspace.ServingStateID, definition *workspace.Definition) (workspace.AssetGraph, error) {

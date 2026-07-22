@@ -102,8 +102,8 @@ test('app shell preserves slotted route geometry before route component upgrade'
   const page = await browser.newPage({ viewport: { width: 1320, height: 900 } })
   try {
     await page.goto(`${baseURL}/upgraded-shell`)
-    await page.waitForFunction(() => customElements.get('ld-app-shell'))
-    await page.locator('ld-app-shell').evaluate((element: any) => element.updateComplete)
+    await page.waitForFunction(() => customElements.get('lv-app-shell'))
+    await page.locator('lv-app-shell').evaluate((element: any) => element.updateComplete)
 
     const state = await shellGeometry(page)
 
@@ -122,15 +122,15 @@ test('app shell renders a restrained text-only LeapView identity', async () => {
   const page = await browser.newPage({ viewport: { width: 1320, height: 900 } })
   try {
     await page.goto(`${baseURL}/upgraded-shell`)
-    await page.waitForFunction(() => customElements.get('ld-app-shell') && customElements.get('ld-sidebar'))
-    const identity = await page.locator('ld-app-shell').evaluate((element: any) => {
-      const sidebar = element.shadowRoot.querySelector('ld-sidebar') as HTMLElement
+    await page.waitForFunction(() => customElements.get('lv-app-shell') && customElements.get('lv-sidebar'))
+    const identity = await page.locator('lv-app-shell').evaluate((element: any) => {
+      const sidebar = element.shadowRoot.querySelector('lv-sidebar') as HTMLElement
       const root = sidebar.shadowRoot!
       return {
         navigationLabel: root.querySelector('aside')?.getAttribute('aria-label'),
         name: root.querySelector('.brand .name')?.textContent?.trim(),
         mobileName: root.querySelector('.mobile-drawer-title')?.textContent?.trim(),
-        markCount: root.querySelectorAll('ld-brand-mark').length,
+        markCount: root.querySelectorAll('lv-brand-mark').length,
       }
     })
 
@@ -149,24 +149,24 @@ test('upgraded compact app shell does not keep the fallback route grid column', 
   const page = await browser.newPage({ viewport: { width: 1320, height: 900 } })
   try {
     await page.goto(`${baseURL}/upgraded-compact-shell`)
-    await page.waitForFunction(() => customElements.get('ld-app-shell') && customElements.get('ld-sidebar'))
-    await page.waitForFunction(() => (document.querySelector('ld-app-shell') as any)?.chrome?.sidebar?.compact === true)
-    await page.waitForFunction(() => ((document.querySelector('ld-app-shell') as any)?.shadowRoot?.querySelector('ld-sidebar') as any)?.config?.compact === true)
+    await page.waitForFunction(() => customElements.get('lv-app-shell') && customElements.get('lv-sidebar'))
+    await page.waitForFunction(() => (document.querySelector('lv-app-shell') as any)?.chrome?.sidebar?.compact === true)
+    await page.waitForFunction(() => ((document.querySelector('lv-app-shell') as any)?.shadowRoot?.querySelector('lv-sidebar') as any)?.config?.compact === true)
     await page.waitForFunction(() => {
-      const shell = document.querySelector('ld-app-shell') as HTMLElement | null
-      const sidebar = shell?.shadowRoot?.querySelector('ld-sidebar') as HTMLElement | null
+      const shell = document.querySelector('lv-app-shell') as HTMLElement | null
+      const sidebar = shell?.shadowRoot?.querySelector('lv-sidebar') as HTMLElement | null
       return sidebar && Math.round(sidebar.getBoundingClientRect().width) === 48
     })
-    await page.locator('ld-app-shell').evaluate((element: any) => element.updateComplete)
+    await page.locator('lv-app-shell').evaluate((element: any) => element.updateComplete)
 
     const state = await shellGeometry(page)
-    const compactIdentity = await page.locator('ld-app-shell').evaluate((element: any) => {
-      const sidebar = element.shadowRoot.querySelector('ld-sidebar') as HTMLElement
+    const compactIdentity = await page.locator('lv-app-shell').evaluate((element: any) => {
+      const sidebar = element.shadowRoot.querySelector('lv-sidebar') as HTMLElement
       const root = sidebar.shadowRoot!
       const expand = root.querySelector('.collapse-button') as HTMLButtonElement
       return {
         name: root.querySelector('.brand .name')?.textContent?.trim() ?? null,
-        markCount: root.querySelectorAll('ld-brand-mark').length,
+        markCount: root.querySelectorAll('lv-brand-mark').length,
         expandLabel: expand.getAttribute('aria-label'),
         expandVisible: getComputedStyle(expand).display !== 'none',
       }
@@ -192,13 +192,13 @@ test('mobile navigation opens in an accessible drawer', async () => {
   const page = await browser.newPage({ viewport: { width: 553, height: 793 } })
   try {
     await page.goto(`${baseURL}/sidebar-history`)
-    await page.evaluate(() => localStorage.setItem('libredash-sidebar-collapsed', 'true'))
+    await page.evaluate(() => localStorage.setItem('leapview-sidebar-collapsed', 'true'))
     await page.reload()
-    await page.waitForFunction(() => customElements.get('ld-app-shell') && customElements.get('ld-sidebar'))
-    await page.locator('ld-app-shell').evaluate((element: any) => element.updateComplete)
+    await page.waitForFunction(() => customElements.get('lv-app-shell') && customElements.get('lv-sidebar'))
+    await page.locator('lv-app-shell').evaluate((element: any) => element.updateComplete)
 
-    const state = await page.locator('ld-app-shell').evaluate((element: any) => {
-      const sidebar = element.shadowRoot.querySelector('ld-sidebar') as HTMLElement
+    const state = await page.locator('lv-app-shell').evaluate((element: any) => {
+      const sidebar = element.shadowRoot.querySelector('lv-sidebar') as HTMLElement
       const root = sidebar.shadowRoot
       const nav = root.querySelector('nav') as HTMLElement
       const main = element.shadowRoot.querySelector('main') as HTMLElement
@@ -227,21 +227,21 @@ test('mobile navigation opens in an accessible drawer', async () => {
     expect(state.navVisibility).toBe('hidden')
     expect(state.navInert).toBe(true)
 
-    await page.locator('ld-app-shell').evaluate(async (element: any) => {
-      const sidebar = element.shadowRoot.querySelector('ld-sidebar') as HTMLElement
+    await page.locator('lv-app-shell').evaluate(async (element: any) => {
+      const sidebar = element.shadowRoot.querySelector('lv-sidebar') as HTMLElement
       const root = sidebar.shadowRoot
       ;(root.querySelector('.mobile-menu-button') as HTMLButtonElement).click()
       await sidebar.updateComplete
     })
     await page.waitForFunction(() => {
-      const shell = document.querySelector('ld-app-shell') as HTMLElement
-      const sidebar = shell.shadowRoot?.querySelector('ld-sidebar') as HTMLElement
+      const shell = document.querySelector('lv-app-shell') as HTMLElement
+      const sidebar = shell.shadowRoot?.querySelector('lv-sidebar') as HTMLElement
       const nav = sidebar.shadowRoot?.querySelector('nav') as HTMLElement
       return getComputedStyle(nav).visibility === 'visible'
     })
 
-    const openState = await page.locator('ld-app-shell').evaluate((element: any) => {
-      const sidebar = element.shadowRoot.querySelector('ld-sidebar') as HTMLElement
+    const openState = await page.locator('lv-app-shell').evaluate((element: any) => {
+      const sidebar = element.shadowRoot.querySelector('lv-sidebar') as HTMLElement
       const root = sidebar.shadowRoot
       const nav = root.querySelector('nav') as HTMLElement
       const menuButton = root.querySelector('.mobile-menu-button') as HTMLButtonElement
@@ -272,20 +272,20 @@ test('mobile navigation opens in an accessible drawer', async () => {
     expect(openState.navBoxShadow).not.toBe('none')
     expect(openState.closeControlCount).toBe(1)
 
-    await page.locator('ld-app-shell').evaluate(async (element: any) => {
-      const sidebar = element.shadowRoot.querySelector('ld-sidebar') as HTMLElement
+    await page.locator('lv-app-shell').evaluate(async (element: any) => {
+      const sidebar = element.shadowRoot.querySelector('lv-sidebar') as HTMLElement
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
       await sidebar.updateComplete
     })
     await page.waitForFunction(() => {
-      const shell = document.querySelector('ld-app-shell') as HTMLElement
-      const sidebar = shell.shadowRoot?.querySelector('ld-sidebar') as HTMLElement
+      const shell = document.querySelector('lv-app-shell') as HTMLElement
+      const sidebar = shell.shadowRoot?.querySelector('lv-sidebar') as HTMLElement
       const nav = sidebar.shadowRoot?.querySelector('nav') as HTMLElement
       return getComputedStyle(nav).visibility === 'hidden'
     })
 
-    const closedState = await page.locator('ld-app-shell').evaluate((element: any) => {
-      const sidebar = element.shadowRoot.querySelector('ld-sidebar') as HTMLElement
+    const closedState = await page.locator('lv-app-shell').evaluate((element: any) => {
+      const sidebar = element.shadowRoot.querySelector('lv-sidebar') as HTMLElement
       const root = sidebar.shadowRoot
       const nav = root.querySelector('nav') as HTMLElement
       const menuButton = root.querySelector('.mobile-menu-button') as HTMLButtonElement
@@ -306,11 +306,11 @@ test('sidebar renders global chat action and recent history', async () => {
   const page = await browser.newPage({ viewport: { width: 1320, height: 900 } })
   try {
     await page.goto(`${baseURL}/sidebar-history`)
-    await page.waitForFunction(() => customElements.get('ld-app-shell') && customElements.get('ld-sidebar'))
-    await page.locator('ld-app-shell').evaluate((element: any) => element.updateComplete)
+    await page.waitForFunction(() => customElements.get('lv-app-shell') && customElements.get('lv-sidebar'))
+    await page.locator('lv-app-shell').evaluate((element: any) => element.updateComplete)
 
-    const state = await page.locator('ld-app-shell').evaluate((element: any) => {
-      const sidebar = element.shadowRoot.querySelector('ld-sidebar') as HTMLElement
+    const state = await page.locator('lv-app-shell').evaluate((element: any) => {
+      const sidebar = element.shadowRoot.querySelector('lv-sidebar') as HTMLElement
       const root = sidebar.shadowRoot
       return {
         links: Array.from(root.querySelectorAll('a')).map((link: any) => ({
@@ -342,7 +342,7 @@ test('sidebar renders global chat action and recent history', async () => {
         })(),
         historyLabel: root.querySelector('.history-label')?.textContent?.trim(),
         historySpinner: (() => {
-          const spinner = root.querySelector('ld-loading-spinner') as HTMLElement | null
+          const spinner = root.querySelector('lv-loading-spinner') as HTMLElement | null
           return {
             present: Boolean(spinner),
             label: spinner?.getAttribute('aria-label'),
@@ -364,7 +364,7 @@ test('sidebar renders global chat action and recent history', async () => {
           const navText = root.querySelector('a[href="/chats"] .nav-text') as HTMLElement
           const label = root.querySelector('.history-label') as HTMLElement
           const mutedProbe = document.createElement('span')
-          mutedProbe.style.color = 'var(--ld-fg-muted)'
+          mutedProbe.style.color = 'var(--lv-fg-muted)'
           root.append(mutedProbe)
           const mutedColor = getComputedStyle(mutedProbe).color
           mutedProbe.remove()
@@ -409,11 +409,11 @@ test('sidebar active nav item uses a full-row highlight without selector rail', 
   const page = await browser.newPage({ viewport: { width: 1320, height: 900 } })
   try {
     await page.goto(`${baseURL}/sidebar-active-nav`)
-    await page.waitForFunction(() => customElements.get('ld-app-shell') && customElements.get('ld-sidebar'))
-    await page.locator('ld-app-shell').evaluate((element: any) => element.updateComplete)
+    await page.waitForFunction(() => customElements.get('lv-app-shell') && customElements.get('lv-sidebar'))
+    await page.locator('lv-app-shell').evaluate((element: any) => element.updateComplete)
 
-    const state = await page.locator('ld-app-shell').evaluate((element: any) => {
-      const sidebar = element.shadowRoot.querySelector('ld-sidebar') as HTMLElement
+    const state = await page.locator('lv-app-shell').evaluate((element: any) => {
+      const sidebar = element.shadowRoot.querySelector('lv-sidebar') as HTMLElement
       const root = sidebar.shadowRoot
       const active = root.querySelector('a[href="/workspaces"]') as HTMLElement
       const icon = active.querySelector('.nav-icon') as HTMLElement
@@ -453,10 +453,10 @@ test('active chat nav item navigates to the chat list href', async () => {
   const page = await browser.newPage({ viewport: { width: 1320, height: 900 } })
   try {
     await page.goto(`${baseURL}/sidebar-history`)
-    await page.waitForFunction(() => customElements.get('ld-app-shell') && customElements.get('ld-sidebar'))
-    await page.locator('ld-app-shell').evaluate((element: any) => element.updateComplete)
+    await page.waitForFunction(() => customElements.get('lv-app-shell') && customElements.get('lv-sidebar'))
+    await page.locator('lv-app-shell').evaluate((element: any) => element.updateComplete)
 
-    const link = page.locator('ld-app-shell ld-sidebar a[href="/chats"]')
+    const link = page.locator('lv-app-shell lv-sidebar a[href="/chats"]')
     expect(await link.count()).toBe(1)
     await link.click()
     await page.waitForURL(`${baseURL}/chats`)
@@ -471,12 +471,12 @@ test('app shell reads chrome from Datastar signals without a payload attribute',
   const page = await browser.newPage({ viewport: { width: 1320, height: 900 } })
   try {
     await page.goto(`${baseURL}/signal-shell`)
-    await page.waitForFunction(() => customElements.get('ld-app-shell') && customElements.get('ld-sidebar'))
-    await page.waitForFunction(() => (document.querySelector('ld-app-shell') as any)?.chrome?.sidebar?.active === 'chat')
-    await page.locator('ld-app-shell').evaluate((element: any) => element.updateComplete)
+    await page.waitForFunction(() => customElements.get('lv-app-shell') && customElements.get('lv-sidebar'))
+    await page.waitForFunction(() => (document.querySelector('lv-app-shell') as any)?.chrome?.sidebar?.active === 'chat')
+    await page.locator('lv-app-shell').evaluate((element: any) => element.updateComplete)
 
-    const state = await page.locator('ld-app-shell').evaluate((element: any) => {
-      const sidebar = element.shadowRoot.querySelector('ld-sidebar') as any
+    const state = await page.locator('lv-app-shell').evaluate((element: any) => {
+      const sidebar = element.shadowRoot.querySelector('lv-sidebar') as any
       return {
         hasChromeAttr: element.hasAttribute('chrome'),
         active: element.chrome.sidebar.active,
@@ -496,11 +496,11 @@ test('app shell routes retargeted sidebar clicks to the visual link', async () =
   const page = await browser.newPage({ viewport: { width: 1320, height: 900 } })
   try {
     await page.goto(`${baseURL}/sidebar-history`)
-    await page.waitForFunction(() => customElements.get('ld-app-shell') && customElements.get('ld-sidebar'))
-    await page.locator('ld-app-shell').evaluate((element: any) => element.updateComplete)
+    await page.waitForFunction(() => customElements.get('lv-app-shell') && customElements.get('lv-sidebar'))
+    await page.locator('lv-app-shell').evaluate((element: any) => element.updateComplete)
 
-    await page.locator('ld-app-shell').evaluate((element: any) => {
-      const sidebar = element.shadowRoot.querySelector('ld-sidebar') as HTMLElement
+    await page.locator('lv-app-shell').evaluate((element: any) => {
+      const sidebar = element.shadowRoot.querySelector('lv-sidebar') as HTMLElement
       const link = sidebar.shadowRoot.querySelector('a[href="/chats"]') as HTMLElement
       const rect = link.getBoundingClientRect()
       element.dispatchEvent(new MouseEvent('click', {
@@ -522,9 +522,9 @@ test('app shell routes retargeted sidebar clicks to the visual link', async () =
 
 async function shellGeometry(page: any) {
   return await page.evaluate(() => {
-    const shell = document.querySelector('ld-app-shell') as HTMLElement
-    const route = document.querySelector('ld-workspace-page') as HTMLElement
-    const sidebar = shell.shadowRoot?.querySelector('ld-sidebar') as HTMLElement
+    const shell = document.querySelector('lv-app-shell') as HTMLElement
+    const route = document.querySelector('lv-workspace-page') as HTMLElement
+    const sidebar = shell.shadowRoot?.querySelector('lv-sidebar') as HTMLElement
     const shellMain = shell.shadowRoot?.querySelector('main') as HTMLElement
     const box = (element?: HTMLElement | null) => {
       if (!element) return null
@@ -541,7 +541,7 @@ async function shellGeometry(page: any) {
       }
     }
     return {
-      routeDefined: Boolean(customElements.get('ld-workspace-page')),
+      routeDefined: Boolean(customElements.get('lv-workspace-page')),
       shell: box(shell),
       sidebar: box(sidebar),
       shellMain: box(shellMain),
@@ -554,7 +554,7 @@ function signalShellDocument(): string {
   const signals = {
     chrome: {
       sidebar: {
-        workspaceTitle: 'LibreDash Workspace',
+        workspaceTitle: 'LeapView Workspace',
         active: 'chat',
         dashboardId: '',
         dashboardTitle: '',
@@ -581,9 +581,9 @@ function signalShellDocument(): string {
       </head>
       <body>
         <main class="min-h-svh bg-app text-fg-default" data-signals="${escapeHTML(JSON.stringify(signals))}">
-          <ld-app-shell>
-            <ld-workspace-page slot="page"></ld-workspace-page>
-          </ld-app-shell>
+          <lv-app-shell>
+            <lv-workspace-page slot="page"></lv-workspace-page>
+          </lv-app-shell>
         </main>
         <script type="module" src="/static/vendor/datastar-1.0.2.js?v=dev"></script>
         <script type="module" src="/tmp/app-shell-under-test.js"></script>
@@ -595,7 +595,7 @@ function signalShellDocument(): string {
 function testDocument(includeShellScript: boolean, compact = false, history = false, nav = false): string {
   const chromeConfig = compact || history || nav ? {
     sidebar: {
-      workspaceTitle: 'LibreDash Workspace',
+      workspaceTitle: 'LeapView Workspace',
       active: history ? 'chat' : 'workspaces',
       dashboardId: '',
       dashboardTitle: '',
@@ -631,22 +631,22 @@ function testDocument(includeShellScript: boolean, compact = false, history = fa
         <style>
           :root {
             --control-bgColor-hover: #eff2f5;
-            --ld-border-transparent: 1px solid transparent;
-            --ld-border-muted: 1px solid #d8dee4;
-            --ld-border-width: 1px;
-            --ld-fg-muted: #57606a;
-            --ld-shadow-floating: 0 8px 24px rgb(0 0 0 / 12%);
-            --ld-spinner-size-md: 16px;
-            --ld-spinner-size-sm: 10px;
-            --ld-spinner-duration: 1800ms;
+            --lv-border-transparent: 1px solid transparent;
+            --lv-border-muted: 1px solid #d8dee4;
+            --lv-border-width: 1px;
+            --lv-fg-muted: #57606a;
+            --lv-shadow-floating: 0 8px 24px rgb(0 0 0 / 12%);
+            --lv-spinner-size-md: 16px;
+            --lv-spinner-size-sm: 10px;
+            --lv-spinner-duration: 1800ms;
           }
         </style>
       </head>
       <body>
         <main class="min-h-svh bg-app text-fg-default"${signals}>
-          <ld-app-shell>
-            <ld-workspace-page slot="page"></ld-workspace-page>
-          </ld-app-shell>
+          <lv-app-shell>
+            <lv-workspace-page slot="page"></lv-workspace-page>
+          </lv-app-shell>
         </main>
         ${includeShellScript ? '<script type="module" src="/static/vendor/datastar-1.0.2.js?v=dev"></script><script type="module" src="/tmp/app-shell-under-test.js"></script>' : ''}
       </body>

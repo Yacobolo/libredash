@@ -17,8 +17,8 @@ Use the same project path, environment, target, and managed-data revisions throu
 Store target and credential values outside shell history:
 
 ```sh
-export LIBREDASH_TARGET=https://dash.example.com
-export LIBREDASH_API_TOKEN=<publisher-token>
+export LEAPVIEW_TARGET=https://dash.example.com
+export LEAPVIEW_API_TOKEN=<publisher-token>
 ```
 
 ## Validate the project
@@ -26,7 +26,7 @@ export LIBREDASH_API_TOKEN=<publisher-token>
 Run validation before contacting a target:
 
 ```sh
-libredash validate --project dashboards/libredash.yaml
+leapview validate --project dashboards/leapview.yaml
 ```
 
 Resolve every configuration, discovery, reference, and policy diagnostic. Validation covers the complete resource graph, so a failure in an unchanged file can still block a candidate whose combined state is invalid.
@@ -38,11 +38,11 @@ Use `--json` in CI and fail the job on a non-zero exit status. Keep human-readab
 Compare the candidate with the intended environment:
 
 ```sh
-libredash plan \
-  --project dashboards/libredash.yaml \
+leapview plan \
+  --project dashboards/leapview.yaml \
   --environment prod \
-  --target "$LIBREDASH_TARGET" \
-  --token "$LIBREDASH_API_TOKEN" \
+  --target "$LEAPVIEW_TARGET" \
+  --token "$LEAPVIEW_API_TOKEN" \
   --revision "olist=sha256:<64-lowercase-hex>"
 ```
 
@@ -53,10 +53,10 @@ Review the resource identities, removals, access changes, and managed revision d
 Run deployment with the same arguments:
 
 ```sh
-libredash deploy --project dashboards/libredash.yaml \
+leapview deploy --project dashboards/leapview.yaml \
   --environment prod \
-  --target "$LIBREDASH_TARGET" \
-  --token "$LIBREDASH_API_TOKEN" \
+  --target "$LEAPVIEW_TARGET" \
+  --token "$LEAPVIEW_API_TOKEN" \
   --revision "olist=sha256:<64-lowercase-hex>"
 ```
 

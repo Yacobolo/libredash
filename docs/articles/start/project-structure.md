@@ -4,7 +4,7 @@ A LeapView project separates project-global data inputs from workspace-owned ana
 
 ```text
 dashboards/
-  libredash.yaml
+  leapview.yaml
   connections/
     warehouse.yaml
   sources/
@@ -29,7 +29,7 @@ The names are conventions rather than hard-coded discovery paths. Include lists 
 The project manifest is the root of configuration discovery:
 
 ```yaml
-apiVersion: libredash.dev/v1
+apiVersion: leapview.dev/v1
 kind: Project
 metadata:
   name: commerce
@@ -72,7 +72,7 @@ Use lower-case, stable names and avoid encoding environment names in resource ID
 Validate from the project root after moving files or changing include patterns:
 
 ```sh
-go run ./cmd/libredash validate --project dashboards/libredash.yaml
+go run ./cmd/leapview validate --project dashboards/leapview.yaml
 ```
 
 Validation catches duplicate resources, missing includes, invalid references, unsupported fields, and other contract failures before deployment. The generated [Project configuration](/docs/config/project) and [Workspace configuration](/docs/config/workspace) pages remain the source of truth for exact fields.
