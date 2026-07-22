@@ -27,6 +27,7 @@ func transcriptStateFromMessages(conversationID string, messages []Message) Chat
 				ConversationID: conversationID,
 				RunID:          message.RunID,
 				CreatedAt:      message.CreatedAt,
+				References:     turnReferencesFromContentJSON(message.ContentJSON),
 			})
 		case MessageRoleAssistant:
 			if strings.TrimSpace(message.ContentText) != "" {
@@ -94,6 +95,33 @@ func transcriptStateFromMessages(conversationID string, messages []Message) Chat
 		}
 	}
 	return ChatTranscriptState{Transcript: items, Artifacts: artifacts}
+}
+
+func turnReferencesFromContentJSON(raw string) []TurnReference {
+	var payload struct {
+		TurnContext TurnContext `json:"turn_context"`
+	}
+	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+		return nil
+	}
+	normalized := payload.TurnContext.normalized()
+	if len(normalized.References) == 0 {
+		return nil
+	}
+	references := make([]TurnReference, 0, len(normalized.References))
+	for _, reference := range normalized.References {
+		references = append(references, TurnReference{
+			Reference:   reference.Reference,
+			Name:        reference.Name,
+			Description: reference.Description,
+			Workspace:   reference.Workspace,
+			Hierarchy:   append([]string(nil), reference.Hierarchy...),
+			Href:        reference.Href,
+			Locations:   append([]TurnReferenceLocation(nil), reference.Locations...),
+			Context:     append([]string(nil), reference.Context...),
+		})
+	}
+	return references
 }
 
 type transcriptToolCall struct {

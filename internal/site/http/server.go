@@ -218,6 +218,7 @@ func docsActiveSearch(w http.ResponseWriter, r *http.Request) {
 
 	_ = pagestream.PatchResponse(w, r, pagestream.SignalPatch{
 		"docsSearch": map[string]any{
+			"loading":     false,
 			"resultQuery": query,
 			"results":     results,
 			"total":       len(matches),

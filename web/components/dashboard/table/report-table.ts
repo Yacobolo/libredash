@@ -1583,6 +1583,7 @@ class ReportTable extends LitElement {
             <h2>${this.table?.title ?? 'Orders'}</h2>
           </div>
           <div class="visual-actions">
+            <slot name="agent-action"></slot>
             <button class="icon-action" type="button" aria-label="Expand table" title="Expand table" @click=${() => this.runAction('focus')}>${visualMenuIcon('focus')}</button>
             <details class="visual-options">
               <summary aria-label="Visual options" title="Visual options">${lucideIcon(EllipsisVertical)}</summary>

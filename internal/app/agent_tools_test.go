@@ -16,6 +16,7 @@ import (
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 	"github.com/Yacobolo/leapview/internal/dataquery"
 	"github.com/Yacobolo/leapview/internal/queryaudit"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
 	"github.com/Yacobolo/leapview/internal/workspace"
 	agentcore "github.com/Yacobolo/leapview/pkg/agent"
 )
@@ -65,7 +66,7 @@ func TestAPIGenAgentToolsExposeTaggedReadOperationsOnly(t *testing.T) {
 		"query_dashboard_page",
 		"query_dashboard_visual",
 		"query_semantic_model",
-		"search_workspace",
+		"search",
 		"explain_semantic_model_query",
 		"explain_semantic_preview",
 	} {
@@ -103,15 +104,12 @@ func TestAPIGenAgentToolsExposeTaggedReadOperationsOnly(t *testing.T) {
 			t.Fatalf("schema missing query parameter %q: %s", want, names["list_assets"].InputSchema)
 		}
 	}
-	if err := json.Unmarshal(names["search_workspace"].InputSchema, &schema); err != nil {
-		t.Fatalf("decode search_workspace schema: %v", err)
+	if err := json.Unmarshal(names["search"].InputSchema, &schema); err != nil {
+		t.Fatalf("decode search schema: %v", err)
 	}
-	if _, ok := schema.Properties["workspace"]; ok {
-		t.Fatalf("workspace must be hidden from model input: %s", names["search_workspace"].InputSchema)
-	}
-	for _, want := range []string{"q", "types", "limit", "pageToken"} {
+	for _, want := range []string{"q", "workspace", "type", "limit", "pageToken"} {
 		if _, ok := schema.Properties[want]; !ok {
-			t.Fatalf("search_workspace schema missing query parameter %q: %s", want, names["search_workspace"].InputSchema)
+			t.Fatalf("search schema missing query parameter %q: %s", want, names["search"].InputSchema)
 		}
 	}
 }
@@ -452,21 +450,23 @@ func TestAgentVisualToolRejectsInlineDataAndFilters(t *testing.T) {
 }
 
 func TestAPIGenAgentSearchToolInjectsDefaultLimit(t *testing.T) {
-	server := NewWithOptions(fakeMetrics{}, Options{DefaultWorkspaceID: "test"})
-	tools := agentAPIGenToolsForTest(server, agentcap.Scope{WorkspaceID: "test", PrincipalID: "principal"})
+	store := testStore(t)
+	seedEnvironmentAssetDeployment(t, store, "test", servingstate.DefaultEnvironment, "Orders dashboard", "Warehouse")
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, DefaultWorkspaceID: "test"})
+	tools := agentAPIGenToolsForTest(server, agentcap.Scope{WorkspaceID: "test", PrincipalID: "principal", DevAuthBypass: true})
 	var search agentcore.ToolDefinition
 	for _, tool := range tools {
-		if tool.Name == "search_workspace" {
+		if tool.Name == "search" {
 			search = tool
 			break
 		}
 	}
 	if search.Handler == nil {
-		t.Fatal("search_workspace tool missing")
+		t.Fatal("search tool missing")
 	}
 	result, err := search.Handler.Run(context.Background(), agentcore.ToolCall{
 		ID:        "call_1",
-		Name:      "search_workspace",
+		Name:      "search",
 		Arguments: json.RawMessage(`{"q":"orders"}`),
 	})
 	if err != nil {
@@ -502,9 +502,6 @@ func TestAPIGenAgentSearchToolInjectsDefaultLimit(t *testing.T) {
 		}
 		if _, ok := item["name"]; !ok {
 			t.Fatalf("search item missing concise name: %#v", item)
-		}
-		if _, ok := item["description"]; !ok {
-			t.Fatalf("search item missing concise description: %#v", item)
 		}
 		if _, ok := item["type"]; !ok {
 			t.Fatalf("search item missing concise type: %#v", item)

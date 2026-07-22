@@ -1,47 +1,32 @@
 # Get started with LeapView
 
-LeapView keeps the semantic layer, report definition, and visual runtime together. Start with the included workspace, then make it your own.
+Use this learning path to go from a new LeapView installation to a validated dashboard change. It keeps setup, the guided lesson, and the underlying project model separate so that each page can serve one purpose well.
 
-This guide uses a source checkout so you can edit the bundled project. To evaluate the running server without building LeapView, start with the public-image path in [Installation](/docs/installation).
+## Choose your starting point
 
-## Bootstrap the workspace
+- Start with [Installation](/docs/installation) if LeapView is not running yet. It covers both the public image and a source checkout.
+- Continue with [Build your first dashboard](/docs/first-dashboard) for the guided learning experience. You will run the sample Sales workspace, trace its resources, change a semantic metric and dashboard note, validate the project, deploy it locally, and verify the result.
+- Read [Project structure](/docs/project-structure) when you are ready to understand how project-global and workspace-scoped resources fit together.
 
-Download the sample data and prepare the local workspace.
+The first-dashboard tutorial uses a source checkout because the lesson includes editing the bundled project. If you only want to evaluate the running product, use the public-image path in the installation guide and explore the included workspace without making source changes.
 
-```sh
-task bootstrap
-```
+## What you will learn
 
-## Run LeapView
+By the end of the tutorial, you will have practiced the complete local authoring loop:
 
-Start the local application and open the dashboard workspace.
+1. Establish a known-good sample dashboard.
+2. Trace presentation fields back to their semantic definitions.
+3. Make a small change without breaking stable resource identities.
+4. Validate and review the project plan.
+5. Deploy to the development target and verify interactive behavior.
 
-```sh
-task dev
-```
+The tutorial optimizes for a successful first experience. After completing it, use the task-oriented [Build dashboards](/docs/guides/build) guides for real project work and [Reference](/docs/reference) for exact resource fields, CLI flags, API operations, and visual contracts.
 
-## Edit the model and dashboard
+## Explore by goal
 
-Keep the project entry point, shared data inputs, and workspace-owned models and dashboards together under `dashboards/`.
+- To connect your own data, follow [Connect a data source](/docs/guides/build/connect-data).
+- To understand ownership and deployment scope, read [Projects, workspaces, and environments](/docs/concepts/projects-workspaces-environments).
+- To evaluate available charts and tables, browse [Visual types](/docs/visuals/overview).
+- To automate delivery, start with [Validate, plan, and deploy](/docs/cli/validate-deploy).
 
-```text
-dashboards/
-  leapview.yaml
-  connections/
-    olist.yaml
-  sources/
-    olist.orders.yaml
-  workspaces/
-    sales/
-      workspace.yaml
-      models/
-        orders.yaml
-      semantic-models/
-        sales.yaml
-      dashboards/
-        executive-sales.yaml
-```
-
-## Explore the visual system
-
-See the chart, table, matrix, and pivot components that the dashboard contract can render in the [visual gallery](/visuals). The project source and issue tracker are available on [GitHub](https://github.com/Yacobolo/leapview).
+The project source and issue tracker are available on [GitHub](https://github.com/Yacobolo/leapview).

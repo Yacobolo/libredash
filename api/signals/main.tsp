@@ -416,6 +416,61 @@ model ChatArtifactSignal {
   `summary`?: string;
 }
 
+model AgentReferenceKeySignal {
+  `workspaceId`: string;
+  `type`: string;
+  `id`: string;
+}
+
+model AgentReferenceWorkspaceSignal {
+  `id`: string;
+  `name`: string;
+}
+
+model AgentReferenceLocationSignal {
+  `dashboardId`?: string;
+  `dashboardName`?: string;
+  `pageId`?: string;
+  `pageName`?: string;
+  `href`: string;
+}
+
+model AgentReferenceSignal {
+  `reference`: AgentReferenceKeySignal;
+  `name`: string;
+  `description`?: string;
+	`visualType`?: string;
+  `workspace`: AgentReferenceWorkspaceSignal;
+	`hierarchy`: string[];
+  `href`: string;
+  `locations`: AgentReferenceLocationSignal[];
+  `context`: string[];
+}
+
+@apigen.contract(#{ kind: "ui-signal", tags: #["agent", "search", "signal"] })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "agent" })
+model AgentReferenceSearchSignal {
+  `query`: string;
+  `requestId`: int64;
+  `results`: AgentReferenceSignal[];
+}
+
+@apigen.contract(#{ kind: "ui-signal", tags: #["agent", "dashboard", "signal"] })
+@apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "dashboard" })
+model AgentContextSignal {
+  `surface`: string;
+  `workspaceId`: string;
+  `dashboardId`: string;
+  `dashboardTitle`: string;
+  `pageId`: string;
+  `pageTitle`: string;
+  `modelId`: string;
+  `generation`: int64;
+  `filters`: DashboardFilters;
+  `referenceLimit`: int32;
+  `references`: AgentReferenceSignal[];
+}
+
 model ChatConversationSummary {
   `archivedAt`?: string;
   `createdAt`: string;
@@ -434,6 +489,10 @@ model ChatConversationSummary {
 model ChatEnvelope {
   @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "agent" })
   `agent`: ChatSignal;
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "agentContext" })
+  `agentContext`: AgentContextSignal;
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "agentReferenceSearch" })
+  `agentReferenceSearch`: AgentReferenceSearchSignal;
   @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "chrome" })
   `chrome`: ChromeSignal;
   @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "page" })
@@ -481,6 +540,7 @@ model ChatTranscriptItemSignal {
   `kind`: string;
   `markdown`?: string;
   `name`?: string;
+  `references`?: AgentReferenceSignal[];
   `resultFormat`?: string;
   `resultJson`?: string;
   `resultSummary`?: string;
@@ -557,6 +617,14 @@ model DashboardComponentStatus {
 @apigen.contract(#{ kind: "ui-envelope", tags: #["dashboard", "envelope"] })
 @apigen.`metadata`(#{ `x-leapview-contract-role`: "envelope", `x-leapview-surface`: "dashboard" })
 model DashboardEnvelope {
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "agent" })
+  `agent`: ChatSignal;
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "agentContext" })
+  `agentContext`: AgentContextSignal;
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "agentReferenceSearch" })
+  `agentReferenceSearch`: AgentReferenceSearchSignal;
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "merge", `x-leapview-signal-key`: "agentVisuals" })
+  `agentVisuals`: Record<DashboardVisual>;
   @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "chrome" })
   `chrome`: ChromeSignal;
   @apigen.`metadata`(#{ `x-leapview-patch-mode`: "merge", `x-leapview-signal-key`: "componentStatus" })

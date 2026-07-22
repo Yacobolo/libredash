@@ -20,23 +20,27 @@ type searchResponse struct {
 }
 
 type searchResult struct {
-	ID          string `json:"id"`
-	Type        string `json:"type"`
+	Reference struct {
+		WorkspaceID string `json:"workspaceId"`
+		Type        string `json:"type"`
+		ID          string `json:"id"`
+	} `json:"reference"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
+	Href        string `json:"href"`
 }
 
 func searchCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "search <query>",
-		Short: "Search workspace assets",
+		Short: "Search accessible product objects",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runSearch(ctx, opts, args[0])
 		},
 	}
 	addTargetTokenFlags(cmd, opts)
-	cmd.Flags().StringVar(&opts.workspaceID, "workspace", opts.workspaceID, "workspace id")
+	cmd.Flags().StringArrayVar(&opts.searchWorkspaces, "workspace", nil, "workspace filter; repeatable")
 	addPaginationFlags(cmd, opts)
 	cmd.Flags().StringArrayVar(&opts.searchTypes, "type", nil, "result type filter; repeatable or comma-separated")
 	cmd.Flags().BoolVar(&opts.jsonOutput, "json", false, "print JSON response")
@@ -50,10 +54,13 @@ func runSearch(ctx context.Context, opts *rootOptions, queryText string) error {
 	}
 	query := paginationQuery(opts)
 	query.Set("q", queryText)
-	if types := searchTypesValue(opts.searchTypes); types != "" {
-		query.Set("types", types)
+	for _, workspaceID := range searchValues(opts.searchWorkspaces) {
+		query.Add("workspace", workspaceID)
 	}
-	endpoint, err := apiOperationURL(target, "searchWorkspace", map[string]string{"workspace": opts.workspaceID}, query)
+	for _, typ := range searchValues(opts.searchTypes) {
+		query.Add("type", typ)
+	}
+	endpoint, err := apiOperationURL(target, "search", nil, query)
 	if err != nil {
 		return err
 	}
@@ -68,7 +75,7 @@ func runSearch(ctx context.Context, opts *rootOptions, queryText string) error {
 	return renderSearchResults(response)
 }
 
-func searchTypesValue(values []string) string {
+func searchValues(values []string) []string {
 	types := make([]string, 0, len(values))
 	for _, value := range values {
 		for _, part := range strings.Split(value, ",") {
@@ -78,17 +85,17 @@ func searchTypesValue(values []string) string {
 			}
 		}
 	}
-	return strings.Join(types, ",")
+	return types
 }
 
 func renderSearchResults(response searchResponse) error {
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "TYPE\tNAME\tDESCRIPTION\tID")
+	fmt.Fprintln(tw, "WORKSPACE\tTYPE\tNAME\tDESCRIPTION\tID")
 	for _, item := range response.Items {
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", item.Type, item.Name, item.Description, item.ID)
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", item.Reference.WorkspaceID, item.Reference.Type, item.Name, item.Description, item.Reference.ID)
 	}
 	if response.Page.NextCursor != "" {
-		fmt.Fprintf(tw, "PAGE\tNEXT\t%s\t\n", response.Page.NextCursor)
+		fmt.Fprintf(tw, "PAGE\tNEXT\t%s\t\t\n", response.Page.NextCursor)
 	}
 	return tw.Flush()
 }

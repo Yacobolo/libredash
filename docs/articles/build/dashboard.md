@@ -2,6 +2,9 @@
 
 A dashboard chooses one workspace semantic model and composes reusable filters, visual queries, tabular queries, and report pages. Build the smallest useful page first, verify its query behavior, and add interactions only after the standalone results are correct.
 
+> [!TIP]
+> Use this guide for the authoring workflow and representative configuration. Use [Dashboard configuration](/docs/config/dashboard) and [Visual types](/docs/visuals/overview) when you need the complete accepted field contract.
+
 ## Before you begin
 
 Verify the semantic model with direct queries and choose a small decision-oriented page to build first. Prepare expected values for each initial visual at an unfiltered state and at least one filtered state.

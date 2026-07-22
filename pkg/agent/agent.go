@@ -22,9 +22,16 @@ type Agent struct {
 }
 
 type PromptRequest struct {
-	Input                string
-	CorrelationID        string
-	InputAlreadyAppended bool
+	Input         string
+	Context       []ContextItem
+	CorrelationID string
+}
+
+// PreparedPromptRequest resumes a prompt already appended with PreparePrompt.
+// It is intended for hosts that durably persist the transcript before model
+// execution. Most callers should use Prompt.
+type PreparedPromptRequest struct {
+	CorrelationID string
 }
 
 type RunResult struct {
@@ -70,9 +77,41 @@ func New(def Definition) (*Agent, error) {
 }
 
 func (a *Agent) Prompt(ctx context.Context, req PromptRequest) (RunResult, error) {
-	if strings.TrimSpace(req.Input) == "" {
-		return RunResult{}, NewError(ErrorCodeInvalidArgument, "prompt input is required", nil)
+	if err := a.PreparePrompt(req); err != nil {
+		return RunResult{}, err
 	}
+	return a.RunPreparedPrompt(ctx, PreparedPromptRequest{CorrelationID: req.CorrelationID})
+}
+
+// PreparePrompt validates and appends a prompt and its context without calling
+// the model. Context is framed as hidden, untrusted model input immediately
+// before the visible user message.
+func (a *Agent) PreparePrompt(req PromptRequest) error {
+	if strings.TrimSpace(req.Input) == "" {
+		return NewError(ErrorCodeInvalidArgument, "prompt input is required", nil)
+	}
+	contextMessages, err := externalContextMessages(req.Context, a.def.IDGenerator)
+	if err != nil {
+		return err
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.running || hasPreparedPrompt(a.transcript) {
+		return NewError(ErrorCodeBusy, "agent already has a prepared or running prompt", nil)
+	}
+	a.transcript = append(a.transcript, contextMessages...)
+	a.transcript = append(a.transcript, Message{
+		ID:      a.def.IDGenerator.NewID("msg"),
+		Role:    RoleUser,
+		Content: req.Input,
+	})
+	return nil
+}
+
+// RunPreparedPrompt executes the last prompt in the transcript. A fresh Agent
+// may be constructed from a transcript persisted after PreparePrompt, allowing
+// durable hosts to resume without reconstructing context themselves.
+func (a *Agent) RunPreparedPrompt(ctx context.Context, req PreparedPromptRequest) (RunResult, error) {
 	runCtx, cancel := context.WithCancel(ctx)
 	runID := a.def.IDGenerator.NewID("run")
 	run := &runState{agent: a, runID: runID, correlationID: req.CorrelationID}
@@ -83,15 +122,13 @@ func (a *Agent) Prompt(ctx context.Context, req PromptRequest) (RunResult, error
 		cancel()
 		return RunResult{}, NewError(ErrorCodeBusy, "agent is already running", nil)
 	}
+	if !hasPreparedPrompt(a.transcript) {
+		a.mu.Unlock()
+		cancel()
+		return RunResult{}, NewError(ErrorCodeInvalidArgument, "agent transcript has no prepared prompt", nil)
+	}
 	a.running = true
 	a.cancel = cancel
-	if !req.InputAlreadyAppended {
-		a.transcript = append(a.transcript, Message{
-			ID:      a.def.IDGenerator.NewID("msg"),
-			Role:    RoleUser,
-			Content: req.Input,
-		})
-	}
 	a.mu.Unlock()
 
 	defer func() {
@@ -116,6 +153,19 @@ func (a *Agent) Prompt(ctx context.Context, req PromptRequest) (RunResult, error
 	}
 	_ = run.emit(runCtx, Event{Type: EventTypeAgentEnd, Severity: severityForStop(result.StopReason), StopReason: result.StopReason})
 	return result, nil
+}
+
+func hasPreparedPrompt(messages []Message) bool {
+	lastUser, lastAssistant := -1, -1
+	for i, message := range messages {
+		switch {
+		case message.Role == RoleUser && message.Kind != MessageKindExternalContext:
+			lastUser = i
+		case message.Role == RoleAssistant:
+			lastAssistant = i
+		}
+	}
+	return lastUser > lastAssistant
 }
 
 func (a *Agent) Abort() {
@@ -245,22 +295,28 @@ func (a *Agent) completeTurn(ctx context.Context, run *runState, turnID string, 
 }
 
 func (a *Agent) buildModelRequest(run *runState, turnID string) ModelRequest {
+	transcript := a.snapshotTranscript()
+	systemPrompt := promptWithExternalContextGuidance(a.def.SystemPrompt, transcript)
 	return ModelRequest{
 		Purpose:       ModelRequestPurposeTurn,
 		RunID:         run.runID,
 		TurnID:        turnID,
 		CorrelationID: run.correlationID,
-		SystemPrompt:  a.def.SystemPrompt,
-		Messages:      a.modelMessagesFrom(a.snapshotTranscript()),
+		SystemPrompt:  systemPrompt,
+		Messages:      a.modelMessagesFrom(transcript),
 		Tools:         append([]ToolSpec(nil), a.toolSpecs...),
 		Limits:        a.def.Limits,
 	}
 }
 
 func (a *Agent) modelMessagesFrom(transcript []Message) []Message {
-	messages := []Message{{Role: RoleSystem, Content: a.def.SystemPrompt}}
+	messages := []Message{{Role: RoleSystem, Content: promptWithExternalContextGuidance(a.def.SystemPrompt, transcript)}}
 	for _, message := range transcript {
 		if message.Role == RoleSummary {
+			if message.Kind == messageKindExternalContextSummary {
+				messages = append(messages, Message{Role: RoleUser, Kind: MessageKindExternalContext, Content: "<external_context_summary>\n" + message.Content + "\n</external_context_summary>"})
+				continue
+			}
 			messages = append(messages, Message{Role: RoleSystem, Content: "Conversation summary:\n" + message.Content})
 			continue
 		}
@@ -274,7 +330,7 @@ func (a *Agent) modelMessagesFrom(transcript []Message) []Message {
 }
 
 func (a *Agent) estimateModelInputTokens(transcript []Message) int {
-	total := estimateTokens(a.def.SystemPrompt)
+	total := estimateTokens(promptWithExternalContextGuidance(a.def.SystemPrompt, transcript))
 	for _, message := range transcript {
 		total += estimateTokens(message.Content)
 		for _, call := range message.ToolCalls {

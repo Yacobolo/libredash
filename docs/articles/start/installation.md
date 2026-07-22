@@ -123,3 +123,5 @@ Use `./leapviewctl logs` when startup or health checks fail. A second process ca
 ## Next steps
 
 Continue with [Self-hosting](/docs/guides/operate/self-hosting), [Connect a data source](/docs/guides/build/connect-data), and [Build your first dashboard](/docs/first-dashboard).
+
+The commands above illustrate the installation workflow. Use the generated [`admin` CLI reference](/docs/cli/admin), [`serve` CLI reference](/docs/cli/serve), and [environment variable reference](/docs/configuration) for the exact current command and runtime contracts.

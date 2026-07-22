@@ -12,6 +12,15 @@ export interface InspectorState {
   filter: string
   /** Expanded tree paths */
   expandedPaths?: string[]
+  /** User-positioned collapsed launcher coordinates */
+  togglePosition?: InspectorPosition
+  /** User-positioned expanded panel coordinates */
+  panelPosition?: InspectorPosition
+}
+
+export interface InspectorPosition {
+  x: number
+  y: number
 }
 
 /**

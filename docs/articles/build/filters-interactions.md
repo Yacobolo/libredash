@@ -101,7 +101,7 @@ interaction:
 
 Point selection on supported visuals uses the same principle. Keep mapping values typed: a numeric zero, boolean false, string `"0"`, and null are not interchangeable.
 
-### Design predictable interactions
+## Verify predictable interactions
 
 - Make selection state visually apparent.
 - Provide a clear way to toggle or clear it.

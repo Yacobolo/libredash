@@ -4,10 +4,32 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Yacobolo/leapview/internal/agent"
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 )
+
+func TestChatTranscriptItemsProjectsTurnReferences(t *testing.T) {
+	items := ChatTranscriptItems([]agent.ChatTranscriptItem{{
+		ID: "user_1", Kind: "user", Text: "Explain this", References: []agent.TurnReference{{
+			Reference: agent.TurnReferenceKey{WorkspaceID: "sales", Type: "visual", ID: "executive-sales.revenue"},
+			Name:      "Revenue by month", Workspace: agent.TurnReferenceWorkspace{ID: "sales", Name: "Sales"},
+			Hierarchy: []string{"Sales", "Executive Sales", "Overview"}, Href: "/overview", VisualType: "line",
+		}},
+	}})
+
+	if len(items) != 1 || items[0].References == nil || len(*items[0].References) != 1 {
+		t.Fatalf("turn reference signal = %#v", items)
+	}
+	reference := (*items[0].References)[0]
+	if reference.Name != "Revenue by month" || reference.Reference.Type != "visual" || reference.Href != "/overview" {
+		t.Fatalf("turn reference signal = %#v", reference)
+	}
+	if reference.VisualType == nil || *reference.VisualType != "line" {
+		t.Fatalf("turn reference visual type = %#v, want line", reference.VisualType)
+	}
+}
 
 func TestDashboardInitialEnvelopeValidatesPageScopedPayloads(t *testing.T) {
 	report := testDashboardReport()
@@ -37,6 +59,12 @@ func TestDashboardInitialEnvelopeValidatesPageScopedPayloads(t *testing.T) {
 	}
 	if len(envelope.ComponentStatus) != 0 {
 		t.Fatalf("initial component status = %#v, want empty", envelope.ComponentStatus)
+	}
+	if envelope.AgentContext.Surface != "dashboard" || envelope.AgentContext.PageID != report.Pages[0].ID || envelope.AgentContext.ModelID != model.Name {
+		t.Fatalf("agent context = %#v", envelope.AgentContext)
+	}
+	if envelope.AgentContext.References == nil || envelope.AgentVisuals == nil {
+		t.Fatalf("dashboard agent collections must be non-nil: context=%#v visuals=%#v", envelope.AgentContext, envelope.AgentVisuals)
 	}
 }
 
@@ -103,6 +131,12 @@ func TestChatInitialEnvelopeValidates(t *testing.T) {
 	}
 	if envelope.Page.View != "list" {
 		t.Fatalf("chat page view = %q", envelope.Page.View)
+	}
+	if envelope.AgentContext.Surface != "chat" || envelope.AgentContext.WorkspaceID != "test" || envelope.AgentContext.References == nil {
+		t.Fatalf("chat context = %#v", envelope.AgentContext)
+	}
+	if envelope.AgentReferenceSearch.Results == nil {
+		t.Fatalf("chat reference search = %#v", envelope.AgentReferenceSearch)
 	}
 	if envelope.Chrome.Sidebar.History.Label != "Chats" {
 		t.Fatalf("chat history search config = %#v", envelope.Chrome.Sidebar.History)

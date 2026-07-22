@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"unicode"
 
 	docsearch "github.com/Yacobolo/leapview/internal/site/search/sqlite"
 	"gopkg.in/yaml.v3"
@@ -66,6 +67,7 @@ type collectionSpec struct {
 type documentSpec struct {
 	Slug            string `yaml:"slug" json:"slug"`
 	Title           string `yaml:"title" json:"title"`
+	Type            string `yaml:"type" json:"type"`
 	NavigationTitle string `yaml:"navigationTitle" json:"navigationTitle,omitempty"`
 	Summary         string `yaml:"summary" json:"summary"`
 	Source          string `yaml:"source" json:"source"`
@@ -269,6 +271,9 @@ func addDocument(root, section, group string, document documentSpec, seenSlugs, 
 	if document.Slug == "" || document.Title == "" || document.Source == "" {
 		return fmt.Errorf("documentation entry requires slug, title, and source")
 	}
+	if err := validateDocumentType(document); err != nil {
+		return err
+	}
 	if _, ok := seenSlugs[document.Slug]; ok {
 		return fmt.Errorf("duplicate documentation slug %q", document.Slug)
 	}
@@ -278,6 +283,16 @@ func addDocument(root, section, group string, document documentSpec, seenSlugs, 
 	if err != nil {
 		return fmt.Errorf("read documentation source %s: %w", document.Source, err)
 	}
+	heading := documentHeading(contents)
+	if heading == "" {
+		return fmt.Errorf("documentation source %s is missing an h1", document.Source)
+	}
+	if heading != document.Title {
+		return fmt.Errorf("documentation title %q does not match h1 %q in %s", document.Title, heading, document.Source)
+	}
+	if err := validateDocumentStructure(document, contents); err != nil {
+		return err
+	}
 	if document.Breadcrumb == "" {
 		document.Breadcrumb = document.Title
 	}
@@ -285,6 +300,147 @@ func addDocument(root, section, group string, document documentSpec, seenSlugs, 
 	*output = append(*output, document)
 	*search = append(*search, docsearch.Document{Slug: document.Slug, Title: document.Title, Summary: document.Summary, Section: section, Category: group, Body: string(contents), Generated: document.Generated})
 	return nil
+}
+
+var supportedDocumentTypes = map[string]struct{}{
+	"landing":     {},
+	"tutorial":    {},
+	"how-to":      {},
+	"explanation": {},
+	"reference":   {},
+}
+
+func validateDocumentType(document documentSpec) error {
+	if document.Type == "" {
+		return fmt.Errorf("documentation entry %q requires type", document.Slug)
+	}
+	if _, ok := supportedDocumentTypes[document.Type]; !ok {
+		return fmt.Errorf("documentation entry %q has unsupported type %q", document.Slug, document.Type)
+	}
+	if document.Generated && document.Type != "reference" {
+		return fmt.Errorf("generated documentation entry %q must have type reference", document.Slug)
+	}
+	return nil
+}
+
+func validateDocumentStructure(document documentSpec, contents []byte) error {
+	headings := documentSectionHeadings(contents)
+	switch document.Type {
+	case "landing":
+		if fencedCodeLine.Match(contents) {
+			return fmt.Errorf("landing %s must not contain fenced code", document.Slug)
+		}
+		destinations := map[string]struct{}{}
+		for _, match := range internalDocumentationLink.FindAllSubmatch(contents, -1) {
+			target := string(match[1])
+			if target != "/docs" && target != "/docs/search" {
+				destinations[target] = struct{}{}
+			}
+		}
+		if len(destinations) < 2 {
+			return fmt.Errorf("landing %s must link to at least two documentation destinations", document.Slug)
+		}
+	case "tutorial":
+		for _, required := range []string{"Before you begin", "Troubleshooting", "Next steps"} {
+			if !containsHeading(headings, required) {
+				return fmt.Errorf("tutorial %s is missing required section %q", document.Slug, required)
+			}
+		}
+		if !containsHeadingPrefix(headings, "Verify") {
+			return fmt.Errorf("tutorial %s requires a verification section", document.Slug)
+		}
+	case "how-to":
+		verificationHeadings := append([]string{document.Title}, headings...)
+		if !containsAnyHeadingTerm(verificationHeadings, "validat", "verif", "test", "troubleshoot", "diagnos", "check", "inspect", "monitor", "observ", "review") {
+			return fmt.Errorf("how-to %s requires a validation, verification, test, or troubleshooting section", document.Slug)
+		}
+	case "reference":
+		if !document.Generated && !fencedCodeLine.Match(contents) && !markdownTableDelimiter.Match(contents) && !markdownListLine.Match(contents) {
+			return fmt.Errorf("reference %s requires a list, table, or fenced code block", document.Slug)
+		}
+	}
+	return nil
+}
+
+func documentSectionHeadings(contents []byte) []string {
+	inFence := false
+	fence := ""
+	headings := make([]string, 0)
+	for _, rawLine := range strings.Split(string(contents), "\n") {
+		line := strings.TrimSpace(rawLine)
+		if strings.HasPrefix(line, "```") || strings.HasPrefix(line, "~~~") {
+			marker := line[:3]
+			if !inFence {
+				inFence = true
+				fence = marker
+			} else if marker == fence {
+				inFence = false
+				fence = ""
+			}
+			continue
+		}
+		if !inFence && strings.HasPrefix(line, "## ") {
+			headings = append(headings, strings.TrimSpace(strings.TrimPrefix(line, "## ")))
+		}
+	}
+	return headings
+}
+
+func containsHeading(headings []string, expected string) bool {
+	for _, heading := range headings {
+		if heading == expected {
+			return true
+		}
+	}
+	return false
+}
+
+func containsHeadingPrefix(headings []string, prefix string) bool {
+	for _, heading := range headings {
+		if strings.HasPrefix(heading, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func containsAnyHeadingTerm(headings []string, terms ...string) bool {
+	for _, heading := range headings {
+		words := strings.FieldsFunc(strings.ToLower(heading), func(character rune) bool {
+			return !unicode.IsLetter(character) && !unicode.IsNumber(character)
+		})
+		for _, word := range words {
+			for _, term := range terms {
+				if strings.HasPrefix(word, term) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func documentHeading(contents []byte) string {
+	inFence := false
+	fence := ""
+	for _, rawLine := range strings.Split(string(contents), "\n") {
+		line := strings.TrimSpace(rawLine)
+		if strings.HasPrefix(line, "```") || strings.HasPrefix(line, "~~~") {
+			marker := line[:3]
+			if !inFence {
+				inFence = true
+				fence = marker
+			} else if marker == fence {
+				inFence = false
+				fence = ""
+			}
+			continue
+		}
+		if !inFence && strings.HasPrefix(line, "# ") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "# "))
+		}
+	}
+	return ""
 }
 
 func validateNoOrphanMarkdown(root string, seenSources map[string]struct{}) error {
@@ -309,6 +465,9 @@ func validateNoOrphanMarkdown(root string, seenSources map[string]struct{}) erro
 
 var internalDocumentationLink = regexp.MustCompile(`\]\((/docs(?:/[^\s)#?]+)?)`)
 var yamlCodeFence = regexp.MustCompile("(?ms)```ya?ml(?:[ \\t]+[^\\n]*)?\\n(.*?)\\n```")
+var fencedCodeLine = regexp.MustCompile("(?m)^[ \\t]*(?:```|~~~)")
+var markdownTableDelimiter = regexp.MustCompile(`(?m)^[ \t]*\|?[ \t]*:?-{3,}:?[ \t]*\|`)
+var markdownListLine = regexp.MustCompile(`(?m)^[ \t]*(?:[-*+] |[0-9]+\. )`)
 
 func validateInternalLinks(root string, seenSources, seenSlugs map[string]struct{}) error {
 	machineLinks, err := loadMachineDocumentationLinks(root)
@@ -424,6 +583,7 @@ func loadCollection(root string, collection collectionSpec) ([]documentSpec, err
 			documents = append(documents, documentSpec{
 				Slug:      joinSlug(collection.SlugPrefix, document.Slug),
 				Title:     document.Title,
+				Type:      "reference",
 				Summary:   document.Summary,
 				Source:    filepath.ToSlash(filepath.Join(collection.SourceDir, document.Slug+".md")),
 				Generated: true,
@@ -450,6 +610,7 @@ func visualDocument(collection collectionSpec, source, title, breadcrumb string)
 	return documentSpec{
 		Slug:       joinSlug(collection.SlugPrefix, source),
 		Title:      title,
+		Type:       "reference",
 		Summary:    "Configuration and query shape for the " + title + " visual.",
 		Source:     filepath.ToSlash(filepath.Join(collection.SourceDir, source+".md")),
 		Breadcrumb: breadcrumb,

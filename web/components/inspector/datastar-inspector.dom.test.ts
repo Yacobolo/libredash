@@ -120,6 +120,13 @@ test('inspector selects a delivered signal and shows its effective history', asy
     await page.goto(baseURL)
     await page.waitForFunction(() => customElements.get('datastar-inspector'))
     const state = await page.locator('datastar-inspector').evaluate(async (element: any) => {
+      const toggleStyle = getComputedStyle(element.shadowRoot.querySelector('.toggle'))
+      const launcher = {
+        bottom: toggleStyle.bottom,
+        width: toggleStyle.width,
+        height: toggleStyle.height,
+        opacity: toggleStyle.opacity,
+      }
       element.shadowRoot.querySelector<HTMLButtonElement>('.toggle')!.click()
       await element.updateComplete
       const deadline = Date.now() + 3_000
@@ -146,6 +153,7 @@ test('inspector selects a delivered signal and shows its effective history', asy
         streamSelectors: element.shadowRoot.querySelectorAll('.signal-stream-select').length,
         hasDeliveredStream: element.shadowRoot.textContent.includes('Delivered stream'),
         storedSelection: JSON.parse(sessionStorage.getItem('ds-inspector') ?? '{}').selectedSignalPath,
+        launcher,
       }
     })
 
@@ -161,6 +169,7 @@ test('inspector selects a delivered signal and shows its effective history', asy
     expect(state.streamSelectors).toBe(0)
     expect(state.hasDeliveredStream).toBe(false)
     expect(state.storedSelection).toBeUndefined()
+    expect(state.launcher).toEqual({ bottom: '16px', width: '38px', height: '38px', opacity: '1' })
     expect(signalQueries.some((query) => query.includes('path=%2Fstatus%2FprogressPercent'))).toBe(true)
 
     await page.reload()
@@ -174,6 +183,89 @@ test('inspector selects a delivered signal and shows its effective history', asy
     })
     expect(refreshed.selected).toBeUndefined()
     expect(refreshed.hasCurrentValue).toBe(false)
+  } finally {
+    await page.close()
+  }
+})
+
+test('inspector launcher and panel can be dragged and keep their positions', async () => {
+  const page = await browser.newPage({ viewport: { width: 900, height: 650 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => customElements.get('datastar-inspector'))
+    const initialToggle = await page.locator('datastar-inspector').evaluate(async (element: any) => {
+      await element.updateComplete
+      const toggle = element.shadowRoot.querySelector('.toggle') as HTMLElement
+      const rect = toggle.getBoundingClientRect()
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+    })
+
+    await page.mouse.move(initialToggle.x + initialToggle.width / 2, initialToggle.y + initialToggle.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(initialToggle.x - 180, initialToggle.y - 120, { steps: 5 })
+    await page.mouse.up()
+
+    const movedToggle = await page.locator('datastar-inspector').evaluate(async (element: any) => {
+      await element.updateComplete
+      const toggle = element.shadowRoot.querySelector('.toggle') as HTMLElement
+      const rect = toggle.getBoundingClientRect()
+      return {
+        expanded: Boolean(element.shadowRoot.querySelector('.panel')),
+        x: rect.x,
+        y: rect.y,
+        stylePosition: { x: Number.parseFloat(toggle.style.left), y: Number.parseFloat(toggle.style.top) },
+        stored: JSON.parse(sessionStorage.getItem('ds-inspector') ?? '{}').togglePosition,
+      }
+    })
+    expect(movedToggle.expanded).toBe(false)
+    expect(movedToggle.x).toBeLessThan(initialToggle.x - 100)
+    expect(movedToggle.y).toBeLessThan(initialToggle.y - 70)
+    expect(movedToggle.stored).toEqual(movedToggle.stylePosition)
+
+    await page.locator('datastar-inspector').evaluate(async (element: any) => {
+      element.shadowRoot.querySelector<HTMLButtonElement>('.toggle')!.click()
+      await element.updateComplete
+    })
+    const initialPanel = await page.locator('datastar-inspector').evaluate((element: any) => {
+      const panel = element.shadowRoot.querySelector('.panel') as HTMLElement
+      const handle = element.shadowRoot.querySelector('.drag-handle') as HTMLElement
+      const panelRect = panel.getBoundingClientRect()
+      const handleRect = handle.getBoundingClientRect()
+      return {
+        x: panelRect.x,
+        y: panelRect.y,
+        handleX: handleRect.x + handleRect.width / 2,
+        handleY: handleRect.y + handleRect.height / 2,
+      }
+    })
+
+    await page.mouse.move(initialPanel.handleX, initialPanel.handleY)
+    await page.mouse.down()
+    await page.mouse.move(initialPanel.handleX - 80, initialPanel.handleY + 45, { steps: 5 })
+    await page.mouse.up()
+
+    const movedPanel = await page.locator('datastar-inspector').evaluate(async (element: any) => {
+      await element.updateComplete
+      const rect = element.shadowRoot.querySelector('.panel').getBoundingClientRect()
+      return {
+        x: rect.x,
+        y: rect.y,
+        stored: JSON.parse(sessionStorage.getItem('ds-inspector') ?? '{}').panelPosition,
+      }
+    })
+    expect(movedPanel.x).toBeLessThan(initialPanel.x - 50)
+    expect(movedPanel.y).toBeGreaterThan(initialPanel.y + 5)
+    expect(movedPanel.stored).toEqual({ x: movedPanel.x, y: movedPanel.y })
+
+    await page.reload()
+    await page.waitForFunction(() => customElements.get('datastar-inspector'))
+    const restoredPanel = await page.locator('datastar-inspector').evaluate(async (element: any) => {
+      await element.updateComplete
+      const rect = element.shadowRoot.querySelector('.panel').getBoundingClientRect()
+      return { x: rect.x, y: rect.y }
+    })
+    expect(restoredPanel.x).toBe(movedPanel.x)
+    expect(restoredPanel.y).toBe(movedPanel.y)
   } finally {
     await page.close()
   }

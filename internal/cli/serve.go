@@ -334,7 +334,7 @@ func servingStateBackedServer(ctx context.Context, cfg config.Config, production
 		_ = registry.Close()
 		cleanup()
 	}
-	runtimeMetrics := app.NewDynamicRuntimeMetrics("", func(workspaceID string) app.RuntimeProvider {
+	runtimeMetrics := app.NewDynamicRuntimeMetrics("", func(workspaceID string) runtimehost.Provider {
 		return registry.ProviderForWorkspace(servingstate.WorkspaceID(workspaceID))
 	})
 	assetCatalog := workspace.NewAssetCatalogService(workspaceRepo)

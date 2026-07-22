@@ -200,6 +200,13 @@ func ChatTranscriptItem(item agent.ChatTranscriptItem) ChatTranscriptItemSignal 
 		RunID:          optionalValue(item.RunID),
 		CreatedAt:      optionalValue(item.CreatedAt),
 	}
+	if len(item.References) > 0 {
+		references := make([]AgentReferenceSignal, 0, len(item.References))
+		for _, reference := range item.References {
+			references = append(references, agentReferenceSignalFromTurn(reference))
+		}
+		out.References = &references
+	}
 	if item.Artifact != nil {
 		out.Artifact = &ChatArtifactSignal{
 			Type:    item.Artifact.Type,
@@ -208,6 +215,59 @@ func ChatTranscriptItem(item agent.ChatTranscriptItem) ChatTranscriptItemSignal 
 		}
 	}
 	return out
+}
+
+func agentReferenceSignalFromTurn(reference agent.TurnReference) AgentReferenceSignal {
+	locations := make([]AgentReferenceLocationSignal, 0, len(reference.Locations))
+	for _, location := range reference.Locations {
+		locations = append(locations, AgentReferenceLocationSignal{
+			DashboardID:   optionalValue(location.DashboardID),
+			DashboardName: optionalValue(location.DashboardName),
+			PageID:        optionalValue(location.PageID),
+			PageName:      optionalValue(location.PageName),
+			Href:          location.Href,
+		})
+	}
+	hierarchy := append([]string(nil), reference.Hierarchy...)
+	if len(hierarchy) == 0 {
+		hierarchy = referenceHierarchyFromTurn(reference)
+	}
+	return AgentReferenceSignal{
+		Reference: AgentReferenceKeySignal{
+			WorkspaceID: reference.Reference.WorkspaceID,
+			Type:        reference.Reference.Type,
+			ID:          reference.Reference.ID,
+		},
+		Name:        reference.Name,
+		Description: optionalValue(reference.Description),
+		VisualType:  optionalValue(reference.VisualType),
+		Workspace:   AgentReferenceWorkspaceSignal{ID: reference.Workspace.ID, Name: reference.Workspace.Name},
+		Hierarchy:   hierarchy,
+		Href:        reference.Href,
+		Locations:   locations,
+		Context:     append([]string(nil), reference.Context...),
+	}
+}
+
+func referenceHierarchyFromTurn(reference agent.TurnReference) []string {
+	hierarchy := make([]string, 0, 3)
+	appendUnique := func(value string) {
+		value = strings.TrimSpace(value)
+		if value != "" && (len(hierarchy) == 0 || hierarchy[len(hierarchy)-1] != value) {
+			hierarchy = append(hierarchy, value)
+		}
+	}
+	appendUnique(reference.Workspace.Name)
+	if len(reference.Locations) > 0 {
+		location := reference.Locations[0]
+		if reference.Reference.Type == "page" || reference.Reference.Type == "visual" {
+			appendUnique(location.DashboardName)
+		}
+		if reference.Reference.Type == "visual" {
+			appendUnique(location.PageName)
+		}
+	}
+	return hierarchy
 }
 
 func DashboardInitialEnvelope(clientID, streamInstanceID string, catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model, pages []dashboard.Page, activePage dashboard.Page, initialFilters dashboard.Filters) DashboardEnvelope {
@@ -220,7 +280,36 @@ func DashboardInitialEnvelope(clientID, streamInstanceID string, catalog dashboa
 		modelTitle = model.Title
 	}
 	return DashboardEnvelope{
-		Chrome: ChromeSignal{Sidebar: sidebarConfig(catalog, "workspaces", report.ID, workspaceDisplayTitle(catalog), report.Title, activePage.Title, modelID, modelTitle, true, "", strings.TrimSpace(catalog.Workspace.ID) != "")},
+		Agent: ChatSignal{
+			Conversations: []ChatConversationSummary{},
+			Transcript:    []ChatTranscriptItemSignal{},
+			Status: ChatStatus{
+				Enabled: false,
+				Running: false,
+				Error:   optionalValue("Agent is not configured"),
+			},
+			Composer: ComposerSignal{
+				Disabled:    true,
+				Placeholder: "Agent is not configured",
+			},
+		},
+		AgentContext: AgentContextSignal{
+			Surface:        "dashboard",
+			WorkspaceID:    catalog.Workspace.ID,
+			DashboardID:    report.ID,
+			DashboardTitle: report.Title,
+			PageID:         activePage.ID,
+			PageTitle:      activePage.Title,
+			ModelID:        modelID,
+			Filters:        DashboardFiltersFromDashboard(initialFilters),
+			ReferenceLimit: agent.MaxTurnReferences,
+			References:     []AgentReferenceSignal{},
+		},
+		AgentReferenceSearch: AgentReferenceSearchSignal{
+			Results: []AgentReferenceSignal{},
+		},
+		AgentVisuals: map[string]DashboardVisual{},
+		Chrome:       ChromeSignal{Sidebar: sidebarConfig(catalog, "workspaces", report.ID, workspaceDisplayTitle(catalog), report.Title, activePage.Title, modelID, modelTitle, true, "", strings.TrimSpace(catalog.Workspace.ID) != "")},
 		Page: DashboardPageSignal{
 			Kind:           RouteDashboard,
 			Presentation:   "app",
@@ -273,9 +362,17 @@ func ChatInitialEnvelope(catalog dashboard.Catalog, workspaceID, roleLabel, view
 	return ChatEnvelope{
 		Chrome:  chrome,
 		Page:    ChatPage(workspaceID, view, state.Agent),
-		Runtime: RouteRuntimeSignal{Kind: RouteChat},
+		Runtime: RouteRuntimeSignal{Kind: RouteChat, WorkspaceID: optionalValue(workspaceID)},
 		Agent:   state.Agent,
-		Visuals: state.Visuals,
+		AgentContext: AgentContextSignal{
+			Surface:        "chat",
+			WorkspaceID:    workspaceID,
+			Filters:        DashboardFilters{Controls: map[string]DashboardFilterControl{}, Selections: []DashboardInteractionSelection{}},
+			ReferenceLimit: agent.MaxTurnReferences,
+			References:     []AgentReferenceSignal{},
+		},
+		AgentReferenceSearch: AgentReferenceSearchSignal{Results: []AgentReferenceSignal{}},
+		Visuals:              state.Visuals,
 	}
 }
 

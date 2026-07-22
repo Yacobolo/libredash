@@ -20,6 +20,7 @@ func TestGenerateBuildsUnifiedCatalogFromArticlesAndGeneratedCollections(t *test
     documents:
       - slug: getting-started
         title: Getting started
+        type: explanation
         navigationTitle: Overview
         summary: Run the sample project.
         source: articles/getting-started.md
@@ -36,13 +37,14 @@ func TestGenerateBuildsUnifiedCatalogFromArticlesAndGeneratedCollections(t *test
           slugPrefix: cli
           index:
             slug: cli
-            title: CLI reference
+            title: CLI command reference
+            type: reference
             summary: Command index.
             source: reference/cli/index.md
 `)
 	writeFixture(t, root, "articles/getting-started.md", "# Getting started\n")
-	writeFixture(t, root, "reference/cli/index.md", "# CLI reference\n")
-	writeFixture(t, root, "reference/cli/deploy.md", "# Deploy\n")
+	writeFixture(t, root, "reference/cli/index.md", "# CLI command reference\n\n| Command | Purpose |\n| --- | --- |\n| deploy | Deploy a project |\n")
+	writeFixture(t, root, "reference/cli/deploy.md", "# leapview deploy\n")
 	writeFixture(t, root, "reference/cli/catalog.json", `{"documents":[{"slug":"deploy","title":"leapview deploy","summary":"Deploy a project."}]}`)
 
 	searchPath := filepath.Join(root, "search-index.sqlite3")
@@ -105,7 +107,7 @@ func TestGenerateRejectsUnknownNavigationFields(t *testing.T) {
   - id: concepts
     title: Core concepts
     documents:
-      - {slug: projects, title: Projects, workspaces, and environments, source: projects.md}
+      - {slug: projects, title: Projects, type: explanation, workspaces: and environments, source: projects.md}
 `)
 	writeFixture(t, root, "projects.md", "# Projects, workspaces, and environments\n")
 
@@ -115,14 +117,209 @@ func TestGenerateRejectsUnknownNavigationFields(t *testing.T) {
 	}
 }
 
+func TestGenerateRequiresSupportedDocumentationType(t *testing.T) {
+	tests := []struct {
+		name      string
+		typeField string
+		want      string
+	}{
+		{name: "missing", want: `documentation entry "one" requires type`},
+		{name: "unsupported", typeField: "        type: recipe\n", want: `documentation entry "one" has unsupported type "recipe"`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			writeFixture(t, root, "navigation.yaml", `sections:
+  - id: start
+    title: Start
+    documents:
+      - slug: one
+        title: One
+`+tt.typeField+`        source: one.md
+`)
+			writeFixture(t, root, "one.md", "# One\n")
+
+			err := generate(filepath.Join(root, "navigation.yaml"), filepath.Join(root, "catalog.json"), filepath.Join(root, "search-index.sqlite3"))
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("generate error = %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestGenerateValidatesTutorialStructure(t *testing.T) {
+	root := t.TempDir()
+	writeFixture(t, root, "navigation.yaml", `sections:
+  - id: start
+    title: Start
+    documents:
+      - slug: first-project
+        title: Build your first project
+        type: tutorial
+        source: first-project.md
+`)
+	writeFixture(t, root, "first-project.md", "# Build your first project\n\n## Make a change\n")
+
+	err := generate(filepath.Join(root, "navigation.yaml"), filepath.Join(root, "catalog.json"), filepath.Join(root, "search-index.sqlite3"))
+	if err == nil || !strings.Contains(err.Error(), `tutorial first-project is missing required section "Before you begin"`) {
+		t.Fatalf("generate error = %v, want tutorial structure error", err)
+	}
+}
+
+func TestGenerateRequiresHowToVerification(t *testing.T) {
+	root := t.TempDir()
+	writeFixture(t, root, "navigation.yaml", `sections:
+  - id: guides
+    title: Guides
+    documents:
+      - slug: rotate-token
+        title: Rotate a token
+        type: how-to
+        source: rotate-token.md
+`)
+	writeFixture(t, root, "rotate-token.md", "# Rotate a token\n\n## Replace the credential\n")
+
+	err := generate(filepath.Join(root, "navigation.yaml"), filepath.Join(root, "catalog.json"), filepath.Join(root, "search-index.sqlite3"))
+	if err == nil || !strings.Contains(err.Error(), "how-to rotate-token requires a validation, verification, test, or troubleshooting section") {
+		t.Fatalf("generate error = %v, want how-to verification error", err)
+	}
+}
+
+func TestGenerateDoesNotTreatLatestAsATestSection(t *testing.T) {
+	root := t.TempDir()
+	writeFixture(t, root, "navigation.yaml", `sections:
+  - id: guides
+    title: Guides
+    documents:
+      - slug: upgrade
+        title: Upgrade LeapView
+        type: how-to
+        source: upgrade.md
+`)
+	writeFixture(t, root, "upgrade.md", "# Upgrade LeapView\n\n## Choose the latest release\n")
+
+	err := generate(filepath.Join(root, "navigation.yaml"), filepath.Join(root, "catalog.json"), filepath.Join(root, "search-index.sqlite3"))
+	if err == nil || !strings.Contains(err.Error(), "how-to upgrade requires a validation, verification, test, or troubleshooting section") {
+		t.Fatalf("generate error = %v, want how-to verification error", err)
+	}
+}
+
+func TestGenerateValidatesLandingPageNavigation(t *testing.T) {
+	tests := []struct {
+		name     string
+		markdown string
+		want     string
+	}{
+		{
+			name:     "too few destinations",
+			markdown: "# Start here\n\n[Install](/docs/installation)\n",
+			want:     "landing start-here must link to at least two documentation destinations",
+		},
+		{
+			name:     "procedural code fence",
+			markdown: "# Start here\n\n[Install](/docs/installation) and [Tutorial](/docs/tutorial).\n\n```sh\nleapview serve\n```\n",
+			want:     "landing start-here must not contain fenced code",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			writeFixture(t, root, "navigation.yaml", `sections:
+  - id: start
+    title: Start
+    documents:
+      - slug: start-here
+        title: Start here
+        type: landing
+        source: start-here.md
+`)
+			writeFixture(t, root, "start-here.md", tt.markdown)
+
+			err := generate(filepath.Join(root, "navigation.yaml"), filepath.Join(root, "catalog.json"), filepath.Join(root, "search-index.sqlite3"))
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("generate error = %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestGenerateRequiresAuthoredReferenceStructure(t *testing.T) {
+	root := t.TempDir()
+	writeFixture(t, root, "navigation.yaml", `sections:
+  - id: reference
+    title: Reference
+    documents:
+      - slug: api-conventions
+        title: API conventions
+        type: reference
+        source: api-conventions.md
+`)
+	writeFixture(t, root, "api-conventions.md", "# API conventions\n\nThis page describes the API.\n")
+
+	err := generate(filepath.Join(root, "navigation.yaml"), filepath.Join(root, "catalog.json"), filepath.Join(root, "search-index.sqlite3"))
+	if err == nil || !strings.Contains(err.Error(), "reference api-conventions requires a list, table, or fenced code block") {
+		t.Fatalf("generate error = %v, want authored reference structure error", err)
+	}
+}
+
+func TestGenerateClassifiesGeneratedCollectionsAsReference(t *testing.T) {
+	root := t.TempDir()
+	writeFixture(t, root, "navigation.yaml", `sections:
+  - id: reference
+    title: Reference
+    groups:
+      - id: cli
+        title: CLI
+        collection:
+          kind: catalog
+          catalog: reference/cli/catalog.json
+          sourceDir: reference/cli
+          slugPrefix: cli
+`)
+	writeFixture(t, root, "reference/cli/deploy.md", "# leapview deploy\n")
+	writeFixture(t, root, "reference/cli/catalog.json", `{"documents":[{"slug":"deploy","title":"leapview deploy","summary":"Deploy a project."}]}`)
+
+	if err := generate(filepath.Join(root, "navigation.yaml"), filepath.Join(root, "catalog.json"), filepath.Join(root, "search-index.sqlite3")); err != nil {
+		t.Fatalf("generate documentation catalog: %v", err)
+	}
+
+	var catalog generatedCatalog
+	decodeFixture(t, filepath.Join(root, "catalog.json"), &catalog)
+	if got, want := catalog.Sections[0].Groups[0].Documents[0].Type, "reference"; got != want {
+		t.Fatalf("generated document type = %q, want %q", got, want)
+	}
+}
+
+func TestGenerateRejectsDocumentTitleThatDoesNotMatchHeading(t *testing.T) {
+	root := t.TempDir()
+	writeFixture(t, root, "navigation.yaml", `sections:
+  - id: concepts
+    title: Core concepts
+    documents:
+      - slug: projects
+        title: Projects and workspaces
+        type: explanation
+        navigationTitle: Projects
+        source: projects.md
+`)
+	writeFixture(t, root, "projects.md", "# Project concepts\n")
+
+	err := generate(filepath.Join(root, "navigation.yaml"), filepath.Join(root, "catalog.json"), filepath.Join(root, "search-index.sqlite3"))
+	if err == nil || !strings.Contains(err.Error(), `title "Projects and workspaces" does not match h1 "Project concepts"`) {
+		t.Fatalf("generate error = %v, want title/h1 mismatch", err)
+	}
+}
+
 func TestGenerateRejectsDuplicateSlugs(t *testing.T) {
 	root := t.TempDir()
 	writeFixture(t, root, "navigation.yaml", `sections:
   - id: start
     title: Start
     documents:
-      - {slug: duplicate, title: One, source: one.md}
-      - {slug: duplicate, title: Two, source: two.md}
+      - {slug: duplicate, title: One, type: explanation, source: one.md}
+      - {slug: duplicate, title: Two, type: explanation, source: two.md}
 `)
 	writeFixture(t, root, "one.md", "# One\n")
 	writeFixture(t, root, "two.md", "# Two\n")
@@ -139,7 +336,7 @@ func TestGenerateRejectsMissingDocumentSource(t *testing.T) {
   - id: start
     title: Start
     documents:
-      - {slug: missing, title: Missing, source: missing.md}
+      - {slug: missing, title: Missing, type: explanation, source: missing.md}
 `)
 
 	err := generate(filepath.Join(root, "navigation.yaml"), filepath.Join(root, "catalog.json"), filepath.Join(root, "search-index.sqlite3"))
@@ -154,7 +351,7 @@ func TestGenerateRejectsOrphanedMarkdown(t *testing.T) {
   - id: start
     title: Start
     documents:
-      - {slug: one, title: One, source: one.md}
+      - {slug: one, title: One, type: explanation, source: one.md}
 `)
 	writeFixture(t, root, "one.md", "# One\n")
 	writeFixture(t, root, "orphan.md", "# Orphan\n")
@@ -171,7 +368,7 @@ func TestGenerateRejectsBrokenInternalLink(t *testing.T) {
   - id: start
     title: Start
     documents:
-      - {slug: one, title: One, source: one.md}
+      - {slug: one, title: One, type: explanation, source: one.md}
 `)
 	writeFixture(t, root, "one.md", "# One\n\n[Missing](/docs/missing)\n")
 
@@ -187,7 +384,7 @@ func TestGenerateRejectsInvalidYAMLExample(t *testing.T) {
   - id: start
     title: Start
     documents:
-      - {slug: one, title: One, source: one.md}
+      - {slug: one, title: One, type: explanation, source: one.md}
 `)
 	writeFixture(t, root, "one.md", "# One\n\n```yaml\nitems: [unterminated\n```\n")
 
@@ -206,7 +403,7 @@ func TestCheckGeneratedRejectsOutdatedArtifacts(t *testing.T) {
   - id: start
     title: Start
     documents:
-      - {slug: one, title: One, source: one.md}
+      - {slug: one, title: One, type: explanation, source: one.md}
 `)
 	writeFixture(t, root, "one.md", "# One\n")
 	writeFixture(t, root, "catalog.json", "{}\n")

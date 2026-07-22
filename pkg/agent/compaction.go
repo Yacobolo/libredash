@@ -37,11 +37,15 @@ func (a *Agent) maybeCompact(ctx context.Context, run *runState, force bool) err
 	}
 
 	_ = run.emit(ctx, Event{Type: EventTypeCompactionStart, Severity: SeverityInfo})
+	contextBearingMessages := older
+	if summary.Content != "" {
+		contextBearingMessages = append([]Message{summary}, older...)
+	}
 	req := ModelRequest{
 		Purpose:       ModelRequestPurposeCompaction,
 		RunID:         run.runID,
 		CorrelationID: run.correlationID,
-		SystemPrompt:  a.def.Compaction.SystemPrompt,
+		SystemPrompt:  promptWithExternalContextGuidance(a.def.Compaction.SystemPrompt, contextBearingMessages),
 		Messages:      a.compactionMessages(summary, older),
 		Tools:         nil,
 		Limits:        a.def.Limits,
@@ -56,9 +60,14 @@ func (a *Agent) maybeCompact(ctx context.Context, run *runState, force bool) err
 		return nil
 	}
 
+	summaryKind := MessageKind("")
+	if hasExternalContext(older) || summary.Kind == messageKindExternalContextSummary {
+		summaryKind = messageKindExternalContextSummary
+	}
 	next := []Message{{
 		ID:      a.def.IDGenerator.NewID("msg"),
 		Role:    RoleSummary,
+		Kind:    summaryKind,
 		Content: resp.Content,
 	}}
 	next = append(next, keep...)
@@ -105,7 +114,11 @@ func splitCompleteTurns(messages []Message) [][]Message {
 	var turns [][]Message
 	var current []Message
 	for _, message := range messages {
-		if message.Role == RoleUser && len(current) > 0 {
+		if message.Kind == MessageKindExternalContext && turnHasAssistant(current) {
+			turns = append(turns, current)
+			current = nil
+		}
+		if message.Role == RoleUser && message.Kind != MessageKindExternalContext && turnHasVisibleUser(current) {
 			turns = append(turns, current)
 			current = nil
 		}
@@ -115,6 +128,15 @@ func splitCompleteTurns(messages []Message) [][]Message {
 		turns = append(turns, current)
 	}
 	return turns
+}
+
+func turnHasVisibleUser(messages []Message) bool {
+	for _, message := range messages {
+		if message.Role == RoleUser && message.Kind != MessageKindExternalContext {
+			return true
+		}
+	}
+	return false
 }
 
 func turnHasAssistant(messages []Message) bool {
@@ -127,9 +149,17 @@ func turnHasAssistant(messages []Message) bool {
 }
 
 func (a *Agent) compactionMessages(summary Message, older []Message) []Message {
-	messages := []Message{{Role: RoleSystem, Content: a.def.Compaction.SystemPrompt}}
+	contextBearingMessages := older
 	if summary.Content != "" {
-		messages = append(messages, Message{Role: RoleSystem, Content: "Existing summary:\n" + summary.Content})
+		contextBearingMessages = append([]Message{summary}, older...)
+	}
+	messages := []Message{{Role: RoleSystem, Content: promptWithExternalContextGuidance(a.def.Compaction.SystemPrompt, contextBearingMessages)}}
+	if summary.Content != "" {
+		if summary.Kind == messageKindExternalContextSummary {
+			messages = append(messages, Message{Role: RoleUser, Kind: MessageKindExternalContext, Content: "<external_context_summary>\n" + summary.Content + "\n</external_context_summary>"})
+		} else {
+			messages = append(messages, Message{Role: RoleSystem, Content: "Existing summary:\n" + summary.Content})
+		}
 	}
 	for _, message := range older {
 		message.DisplayContent = nil

@@ -66,4 +66,4 @@ After restoration:
 
 If any authoritative external store was restored to a different point, reconcile it before admitting traffic. Do not repair metadata by manually changing snapshot IDs or moving Parquet files.
 
-Read [Storage architecture](/docs/storage-architecture) for the detailed model and [Backup and restore](/docs/guides/operate/backup-restore) for the production runbook.
+Read [Storage architecture](/docs/storage-architecture) for the detailed model and [Backup and restore](/docs/guides/operate/backup-restore) for the production runbook. Use the generated [`admin backup`](/docs/cli/admin-backup) and [`admin restore`](/docs/cli/admin-restore) references for exact flags and accepted arguments.

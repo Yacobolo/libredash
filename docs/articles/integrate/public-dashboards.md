@@ -61,6 +61,12 @@ Users with `MANAGE_PUBLICATIONS` can use **Admin → Publications** or the dashb
 
 Mutation API requests require an `Idempotency-Key`.
 
+## Verify the publication
+
+Open the standalone URL in a private browser session and confirm the dashboard loads, page navigation works, and no application or agent controls appear. Embed the iframe from an allowed origin and exercise filters, selections, and table windows. A parent origin not listed in `allowedOrigins` must be rejected by browser CSP.
+
+Suspend the publication from **Admin → Publications** and confirm the document becomes unavailable and any active stream closes. Resume it before sharing the URL. Use rotation only when the old URL must stop working immediately.
+
 ## Embed safely
 
 Use the generated iframe snippet. Keep `sandbox="allow-scripts allow-same-origin"` and `referrerpolicy="no-referrer"`. The iframe document has no authenticated application chrome or cookies, and browser CSP verifies that the parent origin is explicitly allowed.

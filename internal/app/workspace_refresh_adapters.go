@@ -115,38 +115,22 @@ type appRefreshRuntimeHost struct {
 
 func (h appRefreshRuntimeHost) PrepareServingState(ctx context.Context, servingStateID string) (servingstate.PreparedRuntime, error) {
 	if h.reloader == nil {
-		return nil, nil
+		return nil, fmt.Errorf("runtime host is not configured")
 	}
 	return h.reloader.PrepareServingState(ctx, servingStateID)
 }
 
-func (h appRefreshRuntimeHost) CommitPrepared(prepared servingstate.PreparedRuntime) error {
-	if h.reloader == nil || prepared == nil {
-		return nil
-	}
-	return h.reloader.CommitPrepared(prepared)
-}
-
-func (h appRefreshRuntimeHost) CommitPreparedWithActivation(prepared servingstate.PreparedRuntime, activate func() error) error {
-	if h.reloader == nil || prepared == nil {
-		return activate()
-	}
-	if atomic, ok := h.reloader.(interface {
-		CommitPreparedWithActivation(servingstate.PreparedRuntime, func() error) error
-	}); ok {
-		return atomic.CommitPreparedWithActivation(prepared, activate)
-	}
-	if err := activate(); err != nil {
-		return err
-	}
-	return h.reloader.CommitPrepared(prepared)
-}
-
-func (h appRefreshRuntimeHost) Reload(ctx context.Context) error {
+func (h appRefreshRuntimeHost) ActivatePrepared(prepared servingstate.PreparedRuntime, activate func() error) error {
 	if h.reloader == nil {
-		return nil
+		return fmt.Errorf("runtime host is not configured")
 	}
-	return h.reloader.Reload(ctx)
+	if prepared == nil {
+		return fmt.Errorf("prepared runtime is required")
+	}
+	if activate == nil {
+		return fmt.Errorf("metadata activation is required")
+	}
+	return h.reloader.ActivatePrepared(prepared, activate)
 }
 
 type appRefreshRetention struct {

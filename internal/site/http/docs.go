@@ -15,13 +15,16 @@ import (
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/renderer"
+	"github.com/yuin/goldmark/util"
 	g "maragu.dev/gomponents"
 	h "maragu.dev/gomponents/html"
 )
 
 var markdownRenderer = goldmark.New(
 	goldmark.WithExtensions(extension.GFM),
-	goldmark.WithParserOptions(parser.WithAttribute()),
+	goldmark.WithParserOptions(parser.WithAttribute(), parser.WithAutoHeadingID()),
+	goldmark.WithRendererOptions(renderer.WithNodeRenderers(util.Prioritized(semanticTableCellRenderer{}, 100))),
 )
 
 type siteDocument struct {
@@ -36,12 +39,14 @@ type siteDocument struct {
 	groupID            string
 	source             string
 	navigationTitle    string
+	documentType       string
 	generated          bool
 }
 
 type siteCatalogDocument struct {
 	Slug            string `json:"slug"`
 	Title           string `json:"title"`
+	Type            string `json:"type"`
 	NavigationTitle string `json:"navigationTitle"`
 	Summary         string `json:"summary"`
 	Source          string `json:"source"`
@@ -154,6 +159,7 @@ func (loaded *loadedDocumentation) add(section siteCatalogSection, group siteCat
 		groupID:            group.ID,
 		source:             document.Source,
 		navigationTitle:    document.NavigationTitle,
+		documentType:       document.Type,
 		generated:          document.Generated,
 	}
 	loaded.documents = append(loaded.documents, entry)
@@ -381,6 +387,7 @@ func renderSiteNode(node g.Node) string {
 func siteDocsArticleFooter(document siteDocument) g.Node {
 	sourceLabel, sourceHref := documentationSourceLink(document)
 	return h.Footer(h.Class("site-docs-article-footer"),
+		siteDocsPagination(document),
 		h.Section(h.Class("site-docs-page-meta"), g.Attr("aria-labelledby", "site-docs-about-this-page"),
 			h.H2(h.ID("site-docs-about-this-page"), g.Text("About this page")),
 			h.Ul(
@@ -389,6 +396,57 @@ func siteDocsArticleFooter(document siteDocument) g.Node {
 				h.Li(h.A(h.Href(sourceHref), g.Attr("rel", "external"), g.Text(sourceLabel))),
 			),
 		),
+	)
+}
+
+func siteDocsPagination(document siteDocument) g.Node {
+	previous, next := adjacentSiteDocuments(document.slug)
+	if previous == nil && next == nil {
+		return nil
+	}
+	return h.Nav(
+		h.Class("site-docs-pagination"),
+		g.Attr("aria-label", "Documentation pagination"),
+		siteDocsPaginationCard(previous, "previous"),
+		siteDocsPaginationCard(next, "next"),
+	)
+}
+
+func adjacentSiteDocuments(slug string) (previous, next *siteDocument) {
+	for index := range siteDocuments {
+		if siteDocuments[index].slug != slug {
+			continue
+		}
+		if index > 0 {
+			previous = &siteDocuments[index-1]
+		}
+		if index+1 < len(siteDocuments) {
+			next = &siteDocuments[index+1]
+		}
+		return previous, next
+	}
+	return nil, nil
+}
+
+func siteDocsPaginationCard(document *siteDocument, direction string) g.Node {
+	if document == nil {
+		return nil
+	}
+	label, rel, arrow := "Next", "next", "→"
+	if direction == "previous" {
+		label, rel, arrow = "Previous", "prev", "←"
+	}
+	directionNodes := []g.Node{g.Text(label), h.Span(h.Class("site-docs-pagination-arrow"), g.Attr("aria-hidden", "true"), g.Text(arrow))}
+	if direction == "previous" {
+		directionNodes[0], directionNodes[1] = directionNodes[1], directionNodes[0]
+	}
+	return h.A(
+		h.Class("site-docs-pagination-card site-docs-pagination-"+direction),
+		h.Href("/docs/"+document.slug),
+		h.Rel(rel),
+		g.Attr("aria-label", label+" page: "+document.title),
+		h.Span(h.Class("site-docs-pagination-direction"), g.Group(directionNodes)),
+		h.Span(h.Class("site-docs-pagination-title"), g.Text(document.title)),
 	)
 }
 

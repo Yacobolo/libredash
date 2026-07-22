@@ -16184,6 +16184,376 @@ paths:
       x-authz:
         mode: privilege
         privilege: VIEW_ITEM
+  /api/v1/search:
+    get:
+      operationId: search
+      summary: Search accessible product objects
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+          example: example
+          explode: false
+        - name: workspace
+          in: query
+          required: false
+          schema:
+            type: array
+            items:
+              type: string
+          example:
+            - example
+          explode: false
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/SearchResultType'
+          example:
+            - workspace
+          explode: false
+        - name: contextWorkspace
+          in: query
+          required: false
+          schema:
+            type: string
+          example: example
+          explode: false
+        - name: contextDashboard
+          in: query
+          required: false
+          schema:
+            type: string
+          example: example
+          explode: false
+        - name: contextPage
+          in: query
+          required: false
+          schema:
+            type: string
+          example: example
+          explode: false
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: !!float 1
+            maximum: !!float 200
+          example: 1
+          explode: false
+        - name: pageToken
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 2048
+          example: example
+          explode: false
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+              example:
+                items:
+                  - context:
+                      - current_page
+                    description: example
+                    href: example
+                    locations:
+                      - dashboardId: example
+                        dashboardName: example
+                        href: example
+                        pageId: example
+                        pageName: example
+                    name: example
+                    reference:
+                      id: example
+                      type: workspace
+                      workspaceId: example
+                    visualType: example
+                    workspace:
+                      id: example
+                      name: example
+                page:
+                  nextCursor: example
+        '400':
+          description: The server could not understand the request due to invalid syntax.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                code: example
+                detail: example
+                errors:
+                  - code: example
+                    detail: example
+                    field: example
+                instance: example
+                requestId: example
+                status: 1
+                title: example
+                type: example
+        '401':
+          description: Access is unauthorized.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                code: example
+                detail: example
+                errors:
+                  - code: example
+                    detail: example
+                    field: example
+                instance: example
+                requestId: example
+                status: 1
+                title: example
+                type: example
+        '403':
+          description: Access is forbidden.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                code: example
+                detail: example
+                errors:
+                  - code: example
+                    detail: example
+                    field: example
+                instance: example
+                requestId: example
+                status: 1
+                title: example
+                type: example
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                code: example
+                detail: example
+                errors:
+                  - code: example
+                    detail: example
+                    field: example
+                instance: example
+                requestId: example
+                status: 1
+                title: example
+                type: example
+        '409':
+          description: The request conflicts with the current state of the server.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                code: example
+                detail: example
+                errors:
+                  - code: example
+                    detail: example
+                    field: example
+                instance: example
+                requestId: example
+                status: 1
+                title: example
+                type: example
+        '412':
+          description: Precondition failed.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                code: example
+                detail: example
+                errors:
+                  - code: example
+                    detail: example
+                    field: example
+                instance: example
+                requestId: example
+                status: 1
+                title: example
+                type: example
+        '413':
+          description: Client error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                code: example
+                detail: example
+                errors:
+                  - code: example
+                    detail: example
+                    field: example
+                instance: example
+                requestId: example
+                status: 1
+                title: example
+                type: example
+        '415':
+          description: Client error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                code: example
+                detail: example
+                errors:
+                  - code: example
+                    detail: example
+                    field: example
+                instance: example
+                requestId: example
+                status: 1
+                title: example
+                type: example
+        '422':
+          description: Client error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                code: example
+                detail: example
+                errors:
+                  - code: example
+                    detail: example
+                    field: example
+                instance: example
+                requestId: example
+                status: 1
+                title: example
+                type: example
+        '429':
+          description: Client error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                code: example
+                detail: example
+                errors:
+                  - code: example
+                    detail: example
+                    field: example
+                instance: example
+                requestId: example
+                status: 1
+                title: example
+                type: example
+        '500':
+          description: Server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                code: example
+                detail: example
+                errors:
+                  - code: example
+                    detail: example
+                    field: example
+                instance: example
+                requestId: example
+                status: 1
+                title: example
+                type: example
+        '502':
+          description: Server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                code: example
+                detail: example
+                errors:
+                  - code: example
+                    detail: example
+                    field: example
+                instance: example
+                requestId: example
+                status: 1
+                title: example
+                type: example
+        '503':
+          description: Service unavailable.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                code: example
+                detail: example
+                errors:
+                  - code: example
+                    detail: example
+                    field: example
+                instance: example
+                requestId: example
+                status: 1
+                title: example
+                type: example
+      tags:
+        - Search
+      x-apigen-tool:
+        confirmation: never
+        effect: read
+        input:
+          fields:
+            - default: !!float 10
+              name: limit
+              source: query
+        name: search
+        output:
+          cursor:
+            source: /page/nextCursor
+          mode: project
+          select:
+            - count_as: count
+              select:
+                - source: /reference/workspaceId
+                  target: workspaceId
+                - source: /reference/type
+                  target: type
+                - source: /reference/id
+                  target: id
+                - source: /name
+                - source: /description
+                - source: /href
+              source: /items
+        tags:
+          - search
+          - discovery
+      x-authz:
+        mode: privilege
+        privilege: VIEW_ITEM
   /api/v1/service-principals:
     get:
       operationId: listServicePrincipals
@@ -34632,341 +35002,6 @@ paths:
       x-authz:
         mode: privilege
         privilege: MANAGE_GRANTS
-  /api/v1/workspaces/{workspace}/search:
-    get:
-      operationId: searchWorkspace
-      summary: Search workspace
-      parameters:
-        - name: workspace
-          in: path
-          required: true
-          schema:
-            type: string
-          example: example
-        - name: q
-          in: query
-          required: false
-          schema:
-            type: string
-          example: example
-          explode: false
-        - name: types
-          in: query
-          required: false
-          schema:
-            type: string
-          example: example
-          explode: false
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            format: int32
-            minimum: !!float 1
-            maximum: !!float 200
-          example: 1
-          explode: false
-        - name: pageToken
-          in: query
-          required: false
-          schema:
-            type: string
-            minLength: 1
-            maxLength: 2048
-          example: example
-          explode: false
-      responses:
-        '200':
-          description: The request has succeeded.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SearchResponse'
-              example:
-                items:
-                  - assetId: example
-                    dashboardId: example
-                    datasetId: example
-                    description: example
-                    fieldId: example
-                    filterId: example
-                    id: example
-                    modelId: example
-                    name: example
-                    pageId: example
-                    tableId: example
-                    type: example
-                    visualId: example
-                page:
-                  nextCursor: example
-        '400':
-          description: The server could not understand the request due to invalid syntax.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '401':
-          description: Access is unauthorized.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '403':
-          description: Access is forbidden.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '404':
-          description: The server cannot find the requested resource.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '409':
-          description: The request conflicts with the current state of the server.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '412':
-          description: Precondition failed.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '413':
-          description: Client error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '415':
-          description: Client error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '422':
-          description: Client error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '429':
-          description: Client error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '500':
-          description: Server error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '502':
-          description: Server error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '503':
-          description: Service unavailable.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-      tags:
-        - Search
-      x-apigen-tool:
-        confirmation: never
-        effect: read
-        input:
-          fields:
-            - context_key: workspace
-              mode: context
-              name: workspace
-              source: path
-            - default: !!float 10
-              name: limit
-              source: query
-        name: search_workspace
-        output:
-          cursor:
-            source: /page/nextCursor
-          mode: project
-          select:
-            - count_as: count
-              select:
-                - source: /type
-                - source: /id
-                - source: /name
-                - source: /description
-              source: /items
-        tags:
-          - search
-          - discovery
-      x-authz:
-        mode: privilege
-        privilege: VIEW_ITEM
   /api/v1/workspaces/{workspace}/semantic-models:
     get:
       operationId: listSemanticModels
@@ -44723,6 +44758,58 @@ components:
           example: example
       example:
         type: example
+    SearchContextTag:
+      type: string
+      enum:
+        - current_page
+        - current_dashboard
+        - current_workspace
+      example: current_page
+    SearchLocation:
+      type: object
+      required:
+        - href
+      properties:
+        dashboardId:
+          type: string
+          example: example
+        dashboardName:
+          type: string
+          example: example
+        pageId:
+          type: string
+          example: example
+        pageName:
+          type: string
+          example: example
+        href:
+          type: string
+          example: example
+      example:
+        dashboardId: example
+        dashboardName: example
+        href: example
+        pageId: example
+        pageName: example
+    SearchReference:
+      type: object
+      required:
+        - workspaceId
+        - type
+        - id
+      properties:
+        workspaceId:
+          type: string
+          example: example
+        type:
+          $ref: '#/components/schemas/SearchResultType'
+        id:
+          type: string
+          example: example
+      example:
+        id: example
+        type: workspace
+        workspaceId: example
     SearchResponse:
       type: object
       required:
@@ -44734,99 +44821,144 @@ components:
           items:
             $ref: '#/components/schemas/SearchResult'
           example:
-            - assetId: example
-              dashboardId: example
-              datasetId: example
+            - context:
+                - current_page
               description: example
-              fieldId: example
-              filterId: example
-              id: example
-              modelId: example
+              href: example
+              locations:
+                - dashboardId: example
+                  dashboardName: example
+                  href: example
+                  pageId: example
+                  pageName: example
               name: example
-              pageId: example
-              tableId: example
-              type: example
-              visualId: example
+              reference:
+                id: example
+                type: workspace
+                workspaceId: example
+              visualType: example
+              workspace:
+                id: example
+                name: example
         page:
           $ref: '#/components/schemas/PageInfo'
       example:
         items:
-          - assetId: example
-            dashboardId: example
-            datasetId: example
+          - context:
+              - current_page
             description: example
-            fieldId: example
-            filterId: example
-            id: example
-            modelId: example
+            href: example
+            locations:
+              - dashboardId: example
+                dashboardName: example
+                href: example
+                pageId: example
+                pageName: example
             name: example
-            pageId: example
-            tableId: example
-            type: example
-            visualId: example
+            reference:
+              id: example
+              type: workspace
+              workspaceId: example
+            visualType: example
+            workspace:
+              id: example
+              name: example
         page:
           nextCursor: example
     SearchResult:
       type: object
       required:
-        - id
-        - type
+        - reference
         - name
-        - description
+        - workspace
+        - href
+        - locations
+        - context
       properties:
-        id:
-          type: string
-          example: example
-        type:
-          type: string
-          example: example
+        reference:
+          $ref: '#/components/schemas/SearchReference'
         name:
           type: string
           example: example
         description:
           type: string
           example: example
-        dashboardId:
+        visualType:
           type: string
           example: example
-        pageId:
+        workspace:
+          $ref: '#/components/schemas/SearchWorkspaceSummary'
+        href:
           type: string
           example: example
-        visualId:
+        locations:
+          type: array
+          items:
+            $ref: '#/components/schemas/SearchLocation'
+          example:
+            - dashboardId: example
+              dashboardName: example
+              href: example
+              pageId: example
+              pageName: example
+        context:
+          type: array
+          items:
+            $ref: '#/components/schemas/SearchContextTag'
+          example:
+            - current_page
+      example:
+        context:
+          - current_page
+        description: example
+        href: example
+        locations:
+          - dashboardId: example
+            dashboardName: example
+            href: example
+            pageId: example
+            pageName: example
+        name: example
+        reference:
+          id: example
+          type: workspace
+          workspaceId: example
+        visualType: example
+        workspace:
+          id: example
+          name: example
+    SearchResultType:
+      type: string
+      enum:
+        - workspace
+        - connection
+        - source
+        - model_table
+        - semantic_model
+        - semantic_table
+        - field
+        - measure
+        - dashboard
+        - page
+        - visual
+        - filter
+        - refresh_pipeline
+      example: workspace
+    SearchWorkspaceSummary:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
           type: string
           example: example
-        tableId:
-          type: string
-          example: example
-        filterId:
-          type: string
-          example: example
-        modelId:
-          type: string
-          example: example
-        datasetId:
-          type: string
-          example: example
-        fieldId:
-          type: string
-          example: example
-        assetId:
+        name:
           type: string
           example: example
       example:
-        assetId: example
-        dashboardId: example
-        datasetId: example
-        description: example
-        fieldId: example
-        filterId: example
         id: example
-        modelId: example
         name: example
-        pageId: example
-        tableId: example
-        type: example
-        visualId: example
     SecurableObjectResponse:
       type: object
       required:

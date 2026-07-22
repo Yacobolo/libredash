@@ -35,6 +35,8 @@ import (
 	refreshpipelinesqlite "github.com/Yacobolo/leapview/internal/refreshpipeline/sqlite"
 	releasesqlite "github.com/Yacobolo/leapview/internal/release/sqlite"
 	"github.com/Yacobolo/leapview/internal/runtimehost"
+	productsearch "github.com/Yacobolo/leapview/internal/search"
+	searchsqlite "github.com/Yacobolo/leapview/internal/search/sqlite"
 	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
 	servingstatesqlite "github.com/Yacobolo/leapview/internal/servingstate/sqlite"
 	"github.com/Yacobolo/leapview/internal/staticasset"
@@ -97,7 +99,9 @@ type Server struct {
 	refreshPipelineRepo             refreshpipeline.Repository
 	refreshPipelineClock            refreshpipeline.Clock
 	workspaceRepo                   workspace.Repository
+	assetCatalogMu                  sync.Mutex
 	assetCatalog                    workspace.AssetCatalogReader
+	search                          *productsearch.Service
 	accessRepo                      access.Repository
 	asyncJobs                       asyncjob.Repository
 	agent                           *agent.Service
@@ -272,6 +276,7 @@ func NewWithOptions(metrics QueryMetrics, options Options) *Server {
 		if err := cursorsigningsqlite.Configure(context.Background(), options.Store.SQLDB()); err != nil {
 			server.logger.ErrorContext(context.Background(), "configure cursor signing failed", "error", err)
 		}
+		server.search = productsearch.NewService(searchsqlite.New(options.Store.SQLDB()), appSearchAuthorizer{server: server})
 	}
 	server.servingStateRepo = servingStateRepo
 	server.managedDataBindingRepo = managedDataBindingRepo
@@ -673,6 +678,9 @@ func (s *Server) dashboardHTTP() dashboardhttp.Handler {
 				return ""
 			}
 			return version.RefreshedAt.Format(time.RFC3339)
+		},
+		AgentBootstrap: func(r *http.Request, workspaceID string) ui.ChatViewState {
+			return s.agentHTTPHandler().DashboardBootstrap(r, workspaceID)
 		},
 	}
 }

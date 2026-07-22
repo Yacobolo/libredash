@@ -70,6 +70,8 @@ func (s *Server) Routes() http.Handler {
 		agentHTTP := s.agentHTTPHandler()
 		r.Get("/chats", s.globalAgentProtected(access.PrivilegeViewAgent, agentHTTP.Chat))
 		r.Get("/chats/new", s.globalAgentProtected(access.PrivilegeViewAgent, agentHTTP.ChatNew))
+		r.Get("/chats/references/search", s.globalAgentProtected(access.PrivilegeViewItem, agentHTTP.ChatReferenceSearch))
+		r.Get("/chats/restore", s.globalAgentProtected(access.PrivilegeViewAgent, agentHTTP.ChatRestore))
 		r.Get("/chats/{conversation}", s.globalAgentProtected(access.PrivilegeViewAgent, agentHTTP.ChatConversation))
 		r.Post("/chats/turns", s.globalAgentProtected(access.PrivilegeUseAgent, agentHTTP.ChatTurn))
 		r.Get("/chat", redirectLegacyChat)

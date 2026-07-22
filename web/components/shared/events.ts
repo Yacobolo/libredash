@@ -1,5 +1,11 @@
 export const domainEvents = {
   chatSubmit: 'lv-chat-submit',
+  chatReferenceSearch: 'lv-chat-reference-search',
+  chatReferencesChange: 'lv-chat-references-change',
+  agentReferencesChange: 'lv-agent-references-change',
+  chatNew: 'lv-chat-new',
+  chatRestore: 'lv-chat-restore',
+  chatDrawerClose: 'lv-chat-drawer-close',
   visualAction: 'lv-visual-action',
   visualSelect: 'lv-visual-select',
   tableWindow: 'lv-table-window',

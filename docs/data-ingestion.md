@@ -1,122 +1,22 @@
 # Managed data ingestion
 
-LeapView managed data turns local files into immutable, project-global data
-revisions. A connection belongs to the project, not to an individual workspace.
-DuckDB reads the active revision through its native CSV, Parquet, and other file
-scanners; ingestion does not insert rows one at a time.
+LeapView managed data turns local files into immutable, project-global revisions that can be reviewed and activated with the project. Use this page to choose the concept, procedure, or exact contract that matches your current need.
 
-The examples below assume the CLI is already authenticated with `leapview
-login`. Replace the paths, connection name, project ID, target, and environment
-with values from your project.
+## Understand the lifecycle
 
-## Plan a revision
+Read [Managed data and revisions](/docs/concepts/managed-data) to understand content-addressed identity, staging versus activation, upload transport boundaries, atomic project delivery, and storage ownership.
 
-Planning reads the project catalog, discovers the files used by the managed
-connection, hashes them, and prints the canonical manifest and diff. It does not
-contact the server or modify data.
+If you are designing physical inputs first, read [Connections and sources](/docs/concepts/connections-sources) for the boundary between a connection, a reusable source, and workspace permission.
 
-```sh
-leapview data plan \
-  --project dashboards/leapview.yaml \
-  --connection olist \
-  --from /srv/olist
-```
+## Complete a data task
 
-Use `--previous-manifest <path>` when you want the plan output to classify files
-as added, changed, removed, or unchanged relative to an earlier manifest.
+- [Plan, stage, and activate a data revision](/docs/guides/data/revisions).
+- [Refresh model tables](/docs/guides/data/refresh) without disrupting active readers.
+- [Back up or recover analytical storage](/docs/guides/data/storage-recovery).
+- [Diagnose ingestion and refresh failures](/docs/guides/data/troubleshooting).
 
-## Stage the files
+These guides contain goal-oriented procedures and observable verification steps. They link back to concepts instead of embedding lifecycle explanations into every command sequence.
 
-Sync plans the same source tree and transfers only objects the server does not
-already have. Local deployments use resumable tus uploads; S3 deployments use
-direct multipart uploads. The CLI streams files and verifies that they do not
-change during transfer.
+## Look up exact contracts
 
-```sh
-leapview data sync \
-  --project dashboards/leapview.yaml \
-  --connection olist \
-  --from /srv/olist \
-  --target https://leapview.example.com
-```
-
-`data sync` stages an immutable revision only. It does not activate the revision
-or change any serving workspace. A project release pins the revision digest
-alongside every workspace artifact digest. Deploying that ready release moves
-project configuration and managed data revisions together.
-
-Deploy the project with the staged digest printed by `data sync`:
-
-```sh
-leapview deploy \
-  --project dashboards/leapview.yaml \
-  --revision "olist=sha256:<64-lowercase-hex>" \
-  --environment prod \
-  --target https://leapview.example.com \
-  --auto-approve
-```
-
-Supply exactly one repeatable `--revision
-"<connection>=sha256:<64-lowercase-hex>"` flag for every managed connection in
-the project. The CLI rejects missing, duplicate, and unknown connection pins
-before creating the release. It uploads and validates every release artifact
-first, then the server deploys the ready release by switching all project-global
-revision pointers and workspace serving states in one atomic cutover. A failed
-release validation or deployment leaves every active revision and workspace
-unchanged. Projects with no managed connections use the same deploy command
-without revision flags.
-
-## Upload protocol contracts
-
-Upload-session negotiation is part of the JSON product API under
-`/api/v1/projects/{project}/connections/{connection}/upload-sessions`. It
-selects an enabled transport and returns transport endpoints, expiry, and
-required headers; it never returns storage credentials or resolved secrets.
-
-For `tus`, clients follow the TUS resumable-upload protocol at
-`/upload-protocols/tus`. Every request still requires the same bearer
-authentication as `/api/v1`. The negotiated upload ID binds the transport
-object to its product upload session, while TUS offsets and completion remain
-transport concerns.
-
-For `s3_multipart`, clients use the authenticated multipart commands nested
-beneath the upload session to create an upload, sign each part, complete it, or
-abort it. The server returns short-lived signed part URLs and the exact headers
-to send, rather than AWS credentials. Completing either transport does not make
-the revision active: clients must finalize the upload session and then pin the
-resulting immutable revision in a release.
-
-## Inspect revisions
-
-Revision inspection uses the server project ID from the project's
-`metadata.name`, not the local project file path.
-
-```sh
-leapview data revisions list \
-  --project leapview-showcase \
-  --connection olist \
-  --target https://leapview.example.com
-
-leapview data revisions current \
-  --project leapview-showcase \
-  --connection olist \
-  --environment prod \
-  --target https://leapview.example.com
-```
-
-The list command also accepts `--limit` and `--page-token`. The current command
-prints the active revision digest, or `none` when the environment has no active
-revision.
-
-## Storage and recovery
-
-The Hetzner single-node deployment uses the local backend and stores managed
-objects under `/var/lib/leapview/home/managed-data`. Its stopped-state application
-backup contains the object store and LeapView metadata, so backup and restore
-recover a complete local deployment.
-
-With the S3 backend, LeapView backups still contain the control-plane metadata
-and local runtime cache, but not the authoritative S3 objects. Enable bucket
-versioning and a bucket-native backup or replication policy. A recoverable S3
-deployment requires both the LeapView metadata backup and the corresponding
-bucket objects.
+Use the generated [CLI data command reference](/docs/cli/data) and [data revisions command reference](/docs/cli/data-revisions) for current flags and accepted arguments. Use the [Managed Data API reference](/docs/api/managed-data) for upload-session and revision operations, and the [Configuration reference](/docs/config) for connection, source, model-table, and refresh-pipeline fields.

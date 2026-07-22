@@ -58,4 +58,4 @@ Alert on repeated SCIM failures, authentication failures, unexpected mass deacti
 
 Regularly reconcile expected active users and groups. Pay special attention to direct grants that outlive group removal and disabled principals that still own securable objects or scheduled automation.
 
-See [Authentication and authorization](/docs/enterprise-auth), [OIDC](/docs/security/oidc), and [Roles, grants, and policies](/docs/security/authorization).
+See [Authentication and authorization](/docs/enterprise-auth), [OIDC](/docs/security/oidc), and [Roles, grants, and policies](/docs/security/authorization). Use the generated [environment variable reference](/docs/configuration) for the exact SCIM runtime contract and the [Access API reference](/docs/api/access) for service-principal and grant operations.

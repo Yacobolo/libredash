@@ -85,3 +85,5 @@ Use `./leapviewctl status` and `./leapviewctl logs` for health failures. Environ
 ## Next steps
 
 Continue with [Production configuration](/docs/guides/operate/production-configuration), [Backup and restore](/docs/guides/operate/backup-restore), and [Health and observability](/docs/guides/operate/observability).
+
+Use the generated [environment variable reference](/docs/configuration) and [`serve` CLI reference](/docs/cli/serve) as the source of truth for accepted runtime settings and flags.

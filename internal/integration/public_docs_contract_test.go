@@ -60,7 +60,7 @@ func TestPublicDocsAdvertiseOnlyProjectDeploy(t *testing.T) {
 	root := filepath.Join("..", "..")
 	files := []string{
 		"README.md",
-		filepath.Join("docs", "data-ingestion.md"),
+		filepath.Join("docs", "articles", "data", "revisions.md"),
 		filepath.Join("deploy", "hetzner", "README.md"),
 	}
 	for _, name := range files {
@@ -80,14 +80,14 @@ func TestPublicDocsAdvertiseOnlyProjectDeploy(t *testing.T) {
 		}
 	}
 
-	ingestion := readRepoFile(t, root, filepath.Join("docs", "data-ingestion.md"))
+	revisionsGuide := readRepoFile(t, root, filepath.Join("docs", "articles", "data", "revisions.md"))
 	for _, want := range []string{
 		"leapview data plan",
 		"leapview data sync",
 		"--revision",
 	} {
-		if !strings.Contains(ingestion, want) {
-			t.Fatalf("docs/data-ingestion.md missing current command surface %q", want)
+		if !strings.Contains(revisionsGuide, want) {
+			t.Fatalf("docs/articles/data/revisions.md missing current command surface %q", want)
 		}
 	}
 }

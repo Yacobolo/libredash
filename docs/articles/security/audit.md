@@ -63,3 +63,7 @@ Export or forward events to an approved security system when organizational rete
 7. Record findings and validate that new detection covers recurrence.
 
 Audit history supports accountability but does not replace least privilege, secure credential handling, or external monitoring.
+
+## Verify audit coverage
+
+Exercise a representative administrative change and a governed query in a non-production workspace. Confirm that the audit and query APIs record the expected principal, action, resource, status, and correlation identifiers, and verify that secret values are absent from every emitted record.

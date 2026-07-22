@@ -154,6 +154,91 @@ test('chat thread preserves plain user message text without template whitespace'
   await page.close()
 })
 
+test('chat thread renders turn-scoped references inside the user message bubble', async () => {
+  const page = await browser.newPage()
+  await page.goto(baseURL)
+  await page.evaluate(async () => {
+    await customElements.whenDefined('lv-chat-thread')
+    const thread = document.querySelector('lv-chat-thread') as any
+    thread.transcript = [{
+      id: 'user-1',
+      kind: 'user',
+      text: 'Why did revenue fall?',
+      references: [{
+        reference: { workspaceId: 'sales', type: 'visual', id: 'executive-sales.revenue' },
+        name: 'Revenue by month',
+        visualType: 'line',
+        workspace: { id: 'sales', name: 'Sales' },
+        hierarchy: ['Sales', 'Executive Sales', 'Overview'],
+        href: '/workspaces/sales/dashboards/executive-sales/pages/overview',
+        locations: [],
+        context: ['current_page'],
+      }],
+    }]
+    await thread.updateComplete
+  })
+
+  const state = await page.locator('lv-chat-thread').evaluate((element: any) => {
+    const bubble = element.shadowRoot.querySelector('.message.user .bubble')
+    const reference = bubble.querySelector('.turn-reference') as HTMLAnchorElement
+    return {
+      bubbleText: bubble.textContent.replace(/\s+/g, ' ').trim(),
+      referenceHref: reference.getAttribute('href'),
+      referenceInsideBubble: bubble.contains(reference),
+      referenceText: reference.textContent?.replace(/\s+/g, ' ').trim(),
+      tooltip: reference.getAttribute('title'),
+      accessibleName: reference.getAttribute('aria-label'),
+      hasVisibleMetadata: Boolean(reference.querySelector('.turn-reference-hierarchy, .turn-reference-type')),
+      iconClass: reference.querySelector('.turn-reference-icon svg')?.getAttribute('class'),
+    }
+  })
+
+  expect(state).toEqual({
+    bubbleText: 'Revenue by month Why did revenue fall?',
+    referenceHref: '/workspaces/sales/dashboards/executive-sales/pages/overview',
+    referenceInsideBubble: true,
+    referenceText: 'Revenue by month',
+    tooltip: 'Revenue by month · Sales › Executive Sales › Overview · Visual',
+    accessibleName: 'Revenue by month · Sales › Executive Sales › Overview · Visual',
+    hasVisibleMetadata: false,
+    iconClass: 'reference-icon-line',
+  })
+  await page.close()
+})
+
+test('chat thread uses the visual subtype for reference icons', async () => {
+  const page = await browser.newPage()
+  await page.goto(baseURL)
+  await page.evaluate(async () => {
+    await customElements.whenDefined('lv-chat-thread')
+    const thread = document.querySelector('lv-chat-thread') as any
+    const reference = (id: string, visualType: string) => ({
+      reference: { workspaceId: 'sales', type: 'visual', id },
+      name: id,
+      visualType,
+      workspace: { id: 'sales', name: 'Sales' },
+      hierarchy: ['Sales'],
+      href: `/${id}`,
+      locations: [],
+      context: [],
+    })
+    thread.transcript = [{
+      id: 'user-1',
+      kind: 'user',
+      text: 'Compare these',
+      references: [reference('trend', 'line'), reference('revenue', 'kpi'), reference('orders', 'table')],
+    }]
+    await thread.updateComplete
+  })
+
+  const classes = await page.locator('lv-chat-thread').evaluate((element: any) => (
+    Array.from(element.shadowRoot.querySelectorAll('.turn-reference-icon svg'))
+      .map((icon: any) => icon.getAttribute('class'))
+  ))
+  expect(classes).toEqual(['reference-icon-line', 'reference-icon-kpi', 'reference-icon-table'])
+  await page.close()
+})
+
 test('chat thread renders visual artifacts with dashboard web components', async () => {
   const page = await browser.newPage()
   await page.goto(baseURL)

@@ -42,6 +42,8 @@ func (s *Server) assetVersionsStateForSection(ctx context.Context, workspaceID, 
 }
 
 func (s *Server) workspaceAssetCatalogReader() (workspace.AssetCatalogReader, error) {
+	s.assetCatalogMu.Lock()
+	defer s.assetCatalogMu.Unlock()
 	if s.assetCatalog != nil {
 		return s.assetCatalog, nil
 	}

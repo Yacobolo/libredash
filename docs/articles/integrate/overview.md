@@ -1,56 +1,22 @@
 # Integrate with LeapView
 
-LeapView exposes CLI, HTTP API, built-in agent, and remote MCP surfaces backed by the same active projects, authorization, data policies, and semantic contracts. Choose the highest-level stable operation that fits the task instead of reconstructing internal workflows from low-level calls.
+LeapView exposes CLI, HTTP API, built-in agent, and remote MCP surfaces backed by the same active projects, authorization, data policies, and semantic contracts. Choose the highest-level stable operation that fits the integration.
 
-## CLI
+## Choose an integration surface
 
-Use the CLI for human-operated delivery, CI pipelines, managed-data synchronization, administrative maintenance, and quick headless queries. It provides opinionated workflows such as validate, plan, deploy, data sync, backup, and restore as well as generated access to API operations.
+- Use the [CLI](/docs/cli) for human-operated delivery, CI pipelines, managed-data synchronization, maintenance, and quick headless queries.
+- Use the [HTTP API](/docs/guides/integrate/api-quickstart) for application integrations that need typed request, response, status, pagination, and compatibility contracts.
+- Use [Headless BI queries](/docs/guides/integrate/headless-bi) for governed dashboard or semantic-model results without the LeapView browser UI.
+- Use [Public and embedded dashboards](/docs/guides/integrate/public-dashboards) for anonymous, governed dashboard presentations on approved origins.
+- Use [Agent integrations](/docs/guides/integrate/agent) for iterative natural-language exploration through the governed tool catalog.
+- Use [MCP](/docs/guides/integrate/mcp) to expose the same governed tools to Claude or another remote MCP host.
 
-The CLI is preferable when:
+## Design a reliable boundary
 
-- an operator needs readable diagnostics or an approval prompt;
-- a pipeline should follow the supported atomic deployment sequence;
-- local project files or managed-data directories are inputs;
-- shell composition is sufficient and a maintained SDK would add little value.
+Read [API conventions](/docs/guides/integrate/api-conventions) for authentication, resource identity, pagination, errors, retries, timeouts, cancellation, and compatibility. Use [Automation and CI](/docs/cli/automation) when the integration delivers projects unattended.
 
-Use `--json` where a command supports machine output. Do not parse human-readable tables as a compatibility contract.
+Every integration should use an attributable principal with the narrowest useful privileges. Read [Service principals and API tokens](/docs/security/tokens) for workload identity and credential handling, and [Roles, grants, and policies](/docs/security/authorization) for effective access.
 
-## API
+## Look up exact contracts
 
-Use the versioned HTTP API for application integrations, custom portals, catalog discovery, BI queries, deployment automation, access administration, audit export, refresh control, and agent conversations.
-
-The downloadable OpenAPI document describes paths and request/response schemas. Generate a client where that improves type safety, but retain explicit handling for authentication, pagination, rate limiting, conflicts, and server errors.
-
-The API is the right boundary when an application needs long-lived programmatic integration or when direct HTTP status and payload control matter.
-
-## Agent
-
-Agent conversations are global and owned by the authenticated principal. The built-in agent provides governed natural-language exploration through the shared tool catalog. A workspace is selected only when a workspace-aware tool is called, and the tool still enforces that workspace's resource privileges and semantic boundaries. The agent is not a way to bypass modeling or expose unrestricted SQL.
-
-Use the agent when a user benefits from iterative question/answer and can validate results against delivered evidence. Use deterministic BI endpoints for scheduled reporting, financial controls, or other workflows where a natural-language interpretation would be an unnecessary source of variability.
-
-## MCP
-
-Use the deployment-specific `${LEAPVIEW_PUBLIC_URL}/mcp` endpoint to make the same governed BI tools available in Claude or another remote MCP host. MCP is tools-only and does not expose LeapView conversations, prompts, resources, or unrestricted SQL. Interactive clients use OAuth discovery and consent; automated workloads exchange a service-principal credential for an audience-bound MCP access token.
-
-## Identity and scope
-
-Every integration should have an attributable principal and the narrowest useful privileges. Create separate service principals for deployment, data publishing, read-only BI, and agent workloads. Store credentials in the deployment or CI secret manager.
-
-Token access is limited by principal privileges and any token scope or allowlist. A `403` should prompt an effective-privilege review, not replacement with an owner token.
-
-## Reliability contract
-
-Design integrations to:
-
-- send bounded list and query requests;
-- treat page tokens as opaque;
-- distinguish retryable failures from invalid or unauthorized requests;
-- use idempotent retries only where the operation allows them;
-- persist deployment, revision, refresh, conversation, and run IDs needed for correlation;
-- avoid logging tokens or sensitive analytical payloads;
-- tolerate active deployment changes by rediscovering resource metadata when needed.
-
-Prefer `leapview deploy` over manually creating and activating deployment candidates. Prefer dashboard or semantic query endpoints over building SQL from catalog metadata.
-
-Start with [API quickstart](/docs/guides/integrate/api-quickstart), [Headless BI queries](/docs/guides/integrate/headless-bi), [Public and embedded dashboards](/docs/guides/integrate/public-dashboards), [Agent integrations](/docs/guides/integrate/agent), or [Connect an MCP host](/docs/guides/integrate/mcp).
+Use the generated [CLI command reference](/docs/cli/reference) and [API reference](/docs/api) for accepted syntax and schemas. Prefer those generated contracts over copying flags, paths, or payload shapes from an explanatory page.

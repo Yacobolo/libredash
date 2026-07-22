@@ -86,12 +86,23 @@ The harness is the application-facing runtime. It owns configuration and in-memo
 Responsibilities:
 
 - Accept one prompt/run request at a time.
+- Frame application context as separate, untrusted, turn-scoped model input.
 - Use the system prompt supplied at construction time.
 - Use the tools supplied at construction time.
 - Hold in-memory transcript state for the harness lifetime.
 - Compact old transcript turns when context grows.
 - Expose runtime events to UI/SSE/Datastar consumers.
 - Reject concurrent runs while busy.
+
+`PromptRequest.Context` accepts keyed JSON-serializable values. The harness
+validates keys and limits, emits `<external_{key}>` user-role messages, and
+automatically appends generic untrusted-data guidance to the model system
+prompt. The embedding application does not construct context messages or
+maintain separate prompt instructions.
+
+Durable hosts may call `PreparePrompt`, persist `Transcript`, and later call
+`RunPreparedPrompt` on an agent reconstructed with `InitialTranscript`. This is
+the same lifecycle used by `Prompt`, split before model execution.
 
 ## Core Concepts
 

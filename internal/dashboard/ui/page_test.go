@@ -120,7 +120,34 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 			}
 		}
 	}
+	agentSegment := renderedAttrSegment(showcase, "data-on:lv-chat-submit")
+	for _, expected := range []string{"/chats/turns", "filterSignals", "agent", "agentContext"} {
+		if !strings.Contains(agentSegment, expected) {
+			t.Fatalf("agent command segment = %q, want %q", agentSegment, expected)
+		}
+	}
+	for _, forbidden := range []string{"visuals", "agentVisuals", "filterOptions", "componentStatus"} {
+		if strings.Contains(agentSegment, forbidden) {
+			t.Fatalf("agent command segment = %q, must not post heavy signal %q", agentSegment, forbidden)
+		}
+	}
+	agentRestoreSegment := renderedAttrSegment(showcase, "data-on:lv-chat-restore")
+	for _, expected := range []string{"/chats/restore", "evt.detail.conversationId", "filterSignals", "agent"} {
+		if !strings.Contains(agentRestoreSegment, expected) {
+			t.Fatalf("agent restore segment = %q, want %q", agentRestoreSegment, expected)
+		}
+	}
+	for _, forbidden := range []string{"agentContext", "visuals", "agentVisuals", "filterOptions", "componentStatus"} {
+		if strings.Contains(agentRestoreSegment, forbidden) {
+			t.Fatalf("agent restore segment = %q, must not send unrelated signal %q", agentRestoreSegment, forbidden)
+		}
+	}
 	showcaseSignals := html.UnescapeString(jsonString(BootstrapSignals("client", "stream-instance", dashboard.Catalog{}, report, model, report.Pages, report.Pages[0], dashboard.Filters{})))
+	for _, expected := range []string{`"agent":{`, `"agentContext":{`, `"surface":"dashboard"`, `"agentVisuals":{}`} {
+		if !strings.Contains(showcaseSignals, expected) {
+			t.Fatalf("showcase bootstrap missing dashboard agent signal %s:\n%s", expected, showcaseSignals)
+		}
+	}
 	if !strings.Contains(showcaseSignals, `"active_chart"`) || !strings.Contains(showcaseSignals, `"active_kpi"`) {
 		t.Fatalf("showcase bootstrap did not include active chart and KPI visuals:\n%s", showcaseSignals)
 	}
@@ -218,11 +245,12 @@ func renderedAttrSegment(body, name string) string {
 	if start < 0 {
 		return ""
 	}
-	end := start + 1000
-	if end > len(body) {
-		end = len(body)
+	valueStart := start + len(prefix)
+	valueEnd := strings.Index(body[valueStart:], `"`)
+	if valueEnd < 0 {
+		return body[start:]
 	}
-	return body[start:end]
+	return body[start : valueStart+valueEnd+1]
 }
 
 func assertNoDashboardProductDOM(t *testing.T, body string) {

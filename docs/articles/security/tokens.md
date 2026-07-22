@@ -41,7 +41,7 @@ An authenticated user can list, create, and revoke their tokens through `/api/v1
 
 The same user can inspect effective privileges and active sessions through the Current User API. Revoke unused sessions during credential or device incidents.
 
-## Rotate safely
+## Rotate and verify safely
 
 Use overlapping rotation where the secret API and workload allow it:
 

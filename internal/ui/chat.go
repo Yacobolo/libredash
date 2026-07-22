@@ -31,12 +31,13 @@ func ChatPage(catalog dashboard.Catalog, workspaceID, csrfToken, roleLabel, view
 		UpdatesURL: chatUpdatesURL,
 		Body: []g.Node{
 			g.El("lv-app-shell",
+				g.Attr("data-on:lv-chat-reference-search__debounce.200ms", "$agentReferenceSearch.query = evt.detail.query; $agentReferenceSearch.requestId = evt.detail.requestId; "+uiactions.Get(chatBasePath+"/references/search", "agentReferenceSearch", "agentContext")),
 				g.El("lv-chat-page",
 					g.Attr("slot", "page"),
 					g.Attr("workspace-id", workspaceID),
 					g.Attr("view", view),
 					g.Attr("data-indicator", "agentTurnPending"),
-					g.Attr("data-on:lv-chat-submit", "$agent.composer.value = evt.detail.input; "+uiactions.Post(chatBasePath+"/turns")),
+					g.Attr("data-on:lv-chat-submit", "$agent.composer.value = evt.detail.input; $agentContext.references = evt.detail.references; "+uiactions.Post(chatBasePath+"/turns", "agent", "agentContext")),
 				),
 			),
 			inspectorElement(),
@@ -48,11 +49,13 @@ func ChatBootstrapSignals(catalog dashboard.Catalog, workspaceID, roleLabel, vie
 	envelope := uisignals.ChatInitialEnvelope(catalog, workspaceID, roleLabel, view, state)
 	envelope.Runtime = uisignals.RouteRuntimeSignal{Kind: uisignals.RouteChat, WorkspaceID: uisignals.Optional(workspaceID)}
 	return map[string]any{
-		"chrome":  envelope.Chrome,
-		"page":    envelope.Page,
-		"runtime": envelope.Runtime,
-		"agent":   envelope.Agent,
-		"visuals": envelope.Visuals,
+		"chrome":               envelope.Chrome,
+		"page":                 envelope.Page,
+		"runtime":              envelope.Runtime,
+		"agent":                envelope.Agent,
+		"agentContext":         envelope.AgentContext,
+		"agentReferenceSearch": envelope.AgentReferenceSearch,
+		"visuals":              envelope.Visuals,
 	}
 }
 

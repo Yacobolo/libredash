@@ -1,318 +1,159 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
-	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
-	"github.com/Yacobolo/leapview/internal/dashboard"
-	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	"github.com/Yacobolo/leapview/internal/access"
+	apigenapi "github.com/Yacobolo/leapview/internal/api/gen"
+	productsearch "github.com/Yacobolo/leapview/internal/search"
 	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
 )
 
-func TestWorkspaceSearchReturnsProgressiveDiscoveryResults(t *testing.T) {
-	server := NewWithOptions(fakeMetrics{}, Options{Store: testStore(t), DefaultWorkspaceID: "test"})
-	req := newPublicAPIRequest(http.MethodGet, "/api/v1/workspaces/test/search?q=orders&limit=20", nil)
-	req.Header.Set("Accept", "application/json")
-	rec := httptest.NewRecorder()
-	server.Routes().ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-	}
-	var response struct {
-		Items []map[string]any `json:"items"`
-		Page  struct {
-			NextCursor string `json:"nextCursor"`
-		} `json:"page"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
-		t.Fatalf("decode response: %v body=%s", err, rec.Body.String())
-	}
-	seen := map[string]map[string]any{}
-	for _, item := range response.Items {
-		for _, key := range []string{"id", "type", "name", "description"} {
-			if _, ok := item[key]; !ok {
-				t.Fatalf("search item missing %s: %#v", key, item)
-			}
-		}
-		seen[item["type"].(string)+":"+item["id"].(string)] = item
-		for _, forbidden := range []string{"items", "data", "query", "columns", "meta"} {
-			if _, ok := item[forbidden]; ok {
-				t.Fatalf("search item leaked detailed field %q: %#v", forbidden, item)
-			}
-		}
-	}
-	for _, want := range []string{
-		"dashboard:executive-sales",
-		"visual:visual:executive-sales.overview.orders",
-		"visual:visual:executive-sales.overview.order_rows",
-		"semantic_table:test.orders",
-		"field:test.orders.order_id",
-		"measure:test.order_count",
-	} {
-		if _, ok := seen[want]; !ok {
-			t.Fatalf("search results missing %s in %#v", want, response.Items)
-		}
-	}
-	if got := seen["visual:visual:executive-sales.overview.orders"]["dashboardId"]; got != "executive-sales" {
-		t.Fatalf("visual dashboardId=%#v", got)
+func TestSearchAPIResultsIncludeVisualSubtype(t *testing.T) {
+	items := searchAPIResults([]productsearch.Result{{
+		Reference:  productsearch.Reference{WorkspaceID: "sales", Type: productsearch.TypeVisual, ID: "orders.revenue"},
+		Name:       "Revenue",
+		VisualType: "line",
+		Workspace:  productsearch.Workspace{ID: "sales", Name: "Sales"},
+		Locations:  []productsearch.Location{},
+		Context:    []productsearch.ContextTag{},
+	}})
+	if len(items) != 1 || items[0].VisualType == nil || *items[0].VisualType != "line" {
+		t.Fatalf("search API visual subtype = %#v", items)
 	}
 }
 
-func TestWorkspaceSearchUsesRouteWorkspaceRuntimeCatalog(t *testing.T) {
-	server := NewWithOptions(NewMultiWorkspaceMetrics("sales", map[string]QueryMetrics{
-		"sales":      workspaceSearchMetrics{workspaceID: "sales", dashboardID: "executive-sales", title: "Executive Sales Dashboard"},
-		"operations": workspaceSearchMetrics{workspaceID: "operations", dashboardID: "fulfillment-operations", title: "Fulfillment Operations"},
-	}), Options{Store: testStore(t), DefaultWorkspaceID: "sales"})
+func TestGlobalSearchReturnsStructuredResultsAcrossWorkspaces(t *testing.T) {
+	store := testStore(t)
+	seedEnvironmentAssetDeployment(t, store, "sales", servingstate.DefaultEnvironment, "Executive Sales", "Sales Warehouse")
+	seedEnvironmentAssetDeployment(t, store, "operations", servingstate.DefaultEnvironment, "Fulfillment Operations", "Operations Warehouse")
+	if _, err := store.SQLDB().Exec(`
+		UPDATE assets
+		SET asset_key = workspace_id || '.overview', payload_json = '{"key":"overview"}'
+		WHERE asset_type = 'dashboard'
+	`); err != nil {
+		t.Fatalf("remove textual dashboard terms from fixtures: %v", err)
+	}
+	server := NewWithOptions(nil, Options{Store: store, DefaultEnvironment: string(servingstate.DefaultEnvironment)})
 
-	req := newPublicAPIRequest(http.MethodGet, "/api/v1/workspaces/operations/search?types=dashboard&q=fulfillment&limit=20", nil)
-	req.Header.Set("Accept", "application/json")
-	rec := httptest.NewRecorder()
-	server.Routes().ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	request := newPublicAPIRequest(http.MethodGet, "/api/v1/search?q=dashboar&limit=20", nil)
+	response := httptest.NewRecorder()
+	server.Routes().ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
-	var response struct {
-		Items []map[string]any `json:"items"`
+	var body apigenapi.SearchResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode search response: %v", err)
 	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
-		t.Fatalf("decode response: %v body=%s", err, rec.Body.String())
-	}
-	if len(response.Items) == 0 {
-		t.Fatalf("expected operations dashboard search result")
-	}
-	if got := response.Items[0]["dashboardId"]; got != "fulfillment-operations" {
-		t.Fatalf("dashboardId=%#v, want fulfillment-operations; items=%#v", got, response.Items)
-	}
-	for _, item := range response.Items {
-		if item["dashboardId"] == "executive-sales" {
-			t.Fatalf("operations search leaked sales dashboard: %#v", item)
-		}
-	}
-}
-
-func TestWorkspaceSearchDoesNotLeakDefaultWorkspaceRuntimeDocuments(t *testing.T) {
-	server := NewWithOptions(NewMultiWorkspaceMetrics("sales", map[string]QueryMetrics{
-		"sales":      workspaceSearchMetrics{workspaceID: "sales", dashboardID: "executive-sales", title: "Executive Sales Dashboard"},
-		"operations": workspaceSearchMetrics{workspaceID: "operations", dashboardID: "fulfillment-operations", title: "Fulfillment Operations"},
-	}), Options{Store: testStore(t), DefaultWorkspaceID: "sales"})
-
-	req := newPublicAPIRequest(http.MethodGet, "/api/v1/workspaces/operations/search?types=dashboard,visual&limit=20", nil)
-	req.Header.Set("Accept", "application/json")
-	rec := httptest.NewRecorder()
-	server.Routes().ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-	}
-	var response struct {
-		Items []map[string]any `json:"items"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
-		t.Fatalf("decode response: %v body=%s", err, rec.Body.String())
-	}
-	seenTypes := map[string]bool{}
-	for _, item := range response.Items {
-		seenTypes[item["type"].(string)] = true
-		if item["dashboardId"] == "executive-sales" || strings.Contains(item["id"].(string), "executive-sales") {
-			t.Fatalf("operations search leaked sales runtime document: %#v", item)
-		}
-	}
-	for _, typ := range []string{"dashboard", "visual"} {
-		if !seenTypes[typ] {
-			t.Fatalf("missing %s search result in %#v", typ, response.Items)
-		}
-	}
-}
-
-func TestWorkspaceSearchDefaultWorkspaceStillReturnsRichRuntimeResults(t *testing.T) {
-	server := NewWithOptions(NewMultiWorkspaceMetrics("sales", map[string]QueryMetrics{
-		"sales":      workspaceSearchMetrics{workspaceID: "sales", dashboardID: "executive-sales", title: "Executive Sales Dashboard"},
-		"operations": workspaceSearchMetrics{workspaceID: "operations", dashboardID: "fulfillment-operations", title: "Fulfillment Operations"},
-	}), Options{Store: testStore(t), DefaultWorkspaceID: "sales"})
-
-	req := newPublicAPIRequest(http.MethodGet, "/api/v1/workspaces/sales/search?types=dashboard,visual&limit=20", nil)
-	req.Header.Set("Accept", "application/json")
-	rec := httptest.NewRecorder()
-	server.Routes().ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-	}
-	var response struct {
-		Items []map[string]any `json:"items"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
-		t.Fatalf("decode response: %v body=%s", err, rec.Body.String())
+	if len(body.Items) != 2 {
+		t.Fatalf("search items = %#v, want two dashboards", body.Items)
 	}
 	seen := map[string]bool{}
-	for _, item := range response.Items {
-		seen[item["type"].(string)+":"+item["dashboardId"].(string)] = true
-	}
-	for _, want := range []string{"dashboard:executive-sales", "visual:executive-sales"} {
-		if !seen[want] {
-			t.Fatalf("missing %s in %#v", want, response.Items)
+	for _, item := range body.Items {
+		seen[item.Reference.WorkspaceId] = true
+		if item.Reference.Type != apigenapi.SearchResultTypeDashboard || item.Reference.Id == "" || item.Href == "" || len(item.Locations) == 0 {
+			t.Fatalf("incomplete structured search result: %#v", item)
 		}
+	}
+	if !seen["sales"] || !seen["operations"] {
+		t.Fatalf("search workspaces = %#v, want sales and operations", seen)
 	}
 }
 
-func TestWorkspaceSearchDoesNotFallbackToRuntimeCatalogForOtherWorkspaces(t *testing.T) {
-	server := NewWithOptions(fakeMetrics{}, Options{Store: testStore(t), DefaultWorkspaceID: "test"})
-	req := newPublicAPIRequest(http.MethodGet, "/api/v1/workspaces/other/search?q=orders&limit=20", nil)
-	req.Header.Set("Accept", "application/json")
-	rec := httptest.NewRecorder()
-	server.Routes().ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
-	}
-	var response struct {
-		Items []map[string]any `json:"items"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
-		t.Fatalf("decode response: %v body=%s", err, rec.Body.String())
-	}
-	for _, item := range response.Items {
-		if item["dashboardId"] == "executive-sales" || item["modelId"] == "test" {
-			t.Fatalf("search leaked runtime catalog item for another workspace: %#v", item)
-		}
-	}
-}
-
-func TestWorkspaceSearchUsesAssetGraphFallbackWithoutRuntimeDocs(t *testing.T) {
+func TestGlobalSearchRepeatedFiltersAndCursor(t *testing.T) {
 	store := testStore(t)
-	seedEnvironmentAssetDeployment(t, store, "asset-only", servingstate.DefaultEnvironment, "Graph Only Dashboard", "Graph Only Connection")
-	server := NewWithOptions(NewMultiWorkspaceMetrics("sales", map[string]QueryMetrics{
-		"sales": workspaceSearchMetrics{workspaceID: "sales", dashboardID: "executive-sales", title: "Executive Sales Dashboard"},
-	}), Options{Store: store, DefaultWorkspaceID: "sales"})
+	seedEnvironmentAssetDeployment(t, store, "sales", servingstate.DefaultEnvironment, "Executive Sales", "Sales Warehouse")
+	seedEnvironmentAssetDeployment(t, store, "operations", servingstate.DefaultEnvironment, "Fulfillment Operations", "Operations Warehouse")
+	server := NewWithOptions(nil, Options{Store: store, DefaultEnvironment: string(servingstate.DefaultEnvironment)})
 
-	req := newPublicAPIRequest(http.MethodGet, "/api/v1/workspaces/asset-only/search?types=asset&q=Graph%20Only&limit=20", nil)
-	req.Header.Set("Accept", "application/json")
-	rec := httptest.NewRecorder()
-	server.Routes().ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	firstRequest := newPublicAPIRequest(http.MethodGet, "/api/v1/search?workspace=sales&workspace=operations&type=dashboard&type=connection&limit=1", nil)
+	firstResponse := httptest.NewRecorder()
+	server.Routes().ServeHTTP(firstResponse, firstRequest)
+	if firstResponse.Code != http.StatusOK {
+		t.Fatalf("first status=%d body=%s", firstResponse.Code, firstResponse.Body.String())
 	}
-	var response struct {
-		Items []map[string]any `json:"items"`
+	var first apigenapi.SearchResponse
+	if err := json.Unmarshal(firstResponse.Body.Bytes(), &first); err != nil {
+		t.Fatalf("decode first response: %v", err)
 	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
-		t.Fatalf("decode response: %v body=%s", err, rec.Body.String())
+	if len(first.Items) != 1 || first.Page.NextCursor == nil || *first.Page.NextCursor == "" {
+		t.Fatalf("first search page = %#v", first)
 	}
-	found := false
-	for _, item := range response.Items {
-		if item["dashboardId"] == "executive-sales" {
-			t.Fatalf("asset-only fallback leaked default runtime document: %#v", item)
+
+	nextRequest := newPublicAPIRequest(http.MethodGet, "/api/v1/search?workspace=sales&workspace=operations&type=dashboard&type=connection&limit=1&pageToken="+url.QueryEscape(*first.Page.NextCursor), nil)
+	nextResponse := httptest.NewRecorder()
+	server.Routes().ServeHTTP(nextResponse, nextRequest)
+	if nextResponse.Code != http.StatusOK {
+		t.Fatalf("next status=%d body=%s", nextResponse.Code, nextResponse.Body.String())
+	}
+	var next apigenapi.SearchResponse
+	if err := json.Unmarshal(nextResponse.Body.Bytes(), &next); err != nil {
+		t.Fatalf("decode next response: %v", err)
+	}
+	if len(next.Items) != 1 || next.Items[0].Reference == first.Items[0].Reference {
+		t.Fatalf("next page repeated first result: first=%#v next=%#v", first.Items, next.Items)
+	}
+}
+
+func TestWorkspaceSearchRouteWasRemoved(t *testing.T) {
+	server := NewWithOptions(nil, Options{Store: testStore(t)})
+	request := newPublicAPIRequest(http.MethodGet, "/api/v1/workspaces/test/search?q=orders", nil)
+	response := httptest.NewRecorder()
+	server.Routes().ServeHTTP(response, request)
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("legacy workspace search status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestGlobalSearchDoesNotExposeOtherWorkspacesToScopedCredential(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+	seedEnvironmentAssetDeployment(t, store, "sales", servingstate.DefaultEnvironment, "Sales Orders", "Sales Warehouse")
+	seedEnvironmentAssetDeployment(t, store, "secret", servingstate.DefaultEnvironment, "Secret Orders", "Secret Warehouse")
+	accessRepository := testAccessRepository(store)
+	principal, err := accessRepository.SetPrincipalRole(ctx, access.PrincipalRoleInput{
+		WorkspaceID: "sales", Email: "searcher@example.com", DisplayName: "Searcher", Role: access.RoleViewer,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := accessRepository.UpsertSecurableObject(ctx, access.ItemObjectWithParent(
+		access.SecurableDashboard, "sales", "dev-dashboard", access.WorkspaceObject("sales"),
+	), ""); err != nil {
+		t.Fatal(err)
+	}
+	token, _ := testScopedAPIToken(t, ctx, store, access.APITokenInput{
+		PrincipalID: principal.ID, WorkspaceID: "sales", Name: "search", Privileges: []access.Privilege{access.PrivilegeViewItem},
+	})
+	server := NewWithOptions(nil, Options{Store: store, Auth: testAuth(store, "sales", AuthConfig{APITokenOnly: true})})
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/search?q=orders&limit=20", nil)
+	request.Header.Set("Authorization", "Bearer "+token)
+	response := httptest.NewRecorder()
+	server.Routes().ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	var body apigenapi.SearchResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Items) == 0 || body.Page.NextCursor != nil {
+		t.Fatalf("credential-scoped search = %#v", body)
+	}
+	for _, item := range body.Items {
+		if item.Reference.WorkspaceId != "sales" {
+			t.Fatalf("credential-scoped search = %#v", body)
 		}
-		if item["type"] == "asset" && item["name"] == "Graph Only Dashboard" {
-			found = true
-		}
 	}
-	if !found {
-		t.Fatalf("missing graph-backed asset search result in %#v", response.Items)
+	responseText := response.Body.String()
+	if responseText == "" || strings.Contains(responseText, "secret") || strings.Contains(responseText, "Secret Orders") || strings.Contains(responseText, "Secret Warehouse") {
+		t.Fatalf("search response leaked inaccessible catalog metadata: %s", response.Body.String())
 	}
-}
-
-func TestWorkspaceSearchTypeFilteringPaginationAndErrors(t *testing.T) {
-	server := NewWithOptions(fakeMetrics{}, Options{Store: testStore(t), DefaultWorkspaceID: "test"})
-
-	firstReq := newPublicAPIRequest(http.MethodGet, "/api/v1/workspaces/test/search?types=visual&limit=1", nil)
-	firstReq.Header.Set("Accept", "application/json")
-	firstRec := httptest.NewRecorder()
-	server.Routes().ServeHTTP(firstRec, firstReq)
-	if firstRec.Code != http.StatusOK {
-		t.Fatalf("first status=%d body=%s", firstRec.Code, firstRec.Body.String())
-	}
-	var first struct {
-		Items []map[string]any `json:"items"`
-		Page  struct {
-			NextCursor string `json:"nextCursor"`
-		} `json:"page"`
-	}
-	if err := json.Unmarshal(firstRec.Body.Bytes(), &first); err != nil {
-		t.Fatalf("decode first: %v body=%s", err, firstRec.Body.String())
-	}
-	if len(first.Items) != 1 || first.Page.NextCursor == "" {
-		t.Fatalf("first page = %#v", first)
-	}
-	if typ := first.Items[0]["type"]; typ != "visual" {
-		t.Fatalf("unexpected filtered type %#v in %#v", typ, first.Items[0])
-	}
-
-	nextReq := newPublicAPIRequest(http.MethodGet, "/api/v1/workspaces/test/search?types=visual&limit=1&pageToken="+first.Page.NextCursor, nil)
-	nextReq.Header.Set("Accept", "application/json")
-	nextRec := httptest.NewRecorder()
-	server.Routes().ServeHTTP(nextRec, nextReq)
-	if nextRec.Code != http.StatusOK {
-		t.Fatalf("next status=%d body=%s", nextRec.Code, nextRec.Body.String())
-	}
-	if strings.Contains(nextRec.Body.String(), first.Items[0]["id"].(string)) {
-		t.Fatalf("next page repeated first item: first=%#v next=%s", first.Items[0], nextRec.Body.String())
-	}
-
-	badReq := newPublicAPIRequest(http.MethodGet, "/api/v1/workspaces/test/search?types=dashboard,unknown", nil)
-	badReq.Header.Set("Accept", "application/json")
-	badRec := httptest.NewRecorder()
-	server.Routes().ServeHTTP(badRec, badReq)
-	if badRec.Code != http.StatusBadRequest {
-		t.Fatalf("bad status=%d body=%s", badRec.Code, badRec.Body.String())
-	}
-	assertAPIError(t, badRec, http.StatusBadRequest, "unknown search type")
-}
-
-type workspaceSearchMetrics struct {
-	fakeMetrics
-	workspaceID string
-	dashboardID string
-	title       string
-}
-
-func (m workspaceSearchMetrics) Catalog() dashboard.Catalog {
-	return dashboard.Catalog{
-		Workspace: dashboard.CatalogWorkspace{ID: m.workspaceID, Title: m.workspaceID},
-		Models: []dashboard.CatalogModel{{
-			ID:          "test",
-			Title:       "Test Model",
-			Description: "Fixture model",
-		}},
-		Dashboards: []dashboard.CatalogDashboard{{
-			ID:            m.dashboardID,
-			Title:         m.title,
-			Description:   "Fixture report",
-			SemanticModel: "test",
-			PageCount:     2,
-		}},
-	}
-}
-
-func (m workspaceSearchMetrics) DefaultDashboardID() string {
-	return m.dashboardID
-}
-
-func (m workspaceSearchMetrics) ModelIDForDashboard(dashboardID string) string {
-	if dashboardID == m.dashboardID {
-		return "test"
-	}
-	return ""
-}
-
-func (m workspaceSearchMetrics) Report(dashboardID string) (reportdef.Dashboard, *semanticmodel.Model, bool) {
-	if dashboardID != m.dashboardID {
-		return reportdef.Dashboard{}, nil, false
-	}
-	report, model, ok := fakeMetrics{}.Report("executive-sales")
-	if !ok {
-		return reportdef.Dashboard{}, nil, false
-	}
-	report.ID = m.dashboardID
-	report.Title = m.title
-	return report, model, true
-}
-
-func (m workspaceSearchMetrics) Pages(dashboardID string) []dashboard.Page {
-	if dashboardID != m.dashboardID {
-		return nil
-	}
-	pages := fakeMetrics{}.Pages("executive-sales")
-	return append([]dashboard.Page(nil), pages...)
 }

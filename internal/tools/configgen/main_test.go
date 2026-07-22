@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
@@ -26,6 +27,13 @@ func TestGeneratedArtifactsAreCurrent(t *testing.T) {
 
 func TestGeneratedEnvironmentSchemaCompiles(t *testing.T) {
 	_ = compileEnvironmentSchema(t)
+}
+
+func TestGeneratedDocumentationUsesNavigationTitleAsHeading(t *testing.T) {
+	docs := string(generateDocs())
+	if !strings.Contains(docs, "\n# Environment variable reference\n") {
+		t.Fatalf("generated documentation heading does not match its catalog title:\n%s", docs)
+	}
 }
 
 func TestGeneratedEnvironmentSchemaEnforcesProductionRelationships(t *testing.T) {

@@ -524,28 +524,22 @@ lv-site-search:not(:defined) > .site-search-active-input {
 .site-guide-shell {
   display: grid;
   width: 100%;
+  max-width: var(--site-docs-content-width);
   min-width: 0;
+  justify-self: center;
   container: site-docs-guide / inline-size;
 }
 
 .site-docs-reading-layout {
   display: grid;
-  width: min(
-    100%,
-    calc(
-      var(--site-docs-content-width) + var(--base-size-32) +
-        var(--base-size-128) + var(--base-size-64)
-    )
-  );
+  width: 100%;
   grid-template-columns:
-    minmax(0, var(--site-docs-content-width))
+    minmax(0, 1fr)
     minmax(
       var(--base-size-128),
       calc(var(--base-size-128) + var(--base-size-64))
     );
   gap: var(--base-size-32);
-  justify-content: center;
-  margin: 0 auto;
 }
 
 /* DuckDB keeps the article outline through 1201px and removes it at 1200px. */
@@ -553,6 +547,7 @@ lv-site-search:not(:defined) > .site-search-active-input {
   .site-docs-reading-layout {
     width: min(100%, var(--site-docs-content-width));
     grid-template-columns: minmax(0, 1fr);
+    margin: 0 auto;
   }
 
   .site-docs-reading-layout > lv-site-article-toc {
@@ -1200,10 +1195,72 @@ lv-site-search:not(:defined) > .site-search-active-input {
   padding-top: var(--base-size-24);
 }
 
-.site-docs-page-meta {
+.site-docs-pagination {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--base-size-16);
+  margin-bottom: var(--base-size-32);
+}
+
+.site-docs-article .site-docs-pagination-card {
+  display: grid;
+  min-height: calc(var(--base-size-64) + var(--base-size-24));
+  align-content: center;
+  gap: var(--base-size-6);
+  border: var(--lv-border-default);
+  border-radius: var(--lv-radius-default);
+  background: var(--lv-bg-panel);
+  color: var(--lv-fg-default);
+  padding: var(--base-size-16);
+  text-decoration: none;
+  transition:
+    border-color var(--site-motion-duration-short) var(--site-motion-easing),
+    background-color var(--site-motion-duration-short) var(--site-motion-easing);
+}
+
+.site-docs-article .site-docs-pagination-card:hover,
+.site-docs-article .site-docs-pagination-card:focus-visible {
+  border-color: var(--lv-line-accent);
+  background: var(--lv-bg-control-hover);
+}
+
+.site-docs-article .site-docs-pagination-card:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-outline-offset);
+}
+
+.site-docs-pagination-direction {
   display: flex;
+  align-items: center;
+  gap: var(--base-size-6);
+  color: var(--lv-fg-muted);
+  font-size: var(--lv-text-caption-size);
+  font-weight: var(--lv-font-weight-medium);
+}
+
+.site-docs-pagination-title {
+  font-size: var(--lv-text-body-md-size);
+  font-weight: var(--lv-font-weight-strong);
+  line-height: var(--lv-line-height-compact);
+}
+
+.site-docs-pagination-next {
+  grid-column: 2;
+  text-align: right;
+}
+
+.site-docs-pagination-next .site-docs-pagination-direction {
+  justify-content: flex-end;
+}
+
+.site-docs-pagination-arrow {
+  font-size: var(--lv-text-body-md-size);
+  line-height: 1;
+}
+
+.site-docs-page-meta {
+  display: grid;
   width: 100%;
-  justify-content: space-between;
   margin-top: 0;
   border-radius: var(--lv-radius-default);
   background: var(--lv-bg-control);
@@ -1243,6 +1300,16 @@ lv-site-search:not(:defined) > .site-search-active-input {
 .site-docs-page-meta a:hover,
 .site-docs-page-meta a:focus-visible {
   color: var(--lv-fg-default);
+}
+
+@media (max-width: 40rem) {
+  .site-docs-pagination {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .site-docs-pagination-next {
+    grid-column: 1;
+  }
 }
 
 .site-eyebrow {

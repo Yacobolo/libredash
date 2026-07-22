@@ -395,6 +395,9 @@ test('embed presentation keeps page navigation and removes non-navigation chrome
         sidebarVisible: visible('lv-sub-sidebar'),
         headerVisible: visible('.header'),
         footerVisible: visible('lv-report-footer'),
+        hasAgentToggle: Boolean(root.querySelector('.agent-toggle')),
+        hasAgentDrawer: Boolean(root.querySelector('lv-chat-drawer')),
+        agentActionCount: root.querySelectorAll('.ask-visual').length,
         canvasWidth: canvas.getBoundingClientRect().width,
         documentOverflow: document.documentElement.scrollWidth - window.innerWidth,
       }
@@ -403,6 +406,9 @@ test('embed presentation keeps page navigation and removes non-navigation chrome
     expect(state.sidebarVisible).toBe(true)
     expect(state.headerVisible).toBe(false)
     expect(state.footerVisible).toBe(false)
+    expect(state.hasAgentToggle).toBe(false)
+    expect(state.hasAgentDrawer).toBe(false)
+    expect(state.agentActionCount).toBe(0)
     expect(state.canvasWidth).toBeGreaterThan(500)
     expect(state.documentOverflow).toBe(0)
   } finally {
@@ -596,6 +602,475 @@ test('dashboard refresh progress follows only the latest generation', async () =
   }
 })
 
+test('dashboard agent drawer carries page context and explicit visual references', async () => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => (
+      customElements.get('lv-dashboard-page')
+        && customElements.get('lv-chat-drawer')
+        && customElements.get('lv-chat-composer')
+    ))
+    await page.locator('lv-dashboard-page').evaluate((element: any) => element.updateComplete)
+
+    const initial = await page.locator('lv-dashboard-page').evaluate((element: any) => {
+      const root = element.shadowRoot
+      const drawer = root.querySelector('lv-chat-drawer') as any
+      const toggle = root.querySelector('.agent-toggle') as HTMLButtonElement
+      const toggleStyle = getComputedStyle(toggle)
+      return {
+        hasToggle: Boolean(toggle),
+        toggleHasVisibleSurface: toggleStyle.borderColor !== 'rgba(0, 0, 0, 0)'
+          && toggleStyle.backgroundColor !== 'rgba(0, 0, 0, 0)',
+        open: drawer?.open,
+        drawerWidth: Math.round(drawer?.getBoundingClientRect().width ?? 0),
+      }
+    })
+    expect(initial).toEqual({ hasToggle: true, toggleHasVisibleSurface: true, open: false, drawerWidth: 0 })
+
+    const visualActionsAtRest = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
+      const root = element.shadowRoot
+      const frame = root.querySelector('[data-component-status-key="visual:orders_chart"]') as any
+      const chart = frame?.querySelector('lv-echart') as any
+      const kpi = root.querySelector('lv-kpi-card') as any
+      const table = root.querySelector('lv-report-table') as any
+      await Promise.all([frame?.updateComplete, chart?.updateComplete, kpi?.updateComplete, table?.updateComplete])
+      const ask = chart.querySelector('.ask-visual') as HTMLElement
+      const kpiAsk = kpi.querySelector('.ask-visual') as HTMLElement
+      const tableAsk = table.querySelector('.ask-visual') as HTMLElement
+      const askStyle = getComputedStyle(ask)
+      const expand = chart.shadowRoot.querySelector('[aria-label="Expand visual"]') as HTMLElement
+      const options = chart.shadowRoot.querySelector('[aria-label="Visual options"]') as HTMLElement
+      const agentIconMarkup = root.querySelector('.agent-toggle svg')?.innerHTML
+      const drawer = root.querySelector('lv-chat-drawer') as any
+      return {
+        askOpacity: askStyle.opacity,
+        askPointerEvents: askStyle.pointerEvents,
+        askBackground: askStyle.backgroundColor,
+        askBoxShadow: askStyle.boxShadow,
+        askRight: ask.getBoundingClientRect().right,
+        expandLeft: expand.getBoundingClientRect().left,
+        askActionRow: ask.assignedSlot?.parentElement?.className,
+        kpiAskActionRow: kpiAsk.assignedSlot?.parentElement?.className,
+        tableAskActionRow: tableAsk.assignedSlot?.parentElement?.className,
+        askPressed: ask.getAttribute('aria-pressed'),
+        askUsesAgentIcon: ask.querySelector('svg')?.innerHTML === agentIconMarkup
+          && drawer.shadowRoot.querySelector('.title svg')?.innerHTML === agentIconMarkup,
+        chartActions: [expand, options].map((control) => control.getAttribute('aria-label')),
+        chartHasExport: Array.from(chart.shadowRoot.querySelectorAll('[role="menuitem"]'))
+          .some((item: any) => item.textContent?.trim() === 'Export CSV'),
+        tableHasExpand: Boolean(table.shadowRoot.querySelector('[aria-label="Expand table"]')),
+        tableHasExport: Array.from(table.shadowRoot.querySelectorAll('[role="menuitem"]'))
+          .some((item: any) => item.textContent?.trim() === 'Export CSV'),
+      }
+    })
+    expect(visualActionsAtRest).toMatchObject({
+      askOpacity: '0',
+      askPointerEvents: 'none',
+      askBackground: 'rgba(0, 0, 0, 0)',
+      askBoxShadow: 'none',
+      askActionRow: 'visual-actions',
+      kpiAskActionRow: 'visual-actions',
+      tableAskActionRow: 'visual-actions',
+      askPressed: 'false',
+      askUsesAgentIcon: true,
+      chartActions: ['Expand visual', 'Visual options'],
+      chartHasExport: true,
+      tableHasExpand: true,
+      tableHasExport: true,
+    })
+
+    await page.locator('lv-dashboard-visual-frame[data-component-status-key="visual:orders_chart"]').hover()
+    const visualActionsOnHover = await page.locator('lv-dashboard-page').evaluate((element: any) => {
+      const frame = element.shadowRoot.querySelector('[data-component-status-key="visual:orders_chart"]') as any
+      const chart = frame.querySelector('lv-echart') as any
+      const ask = chart.querySelector('.ask-visual') as HTMLElement
+      const expand = chart.shadowRoot.querySelector('[aria-label="Expand visual"]') as HTMLElement
+      const askStyle = getComputedStyle(ask)
+      return {
+        askOpacity: askStyle.opacity,
+        askPointerEvents: askStyle.pointerEvents,
+        askRight: ask.getBoundingClientRect().right,
+        expandLeft: expand.getBoundingClientRect().left,
+      }
+    })
+    expect(visualActionsOnHover.askOpacity).toBe('1')
+    expect(visualActionsOnHover.askPointerEvents).toBe('auto')
+    expect(visualActionsOnHover.askRight).toBeLessThanOrEqual(visualActionsOnHover.expandLeft)
+
+    await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
+      element.shadowRoot.querySelector('.agent-toggle').click()
+      await element.updateComplete
+      const drawer = element.shadowRoot.querySelector('lv-chat-drawer')
+      await drawer.updateComplete
+    })
+    await page.waitForFunction(() => {
+      const dashboard = document.querySelector('lv-dashboard-page') as any
+      const drawer = dashboard?.shadowRoot?.querySelector('lv-chat-drawer')
+      return (drawer?.getBoundingClientRect().width ?? 0) >= 419.9
+    })
+
+    const opened = await page.locator('lv-dashboard-page').evaluate((element: any) => {
+      const root = element.shadowRoot
+      const drawer = root.querySelector('lv-chat-drawer') as any
+      const drawerRoot = drawer.shadowRoot
+      const drawerSurface = drawerRoot.querySelector('.drawer') as HTMLElement
+      const header = drawerRoot.querySelector('.header') as HTMLElement
+      const context = drawerRoot.querySelector('.context') as HTMLElement
+      const toolbarAction = drawerRoot.querySelector('.toolbar-actions button') as HTMLElement
+      const thread = drawerRoot.querySelector('lv-chat-thread') as any
+      const composer = drawerRoot.querySelector('lv-chat-composer') as any
+      const toggle = root.querySelector('.agent-toggle') as HTMLButtonElement
+      const toggleRect = toggle.getBoundingClientRect()
+      const toggleIconRect = toggle.querySelector('svg')!.getBoundingClientRect()
+      return {
+        open: drawer.open,
+        drawerWidth: Math.round(drawer.getBoundingClientRect().width),
+        pageContext: drawerRoot.querySelector('.page-context')?.textContent?.replace(/\s+/g, ' ').trim(),
+        filterContext: drawerRoot.querySelector('.filter-context')?.textContent?.replace(/\s+/g, ' ').trim(),
+        hasThread: Boolean(thread),
+        hasComposer: Boolean(composer),
+        contextInHeader: header.contains(context),
+        contextBorder: getComputedStyle(context).borderBottomStyle,
+        contextSharesSurface: getComputedStyle(context).backgroundColor === getComputedStyle(drawerSurface).backgroundColor,
+        toolbarActionBorder: toolbarAction ? getComputedStyle(toolbarAction).borderStyle : 'missing',
+        threadSharesSurface: getComputedStyle(thread.shadowRoot.querySelector('.thread')).backgroundColor === getComputedStyle(drawerSurface).backgroundColor,
+        composerDockBorder: getComputedStyle(composer).borderTopStyle,
+        composerShadow: getComputedStyle(composer.shadowRoot.querySelector('.composer-surface')).boxShadow,
+        composerHeight: Math.round(composer.shadowRoot.querySelector('.composer-surface').getBoundingClientRect().height),
+        toggleIconCenterOffset: Math.abs((toggleRect.left + toggleRect.width / 2) - (toggleIconRect.left + toggleIconRect.width / 2)),
+      }
+    })
+    expect(opened).toMatchObject({
+      open: true,
+      pageContext: 'Overview',
+      filterContext: '1 filter · 2 selections',
+      hasThread: true,
+      hasComposer: true,
+      contextInHeader: true,
+      contextBorder: 'none',
+      contextSharesSurface: true,
+      toolbarActionBorder: 'none',
+      threadSharesSurface: true,
+      toggleIconCenterOffset: 0,
+      composerDockBorder: 'none',
+      composerShadow: 'none',
+    })
+    expect(opened.composerHeight).toBeLessThan(80)
+    expect(opened.drawerWidth).toBeGreaterThanOrEqual(360)
+    expect(opened.drawerWidth).toBeLessThanOrEqual(520)
+
+    const groupedSearch = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
+      const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev')
+      mergePatch({ agentReferenceSearch: {
+        query: 'orders', requestId: 1,
+        results: [
+		  { reference: { workspaceId: 'sales', type: 'visual', id: 'executive-sales.orders_chart' }, name: 'Orders by status', workspace: { id: 'sales', name: 'Sales' }, hierarchy: ['Sales', 'Executive Sales', 'Overview'], href: '/orders', locations: [{ dashboardId: 'executive-sales', pageId: 'overview', href: '/orders' }], context: ['current_page'] },
+		  { reference: { workspaceId: 'finance', type: 'visual', id: 'executive-sales.foreign_orders' }, name: 'Finance orders', description: 'From another workspace', workspace: { id: 'finance', name: 'Finance' }, hierarchy: ['Finance', 'Executive Sales', 'Overview'], href: '/finance', locations: [{ dashboardId: 'executive-sales', pageId: 'overview', href: '/finance' }], context: [] },
+		  { reference: { workspaceId: 'sales', type: 'measure', id: 'olist.order_count' }, name: 'Orders count', description: 'Across the sales workspace', workspace: { id: 'sales', name: 'Sales' }, hierarchy: ['Sales', 'Olist'], href: '/measure', locations: [], context: ['current_workspace'] },
+        ],
+      } })
+      await element.updateComplete
+      const drawer = element.shadowRoot.querySelector('lv-chat-drawer') as any
+      await drawer.updateComplete
+      const composer = drawer.shadowRoot.querySelector('lv-chat-composer') as any
+      const textarea = composer.shadowRoot.querySelector('textarea') as HTMLTextAreaElement
+      textarea.value = '@orders'
+      textarea.setSelectionRange(textarea.value.length, textarea.value.length)
+      textarea.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true }))
+      await composer.updateComplete
+      return {
+        labels: Array.from(composer.shadowRoot.querySelectorAll('.mention-section-label')).map((node: any) => node.textContent.trim()),
+        options: Array.from(composer.shadowRoot.querySelectorAll('.mention-option')).map((node: any) => node.textContent.replace(/\s+/g, ' ').trim()),
+        onPage: Array.from(composer.shadowRoot.querySelector('[aria-label="On this page"]')?.querySelectorAll('.mention-option') ?? []).map((node: any) => node.textContent.replace(/\s+/g, ' ').trim()),
+        accessible: Array.from(composer.shadowRoot.querySelector('[aria-label="All accessible"]')?.querySelectorAll('.mention-option') ?? []).map((node: any) => node.textContent.replace(/\s+/g, ' ').trim()),
+      }
+    })
+    expect(groupedSearch.labels).toEqual(['On this page', 'All accessible'])
+    expect(groupedSearch.options[0]).toContain('Orders')
+	expect(groupedSearch.onPage).not.toContain('Finance orders Finance › Executive Sales › Overview Visual')
+	expect(groupedSearch.accessible).toContain('Finance orders Finance › Executive Sales › Overview Visual')
+	expect(groupedSearch.options.at(-1)).toBe('Orders count Sales › Olist Measure')
+
+    await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
+      const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev')
+      mergePatch({ agentContext: { referenceLimit: 1 } })
+      await element.updateComplete
+    })
+
+    await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
+      const frame = Array.from(element.shadowRoot.querySelectorAll('lv-dashboard-visual-frame'))
+        .find((candidate: any) => candidate.getAttribute('data-component-status-key') === 'visual:orders_chart') as any
+      frame.querySelector('.ask-visual').click()
+      const drawer = element.shadowRoot.querySelector('lv-chat-drawer') as any
+      await drawer.updateComplete
+    })
+
+    const referenced = await page.locator('lv-dashboard-page').evaluate((element: any) => {
+      const drawer = element.shadowRoot.querySelector('lv-chat-drawer') as any
+      const drawerRoot = drawer.shadowRoot
+      const composerRoot = drawerRoot.querySelector('lv-chat-composer')?.shadowRoot
+      return {
+        chip: composerRoot?.querySelector('.reference-chip')?.textContent?.replace(/\s+/g, ' ').trim(),
+        highlighted: Boolean(element.shadowRoot.querySelector('lv-dashboard-visual-frame[data-agent-referenced]')),
+		pressed: element.shadowRoot.querySelector('[data-component-status-key="visual:orders_chart"] .ask-visual')?.getAttribute('aria-pressed'),
+      }
+    })
+    expect(referenced).toEqual({ chip: 'Orders by status', highlighted: true, pressed: 'true' })
+
+    const limitReached = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
+      const frame = Array.from(element.shadowRoot.querySelectorAll('lv-dashboard-visual-frame'))
+        .find((candidate: any) => candidate.getAttribute('data-component-status-key') === 'visual:orders_kpi') as any
+      frame.querySelector('.ask-visual').click()
+      const drawer = element.shadowRoot.querySelector('lv-chat-drawer') as any
+      await drawer.updateComplete
+      const composer = drawer.shadowRoot.querySelector('lv-chat-composer') as any
+      await composer.updateComplete
+      return {
+        chips: Array.from(composer.shadowRoot.querySelectorAll('.reference-chip')).map((node: any) => node.textContent?.replace(/\s+/g, ' ').trim()),
+        status: drawer.shadowRoot.querySelector('[data-reference-limit-status]')?.textContent?.replace(/\s+/g, ' ').trim(),
+      }
+    })
+    expect(limitReached).toEqual({ chips: ['Orders by status'], status: 'Up to 1 item can be attached' })
+
+    const submitted = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
+      const received: any[] = []
+      element.addEventListener('lv-chat-submit', (event: CustomEvent) => received.push(event.detail), { once: true })
+      const drawer = element.shadowRoot.querySelector('lv-chat-drawer') as any
+      const composer = drawer.shadowRoot.querySelector('lv-chat-composer') as any
+      const textarea = composer.shadowRoot.querySelector('textarea') as HTMLTextAreaElement
+      textarea.value = 'Why did this decline?'
+      textarea.dispatchEvent(new InputEvent('input', { bubbles: true }))
+      composer.shadowRoot.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      return received[0]
+    })
+    expect(submitted).toEqual({
+      input: 'Why did this decline?',
+      references: [{
+        reference: { workspaceId: 'sales', type: 'visual', id: 'executive-sales.orders_chart' },
+        name: 'Orders by status',
+        visualType: 'bar',
+        workspace: { id: 'sales', name: 'sales' },
+        hierarchy: ['sales', 'Executive Sales Dashboard', 'Overview'],
+        href: '/workspaces/sales/dashboards/executive-sales/pages/overview',
+        locations: [{ dashboardId: 'executive-sales', dashboardName: 'Executive Sales Dashboard', pageId: 'overview', pageName: 'Overview', href: '/workspaces/sales/dashboards/executive-sales/pages/overview' }],
+        context: ['current_page', 'current_dashboard', 'current_workspace'],
+      }],
+    })
+
+	const accepted = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
+	  const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev')
+	  mergePatch({ agent: {
+		activeConversationId: 'agentconv_1',
+		transcript: [{
+		  id: 'user_1', kind: 'user', runId: 'run_1', text: 'Why did this decline?',
+		  references: [{
+			reference: { workspaceId: 'sales', type: 'visual', id: 'executive-sales.orders_chart' },
+			name: 'Orders by status', workspace: { id: 'sales', name: 'Sales' },
+			hierarchy: ['Sales', 'Executive Sales Dashboard', 'Overview'],
+			href: '/workspaces/sales/dashboards/executive-sales/pages/overview', locations: [], context: ['current_page'],
+		  }],
+		}],
+		status: { enabled: true, running: true },
+		composer: { value: '', disabled: true, placeholder: 'Agent is working…' },
+	  } })
+	  await element.updateComplete
+	  const drawer = element.shadowRoot.querySelector('lv-chat-drawer') as any
+	  await drawer.updateComplete
+	  const composer = drawer.shadowRoot.querySelector('lv-chat-composer') as any
+	  const thread = drawer.shadowRoot.querySelector('lv-chat-thread') as any
+	  await Promise.all([composer.updateComplete, thread.updateComplete])
+	  return {
+		composerReferences: composer.references.length,
+		draft: composer.shadowRoot.querySelector('textarea').value,
+		bubble: thread.shadowRoot.querySelector('.message.user .bubble')?.textContent?.replace(/\s+/g, ' ').trim(),
+		highlighted: Boolean(element.shadowRoot.querySelector('lv-dashboard-visual-frame[data-agent-referenced]')),
+	  }
+	})
+	expect(accepted).toEqual({
+	  composerReferences: 0,
+	  draft: '',
+	  bubble: 'Orders by status Why did this decline?',
+	  highlighted: false,
+	})
+  } finally {
+    await page.close()
+  }
+})
+
+test('collapsed filters and page navigation use the same rail width', async () => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+  try {
+    await page.addInitScript(() => {
+      localStorage.setItem('leapview-report-sidebar-collapsed', 'true')
+      localStorage.setItem('leapview:filters-open', 'closed')
+    })
+    await page.goto(baseURL)
+    await page.waitForFunction(() => (
+      customElements.get('lv-dashboard-page')
+        && customElements.get('lv-sub-sidebar')
+        && customElements.get('lv-filter-dock')
+        && (document.querySelector('lv-dashboard-page') as any)?.page
+    ))
+
+    const widths = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
+      await element.updateComplete
+      const root = element.shadowRoot
+      const pageSidebar = root.querySelector('lv-sub-sidebar') as any
+      const filterDock = root.querySelector('lv-filter-dock') as any
+      await Promise.all([pageSidebar.updateComplete, filterDock.updateComplete])
+      return {
+        pageSidebar: Math.round(pageSidebar.getBoundingClientRect().width),
+        filters: Math.round(filterDock.shadowRoot.querySelector('aside').getBoundingClientRect().width),
+      }
+    })
+
+    expect(widths.pageSidebar).toBeGreaterThan(0)
+    expect(widths.filters).toBe(widths.pageSidebar)
+  } finally {
+    await page.close()
+  }
+})
+
+test('dashboard agent drawer folds out with the dashboard motion contract', async () => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+  try {
+    await page.addInitScript(() => localStorage.removeItem('leapview-dashboard-agent-state'))
+    await page.goto(baseURL)
+    await page.waitForFunction(() => (
+      customElements.get('lv-dashboard-page')
+        && customElements.get('lv-chat-drawer')
+        && (document.querySelector('lv-dashboard-page') as any)?.page
+    ))
+
+    const motion = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
+      await element.updateComplete
+      const root = element.shadowRoot
+      const route = root.querySelector('.route') as HTMLElement
+      const drawer = root.querySelector('lv-chat-drawer') as HTMLElement
+      const toggle = root.querySelector('.agent-toggle') as HTMLButtonElement
+      const before = getComputedStyle(route)
+      const closedWidth = drawer.getBoundingClientRect().width
+      toggle.click()
+      await element.updateComplete
+      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+      return {
+        transitionProperty: before.transitionProperty,
+        transitionDuration: before.transitionDuration,
+        animatedProperties: route.getAnimations().map((animation) => (
+          'transitionProperty' in animation ? (animation as CSSTransition).transitionProperty : ''
+        )),
+        closedWidth: Math.round(closedWidth),
+        openingWidth: Math.round(drawer.getBoundingClientRect().width),
+      }
+    })
+
+    expect(motion.transitionProperty).toContain('grid-template-columns')
+    expect(motion.transitionDuration).toBe('0.16s')
+    expect(motion.animatedProperties).toContain('grid-template-columns')
+    expect(motion.closedWidth).toBe(0)
+    expect(motion.openingWidth).toBeGreaterThan(0)
+    expect(motion.openingWidth).toBeLessThan(420)
+
+    await page.waitForFunction(() => {
+      const dashboard = document.querySelector('lv-dashboard-page') as any
+      const drawer = dashboard?.shadowRoot?.querySelector('lv-chat-drawer')
+      return (drawer?.getBoundingClientRect().width ?? 0) >= 419.9
+    })
+    const openWidth = await page.locator('lv-dashboard-page').evaluate((element: any) => (
+      Math.round(element.shadowRoot.querySelector('lv-chat-drawer')?.getBoundingClientRect().width ?? 0)
+    ))
+    expect(openWidth).toBe(420)
+
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    const reducedMotionDuration = await page.locator('lv-dashboard-page').evaluate((element: any) => (
+      getComputedStyle(element.shadowRoot.querySelector('.route')).transitionDuration
+    ))
+    expect(reducedMotionDuration).toBe('0s')
+  } finally {
+    await page.close()
+  }
+})
+
+test('dashboard agent restores its open state and active conversation after reload', async () => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+  try {
+    await page.addInitScript(() => {
+      ;(window as any).__agentRestoreRequests = []
+      window.addEventListener('lv-chat-restore', (event: Event) => {
+        ;(window as any).__agentRestoreRequests.push((event as CustomEvent).detail)
+      })
+    })
+    await page.goto(baseURL)
+    await page.evaluate(() => {
+      localStorage.setItem('leapview-dashboard-agent-state', JSON.stringify({
+        open: true,
+        conversationId: 'agentconv_saved',
+      }))
+    })
+    await page.reload()
+    await page.waitForFunction(() => (
+      customElements.get('lv-dashboard-page')
+        && (window as any).__agentRestoreRequests?.length === 1
+    ))
+
+    const restoredShell = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
+      await element.updateComplete
+      const drawer = element.shadowRoot.querySelector('lv-chat-drawer') as any
+      return {
+        open: drawer.open,
+        request: (window as any).__agentRestoreRequests[0],
+      }
+    })
+    expect(restoredShell).toEqual({
+      open: true,
+      request: { conversationId: 'agentconv_saved' },
+    })
+
+    await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
+      const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev')
+      mergePatch({ agent: {
+        activeConversationId: 'agentconv_saved',
+        transcript: [{ id: 'user_saved', kind: 'user', text: 'Persisted question' }],
+      } })
+      await element.updateComplete
+      const drawer = element.shadowRoot.querySelector('lv-chat-drawer') as any
+      await drawer.updateComplete
+      drawer.shadowRoot.querySelector('[aria-label="Close agent"]').click()
+      await element.updateComplete
+    })
+
+    const closedState = await page.locator('lv-dashboard-page').evaluate((element: any) => ({
+      open: element.shadowRoot.querySelector('lv-chat-drawer')?.open,
+      persisted: JSON.parse(localStorage.getItem('leapview-dashboard-agent-state') || '{}'),
+    }))
+    expect(closedState).toEqual({
+      open: false,
+      persisted: { open: false, conversationId: 'agentconv_saved' },
+    })
+
+    await page.reload()
+    await page.waitForFunction(() => (
+      customElements.get('lv-dashboard-page')
+        && (window as any).__agentRestoreRequests?.length === 1
+    ))
+    const reloadedClosedState = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
+      await element.updateComplete
+      return {
+        open: element.shadowRoot.querySelector('lv-chat-drawer')?.open,
+        request: (window as any).__agentRestoreRequests[0],
+      }
+    })
+    expect(reloadedClosedState).toEqual({
+      open: false,
+      request: { conversationId: 'agentconv_saved' },
+    })
+  } finally {
+    await page.close()
+  }
+})
+
 function testDocument(): string {
   const page = {
     kind: 'dashboard',
@@ -734,6 +1209,26 @@ function testDocument(): string {
     componentStatus,
     visuals,
     status,
+    agent: {
+      conversations: [],
+      activeConversationId: '',
+      transcript: [],
+      status: { enabled: true, running: false },
+      composer: { value: '', disabled: false, placeholder: 'Ask about this dashboard...' },
+    },
+    agentContext: {
+      surface: 'dashboard',
+      workspaceId: 'sales',
+      dashboardId: 'executive-sales',
+      dashboardTitle: 'Executive Sales Dashboard',
+      pageId: 'overview',
+      pageTitle: 'Overview',
+      modelId: 'olist',
+      generation: 3,
+      filters,
+      references: [],
+    },
+    agentVisuals: {},
   }
   const attr = (value: unknown) => escapeHTML(JSON.stringify(value))
   return `
@@ -742,7 +1237,7 @@ function testDocument(): string {
       <head>
         <style>
           html, body { margin: 0; min-height: 100%; }
-          body { --fontStack-system: system-ui; --lv-bg-app: #f6f8fa; --lv-bg-panel: #fff; --lv-bg-panel-muted: #f6f8fa; --lv-bg-control-hover: #f3f4f6; --lv-chart-surface: #fff; --lv-report-page-bg: #fff; --lv-report-canvas-bg: #eaeef2; --lv-report-rail-bg: #fff; --lv-bg-overlay: #fff; --lv-fg-default: #24292f; --lv-fg-muted: #57606a; --lv-fg-link: #0969da; --lv-line-muted: #d8dee4; --lv-border-default: 1px solid #d0d7de; --lv-border-muted: 1px solid #d8dee4; --lv-border-transparent: 1px solid transparent; --lv-radius-default: 6px; --lv-radius-full: 999px; --lv-dashboard-filter-width: 44px; --lv-dashboard-filter-open-width: 320px; --base-size-2: 2px; --base-size-4: 4px; --base-size-6: 6px; --base-size-8: 8px; --base-size-10: 10px; --base-size-12: 12px; --base-size-16: 16px; --base-size-20: 20px; --base-size-24: 24px; --control-medium-size: 32px; --control-xlarge-size: 40px; --lv-font-size-caption: 12px; --lv-font-size-body-sm: 14px; --lv-font-size-title-sm: 16px; --lv-font-size-title-lg: 28px; --lv-font-size-display: 32px; --lv-font-weight-medium: 500; --lv-font-weight-strong: 600; --lv-line-height-none: 1; --lv-line-height-tight: 1.2; --lv-line-height-compact: 1.3; --zIndex-dropdown: 100; --zIndex-modal: 200; --zIndex-sticky: 50; --shadow-resting-small: 0 1px 2px rgb(0 0 0 / .08); --shadow-floating-small: 0 8px 24px rgb(0 0 0 / .12); --lv-duration-fast: 160ms; --lv-spinner-size-md: 16px; --lv-spinner-duration: 1800ms; --motion-easing-move: ease; --motion-transition-stateChange: 160ms ease; }
+          body { --fontStack-system: system-ui; --lv-bg-app: #f6f8fa; --lv-bg-panel: #fff; --lv-bg-panel-muted: #f6f8fa; --lv-bg-control-hover: #f3f4f6; --lv-chart-surface: #fff; --lv-report-page-bg: #fff; --lv-report-canvas-bg: #eaeef2; --lv-report-rail-bg: #fff; --lv-bg-overlay: #fff; --lv-fg-default: #24292f; --lv-fg-muted: #57606a; --lv-fg-link: #0969da; --lv-line-muted: #d8dee4; --lv-border-default: 1px solid #d0d7de; --lv-border-muted: 1px solid #d8dee4; --lv-border-transparent: 1px solid transparent; --lv-radius-default: 6px; --lv-radius-full: 999px; --lv-page-rail-width-collapsed: 38px; --lv-dashboard-filter-open-width: 320px; --lv-dashboard-agent-width: 420px; --base-size-2: 2px; --base-size-4: 4px; --base-size-6: 6px; --base-size-8: 8px; --base-size-10: 10px; --base-size-12: 12px; --base-size-16: 16px; --base-size-20: 20px; --base-size-24: 24px; --control-medium-size: 32px; --control-xlarge-size: 40px; --lv-font-size-caption: 12px; --lv-font-size-body-sm: 14px; --lv-font-size-title-sm: 16px; --lv-font-size-title-lg: 28px; --lv-font-size-display: 32px; --lv-font-weight-medium: 500; --lv-font-weight-strong: 600; --lv-line-height-none: 1; --lv-line-height-tight: 1.2; --lv-line-height-compact: 1.3; --zIndex-dropdown: 100; --zIndex-modal: 200; --zIndex-sticky: 50; --shadow-resting-small: 0 1px 2px rgb(0 0 0 / .08); --shadow-floating-small: 0 8px 24px rgb(0 0 0 / .12); --lv-duration-fast: 160ms; --lv-spinner-size-md: 16px; --lv-spinner-duration: 1800ms; --motion-easing-move: ease; --motion-transition-stateChange: 160ms ease; }
           body { --lv-loading-delay-short: 250ms; --lv-loading-delay-long: 500ms; }
           lv-dashboard-page { min-height: 720px; }
         </style>

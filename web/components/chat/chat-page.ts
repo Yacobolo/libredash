@@ -1,9 +1,11 @@
 import { LitElement, css, html } from 'lit'
-import type { ChatConversationSummary, ChatPageSignal, ChatSignal, DashboardVisual } from '../../generated/signals'
+import { state } from 'lit/decorators.js'
+import type { AgentContextSignal, AgentReferenceSearchSignal, AgentReferenceSignal, ChatConversationSummary, ChatPageSignal, ChatSignal, DashboardVisual } from '../../generated/signals'
 import { DatastarLit } from '../shared/datastar-lit'
 import { checkSignalContract } from '../shared/signal-contract'
 import '../dashboard/visual-modal'
 import './chat-thread'
+import { type ChatReferencesChangeDetail, defaultAgentReferenceLimit, latestAcceptedRunId } from './reference'
 import './chat-composer'
 import './chat-list'
 
@@ -17,6 +19,7 @@ const emptyAgent: ChatSignal = {
 
 class LeapViewChatPage extends DatastarLit(LitElement) {
   private redirectedConversationID = ''
+  @state() private references: AgentReferenceSignal[] = []
 
   static styles = css`
     :host {
@@ -207,9 +210,19 @@ class LeapViewChatPage extends DatastarLit(LitElement) {
     return this.signal<boolean>('agentTurnPending', false) || Boolean(this.agent.status?.running)
   }
 
+	get referenceSearch(): AgentReferenceSearchSignal {
+		return this.signal<AgentReferenceSearchSignal>('agentReferenceSearch', {
+			query: '', requestId: 0, results: [],
+		})
+	}
+
   get composerDisabled(): boolean {
     const agent = this.agent
     return this.pending || Boolean(agent.status?.running) || Boolean(agent.composer?.disabled)
+  }
+
+  get context(): AgentContextSignal | null {
+    return this.signal<AgentContextSignal | null>('agentContext', null)
   }
 
   render() {
@@ -281,9 +294,20 @@ class LeapViewChatPage extends DatastarLit(LitElement) {
         .disabled=${this.composerDisabled || status.running || composer.disabled}
         .pending=${this.pending || status.running}
         .placeholder=${composer.placeholder ?? emptyAgent.composer.placeholder}
+        .references=${this.references}
+        .referenceLimit=${this.context?.referenceLimit ?? defaultAgentReferenceLimit}
+        .suggestions=${this.referenceSearch.results ?? []}
+        .suggestionQuery=${this.referenceSearch.query}
+        .suggestionRequestId=${this.referenceSearch.requestId}
+		.acceptedRunId=${latestAcceptedRunId(this.agent.transcript ?? [])}
+        @lv-chat-references-change=${this.referencesChanged}
       ></lv-chat-composer>
     `
   }
+
+	private referencesChanged(event: CustomEvent<ChatReferencesChangeDetail>) {
+		this.references = [...(event.detail.references ?? [])]
+	}
 }
 
 function conversationTitle(agent: ChatSignal): string {

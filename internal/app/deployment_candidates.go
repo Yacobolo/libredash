@@ -14,9 +14,8 @@ import (
 )
 
 type runtimeReloader interface {
-	Reload(ctx context.Context) error
 	PrepareServingState(ctx context.Context, servingStateID string) (servingstate.PreparedRuntime, error)
-	CommitPrepared(prepared servingstate.PreparedRuntime) error
+	ActivatePrepared(prepared servingstate.PreparedRuntime, activate func() error) error
 }
 
 type servingStateRepository interface {

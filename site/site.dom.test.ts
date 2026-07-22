@@ -313,7 +313,7 @@ test('site explains the product, its workflow, and where it fits in the data sta
   } finally {
     await page.close()
   }
-})
+}, 10_000)
 
 test('homepage flow background renders from design tokens and respects reduced motion', async () => {
   const context = await browser.newContext({ reducedMotion: 'reduce', viewport: { width: 1280, height: 800 } })
@@ -642,7 +642,7 @@ test('mobile landing page keeps the product story compact and ordered', async ()
   }
 })
 
-test('getting started route gives users a code-native first path', async () => {
+test('getting started route directs users through the first learning path', async () => {
   const page = await browser.newPage()
   try {
     await page.goto(`${baseURL}/docs/getting-started`)
@@ -703,8 +703,12 @@ test('getting started route gives users a code-native first path', async () => {
     expect(await page.locator('html').getAttribute('data-copied-markdown')).toStartWith('# Get started with LeapView')
 
     expect(await page.locator('.site-guide-step').count()).toBe(0)
-    expect((await page.locator('.site-docs-article pre code').allTextContents()).map((content) => content.trim())).toEqual(['task bootstrap', 'task dev', 'dashboards/\n  leapview.yaml\n  connections/\n    olist.yaml\n  sources/\n    olist.orders.yaml\n  workspaces/\n    sales/\n      workspace.yaml\n      models/\n        orders.yaml\n      semantic-models/\n        sales.yaml\n      dashboards/\n        executive-sales.yaml'])
-    expect(await page.getByRole('link', { name: 'Visual gallery' }).count()).toBeGreaterThan(0)
+    expect(await page.locator('.site-docs-article pre code').count()).toBe(0)
+    expect(await page.getByRole('heading', { name: 'Choose your starting point' }).isVisible()).toBe(true)
+    expect(await page.getByRole('heading', { name: 'What you will learn' }).isVisible()).toBe(true)
+    expect(await page.getByRole('link', { name: 'Installation' }).count()).toBeGreaterThan(0)
+    expect(await page.getByRole('link', { name: 'Build your first dashboard' }).count()).toBeGreaterThan(0)
+    expect(await page.getByRole('link', { name: 'Visual types' }).count()).toBeGreaterThan(0)
   } finally {
     await page.close()
   }
@@ -1002,7 +1006,7 @@ test('documentation articles provide a readable, navigable reference experience'
     viewport: { width: 1440, height: 900 },
   })
   try {
-    await page.goto(`${baseURL}/docs/guides/build`)
+    await page.goto(`${baseURL}/docs/guides/build/dashboard`)
     await page.evaluate(() => {
       Object.defineProperty(navigator, 'clipboard', {
         configurable: true,
@@ -1055,13 +1059,13 @@ test('documentation articles provide a readable, navigable reference experience'
     expect(await page.locator('.site-docs-callout[data-callout="tip"]').count()).toBe(1)
     expect(await page.locator('.site-docs-callout-label').getByText('Tip', { exact: true }).isVisible()).toBe(true)
     await page.waitForFunction(() => Boolean(document.querySelector('.site-docs-article lv-code-block .shiki')))
-    const codeBlock = page.locator('.site-docs-article lv-code-block').first()
+    const codeBlock = page.locator('.site-docs-article lv-code-block[language="sh"]').first()
     expect(await codeBlock.getAttribute('language')).toBe('sh')
     expect(await codeBlock.getAttribute('toolbar')).not.toBeNull()
     expect(await codeBlock.locator('.shiki').getAttribute('class')).toContain('github-light')
     expect(await codeBlock.getByText('Shell', { exact: true }).isVisible()).toBe(true)
     await codeBlock.getByRole('button', { name: 'Copy code' }).click()
-    await page.waitForFunction(() => document.documentElement.dataset.copiedCode === 'leapview validate --project dashboards/leapview.yaml\n')
+    await page.waitForFunction(() => document.documentElement.dataset.copiedCode === 'leapview validate --project dashboards/leapview.yaml\nleapview plan --project dashboards/leapview.yaml\n')
     expect(await codeBlock.getByRole('button', { name: 'Code copied' }).isVisible()).toBe(true)
 
     const activeGroup = page.locator('.site-docs-nav-group-active > summary').first()
@@ -1087,9 +1091,14 @@ test('documentation articles provide a readable, navigable reference experience'
     const semanticModelsResult = search.locator('a[href="/docs/concepts/semantic-models"]')
     await semanticModelsResult.waitFor({ state: 'visible' })
     expect(await semanticModelsResult.isVisible()).toBe(true)
-    expect(page.url()).toBe(`${baseURL}/docs/guides/build`)
+    expect(page.url()).toBe(`${baseURL}/docs/guides/build/dashboard`)
     const resultCount = await search.locator('.status').innerText()
     expect(resultCount).toMatch(/^[1-9]\d* results$/)
+    await searchInput.fill('no-document-can-match-this-query-9f83c1')
+    const emptyStatus = search.locator('.status')
+    await page.waitForFunction(() => document.querySelector('lv-site-search')?.shadowRoot?.querySelector('.status')?.textContent?.startsWith('No results'))
+    expect(await emptyStatus.innerText()).toBe('No results for “no-document-can-match-this-query-9f83c1”.')
+    expect(await emptyStatus.getAttribute('role')).toBe('status')
     await search.getByRole('button', { name: 'Close search' }).click()
     await page.keyboard.press('/')
     expect(await search.getByRole('dialog', { name: 'Search documentation' }).isVisible()).toBe(true)
@@ -1211,6 +1220,7 @@ test('documentation reading columns stay centered and readable at every layout t
         const articleRect = article.getBoundingClientRect()
         const paragraphRect = paragraph.getBoundingClientRect()
         const shellRect = shell.getBoundingClientRect()
+        const outlineRect = outline.getBoundingClientRect()
         const sectionHeading = article.querySelector('h2') as HTMLElement
         const precedingBlock = sectionHeading.previousElementSibling as HTMLElement
         return {
@@ -1218,6 +1228,7 @@ test('documentation reading columns stay centered and readable at every layout t
           articleRightSpace: shellRect.right - articleRect.right,
           articleWidth: articleRect.width,
           outlineVisible: getComputedStyle(outline).display !== 'none',
+          outlineRightSpace: contentRect.right - Number.parseFloat(contentStyle.paddingRight) - outlineRect.right,
           paragraphWidth: paragraphRect.width,
           readingLeftSpace: readingRect.left - (contentRect.left + Number.parseFloat(contentStyle.paddingLeft)),
           readingRightSpace: contentRect.right - Number.parseFloat(contentStyle.paddingRight) - readingRect.right,
@@ -1228,6 +1239,7 @@ test('documentation reading columns stay centered and readable at every layout t
 
     const wide = await measure()
     expect(wide.outlineVisible).toBe(true)
+    expect(Math.abs(wide.outlineRightSpace)).toBeLessThanOrEqual(1)
     expect(Math.abs(wide.readingLeftSpace - wide.readingRightSpace)).toBeLessThanOrEqual(1)
     expect(wide.articleWidth).toBeGreaterThanOrEqual(1000)
     expect(wide.articleWidth).toBeLessThanOrEqual(1024)
@@ -1238,6 +1250,7 @@ test('documentation reading columns stay centered and readable at every layout t
     await page.setViewportSize({ width: 1201, height: 900 })
     const withOutline = await measure()
     expect(withOutline.outlineVisible).toBe(true)
+    expect(Math.abs(withOutline.outlineRightSpace)).toBeLessThanOrEqual(1)
     expect(Math.abs(withOutline.readingLeftSpace - withOutline.readingRightSpace)).toBeLessThanOrEqual(1)
     expect(withOutline.articleWidth).toBeGreaterThan(600)
     expect(withOutline.articleWidth).toBeLessThan(800)
@@ -1284,9 +1297,9 @@ test('documentation CSS keeps site tokens available and fragment targets below t
     expect(Math.abs(runtimeStyles.articleWidth - runtimeStyles.shellWidth)).toBeLessThanOrEqual(1)
     expect(runtimeStyles.articleWidth).toBeLessThanOrEqual(1024)
 
-    await page.getByRole('navigation', { name: 'In this article' }).getByRole('link', { name: 'Run LeapView' }).click()
-    await page.waitForFunction(() => location.hash === '#run-leapview')
-    const anchorPosition = await page.locator('#run-leapview').evaluate((heading) => ({
+    await page.getByRole('navigation', { name: 'In this article' }).getByRole('link', { name: 'What you will learn' }).click()
+    await page.waitForFunction(() => location.hash === '#what-you-will-learn')
+    const anchorPosition = await page.locator('#what-you-will-learn').evaluate((heading) => ({
       headingTop: heading.getBoundingClientRect().top,
       headerBottom: document.querySelector('.site-header')?.getBoundingClientRect().bottom ?? 0,
     }))
@@ -1354,28 +1367,42 @@ test('documentation header keeps the Markdown copy action beside the title at ev
   }
 })
 
-test('documentation articles end with a DuckDB-style About this page panel', async () => {
+test('documentation articles end with responsive pagination cards and an About this page panel', async () => {
   const page = await browser.newPage({
     viewport: { width: 1440, height: 900 },
   })
   try {
     await page.goto(`${baseURL}/docs/getting-started`)
     const article = page.locator('.site-docs-article')
+    const pagination = article.getByRole('navigation', { name: 'Documentation pagination' })
     const panel = article.locator('.site-docs-page-meta')
-    expect(await article.getByRole('navigation', { name: 'Documentation pagination' }).count()).toBe(0)
-    expect(await article.getByRole('link', { name: /^(Previous|Next)/ }).count()).toBe(0)
+    const previous = pagination.getByRole('link', { name: 'Previous page: Installation' })
+    const next = pagination.getByRole('link', { name: 'Next page: Build your first dashboard' })
+    expect(await previous.getAttribute('href')).toBe('/docs/installation')
+    expect(await previous.getAttribute('rel')).toBe('prev')
+    expect(await next.getAttribute('href')).toBe('/docs/first-dashboard')
+    expect(await next.getAttribute('rel')).toBe('next')
     expect(await panel.getByRole('heading', { name: 'About this page', exact: true }).count()).toBe(1)
     expect(await panel.getByRole('link', { name: 'Report content issue', exact: true }).getAttribute('href')).toContain('github.com/Yacobolo/leapview/issues/new?')
     expect(await panel.getByRole('link', { name: 'See this page as Markdown', exact: true }).getAttribute('href')).toBe('https://raw.githubusercontent.com/Yacobolo/leapview/main/docs/getting-started.md')
     expect(await panel.getByRole('link', { name: 'Edit this page on GitHub', exact: true }).getAttribute('href')).toBe('https://github.com/Yacobolo/leapview/edit/main/docs/getting-started.md')
 
     const measure = () =>
-      panel.evaluate((element) => {
+      pagination.evaluate((element) => {
         const article = element.closest('.site-docs-article') as HTMLElement
-        const heading = element.querySelector('h2') as HTMLElement
-        const list = element.querySelector('ul') as HTMLElement
-        const item = element.querySelector('li') as HTMLElement
-        const panelStyle = getComputedStyle(element)
+        const previous = element.querySelector<HTMLElement>('.site-docs-pagination-previous')!
+        const next = element.querySelector<HTMLElement>('.site-docs-pagination-next')!
+        const panel = article.querySelector<HTMLElement>('.site-docs-page-meta')!
+        const previousRect = previous.getBoundingClientRect()
+        const nextRect = next.getBoundingClientRect()
+        const paginationRect = element.getBoundingClientRect()
+        const panelRect = panel.getBoundingClientRect()
+        const heading = panel.querySelector('h2') as HTMLElement
+        const list = panel.querySelector('ul') as HTMLElement
+        const item = panel.querySelector('li') as HTMLElement
+        const headingRect = heading.getBoundingClientRect()
+        const listRect = list.getBoundingClientRect()
+        const panelStyle = getComputedStyle(panel)
         const headingStyle = getComputedStyle(heading)
         const listStyle = getComputedStyle(list)
         const itemStyle = getComputedStyle(item)
@@ -1386,13 +1413,23 @@ test('documentation articles end with a DuckDB-style About this page panel', asy
           headingFontSize: Number.parseFloat(headingStyle.fontSize),
           headingLineHeight: Number.parseFloat(headingStyle.lineHeight),
           headingMarginBottom: Number.parseFloat(headingStyle.marginBottom),
+          headingLeft: headingRect.left,
+          headingBottom: headingRect.bottom,
           itemFontSize: Number.parseFloat(itemStyle.fontSize),
           itemLineHeight: Number.parseFloat(itemStyle.lineHeight),
           listStyle: listStyle.listStyleType,
+          listLeft: listRect.left,
+          listTop: listRect.top,
           marginTop: Number.parseFloat(panelStyle.marginTop),
+          nextLeft: nextRect.left,
+          nextTop: nextRect.top,
           padding: Number.parseFloat(panelStyle.paddingTop),
           paddingLeft: Number.parseFloat(listStyle.paddingLeft),
-          panelWidth: element.getBoundingClientRect().width,
+          paginationBottom: paginationRect.bottom,
+          panelTop: panelRect.top,
+          panelWidth: panelRect.width,
+          previousLeft: previousRect.left,
+          previousTop: previousRect.top,
         }
       })
 
@@ -1403,17 +1440,26 @@ test('documentation articles end with a DuckDB-style About this page panel', asy
     expect(desktop.headingFontSize).toBe(14)
     expect(desktop.headingLineHeight / desktop.headingFontSize).toBeCloseTo(1.2, 2)
     expect(desktop.headingMarginBottom).toBe(7)
+    expect(desktop.listTop).toBeGreaterThan(desktop.headingBottom)
+    expect(desktop.listLeft).toBe(desktop.headingLeft)
     expect(desktop.itemFontSize).toBe(14)
     expect(desktop.itemLineHeight / desktop.itemFontSize).toBeCloseTo(1.4, 2)
     expect(desktop.listStyle).toBe('disc')
     expect(desktop.marginTop).toBe(0)
     expect(desktop.paddingLeft).toBe(20)
     expect(Math.abs(desktop.panelWidth - desktop.articleWidth)).toBeLessThanOrEqual(1)
+    expect(desktop.previousTop).toBe(desktop.nextTop)
+    expect(desktop.previousLeft).toBeLessThan(desktop.nextLeft)
+    expect(desktop.paginationBottom).toBeLessThan(desktop.panelTop)
 
     await page.setViewportSize({ width: 390, height: 844 })
     const mobile = await measure()
     expect(mobile.padding).toBe(20)
+    expect(mobile.listTop).toBeGreaterThan(mobile.headingBottom)
+    expect(mobile.listLeft).toBe(mobile.headingLeft)
     expect(Math.abs(mobile.panelWidth - mobile.articleWidth)).toBeLessThanOrEqual(1)
+    expect(mobile.previousLeft).toBe(mobile.nextLeft)
+    expect(mobile.previousTop).toBeLessThan(mobile.nextTop)
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   } finally {
     await page.close()
@@ -1468,6 +1514,14 @@ test('compact documentation navigation opens in a drawer', async () => {
     await page.waitForFunction((previousCount) => (window as unknown as { siteDocsRevealCalls: unknown[] }).siteDocsRevealCalls.length > previousCount, revealCount)
     expect(await headerDrawerToggle.evaluate((element) => element.shadowRoot?.querySelector('button')?.getAttribute('aria-expanded'))).toBe('true')
     expect(await sidebar.getAttribute('aria-hidden')).toBe('false')
+    expect(await page.locator('.site-header').evaluate((element) => (element as HTMLElement).inert)).toBe(true)
+    expect(await page.locator('.site-docs-content').evaluate((element) => (element as HTMLElement).inert)).toBe(true)
+    const drawerToggle = page.locator('lv-site-docs-drawer-toggle[placement="drawer"]')
+    await page.waitForFunction(() =>
+      document.querySelector<HTMLElement>('lv-site-docs-drawer-toggle[placement="drawer"]')?.shadowRoot?.activeElement?.matches('button'),
+    )
+    await page.keyboard.press('Shift+Tab')
+    expect(await page.evaluate(() => document.querySelector('.site-docs-sidebar')?.contains(document.activeElement))).toBe(true)
     expect(
       await sidebar
         .locator('.site-docs-link')
@@ -1493,9 +1547,56 @@ test('compact documentation navigation opens in a drawer', async () => {
     })
     expect(await sidebar.evaluate((element) => getComputedStyle(element).transitionDuration)).not.toBe('0s')
 
-    await page.locator('lv-site-docs-drawer-toggle[placement="drawer"]').getByRole('button', { name: 'Close documentation menu' }).click()
+    await drawerToggle.getByRole('button', { name: 'Close documentation menu' }).click()
     await page.waitForFunction(() => !document.querySelector('.site-docs-layout')?.classList.contains('site-docs-drawer-open'))
     expect(await headerDrawerToggle.evaluate((element) => element.shadowRoot?.querySelector('button')?.getAttribute('aria-expanded'))).toBe('false')
+  } finally {
+    await context.close()
+  }
+})
+
+test('documentation navigation preserves sidebar context within the current tab', async () => {
+  const context = await browser.newContext({
+    viewport: { width: 1440, height: 600 },
+  })
+  const page = await context.newPage()
+  try {
+    await page.goto(`${baseURL}/docs/visuals/line`)
+    const sidebar = page.locator('.site-docs-sidebar')
+    const current = sidebar.locator('a[href="/docs/visuals/line"]')
+    await page.evaluate(() => sessionStorage.removeItem('leapview:docs-sidebar-scroll:v1'))
+    await sidebar.evaluate((element, currentElement) => {
+      const currentLink = currentElement as HTMLElement
+      const sidebarRect = element.getBoundingClientRect()
+      const currentRect = currentLink.getBoundingClientRect()
+      element.scrollTop += currentRect.top - sidebarRect.top - element.clientHeight / 2
+      element.dispatchEvent(new Event('scroll'))
+    }, await current.elementHandle())
+    await page.waitForFunction(() => sessionStorage.getItem('leapview:docs-sidebar-scroll:v1') !== null)
+
+    const saved = await page.evaluate(() => JSON.parse(sessionStorage.getItem('leapview:docs-sidebar-scroll:v1') ?? 'null') as {
+      anchor: { id: string; kind: 'group' | 'link'; offset: number }
+      scrollTop: number
+    })
+    expect(saved.scrollTop).toBeGreaterThan(0)
+    expect(saved.anchor.id).not.toBe('')
+
+    await page.goto(`${baseURL}/docs/visuals/area`)
+    await page.waitForFunction(() => document.querySelector('.site-docs-link-current')?.getAttribute('href') === '/docs/visuals/area')
+    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+
+    const restored = await sidebar.evaluate((element) => {
+      const currentLink = element.querySelector<HTMLElement>('.site-docs-link-current')
+      if (!currentLink) throw new Error('restored documentation navigation target is missing')
+      const sidebarRect = element.getBoundingClientRect()
+      const currentRect = currentLink.getBoundingClientRect()
+      return {
+        activeVisible: currentRect.top >= sidebarRect.top && currentRect.bottom <= sidebarRect.bottom,
+        scrollTop: element.scrollTop,
+      }
+    })
+    expect(restored.scrollTop).toBeGreaterThan(0)
+    expect(restored.activeVisible).toBe(true)
   } finally {
     await context.close()
   }
@@ -1597,6 +1698,96 @@ test('documentation outlines match the compact DuckDB article navigation treatme
     await page.close()
   }
 })
+
+test('generated CLI outlines keep subcommands and omit repeated details and footer metadata', async () => {
+  const page = await browser.newPage({
+    viewport: { width: 1440, height: 900 },
+  })
+  try {
+    await page.goto(`${baseURL}/docs/cli/semantic-models`)
+    const article = page.locator('.site-docs-article')
+    const toc = page.locator('lv-site-article-toc')
+    await page.waitForFunction(() => Boolean(document.querySelector('lv-site-article-toc')?.shadowRoot?.querySelector('a')))
+
+    expect(await article.locator('h3#dataset').count()).toBe(1)
+    expect(await article.locator('h3#dataset ~ h4').first().textContent()).toBe('Usage')
+    expect(await article.locator('.site-docs-page-meta h2').textContent()).toBe('About this page')
+
+    const visibleOutlineLabels = await toc.evaluate((element) =>
+      Array.from(element.shadowRoot?.querySelectorAll<HTMLAnchorElement>('a') ?? [])
+        .filter((link) => link.getClientRects().length > 0)
+        .map((link) => link.textContent?.trim() ?? ''),
+    )
+    expect(visibleOutlineLabels.filter((label) => label === 'Usage')).toHaveLength(1)
+    expect(visibleOutlineLabels.filter((label) => label === 'Options')).toHaveLength(1)
+    expect(visibleOutlineLabels).toContain('Subcommands')
+    expect(visibleOutlineLabels).toContain('dataset')
+    expect(visibleOutlineLabels).toContain('datasets')
+    expect(visibleOutlineLabels).toContain('describe')
+    expect(visibleOutlineLabels).not.toContain('Behavior')
+    expect(visibleOutlineLabels).not.toContain('Inherited options')
+    expect(visibleOutlineLabels).not.toContain('About this page')
+    expect(await toc.getByRole('link', { name: 'About this page', exact: true }).count()).toBe(0)
+  } finally {
+    await page.close()
+  }
+})
+
+test('generated API outlines keep operations and omit repeated operation details', async () => {
+  const page = await browser.newPage({
+    viewport: { width: 1440, height: 900 },
+  })
+  try {
+    await page.goto(`${baseURL}/docs/api/access`)
+    const article = page.locator('.site-docs-article')
+    const toc = page.locator('lv-site-article-toc')
+    await page.waitForFunction(() => Boolean(document.querySelector('lv-site-article-toc')?.shadowRoot?.querySelector('a')))
+
+    expect(await article.locator('h2#operations').count()).toBe(1)
+    expect(await article.locator('h3').first().textContent()).toBe('List principals')
+    expect(await article.locator('h3').first().locator('xpath=following-sibling::h4[1]').textContent()).toBe('Parameters')
+
+    const visibleOutlineLabels = await toc.evaluate((element) =>
+      Array.from(element.shadowRoot?.querySelectorAll<HTMLAnchorElement>('a') ?? [])
+        .filter((link) => link.getClientRects().length > 0)
+        .map((link) => link.textContent?.trim() ?? ''),
+    )
+    expect(visibleOutlineLabels[0]).toBe('Operations')
+    expect(visibleOutlineLabels).toContain('List principals')
+    expect(visibleOutlineLabels).toContain('Create a local principal')
+    expect(visibleOutlineLabels).not.toContain('Parameters')
+    expect(visibleOutlineLabels).not.toContain('Request body')
+    expect(visibleOutlineLabels).not.toContain('Responses')
+
+    const listWorkspaceRoles = article.locator('h3#list-workspace-roles')
+    const listWorkspaceRolesDetail = listWorkspaceRoles.locator('xpath=following-sibling::h4[1]')
+    await listWorkspaceRolesDetail.evaluate((heading) => {
+      document.documentElement.style.scrollBehavior = 'auto'
+      window.scrollTo({ top: heading.getBoundingClientRect().top + window.scrollY - window.innerHeight * 0.2 })
+    })
+    await page.waitForFunction(() => {
+      const toc = document.querySelector<HTMLElement>('lv-site-article-toc')
+      const active = toc?.shadowRoot?.querySelector<HTMLAnchorElement>('a.active')
+      return active?.textContent?.trim() === 'List workspace roles' && active.getClientRects().length > 0 && toc.scrollTop > 0
+    })
+    const activeOutline = await toc.evaluate((element) => {
+      const active = element.shadowRoot?.querySelector<HTMLAnchorElement>('a.active')
+      if (!active) throw new Error('active article outline link is missing')
+      const hostRect = element.getBoundingClientRect()
+      const activeRect = active.getBoundingClientRect()
+      return {
+        label: active.textContent?.trim(),
+        scrollTop: element.scrollTop,
+        visible: activeRect.top >= hostRect.top && activeRect.bottom <= hostRect.bottom,
+      }
+    })
+    expect(activeOutline.label).toBe('List workspace roles')
+    expect(activeOutline.scrollTop).toBeGreaterThan(0)
+    expect(activeOutline.visible).toBe(true)
+  } finally {
+    await page.close()
+  }
+}, 10_000)
 
 test('visual showcase renders every supported visual type', async () => {
   const page = await browser.newPage()

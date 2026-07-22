@@ -3,6 +3,7 @@ import { property, state } from 'lit/decorators.js'
 import { Box, ChevronRight, FileText, LayoutDashboard, LayoutPanelTop, Wrench, type IconNode } from 'lucide'
 import type { ChatArtifactSignal, ChatStatus, ChatTranscriptItemSignal, DashboardVisual } from '../../generated/signals'
 import { lucideIcon } from '../shared/lucide-icons'
+import { referenceHierarchy, referenceIcon, referenceKindLabel } from './reference'
 import '../shared/code-block'
 import '../shared/markdown-view'
 import '../shared/visual-artifact'
@@ -38,6 +39,7 @@ class ChatThread extends LitElement {
   @property({ attribute: 'visuals', converter: jsonConverter<Record<string, DashboardVisual>>({}) }) visualsAttribute: Record<string, DashboardVisual> = {}
   @property({ attribute: 'status', converter: jsonConverter<ChatStatus>({ enabled: false, running: false }) }) status: ChatStatus = { enabled: false, running: false }
   @property({ attribute: 'conversation-id' }) conversationId = ''
+  @property({ reflect: true }) surface: 'page' | 'drawer' = 'page'
   @state() private expandedToolCalls = new Set<string>()
   private scrollFrame = 0
 
@@ -153,6 +155,69 @@ class ChatThread extends LitElement {
     .user .bubble {
       border-color: var(--lv-line-muted);
       background: var(--lv-bg-panel-muted);
+    }
+
+		.user-turn-bubble {
+			display: grid;
+			gap: var(--lv-space-sm);
+		}
+
+		.turn-references {
+			display: flex;
+			flex-wrap: wrap;
+			gap: var(--lv-space-2xs);
+		}
+
+		.turn-reference {
+			display: inline-flex;
+			width: fit-content;
+			max-width: 100%;
+			min-width: 0;
+			align-items: center;
+			gap: var(--lv-space-xs);
+			border-radius: var(--lv-radius-default);
+			background: var(--lv-bg-control);
+			color: var(--lv-fg-default);
+			padding: var(--lv-space-xs) var(--lv-space-sm);
+			text-decoration: none;
+			white-space: nowrap;
+		}
+
+		.turn-reference:hover,
+		.turn-reference:focus-visible {
+			background: var(--lv-bg-control-hover);
+			outline: 0;
+		}
+
+		.turn-reference-icon,
+		.turn-reference-icon svg {
+			width: 14px;
+			height: 14px;
+		}
+
+		.turn-reference-name {
+			min-width: 0;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+
+		.turn-message-text {
+			white-space: pre-wrap;
+		}
+
+    :host([surface='drawer']) .thread {
+      background: var(--lv-bg-app);
+    }
+
+    :host([surface='drawer']) .scroll {
+      padding: var(--lv-space-lg) calc(var(--lv-space-lg) + var(--lv-space-xs)) var(--lv-space-sm);
+    }
+
+    :host([surface='drawer']) .user .bubble {
+      border-color: transparent;
+      border-radius: var(--lv-radius-large);
+      padding: var(--lv-space-sm) var(--lv-space-md);
     }
 
     .message.error .bubble {
@@ -418,9 +483,34 @@ class ChatThread extends LitElement {
   }
 
   private renderUnit(unit: ChatRenderUnit) {
-    if (unit.kind === 'user') return this.renderMessage('user', unit.item.text || '-')
+    if (unit.kind === 'user') return this.renderUserTurn(unit.item)
     return this.renderAgentTurn(unit.items)
   }
+
+	private renderUserTurn(item: ChatTranscriptItemSignal) {
+		const references = item.references ?? []
+		if (references.length === 0) return this.renderMessage('user', item.text || '-')
+		return html`
+			<article class="message user">
+				<div class="bubble plain user-turn-bubble">
+					<div class="turn-references" aria-label="Context for this message">
+						${references.map((reference) => {
+							const hierarchy = referenceHierarchy(reference).join(' › ')
+							const kind = referenceKindLabel(reference.reference.type)
+							const tooltip = [reference.name, hierarchy, kind].filter(Boolean).join(' · ')
+							return html`
+								<a class="turn-reference" href=${reference.href} title=${tooltip} aria-label=${tooltip}>
+									<span class="turn-reference-icon" aria-hidden="true">${referenceIcon(reference.reference.type, reference.visualType)}</span>
+									<span class="turn-reference-name">${reference.name}</span>
+								</a>
+							`
+						})}
+					</div>
+					<div class="turn-message-text">${item.text || '-'}</div>
+				</div>
+			</article>
+		`
+	}
 
   private renderAgentTurn(items: ChatTranscriptItemSignal[]) {
     return html`

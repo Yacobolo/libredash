@@ -123,7 +123,7 @@ func signAPIPageCursor(r *http.Request, value string) string {
 }
 
 func hasNativeCursorPrefix(value string) bool {
-	for _, prefix := range []string{"q1.", "q2.", "d1.", "d2.", "e1."} {
+	for _, prefix := range []string{"q1.", "q2.", "d1.", "d2.", "e1.", "s1."} {
 		if strings.HasPrefix(value, prefix) {
 			return true
 		}

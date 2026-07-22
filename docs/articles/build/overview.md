@@ -1,85 +1,25 @@
 # Build dashboards
 
-LeapView authoring follows the dependency direction of the project. Start with governed data inputs and finish with presentation. Working in that order makes validation errors local and prevents dashboards from becoming the place where source cleanup and business logic accumulate.
+Build a LeapView dashboard from governed data resources upward: connect physical data, shape reusable analytical tables, define business meaning, and then compose the report surface. Use this page to choose the next task rather than as a substitute for the focused guides.
 
-> [!TIP]
-> Treat this sequence as a diagnostic boundary as well as a build order. Verify each layer before moving upward so a dashboard never has to compensate for an ambiguous source, grain, or measure.
+## Follow the authoring path
 
-## Author dashboards in layers
+1. [Connect a data source](/docs/guides/build/connect-data) and give physical inputs stable project identities.
+2. [Define model tables](/docs/guides/build/model-tables) with explicit keys, grain, and reusable transformations.
+3. [Build a semantic model](/docs/guides/build/semantic-model) containing governed dimensions, measures, metrics, and relationships.
+4. [Create a dashboard](/docs/guides/build/dashboard) with filters, queries, visuals, tables, and an initial report page.
+5. [Compose pages and layout](/docs/guides/build/pages-layout) for desktop and compact widths.
+6. [Add filters and interactions](/docs/guides/build/filters-interactions) through server-validated semantic mappings.
+7. [Configure tables, matrices, and pivots](/docs/guides/build/tables) for detailed analytical workflows.
 
-### Authoring sequence
+Each guide owns one outcome and links to the exact generated contract for the resources it changes.
 
-Use this sequence for a new analytical surface:
+## Make sound design choices
 
-1. Add or reuse a project connection.
-2. Describe physical inputs as project sources.
-3. Permit those sources in the target workspace.
-4. Build workspace model tables with documented keys and grain.
-5. Expose dimensions, measures, metrics, and relationships through a semantic model.
-6. Define dashboard filters, visual queries, tables, pages, and layout.
-7. Validate locally, exercise semantic queries, and review a deployment plan.
+Read [Connections and sources](/docs/concepts/connections-sources), [Model tables](/docs/concepts/model-tables), [Semantic models](/docs/concepts/semantic-models), and [Dashboards, pages, and visuals](/docs/concepts/dashboards) when you need to understand why the layers have separate responsibilities.
 
-The sequence is also a debugging tool. If a chart returns the wrong total, first determine whether the model-table grain is correct, then test the semantic measure, and only then inspect dashboard filters and presentation.
+Use [Dashboard authoring patterns](/docs/guides/build/patterns) for cross-cutting guidance about grain, stable identities, ownership, bounded queries, and maintainable presentation.
 
-### Keep each layer focused
+## Validate and deliver
 
-Project sources document physical input identity and shape. Model tables parse, normalize, join, and materialize reusable analytical rows. Semantic models define business meaning and valid relationships. Dashboards select and present that meaning.
-
-Avoid these common shortcuts:
-
-- putting environment-specific URLs or secrets in dashboard YAML;
-- repeating source parsing in several model tables without a clear reason;
-- embedding business formulas separately in each visual;
-- joining incompatible grains because the fields happen to share a name;
-- using page placement entries as the definition of a query;
-- loading unbounded chart or table results.
-
-## Validate as you build
-
-### Work in small validated steps
-
-Validate after adding each resource layer:
-
-```sh
-leapview validate --project dashboards/leapview.yaml
-```
-
-Once the project is valid, inspect how it differs from the active target:
-
-```sh
-leapview plan \
-  --project dashboards/leapview.yaml \
-  --environment dev \
-  --target "$LEAPVIEW_TARGET" \
-  --token "$LEAPVIEW_API_TOKEN"
-```
-
-The local plan is useful even without a target; a target-aware plan adds active deployment differences. Use `--json` in automation and keep human-readable output for review.
-
-### Test below the dashboard
-
-Before debugging a report component, inspect the semantic surface directly:
-
-```sh
-leapview semantic-models describe sales \
-  --workspace sales \
-  --target "$LEAPVIEW_TARGET" \
-  --token "$LEAPVIEW_API_TOKEN"
-```
-
-The generated [`semantic-models` command reference](/docs/cli/semantic-models) includes dataset discovery, field listing, preview, explain, and query operations. These commands help distinguish semantic or data failures from rendering problems.
-
-### Review checklist
-
-Before deployment, confirm:
-
-- all source and resource references resolve;
-- model-table keys and grains match observed data;
-- measure results are correct for filtered and empty inputs;
-- relationships have valid cardinality;
-- chart, option, and table queries are bounded and deterministically sorted;
-- component IDs and filter URL parameters are stable;
-- the page works at desktop and compact widths;
-- the plan contains only the intended resource and revision changes.
-
-The following guides walk through each layer. Use generated configuration reference pages for exact fields; these guides explain how the contracts should work together.
+Use [Validate, plan, and deploy](/docs/cli/validate-deploy) for the reviewed delivery loop. When you need accepted fields rather than workflow guidance, open the generated [Configuration reference](/docs/config), [CLI command reference](/docs/cli/reference), or [Visual types](/docs/visuals/overview).

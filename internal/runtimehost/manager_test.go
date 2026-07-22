@@ -36,7 +36,7 @@ func TestManagerReloadClearsStaleRuntimeWhenActiveDeploymentMissing(t *testing.T
 	if err := manager.Reload(ctx); err != nil {
 		t.Fatalf("reload missing active: %v", err)
 	}
-	if _, err := manager.Active(); err == nil {
+	if _, err := manager.Acquire(); err == nil {
 		t.Fatal("active runtime survived missing active deployment")
 	}
 }
@@ -69,13 +69,15 @@ func TestManagerPrepareCommitSwapsRuntimeAndClosesOld(t *testing.T) {
 	if err != nil {
 		t.Fatalf("prepare: %v", err)
 	}
-	if err := manager.CommitPrepared(prepared); err != nil {
+	if err := manager.PublishPrepared(prepared); err != nil {
 		t.Fatalf("commit: %v", err)
 	}
-	active, err := manager.Active()
+	lease, err := manager.Acquire()
 	if err != nil {
 		t.Fatalf("active: %v", err)
 	}
+	defer lease.Release()
+	active := lease.Runtime()
 	if active == nil {
 		t.Fatal("active runtime is nil")
 	}
@@ -84,7 +86,7 @@ func TestManagerPrepareCommitSwapsRuntimeAndClosesOld(t *testing.T) {
 	if err != nil {
 		t.Fatalf("prepare second: %v", err)
 	}
-	if err := manager.CommitPrepared(second); err != nil {
+	if err := manager.PublishPrepared(second); err != nil {
 		t.Fatalf("commit second: %v", err)
 	}
 	if factory.prepareCalls != 1 {
@@ -545,10 +547,11 @@ func TestManagerReloadRoutesWhenOnlyActiveDeploymentPointerChanges(t *testing.T)
 	if err := manager.Reload(ctx); err != nil {
 		t.Fatalf("first reload: %v", err)
 	}
-	active, err := manager.Active()
+	lease, err := manager.Acquire()
 	if err != nil {
 		t.Fatalf("first active: %v", err)
 	}
+	active := lease.Runtime()
 	if got := active.(RuntimeSnapshot).DuckLakeSnapshotID(); got != 11 {
 		t.Fatalf("first active snapshot = %d, want 11", got)
 	}
@@ -558,10 +561,13 @@ func TestManagerReloadRoutesWhenOnlyActiveDeploymentPointerChanges(t *testing.T)
 	if err := manager.Reload(ctx); err != nil {
 		t.Fatalf("second reload: %v", err)
 	}
-	active, err = manager.Active()
+	lease.Release()
+	lease, err = manager.Acquire()
 	if err != nil {
 		t.Fatalf("second active: %v", err)
 	}
+	defer lease.Release()
+	active = lease.Runtime()
 	if got := active.(RuntimeSnapshot).DuckLakeSnapshotID(); got != 22 {
 		t.Fatalf("second active snapshot = %d, want 22", got)
 	}
@@ -586,10 +592,12 @@ func TestManagerReloadRoutesWhenOnlyDuckLakeSnapshotPointerChanges(t *testing.T)
 	if err := manager.Reload(ctx); err != nil {
 		t.Fatalf("second reload: %v", err)
 	}
-	active, err := manager.Active()
+	lease, err := manager.Acquire()
 	if err != nil {
 		t.Fatalf("active: %v", err)
 	}
+	defer lease.Release()
+	active := lease.Runtime()
 	if got := active.(RuntimeSnapshot).DuckLakeSnapshotID(); got != 22 {
 		t.Fatalf("active snapshot = %d, want 22", got)
 	}
@@ -620,7 +628,7 @@ func TestManagerReloadReusesRuntimeWhenDeploymentDigestAndSnapshotMatch(t *testi
 
 func TestManagerRejectsPreparedFromDifferentHost(t *testing.T) {
 	manager := NewManagerWithFactory(ManagerOptions{Repo: &fakeRepo{}, WorkspaceID: "test", Environment: "dev", Factory: &fakeFactory{}})
-	if err := manager.CommitPrepared(fakePrepared{}); err == nil {
+	if err := manager.PublishPrepared(fakePrepared{}); err == nil {
 		t.Fatal("expected wrong prepared runtime error")
 	}
 }
@@ -636,14 +644,14 @@ func TestManagerCloseClearsActiveRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatalf("prepare: %v", err)
 	}
-	if err := manager.CommitPrepared(prepared); err != nil {
+	if err := manager.PublishPrepared(prepared); err != nil {
 		t.Fatalf("commit: %v", err)
 	}
 
 	if err := manager.Close(); err != nil {
 		t.Fatalf("close: %v", err)
 	}
-	if _, err := manager.Active(); err == nil {
+	if _, err := manager.Acquire(); err == nil {
 		t.Fatal("expected no active runtime after close")
 	}
 }
@@ -676,13 +684,17 @@ func TestRegistryReloadLoadsConfiguredEnvironmentForEachWorkspace(t *testing.T) 
 	if got := repo.activeCalls; !equalStrings(got, []string{"empty/prod", "operations/prod", "sales/prod"}) {
 		t.Fatalf("active calls = %#v, want configured prod workspaces only", got)
 	}
-	if _, err := registry.ActiveForWorkspace(context.Background(), "sales"); err != nil {
+	if lease, err := registry.AcquireForWorkspace(context.Background(), "sales"); err != nil {
 		t.Fatalf("sales active: %v", err)
+	} else {
+		lease.Release()
 	}
-	if _, err := registry.ActiveForWorkspace(context.Background(), "operations"); err != nil {
+	if lease, err := registry.AcquireForWorkspace(context.Background(), "operations"); err != nil {
 		t.Fatalf("operations active: %v", err)
+	} else {
+		lease.Release()
 	}
-	if _, err := registry.ActiveForWorkspace(context.Background(), "empty"); err == nil {
+	if _, err := registry.AcquireForWorkspace(context.Background(), "empty"); err == nil {
 		t.Fatal("empty workspace active error = nil, want no active deployment")
 	}
 	if got := factory.inputs; !equalStrings(got, []string{"operations/prod/dep_ops_prod", "sales/prod/dep_sales_prod"}) {
@@ -706,17 +718,19 @@ func TestRegistryPrepareCommitRoutesDeploymentByWorkspace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("prepare: %v", err)
 	}
-	if err := registry.CommitPrepared(prepared); err != nil {
+	if err := registry.ActivatePrepared(prepared, func() error { return nil }); err != nil {
 		t.Fatalf("commit: %v", err)
 	}
 	repo.active["operations/prod"] = registryDeploymentArtifact{
 		deployment: servingstate.State{ID: "dep_ops_prod", WorkspaceID: "operations", Environment: "prod", Status: servingstate.StatusActive},
 		artifact:   servingstate.Artifact{ServingStateID: "dep_ops_prod", WorkspaceID: "operations", Environment: "prod", Digest: "ops-prod"},
 	}
-	if _, err := registry.ActiveForWorkspace(context.Background(), "operations"); err != nil {
+	if lease, err := registry.AcquireForWorkspace(context.Background(), "operations"); err != nil {
 		t.Fatalf("operations active after commit: %v", err)
+	} else {
+		lease.Release()
 	}
-	if _, err := registry.ActiveForWorkspace(context.Background(), "sales"); err == nil {
+	if _, err := registry.AcquireForWorkspace(context.Background(), "sales"); err == nil {
 		t.Fatal("sales active error = nil, want only operations runtime committed")
 	}
 	if got := factory.inputs; !equalStrings(got, []string{"operations/prod/dep_ops_prod"}) {
@@ -735,10 +749,10 @@ func TestRegistryPreparedRuntimeDoesNotCommitWhenMetadataActivationFails(t *test
 	}
 	defer prepared.Close()
 	wantErr := errors.New("activation failed")
-	if err := registry.CommitPreparedWithActivation(prepared, func() error { return wantErr }); !errors.Is(err, wantErr) {
+	if err := registry.ActivatePrepared(prepared, func() error { return wantErr }); !errors.Is(err, wantErr) {
 		t.Fatalf("commit error = %v, want %v", err, wantErr)
 	}
-	if _, err := registry.managerForWorkspace("sales").Active(); err == nil {
+	if _, err := registry.managerForWorkspace("sales").Acquire(); err == nil {
 		t.Fatal("runtime committed after metadata activation failed")
 	}
 }
@@ -774,11 +788,13 @@ func TestRegistryPreparedSetActivatesAndCommitsEveryWorkspaceTogether(t *testing
 	if len(factory.runtimes) != 4 || factory.runtimes[0].closed || factory.runtimes[1].closed {
 		t.Fatalf("active generation was not retained during prepare: %#v", factory.runtimes)
 	}
-	if runtime, err := registry.managerForWorkspace("operations").Active(); err != nil || runtime != factory.runtimes[0] {
-		t.Fatalf("operations active during prepare = %#v, %v", runtime, err)
+	activeLease, err := registry.managerForWorkspace("operations").Acquire()
+	if err != nil || activeLease.Runtime() != factory.runtimes[0] {
+		t.Fatalf("operations active during prepare = %#v, %v", activeLease.Runtime(), err)
 	}
+	activeLease.Release()
 	activated := false
-	err = registry.CommitPreparedSet(prepared, func() error {
+	err = registry.ActivatePreparedSet(prepared, func() error {
 		activated = true
 		for _, workspaceID := range []servingstate.WorkspaceID{"operations", "sales"} {
 			id := servingstate.ID("dep_" + string(workspaceID) + "_prod")
@@ -793,8 +809,10 @@ func TestRegistryPreparedSetActivatesAndCommitsEveryWorkspaceTogether(t *testing
 		t.Fatal("metadata activation was not called")
 	}
 	for _, workspaceID := range []servingstate.WorkspaceID{"operations", "sales"} {
-		if _, err := registry.ActiveForWorkspace(context.Background(), workspaceID); err != nil {
+		if lease, err := registry.AcquireForWorkspace(context.Background(), workspaceID); err != nil {
 			t.Fatalf("%s active: %v", workspaceID, err)
+		} else {
+			lease.Release()
 		}
 	}
 	if got := factory.inputs; !equalStrings(got, []string{"operations/prod/dep_operations_active", "sales/prod/dep_sales_active", "operations/prod/dep_operations_prod", "sales/prod/dep_sales_prod"}) {
@@ -815,11 +833,221 @@ func TestRegistryPreparedSetDoesNotCommitWhenMetadataActivationFails(t *testing.
 	}
 	defer prepared.Close()
 	wantErr := errors.New("activation failed")
-	if err := registry.CommitPreparedSet(prepared, func() error { return wantErr }); !errors.Is(err, wantErr) {
+	if err := registry.ActivatePreparedSet(prepared, func() error { return wantErr }); !errors.Is(err, wantErr) {
 		t.Fatalf("commit error = %v, want %v", err, wantErr)
 	}
-	if _, err := registry.managerForWorkspace("sales").Active(); err == nil {
+	if _, err := registry.managerForWorkspace("sales").Acquire(); err == nil {
 		t.Fatal("runtime committed after metadata activation failed")
+	}
+}
+
+func TestRegistryActivatePreparedSetReportsCleanupFailureAfterPublishingEveryWorkspace(t *testing.T) {
+	repo := newFakeRegistryRepo()
+	for _, workspaceID := range []servingstate.WorkspaceID{"operations", "sales"} {
+		activeID := servingstate.ID("dep_" + string(workspaceID) + "_active")
+		repo.active[string(workspaceID)+"/prod"] = registryDeploymentArtifact{
+			deployment: servingstate.State{ID: activeID, WorkspaceID: workspaceID, Environment: "prod", Status: servingstate.StatusActive, DuckLakeSnapshotID: 1},
+			artifact:   servingstate.Artifact{ServingStateID: activeID, WorkspaceID: workspaceID, Environment: "prod", Digest: string(workspaceID) + "-active"},
+		}
+		nextID := servingstate.ID("dep_" + string(workspaceID) + "_next")
+		repo.deployments[nextID] = servingstate.State{ID: nextID, WorkspaceID: workspaceID, Environment: "prod", Status: servingstate.StatusValidated}
+		repo.artifacts[nextID] = servingstate.Artifact{ServingStateID: nextID, WorkspaceID: workspaceID, Environment: "prod", Digest: string(workspaceID) + "-next"}
+	}
+	factory := &recordingRegistryFactory{}
+	var failures []CleanupFailure
+	registry := NewRegistryWithFactory(RegistryOptions{
+		Repo: repo, WorkspaceIDs: []servingstate.WorkspaceID{"operations", "sales"}, Environment: "prod", Factory: factory,
+		OnCleanupFailure: func(failure CleanupFailure) { failures = append(failures, failure) },
+	})
+	if err := registry.Reload(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	wantCleanupErr := errors.New("old runtime close failed")
+	factory.runtimes[0].closeErr = wantCleanupErr
+	prepared, err := registry.PrepareServingStates(context.Background(), []string{"dep_sales_next", "dep_operations_next"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prepared.Close()
+
+	err = registry.ActivatePreparedSet(prepared, func() error {
+		for _, workspaceID := range []servingstate.WorkspaceID{"operations", "sales"} {
+			nextID := servingstate.ID("dep_" + string(workspaceID) + "_next")
+			repo.active[string(workspaceID)+"/prod"] = registryDeploymentArtifact{deployment: repo.deployments[nextID], artifact: repo.artifacts[nextID]}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("activate prepared set: %v", err)
+	}
+	for index, workspaceID := range []servingstate.WorkspaceID{"operations", "sales"} {
+		lease, acquireErr := registry.AcquireForWorkspace(context.Background(), workspaceID)
+		if acquireErr != nil {
+			t.Fatalf("acquire %s: %v", workspaceID, acquireErr)
+		}
+		if lease.Runtime() != factory.runtimes[index+2] {
+			t.Fatalf("%s runtime was not published", workspaceID)
+		}
+		lease.Release()
+	}
+	if len(failures) != 1 || !errors.Is(failures[0].Err, wantCleanupErr) {
+		t.Fatalf("cleanup failures = %#v, want runtime close failure", failures)
+	}
+	if failures[0].WorkspaceID != "operations" || failures[0].Resource != CleanupResourceRuntime {
+		t.Fatalf("cleanup failure context = %#v", failures[0])
+	}
+}
+
+func TestRegistryActivatePreparedSetRejectsDuplicateTargetBeforeActivation(t *testing.T) {
+	repo := newFakeRegistryRepo()
+	repo.deployments["dep_sales_next"] = servingstate.State{ID: "dep_sales_next", WorkspaceID: "sales", Environment: "prod", Status: servingstate.StatusValidated}
+	repo.artifacts["dep_sales_next"] = servingstate.Artifact{ServingStateID: "dep_sales_next", WorkspaceID: "sales", Environment: "prod", Digest: "sales-next"}
+	registry := NewRegistryWithFactory(RegistryOptions{Repo: repo, Environment: "prod", Factory: &recordingRegistryFactory{}})
+	prepared, err := registry.PrepareServingStates(context.Background(), []string{"dep_sales_next"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prepared.Close()
+	prepared.items = append(prepared.items, prepared.items[0])
+	activated := false
+	if err := registry.ActivatePreparedSet(prepared, func() error { activated = true; return nil }); err == nil {
+		t.Fatal("duplicate target activation error = nil")
+	}
+	if activated {
+		t.Fatal("durable activation ran before candidate validation")
+	}
+}
+
+func TestRegistryDelayedDrainReportsCleanupFailureAfterLeaseRelease(t *testing.T) {
+	repo := newFakeRegistryRepo()
+	repo.active["sales/prod"] = registryDeploymentArtifact{
+		deployment: servingstate.State{ID: "dep_sales_active", WorkspaceID: "sales", Environment: "prod", Status: servingstate.StatusActive},
+		artifact:   servingstate.Artifact{ServingStateID: "dep_sales_active", WorkspaceID: "sales", Environment: "prod", Digest: "sales-active"},
+	}
+	repo.deployments["dep_sales_next"] = servingstate.State{ID: "dep_sales_next", WorkspaceID: "sales", Environment: "prod", Status: servingstate.StatusValidated}
+	repo.artifacts["dep_sales_next"] = servingstate.Artifact{ServingStateID: "dep_sales_next", WorkspaceID: "sales", Environment: "prod", Digest: "sales-next"}
+	factory := &recordingRegistryFactory{}
+	failures := make(chan CleanupFailure, 1)
+	registry := NewRegistryWithFactory(RegistryOptions{
+		Repo: repo, WorkspaceIDs: []servingstate.WorkspaceID{"sales"}, Environment: "prod", Factory: factory,
+		OnCleanupFailure: func(failure CleanupFailure) { failures <- failure },
+	})
+	if err := registry.Reload(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	lease, err := registry.AcquireForWorkspace(context.Background(), "sales")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantCleanupErr := errors.New("delayed close failed")
+	factory.runtimes[0].closeErr = wantCleanupErr
+	prepared, err := registry.PrepareServingState(context.Background(), "dep_sales_next")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prepared.Close()
+	if err := registry.ActivatePrepared(prepared, func() error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if factory.runtimes[0].closed {
+		t.Fatal("leased runtime closed during activation")
+	}
+	lease.Release()
+	select {
+	case failure := <-failures:
+		if !errors.Is(failure.Err, wantCleanupErr) || failure.ServingStateID != "dep_sales_active" {
+			t.Fatalf("cleanup failure = %#v", failure)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("cleanup failure was not reported after lease release")
+	}
+}
+
+func TestRegistryAcquireWaitsForCompleteCutover(t *testing.T) {
+	repo := newFakeRegistryRepo()
+	repo.active["sales/prod"] = registryDeploymentArtifact{
+		deployment: servingstate.State{ID: "dep_sales_active", WorkspaceID: "sales", Environment: "prod", Status: servingstate.StatusActive, DuckLakeSnapshotID: 1},
+		artifact:   servingstate.Artifact{ServingStateID: "dep_sales_active", WorkspaceID: "sales", Environment: "prod", Digest: "active"},
+	}
+	repo.deployments["dep_sales_next"] = servingstate.State{ID: "dep_sales_next", WorkspaceID: "sales", Environment: "prod", Status: servingstate.StatusValidated}
+	repo.artifacts["dep_sales_next"] = servingstate.Artifact{ServingStateID: "dep_sales_next", WorkspaceID: "sales", Environment: "prod", Digest: "next"}
+	registry := NewRegistryWithFactory(RegistryOptions{Repo: repo, WorkspaceIDs: []servingstate.WorkspaceID{"sales"}, Environment: "prod", Factory: &recordingRegistryFactory{}})
+	if err := registry.Reload(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	prepared, err := registry.PrepareServingState(context.Background(), "dep_sales_next")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prepared.Close()
+	activationStarted := make(chan struct{})
+	allowActivation := make(chan struct{})
+	activationDone := make(chan error, 1)
+	go func() {
+		activationDone <- registry.ActivatePrepared(prepared, func() error {
+			close(activationStarted)
+			<-allowActivation
+			return nil
+		})
+	}()
+	<-activationStarted
+	leaseResult := make(chan Lease, 1)
+	acquireErr := make(chan error, 1)
+	go func() {
+		lease, err := registry.AcquireForWorkspace(context.Background(), "sales")
+		leaseResult <- lease
+		acquireErr <- err
+	}()
+	select {
+	case err := <-acquireErr:
+		t.Fatalf("acquire completed during cutover: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(allowActivation)
+	if err := <-activationDone; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-acquireErr; err != nil {
+		t.Fatal(err)
+	}
+	lease := <-leaseResult
+	defer lease.Release()
+	if lease.ServingStateID() != "dep_sales_next" {
+		t.Fatalf("serving state = %q, want dep_sales_next", lease.ServingStateID())
+	}
+}
+
+func TestRegistryRejectsConsumedAndForeignPreparedRuntimeBeforeActivation(t *testing.T) {
+	repo := newFakeRegistryRepo()
+	repo.deployments["dep_sales_next"] = servingstate.State{ID: "dep_sales_next", WorkspaceID: "sales", Environment: "prod", Status: servingstate.StatusValidated}
+	repo.artifacts["dep_sales_next"] = servingstate.Artifact{ServingStateID: "dep_sales_next", WorkspaceID: "sales", Environment: "prod", Digest: "next"}
+	registry := NewRegistryWithFactory(RegistryOptions{Repo: repo, Environment: "prod", Factory: &recordingRegistryFactory{}})
+	prepared, err := registry.PrepareServingState(context.Background(), "dep_sales_next")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.ActivatePrepared(prepared, func() error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	activated := false
+	if err := registry.ActivatePrepared(prepared, func() error { activated = true; return nil }); err == nil {
+		t.Fatal("consumed prepared runtime error = nil")
+	}
+	if activated {
+		t.Fatal("activation ran for consumed candidate")
+	}
+
+	foreignPrepared, err := registry.PrepareServingState(context.Background(), "dep_sales_next")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer foreignPrepared.Close()
+	foreignRegistry := NewRegistryWithFactory(RegistryOptions{Repo: repo, Environment: "prod", Factory: &recordingRegistryFactory{}})
+	if err := foreignRegistry.ActivatePrepared(foreignPrepared, func() error { activated = true; return nil }); err == nil {
+		t.Fatal("foreign prepared runtime error = nil")
+	}
+	if activated {
+		t.Fatal("activation ran for foreign candidate")
 	}
 }
 
@@ -1366,12 +1594,13 @@ func (f *recordingRegistryFactory) Prepare(_ context.Context, input RuntimeInput
 }
 
 type recordingRuntime struct {
-	closed bool
+	closed   bool
+	closeErr error
 }
 
 func (r *recordingRuntime) Close() error {
 	r.closed = true
-	return nil
+	return r.closeErr
 }
 
 type overlapDetectingRegistryFactory struct {

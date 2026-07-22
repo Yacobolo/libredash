@@ -15,6 +15,7 @@ type PromptInput struct {
 	Scope          Scope
 	ConversationID string
 	Input          string
+	Context        *TurnContext
 	CorrelationID  string
 	OnEvent        func(EventEnvelope)
 }
@@ -93,19 +94,40 @@ func (s *Service) StartPrompt(ctx context.Context, input PromptInput) (*StartedP
 	if err != nil {
 		return nil, err
 	}
-	userMessage := agentcore.Message{
-		ID:      newID("msg"),
-		Role:    agentcore.RoleUser,
-		Content: input.Input,
+	prepared, err := agentcore.New(agentcore.Definition{
+		Name:              "leapview-readonly",
+		SystemPrompt:      systemPrompt,
+		Model:             s.model,
+		Tools:             s.toolDefinitions(input.Scope),
+		InitialTranscript: initial,
+		IDGenerator:       fixedRunIDGenerator{runID: run.ID},
+	})
+	if err != nil {
+		_ = s.finishRun(ctx, input, run.ID, RunStatusFailed, "", agentcore.Usage{}, err)
+		return nil, err
+	}
+	if err := prepared.PreparePrompt(agentcore.PromptRequest{
+		Input:   input.Input,
+		Context: turnContextItems(input.Context),
+	}); err != nil {
+		_ = s.finishRun(ctx, input, run.ID, RunStatusFailed, "", agentcore.Usage{}, err)
+		return nil, err
+	}
+	initial = prepared.Transcript()
+	userMessage, ok := lastVisibleUserMessage(initial)
+	if !ok {
+		err := fmt.Errorf("prepared transcript has no user prompt")
+		_ = s.finishRun(ctx, input, run.ID, RunStatusFailed, "", agentcore.Usage{}, err)
+		return nil, err
 	}
 	if err := s.appendMessage(ctx, PromptInput{
 		Scope:          input.Scope,
 		ConversationID: input.ConversationID,
+		Context:        input.Context,
 	}, run.ID, userMessage); err != nil {
 		_ = s.finishRun(ctx, input, run.ID, RunStatusFailed, "", agentcore.Usage{}, err)
 		return nil, err
 	}
-	initial = append(initial, userMessage)
 	if err := s.persistTranscript(ctx, input, initial); err != nil {
 		_ = s.finishRun(ctx, input, run.ID, RunStatusFailed, "", agentcore.Usage{}, err)
 		return nil, err
@@ -168,7 +190,7 @@ func (s *Service) ResumePrompt(ctx context.Context, scope Scope, conversationID,
 	}
 	input := ""
 	for index := len(initial) - 1; index >= 0; index-- {
-		if initial[index].Role == agentcore.RoleUser {
+		if initial[index].Role == agentcore.RoleUser && initial[index].Kind != agentcore.MessageKindExternalContext {
 			input = strings.TrimSpace(initial[index].Content)
 			break
 		}
@@ -246,7 +268,7 @@ func (p *StartedPrompt) Complete(ctx context.Context, onEvent func(EventEnvelope
 		_ = s.finishRun(context.WithoutCancel(executionContext), input, p.RunID, RunStatusFailed, "", sink.usage, err)
 		return PromptResult{}, err
 	}
-	result, promptErr := promptFromPersistedUser(executionContext, harness, input)
+	result, promptErr := harness.RunPreparedPrompt(executionContext, agentcore.PreparedPromptRequest{CorrelationID: input.CorrelationID})
 	transcript := harness.Transcript()
 	if err := s.persistNewMessages(ctx, input, p.RunID, p.initial, transcript); err != nil && promptErr == nil {
 		promptErr = err
@@ -311,10 +333,6 @@ func (p *StartedPrompt) release() {
 	}
 }
 
-func promptFromPersistedUser(ctx context.Context, harness *agentcore.Agent, input PromptInput) (agentcore.RunResult, error) {
-	return harness.Prompt(ctx, agentcore.PromptRequest{Input: input.Input, CorrelationID: input.CorrelationID, InputAlreadyAppended: true})
-}
-
 func (s *Service) acquire(conversationID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -364,16 +382,22 @@ func (s *Service) persistNewMessages(ctx context.Context, input PromptInput, run
 }
 
 func (s *Service) appendMessage(ctx context.Context, input PromptInput, runID string, message agentcore.Message) error {
-	if message.Role == agentcore.RoleSystem {
+	if message.Role == agentcore.RoleSystem || message.Kind == agentcore.MessageKindExternalContext {
 		return nil
+	}
+	contentText := message.Content
+	if message.Role == agentcore.RoleUser {
+		if visible, ok := message.DisplayContent.(string); ok && strings.TrimSpace(visible) != "" {
+			contentText = visible
+		}
 	}
 	row, err := s.repo.AppendMessage(ctx, MessageInput{
 		PrincipalID:    input.Scope.PrincipalID,
 		ConversationID: input.ConversationID,
 		RunID:          runID,
 		Role:           platformRole(message.Role),
-		ContentText:    message.Content,
-		ContentJSON:    messageContentJSON(message),
+		ContentText:    contentText,
+		ContentJSON:    messageContentJSON(message, input.Context),
 		ToolCallID:     message.ToolCallID,
 		ToolName:       message.ToolName,
 		IsError:        message.IsError,
@@ -382,6 +406,15 @@ func (s *Service) appendMessage(ctx context.Context, input PromptInput, runID st
 		input.OnEvent(messageEnvelope(input.ConversationID, row))
 	}
 	return err
+}
+
+func lastVisibleUserMessage(messages []agentcore.Message) (agentcore.Message, bool) {
+	for index := len(messages) - 1; index >= 0; index-- {
+		if messages[index].Role == agentcore.RoleUser && messages[index].Kind != agentcore.MessageKindExternalContext {
+			return messages[index], true
+		}
+	}
+	return agentcore.Message{}, false
 }
 
 func (s *Service) persistTranscript(ctx context.Context, input PromptInput, transcript []agentcore.Message) error {

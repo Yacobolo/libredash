@@ -471,11 +471,11 @@ class SiteSearch extends DatastarLit(LitElement) {
   }
 
   private renderResults(query: string, results: SiteSearchResult[], total: number, loading: boolean) {
-    if (!query) return html`<p class="status">Start typing to search the documentation.</p>`
-    if (loading) return html`<p class="status">Searching…</p>`
-    if (results.length === 0) return html`<p class="status">No results for “${query}”.</p>`
+    if (!query) return html`<p class="status" role="status">Start typing to search the documentation.</p>`
+    if (loading) return html`<p class="status" role="status">Searching…</p>`
+    if (results.length === 0) return html`<p class="status" role="status">No results for “${query}”.</p>`
     const label = `${total} ${total === 1 ? 'result' : 'results'}`
-    return html`<p class="status">${label}</p>
+    return html`<p class="status" role="status">${label}</p>
       <ul>
         ${results.map(
           (result) =>
@@ -597,10 +597,32 @@ if (!customElements.get('lv-site-docs-drawer-toggle')) {
   customElements.define('lv-site-docs-drawer-toggle', SiteDocsDrawerToggle)
 }
 
+const docsDrawerFocusableSelector = 'a[href], button:not([disabled]), summary, input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+function docsDrawerFocusableElements(sidebar: HTMLElement): HTMLElement[] {
+  const focusable: HTMLElement[] = []
+  const collect = (root: ParentNode): void => {
+    for (const element of root.querySelectorAll<HTMLElement>('*')) {
+      if (element.matches(docsDrawerFocusableSelector) && element.getClientRects().length > 0 && !element.closest('[inert]')) focusable.push(element)
+      if (element.shadowRoot) collect(element.shadowRoot)
+    }
+  }
+  collect(sidebar)
+  return focusable
+}
+
+function deepestActiveElement(): Element | null {
+  let active: Element | null = document.activeElement
+  while (active?.shadowRoot?.activeElement) active = active.shadowRoot.activeElement
+  return active
+}
+
 function syncDocsDrawer(open = false): void {
   const layout = document.querySelector<HTMLElement>('.site-docs-layout')
   const sidebar = document.querySelector<HTMLElement>('.site-docs-sidebar')
   if (!layout || !sidebar) return
+  const header = document.querySelector<HTMLElement>('.site-header')
+  const content = layout.querySelector<HTMLElement>('.site-docs-content')
 
   const compact = window.matchMedia('(max-width: 56.25rem)').matches
   const nextOpen = compact && open
@@ -608,13 +630,20 @@ function syncDocsDrawer(open = false): void {
   layout.classList.toggle('site-docs-drawer-open', nextOpen)
   sidebar.inert = compact && !nextOpen
   sidebar.setAttribute('aria-hidden', String(compact && !nextOpen))
+  if (header) header.inert = nextOpen
+  if (content) content.inert = nextOpen
   document.body.classList.toggle('site-docs-drawer-open', nextOpen)
   document.dispatchEvent(
     new CustomEvent('leapview-docs-drawer-state', {
       detail: { open: nextOpen },
     }),
   )
-  if (nextOpen && !wasOpen) requestAnimationFrame(revealCurrentDocsLink)
+  if (nextOpen && !wasOpen) {
+    requestAnimationFrame(() => {
+      revealCurrentDocsLink()
+      docsDrawerFocusableElements(sidebar)[0]?.focus()
+    })
+  }
   if (compact && wasOpen && !nextOpen) {
     document.querySelector<HTMLElement>('lv-site-docs-drawer-toggle:not([placement])')?.shadowRoot?.querySelector<HTMLButtonElement>('button')?.focus()
   }
@@ -631,12 +660,135 @@ document.addEventListener('click', (event) => {
 })
 
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') syncDocsDrawer(false)
+  const layout = document.querySelector<HTMLElement>('.site-docs-layout')
+  if (!layout?.classList.contains('site-docs-drawer-open')) return
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    syncDocsDrawer(false)
+    return
+  }
+  if (event.key !== 'Tab') return
+  const sidebar = document.querySelector<HTMLElement>('.site-docs-sidebar')
+  if (!sidebar) return
+  const focusable = docsDrawerFocusableElements(sidebar)
+  if (focusable.length === 0) return
+  const active = deepestActiveElement()
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  if (event.shiftKey && (active === first || !active || !sidebar.contains(active))) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && (active === last || !active || !sidebar.contains(active))) {
+    event.preventDefault()
+    first.focus()
+  }
 })
 
 window.addEventListener('resize', () => syncDocsDrawer(document.querySelector('.site-docs-layout')?.classList.contains('site-docs-drawer-open')))
-syncDocsDrawer()
-requestAnimationFrame(revealCurrentDocsLink)
+
+const docsSidebarScrollStorageKey = 'leapview:docs-sidebar-scroll:v1'
+
+type DocsSidebarScrollAnchor = {
+  id: string
+  kind: 'group' | 'link'
+  offset: number
+}
+
+type DocsSidebarScrollState = {
+  anchor?: DocsSidebarScrollAnchor
+  scrollTop: number
+}
+
+function initializeDocsSidebarScroll(): void {
+  const sidebar = document.querySelector<HTMLElement>('.site-docs-sidebar')
+  if (!sidebar) return
+
+  let persistenceFrame = 0
+  sidebar.addEventListener('scroll', () => {
+    if (persistenceFrame !== 0) return
+    persistenceFrame = requestAnimationFrame(() => {
+      persistenceFrame = 0
+      persistDocsSidebarScroll(sidebar)
+    })
+  }, { passive: true })
+  window.addEventListener('pagehide', () => persistDocsSidebarScroll(sidebar), { once: true })
+
+  requestAnimationFrame(() => {
+    restoreDocsSidebarScroll(sidebar)
+    revealCurrentDocsLink()
+  })
+}
+
+function persistDocsSidebarScroll(sidebar: HTMLElement): void {
+  const state: DocsSidebarScrollState = {
+    anchor: currentDocsSidebarAnchor(sidebar),
+    scrollTop: sidebar.scrollTop,
+  }
+  try {
+    sessionStorage.setItem(docsSidebarScrollStorageKey, JSON.stringify(state))
+  } catch {
+    // Storage can be unavailable in restricted browsing contexts. Navigation
+    // remains usable through the active-link reveal below.
+  }
+}
+
+function currentDocsSidebarAnchor(sidebar: HTMLElement): DocsSidebarScrollAnchor | undefined {
+  const sidebarTop = sidebar.getBoundingClientRect().top
+  for (const row of docsSidebarRows(sidebar)) {
+    const bounds = row.getBoundingClientRect()
+    if (bounds.height === 0 || bounds.bottom <= sidebarTop) continue
+    if (row.matches('a')) {
+      const href = row.getAttribute('href')
+      if (href) return { id: href, kind: 'link', offset: bounds.top - sidebarTop }
+    } else {
+      const group = row.parentElement?.getAttribute('data-site-docs-group')
+      if (group) return { id: group, kind: 'group', offset: bounds.top - sidebarTop }
+    }
+  }
+  return undefined
+}
+
+function restoreDocsSidebarScroll(sidebar: HTMLElement): void {
+  const state = storedDocsSidebarScroll()
+  if (!state) return
+
+  sidebar.scrollTop = state.scrollTop
+  const savedAnchor = state.anchor
+  if (!savedAnchor) return
+  const anchor = docsSidebarRows(sidebar).find((row) => docsSidebarRowMatchesAnchor(row, savedAnchor))
+  if (!anchor || anchor.getBoundingClientRect().height === 0) return
+
+  const currentOffset = anchor.getBoundingClientRect().top - sidebar.getBoundingClientRect().top
+  sidebar.scrollTop += currentOffset - savedAnchor.offset
+}
+
+function storedDocsSidebarScroll(): DocsSidebarScrollState | undefined {
+  try {
+    const value: unknown = JSON.parse(sessionStorage.getItem(docsSidebarScrollStorageKey) ?? 'null')
+    if (!value || typeof value !== 'object') return undefined
+    const state = value as Partial<DocsSidebarScrollState>
+    if (!Number.isFinite(state.scrollTop) || Number(state.scrollTop) < 0) return undefined
+    if (state.anchor !== undefined && !validDocsSidebarAnchor(state.anchor)) return undefined
+    return { anchor: state.anchor, scrollTop: Number(state.scrollTop) }
+  } catch {
+    return undefined
+  }
+}
+
+function validDocsSidebarAnchor(value: unknown): value is DocsSidebarScrollAnchor {
+  if (!value || typeof value !== 'object') return false
+  const anchor = value as Partial<DocsSidebarScrollAnchor>
+  return (anchor.kind === 'group' || anchor.kind === 'link') && typeof anchor.id === 'string' && anchor.id !== '' && Number.isFinite(anchor.offset)
+}
+
+function docsSidebarRows(sidebar: HTMLElement): HTMLElement[] {
+  return Array.from(sidebar.querySelectorAll<HTMLElement>('.site-docs-link, .site-docs-nav-group > summary'))
+}
+
+function docsSidebarRowMatchesAnchor(row: HTMLElement, anchor: DocsSidebarScrollAnchor): boolean {
+  if (anchor.kind === 'link') return row.matches('a') && row.getAttribute('href') === anchor.id
+  return row.matches('summary') && row.parentElement?.getAttribute('data-site-docs-group') === anchor.id
+}
 
 function revealCurrentDocsLink(): void {
   document.querySelector<HTMLElement>('.site-docs-link-current')?.scrollIntoView({
@@ -644,6 +796,9 @@ function revealCurrentDocsLink(): void {
     inline: 'nearest',
   })
 }
+
+syncDocsDrawer()
+initializeDocsSidebarScroll()
 
 class SiteMarkdownCopy extends LitElement {
   static properties = {
@@ -1167,6 +1322,7 @@ type ArticleSectionNode = ArticleSection & { children: ArticleSectionNode[] }
 class SiteArticleToc extends LitElement {
   private sections: ArticleSection[] = []
   private activeId = ''
+  private visibleSectionIDs = new Map<string, string>()
   private observer?: IntersectionObserver
 
   static styles = css`
@@ -1257,7 +1413,8 @@ class SiteArticleToc extends LitElement {
   }
 
   private collectSections() {
-    const headings = Array.from(document.querySelectorAll<HTMLElement>('.site-docs-article h2, .site-docs-article h3, .site-docs-article h4'))
+    const article = document.querySelector<HTMLElement>('.site-docs-article')
+    const headings = Array.from(article?.querySelectorAll<HTMLElement>(':scope > h2, :scope > h3, :scope > h4') ?? [])
     const used = new Set<string>()
     this.sections = headings.map((heading) => {
       let id =
@@ -1279,19 +1436,47 @@ class SiteArticleToc extends LitElement {
         level: Number(heading.tagName.slice(1)),
       }
     })
-    this.activeId = this.sections[0]?.id ?? ''
+    this.visibleSectionIDs = new Map<string, string>()
+    const indexVisibleSections = (nodes: ArticleSectionNode[], depth = 0, visibleAncestor = ''): void => {
+      for (const node of nodes) {
+        const visibleID = depth <= 1 ? node.id : visibleAncestor
+        this.visibleSectionIDs.set(node.id, visibleID)
+        indexVisibleSections(node.children, depth + 1, visibleID)
+      }
+    }
+    indexVisibleSections(this.sectionTree())
+    this.activeId = this.visibleSectionIDs.get(this.sections[0]?.id ?? '') ?? ''
     this.observer = new IntersectionObserver(
       (entries) => {
         const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0]
-        if (visible?.target.id && this.activeId !== visible.target.id) {
-          this.activeId = visible.target.id
-          this.requestUpdate()
+        const visibleID = visible?.target.id ? this.visibleSectionIDs.get(visible.target.id) : undefined
+        if (visibleID && this.activeId !== visibleID) {
+          this.setActiveSection(visibleID)
         }
       },
       { rootMargin: '-18% 0px -70% 0px', threshold: 0 },
     )
     headings.forEach((heading) => this.observer?.observe(heading))
     this.requestUpdate()
+  }
+
+  private setActiveSection(id: string): void {
+    this.activeId = id
+    this.requestUpdate()
+    void this.updateComplete.then(() => this.revealActiveSection())
+  }
+
+  private revealActiveSection(): void {
+    const active = this.renderRoot.querySelector<HTMLElement>('a.active')
+    if (!active || active.getClientRects().length === 0) return
+    const hostBounds = this.getBoundingClientRect()
+    const activeBounds = active.getBoundingClientRect()
+    const revealMargin = 8
+    if (activeBounds.top < hostBounds.top + revealMargin) {
+      this.scrollTop -= hostBounds.top + revealMargin - activeBounds.top
+    } else if (activeBounds.bottom > hostBounds.bottom - revealMargin) {
+      this.scrollTop += activeBounds.bottom - hostBounds.bottom + revealMargin
+    }
   }
 
   private sectionTree(): ArticleSectionNode[] {

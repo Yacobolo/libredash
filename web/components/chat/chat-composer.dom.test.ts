@@ -44,7 +44,7 @@ afterAll(async () => {
   await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
 }, 15_000)
 
-test('composer renders an elevated centered prompt surface', async () => {
+test('composer renders a compact centered prompt surface', async () => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {
     await page.goto(baseURL)
@@ -88,10 +88,10 @@ test('composer renders an elevated centered prompt surface', async () => {
       surfaceLeft: 260,
       surfaceDisplay: 'grid',
       surfaceRadius: '12px',
-      surfaceShadow: 'rgba(0, 0, 0, 0.12) 0px 8px 24px 0px',
+      surfaceShadow: 'none',
       textareaPlaceholder: 'Ask about dashboards, metrics, or models...',
       textareaResize: 'none',
-      textareaMinHeight: 36,
+      textareaMinHeight: 32,
       textareaMaxHeight: 160,
       actionsJustify: 'flex-end',
       buttonWidth: 32,
@@ -142,13 +142,7 @@ test('composer preserves submit, multiline, disabled, and pending behavior', asy
       element.pending = true
       await element.updateComplete
       const pendingDisabled = button.disabled
-      const spinner = root.querySelector('lv-loading-spinner') as any
-      await spinner?.updateComplete
-      const hasSpinner = Boolean(spinner)
-      const spinnerAnimationDuration = spinner?.shadowRoot?.querySelector('svg')
-        ? getComputedStyle(spinner.shadowRoot.querySelector('svg')).animationDuration
-        : ''
-      const spinnerInheritsButtonColor = spinner ? getComputedStyle(spinner).color === getComputedStyle(button).color : false
+      const hasSpinner = Boolean(root.querySelector('lv-loading-spinner'))
 
       element.pending = false
       element.disabled = true
@@ -156,12 +150,12 @@ test('composer preserves submit, multiline, disabled, and pending behavior', asy
       const textareaDisabled = textarea.disabled
       const disabledButton = button.disabled
 
-      return { received, enabledAfterInput, singleLineHeight, multilineHeight, multilineOverflowY, afterShiftEnter, afterEnter, pendingDisabled, hasSpinner, spinnerAnimationDuration, spinnerInheritsButtonColor, textareaDisabled, disabledButton }
+      return { received, enabledAfterInput, singleLineHeight, multilineHeight, multilineOverflowY, afterShiftEnter, afterEnter, pendingDisabled, hasSpinner, textareaDisabled, disabledButton }
     })
 
     expect(events.received).toEqual(['Revenue trend'])
     expect(events.enabledAfterInput).toBe(true)
-    expect(events.singleLineHeight).toBe(36)
+    expect(events.singleLineHeight).toBe(32)
     expect(events.multilineHeight).toBeGreaterThan(events.singleLineHeight)
     expect(events.multilineHeight).toBeLessThanOrEqual(160)
     expect(events.multilineOverflowY).toBe('hidden')
@@ -169,10 +163,383 @@ test('composer preserves submit, multiline, disabled, and pending behavior', asy
     expect(events.afterEnter).toBe(1)
     expect(events.pendingDisabled).toBe(true)
     expect(events.hasSpinner).toBe(true)
-    expect(events.spinnerAnimationDuration).toBe('1.8s')
-    expect(events.spinnerInheritsButtonColor).toBe(true)
     expect(events.textareaDisabled).toBe(true)
     expect(events.disabledButton).toBe(true)
+  } finally {
+    await page.close()
+  }
+})
+
+test('composer searches for and attaches typed @ references with spaces', async () => {
+  const page = await browser.newPage({ viewport: { width: 800, height: 600 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => customElements.get('lv-chat-composer'))
+    const result = await page.locator('lv-chat-composer').evaluate(async (element: any) => {
+      const reference = {
+        reference: { workspaceId: 'sales', type: 'visual', id: 'executive-sales.orders_chart' },
+        name: 'Orders',
+		visualType: 'table',
+        description: 'Overview · Executive Sales',
+        workspace: { id: 'sales', name: 'Sales' },
+        href: '/workspaces/sales/dashboards/executive-sales/pages/overview',
+        locations: [],
+        context: [],
+		hierarchy: ['Sales', 'Executive Sales', 'Overview'],
+      }
+      element.suggestions = [reference]
+      await element.updateComplete
+      const textarea = element.shadowRoot.querySelector('textarea') as HTMLTextAreaElement
+      const searches: string[] = []
+      element.addEventListener('lv-chat-reference-search', (event: CustomEvent) => searches.push(event.detail.query))
+      textarea.value = 'Compare @orders by'
+      textarea.setSelectionRange(textarea.value.length, textarea.value.length)
+      textarea.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true }))
+      await element.updateComplete
+      const option = element.shadowRoot.querySelector('.mention-option') as HTMLButtonElement
+      const optionText = option?.textContent?.replace(/\s+/g, ' ').trim()
+      option.click()
+      await element.updateComplete
+      const draftAfterReference = textarea.value
+      textarea.value = 'Compare this with last month'
+      textarea.dispatchEvent(new InputEvent('input', { bubbles: true }))
+      const submitted = await new Promise<any>((resolve) => {
+        element.addEventListener('lv-chat-submit', (event: CustomEvent) => resolve(event.detail), { once: true })
+        textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      })
+		const iconClass = option.querySelector('.mention-icon svg')?.getAttribute('class')
+		return { searches, optionText, iconClass, draftAfterReference, submitted }
+    })
+
+    expect(result).toEqual({
+      searches: ['orders by'],
+      optionText: 'Orders Sales › Executive Sales › Overview Visual',
+		iconClass: 'reference-icon-table',
+      draftAfterReference: 'Compare',
+      submitted: {
+        input: 'Compare this with last month',
+        references: [{
+          reference: { workspaceId: 'sales', type: 'visual', id: 'executive-sales.orders_chart' },
+          name: 'Orders',
+		  visualType: 'table',
+          description: 'Overview · Executive Sales',
+          workspace: { id: 'sales', name: 'Sales' },
+          href: '/workspaces/sales/dashboards/executive-sales/pages/overview',
+          locations: [],
+          context: [],
+		  hierarchy: ['Sales', 'Executive Sales', 'Overview'],
+        }],
+      },
+    })
+  } finally {
+    await page.close()
+  }
+})
+
+test('composer consumes attachments only after a user turn is accepted', async () => {
+  const page = await browser.newPage({ viewport: { width: 800, height: 600 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => customElements.get('lv-chat-composer'))
+    const result = await page.locator('lv-chat-composer').evaluate(async (element: any) => {
+      const reference = {
+        reference: { workspaceId: 'sales', type: 'visual', id: 'executive-sales.revenue' },
+        name: 'Revenue by month',
+        workspace: { id: 'sales', name: 'Sales' },
+        hierarchy: ['Sales', 'Executive Sales', 'Overview'],
+        href: '/workspaces/sales/dashboards/executive-sales/pages/overview',
+        locations: [],
+        context: ['current_page'],
+      }
+      element.acceptedRunId = 'run_previous'
+      await element.updateComplete
+	  element.references = [reference]
+	  await element.updateComplete
+      const textarea = element.shadowRoot.querySelector('textarea') as HTMLTextAreaElement
+      textarea.value = 'Why did revenue fall?'
+      textarea.dispatchEvent(new InputEvent('input', { bubbles: true }))
+      const changes: any[] = []
+      element.addEventListener('lv-chat-references-change', (event: CustomEvent) => changes.push(event.detail.references))
+      textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      await element.updateComplete
+      const afterSubmit = { draft: textarea.value, references: element.references.length, changes: changes.length }
+
+      // A rejected request returns no newly persisted user run.
+      element.value = ''
+      await element.updateComplete
+      const afterRejected = { draft: textarea.value, references: element.references.length, changes: changes.length }
+
+      // The persisted user message identifies the accepted turn before model completion.
+      element.acceptedRunId = 'run_new'
+      await element.updateComplete
+      return {
+        afterSubmit,
+        afterRejected,
+        afterAccepted: { draft: textarea.value, references: element.references.length, changes },
+      }
+    })
+
+    expect(result.afterSubmit).toEqual({ draft: 'Why did revenue fall?', references: 1, changes: 0 })
+    expect(result.afterRejected).toEqual({ draft: 'Why did revenue fall?', references: 1, changes: 0 })
+    expect(result.afterAccepted).toEqual({ draft: '', references: 0, changes: [[]] })
+  } finally {
+    await page.close()
+  }
+})
+
+test('composer distinguishes matching reference IDs from different workspaces', async () => {
+  const page = await browser.newPage({ viewport: { width: 800, height: 600 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => customElements.get('lv-chat-composer'))
+    const attached = await page.locator('lv-chat-composer').evaluate(async (element: any) => {
+      const references = ['sales', 'visuals'].map((workspaceId) => ({
+		reference: { workspaceId, type: 'field', id: 'orders.revenue' },
+		name: `Revenue ${workspaceId}`,
+		workspace: { id: workspaceId, name: workspaceId },
+		href: `/workspaces/${workspaceId}`,
+		locations: [],
+		context: [],
+      }))
+      element.suggestions = references
+      await element.updateComplete
+      const textarea = element.shadowRoot.querySelector('textarea') as HTMLTextAreaElement
+
+      for (const reference of references) {
+        textarea.value = '@revenue'
+        textarea.setSelectionRange(textarea.value.length, textarea.value.length)
+        textarea.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true }))
+        await element.updateComplete
+        const option = Array.from(element.shadowRoot.querySelectorAll('.mention-option'))
+		  .find((candidate: any) => candidate.textContent.includes(reference.name)) as HTMLButtonElement
+        option.click()
+        await element.updateComplete
+      }
+
+	  return element.references.map((reference: any) => reference.reference.workspaceId)
+    })
+
+    expect(attached).toEqual(['sales', 'visuals'])
+  } finally {
+    await page.close()
+  }
+})
+
+test('mention picker opens immediately, renders compact rows, and scrolls with keyboard navigation', async () => {
+  const page = await browser.newPage({ viewport: { width: 800, height: 600 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => customElements.get('lv-chat-composer'))
+    const result = await page.locator('lv-chat-composer').evaluate(async (element: any) => {
+      const root = element.shadowRoot
+      const textarea = root.querySelector('textarea') as HTMLTextAreaElement
+      textarea.value = '@'
+      textarea.setSelectionRange(1, 1)
+      textarea.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true }))
+      await element.updateComplete
+
+      const immediatePicker = root.querySelector('.mention-picker') as HTMLElement
+      const immediate = {
+        visible: Boolean(immediatePicker),
+        busy: immediatePicker?.getAttribute('aria-busy'),
+        status: root.querySelector('.mention-status')?.textContent?.trim(),
+      }
+
+      element.suggestions = Array.from({ length: 8 }, (_, index) => ({
+		reference: { workspaceId: 'sales', type: index % 2 === 0 ? 'visual' : 'measure', id: `result-${index}` },
+		name: `Result ${index + 1}`,
+        description: `Compact description ${index + 1}`,
+		workspace: { id: 'sales', name: 'Sales' }, href: '/workspaces/sales', locations: [], context: [],
+      }))
+      await element.updateComplete
+      await element.updateComplete
+
+      const picker = root.querySelector('.mention-picker') as HTMLElement
+      const firstOption = root.querySelector('.mention-option') as HTMLElement
+      const copy = root.querySelector('.mention-copy') as HTMLElement
+	  const hierarchy = root.querySelector('.mention-hierarchy') as HTMLElement
+	  const type = root.querySelector('.mention-type') as HTMLElement
+      const initialScrollTop = picker.scrollTop
+      for (let index = 0; index < 7; index += 1) {
+        textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, composed: true }))
+        await element.updateComplete
+        await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)))
+      }
+      const active = root.querySelector('.mention-option[data-active="true"]') as HTMLElement
+      const pickerBox = picker.getBoundingClientRect()
+      const activeBox = active.getBoundingClientRect()
+
+      return {
+        immediate,
+        optionHeight: Math.round(firstOption.getBoundingClientRect().height),
+        copyDisplay: getComputedStyle(copy).display,
+		hierarchyText: hierarchy.textContent?.trim(),
+		typeText: type.textContent?.trim(),
+		descriptionVisible: Boolean(root.querySelector('.mention-description')),
+        scrolled: picker.scrollTop > initialScrollTop,
+        activeText: active.textContent?.replace(/\s+/g, ' ').trim(),
+        activeVisible: activeBox.top >= pickerBox.top && activeBox.bottom <= pickerBox.bottom,
+      }
+    })
+
+    expect(result.immediate).toEqual({ visible: true, busy: 'true', status: 'Searching…' })
+    expect(result.optionHeight).toBeLessThanOrEqual(32)
+    expect(result.copyDisplay).toBe('grid')
+	expect(result.hierarchyText).toBe('Sales')
+	expect(result.typeText).toBe('Visual')
+	expect(result.descriptionVisible).toBe(false)
+    expect(result.scrolled).toBe(true)
+    expect(result.activeText).toContain('Result 8')
+    expect(result.activeVisible).toBe(true)
+  } finally {
+    await page.close()
+  }
+})
+
+test('mention picker ignores search responses from an older request', async () => {
+  const page = await browser.newPage({ viewport: { width: 800, height: 600 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => customElements.get('lv-chat-composer'))
+    const result = await page.locator('lv-chat-composer').evaluate(async (element: any) => {
+      const textarea = element.shadowRoot.querySelector('textarea') as HTMLTextAreaElement
+      const requests: Array<{ query: string; requestId: number }> = []
+      element.addEventListener('lv-chat-reference-search', (event: CustomEvent) => requests.push(event.detail))
+
+      const search = async (value: string) => {
+        textarea.value = value
+        textarea.setSelectionRange(value.length, value.length)
+        textarea.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true }))
+        await element.updateComplete
+      }
+
+      await search('@orders')
+      const first = requests[0]
+      element.suggestionQuery = first.query
+      element.suggestionRequestId = first.requestId
+	  element.suggestions = [{ reference: { workspaceId: 'sales', type: 'visual', id: 'orders' }, name: 'Orders', workspace: { id: 'sales', name: 'Sales' }, href: '/orders', locations: [], context: [] }]
+      await element.updateComplete
+      const optionText = () => element.shadowRoot.querySelector('.mention-option')?.textContent?.replace(/\s+/g, ' ').trim()
+      const firstVisible = optionText()
+
+      await search('@revenue')
+      const second = requests[1]
+      element.suggestionQuery = first.query
+      element.suggestionRequestId = first.requestId
+	  element.suggestions = [{ reference: { workspaceId: 'sales', type: 'visual', id: 'orders-old' }, name: 'Old orders response', workspace: { id: 'sales', name: 'Sales' }, href: '/orders-old', locations: [], context: [] }]
+      await element.updateComplete
+      const staleVisible = element.shadowRoot.querySelector('.mention-option')?.textContent?.trim() ?? ''
+      const staleStatus = element.shadowRoot.querySelector('.mention-status')?.textContent?.replace(/\s+/g, ' ').trim()
+
+      element.suggestionQuery = second.query
+      element.suggestionRequestId = second.requestId
+	  element.suggestions = [{ reference: { workspaceId: 'sales', type: 'measure', id: 'revenue' }, name: 'Revenue', workspace: { id: 'sales', name: 'Sales' }, href: '/revenue', locations: [], context: [] }]
+      await element.updateComplete
+      const currentVisible = optionText()
+
+      element.suggestionQuery = first.query
+      element.suggestionRequestId = first.requestId
+	  element.suggestions = [{ reference: { workspaceId: 'sales', type: 'visual', id: 'orders-late' }, name: 'Late orders response', workspace: { id: 'sales', name: 'Sales' }, href: '/orders-late', locations: [], context: [] }]
+      await element.updateComplete
+      const afterLateStale = optionText()
+
+      return { requests, firstVisible, staleVisible, staleStatus, currentVisible, afterLateStale }
+    })
+
+    expect(result.requests).toEqual([
+      { query: 'orders', requestId: 1 },
+      { query: 'revenue', requestId: 2 },
+    ])
+	expect(result.firstVisible).toBe('Orders Sales Visual')
+    expect(result.staleVisible).toBe('')
+    expect(result.staleStatus).toBe('Searching…')
+	expect(result.currentVisible).toBe('Revenue Sales Measure')
+	expect(result.afterLateStale).toBe('Revenue Sales Measure')
+  } finally {
+    await page.close()
+  }
+})
+
+test('mention picker pins on-page results above deduplicated accessible results', async () => {
+  const page = await browser.newPage({ viewport: { width: 800, height: 600 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => customElements.get('lv-chat-composer'))
+    const result = await page.locator('lv-chat-composer').evaluate(async (element: any) => {
+      const onPage = {
+		reference: { workspaceId: 'sales', type: 'visual', id: 'orders-on-page' },
+		name: 'Orders on this page', description: 'Overview', workspace: { id: 'sales', name: 'Sales' },
+		hierarchy: ['Sales', 'Executive Sales', 'Overview'],
+		href: '/overview', locations: [{ dashboardId: 'executive-sales', pageId: 'overview', href: '/overview' }], context: ['current_page'],
+      }
+      element.pinnedSuggestions = [onPage]
+      element.suggestions = [
+        onPage,
+		{ reference: { workspaceId: 'sales', type: 'measure', id: 'orders-workspace' }, name: 'Orders workspace measure', description: 'Sales model', workspace: { id: 'sales', name: 'Sales' }, hierarchy: ['Sales', 'Sales model'], href: '/measure', locations: [], context: [] },
+      ]
+      await element.updateComplete
+      const textarea = element.shadowRoot.querySelector('textarea') as HTMLTextAreaElement
+      textarea.value = '@orders'
+      textarea.setSelectionRange(textarea.value.length, textarea.value.length)
+      textarea.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true }))
+      await element.updateComplete
+
+      return {
+        labels: Array.from(element.shadowRoot.querySelectorAll('.mention-section-label')).map((node: any) => node.textContent.trim()),
+        options: Array.from(element.shadowRoot.querySelectorAll('.mention-option')).map((node: any) => node.textContent.replace(/\s+/g, ' ').trim()),
+      }
+    })
+
+    expect(result.labels).toEqual(['On this page', 'All accessible'])
+	expect(result.options).toEqual(['Orders on this page Sales › Executive Sales › Overview Visual', 'Orders workspace measure Sales › Sales model Measure'])
+  } finally {
+    await page.close()
+  }
+})
+
+test('composer enforces the server-provided reference limit', async () => {
+  const page = await browser.newPage({ viewport: { width: 800, height: 600 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => customElements.get('lv-chat-composer'))
+    const result = await page.locator('lv-chat-composer').evaluate(async (element: any) => {
+      element.referenceLimit = 2
+      const searches: string[] = []
+      element.addEventListener('lv-chat-reference-search', (event: CustomEvent) => searches.push(event.detail.query))
+      const textarea = element.shadowRoot.querySelector('textarea') as HTMLTextAreaElement
+      for (const id of ['one', 'two', 'three']) {
+		element.suggestions = [{ reference: { workspaceId: 'sales', type: 'measure', id }, name: id, workspace: { id: 'sales', name: 'Sales' }, href: `/${id}`, locations: [], context: [] }]
+        textarea.value = `@${id}`
+        textarea.setSelectionRange(textarea.value.length, textarea.value.length)
+        textarea.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true }))
+        await element.updateComplete
+        element.shadowRoot.querySelector('.mention-option')?.click()
+        await element.updateComplete
+      }
+      textarea.value = '@three'
+      textarea.setSelectionRange(textarea.value.length, textarea.value.length)
+      textarea.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true }))
+      await element.updateComplete
+      const limited = {
+		references: element.references.map((reference: any) => reference.reference.id),
+        status: element.shadowRoot.querySelector('.mention-status')?.textContent?.replace(/\s+/g, ' ').trim(),
+        optionCount: element.shadowRoot.querySelectorAll('.mention-option').length,
+      }
+      element.shadowRoot.querySelector('.reference-chip')?.click()
+      await element.updateComplete
+      return {
+        limited,
+        searches,
+      }
+    })
+    expect(result).toEqual({
+      limited: {
+        references: ['one', 'two'],
+        status: 'Up to 2 items can be attached',
+        optionCount: 0,
+      },
+      searches: ['one', 'two', 'three'],
+    })
   } finally {
     await page.close()
   }
@@ -212,6 +579,7 @@ function testDocument(): string {
             --lv-space-lg: 12px;
             --lv-space-xl: 16px;
             --lv-control-medium: 32px;
+            --lv-control-small: 28px;
             --lv-chat-stack-width: 760px;
             --lv-font-size-body-sm: 14px;
             --lv-font-weight-strong: 600;

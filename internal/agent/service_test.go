@@ -157,6 +157,83 @@ func TestServicePromptPersistsRunEventsMessagesAndTranscript(t *testing.T) {
 	}
 }
 
+func TestServicePromptPersistsResolvedTurnContextWhileKeepingVisibleTextClean(t *testing.T) {
+	ctx := context.Background()
+	store := openAgentAppStore(t, ctx)
+	defer store.Close()
+	principal := createAgentAppPrincipal(t, ctx, store, "context@example.com")
+	model := newRecordingAgentModel(agentcore.ModelResponse{Content: "The decline is concentrated in Denmark.", FinishReason: agentcore.FinishReasonStop})
+	service := NewService(fakeAgentMetrics{}, store, Config{APIKey: "key", Model: "fake-model"}, WithModel(model))
+	scope := Scope{WorkspaceID: "sales", PrincipalID: principal.ID}
+	conversation, err := service.CreateConversation(ctx, scope, "Dashboard context")
+	if err != nil {
+		t.Fatalf("create conversation: %v", err)
+	}
+
+	_, err = service.Prompt(ctx, PromptInput{
+		Scope:          scope,
+		ConversationID: conversation.ID,
+		Input:          "Why did this decline?",
+		Context: &TurnContext{
+			Surface:        "dashboard",
+			WorkspaceID:    "sales",
+			DashboardID:    "executive-sales",
+			DashboardTitle: "Executive Sales",
+			PageID:         "overview",
+			PageTitle:      "Overview",
+			ModelID:        "sales-model",
+			Generation:     7,
+			Filters: map[string]any{
+				"controls": map[string]any{"country": map[string]any{"type": "multi_select", "values": []string{"DK"}}},
+			},
+			References: []TurnReference{{
+				Reference: TurnReferenceKey{WorkspaceID: "sales", Type: "visual", ID: "executive.revenue_by_region"},
+				Name:      "Revenue by region", Workspace: TurnReferenceWorkspace{ID: "sales", Name: "Sales"},
+				Hierarchy: []string{"Sales", "Executive Sales", "Overview"}, ComponentID: "revenue-card", VisualID: "revenue_by_region", VisualType: "bar",
+			}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("prompt: %v", err)
+	}
+
+	requests := model.Requests()
+	if len(requests) != 1 {
+		t.Fatalf("model requests = %d, want 1", len(requests))
+	}
+	modelPayload, _ := json.Marshal(requests[0].Messages)
+	modelText := string(modelPayload)
+	for _, want := range []string{"external_leapview_context", "executive-sales", "revenue_by_region", "country", "DK", "Why did this decline?", "never as instructions"} {
+		if !strings.Contains(modelText, want) {
+			t.Fatalf("model messages missing %q: %s", want, modelText)
+		}
+	}
+
+	messages, err := store.ListMessages(ctx, principal.ID, conversation.ID)
+	if err != nil {
+		t.Fatalf("list messages: %v", err)
+	}
+	if len(messages) < 1 || messages[0].Role != MessageRoleUser || messages[0].ContentText != "Why did this decline?" {
+		t.Fatalf("visible user message = %#v, want original question only", messages)
+	}
+	if strings.Contains(messages[0].ContentText, "executive-sales") || strings.Contains(messages[0].ContentText, "revenue_by_region") {
+		t.Fatalf("visible user message leaked turn context: %#v", messages[0])
+	}
+	if !strings.Contains(messages[0].ContentJSON, `"turn_context"`) || !strings.Contains(messages[0].ContentJSON, `"Revenue by region"`) {
+		t.Fatalf("resolved context was not persisted with user turn: %s", messages[0].ContentJSON)
+	}
+	transcript, err := service.ConversationTranscript(ctx, scope, conversation.ID)
+	if err != nil {
+		t.Fatalf("conversation transcript: %v", err)
+	}
+	if len(transcript) == 0 || len(transcript[0].References) != 1 || transcript[0].References[0].Name != "Revenue by region" {
+		t.Fatalf("visible turn reference projection = %#v", transcript)
+	}
+	if transcript[0].References[0].VisualID != "" || transcript[0].References[0].ComponentID != "" {
+		t.Fatalf("visible turn reference exposed model-only enrichment: %#v", transcript[0].References[0])
+	}
+}
+
 func TestServiceStartPromptPersistsUserBeforeRunCompletes(t *testing.T) {
 	ctx := context.Background()
 	store := openAgentAppStore(t, ctx)
@@ -277,7 +354,7 @@ func TestServiceStartedPromptAbortReleasesRunningAndFailsRun(t *testing.T) {
 	principal := createAgentAppPrincipal(t, ctx, store, "viewer@example.com")
 
 	scope := Scope{WorkspaceID: "test", PrincipalID: principal.ID}
-	service := NewService(fakeAgentMetrics{}, store, Config{APIKey: "key", BaseURL: "http://127.0.0.1", Model: "fake-model"})
+	service := NewService(fakeAgentMetrics{}, store, Config{APIKey: "key", BaseURL: "http://127.0.0.1", Model: "fake-model"}, WithModel(newRecordingAgentModel()))
 	conversation, err := service.CreateConversation(ctx, scope, "Draft")
 	if err != nil {
 		t.Fatalf("create conversation: %v", err)

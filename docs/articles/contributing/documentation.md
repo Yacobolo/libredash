@@ -8,8 +8,35 @@ LeapView documentation is maintained like product code: authored Markdown stays 
 - **How-to guides** complete one concrete task for a reader who already understands the surrounding concepts.
 - **Concept articles** explain why the system behaves as it does and connect related resources or boundaries.
 - **Reference pages** describe exact accepted contracts. Generate these from code whenever possible.
+- **Landing pages** orient readers and route them to focused pages. They are navigation aids rather than a fifth Diátaxis content type.
 
 Do not combine all four modes in one long page. Link from a procedure to the relevant concept and generated reference instead of repeating either one.
+
+Declare the page's purpose in `docs/navigation.yaml`:
+
+```yaml
+- slug: guides/build/connect-data
+  title: Connect a data source
+  type: how-to
+  summary: Add a connection and source definitions to a project.
+  source: articles/build/connect-data.md
+```
+
+Supported types are `landing`, `tutorial`, `how-to`, `explanation`, and `reference`. Generated collection pages are always `reference`. The public navigation remains organized around user journeys and product areas; the type controls how an individual page is authored and validated.
+
+A landing page briefly orients the reader and links to at least two focused documentation destinations. Keep commands, configuration, and exhaustive background out of landing pages: move procedures into how-to guides, background into concepts, and accepted syntax into reference. `docs:check` rejects fenced code on a landing page so it cannot gradually become an unclassified procedure.
+
+## Use the tutorial template
+
+A tutorial is a guided learning experience, not merely a long procedure. Keep the learner on one safe, reproducible path and take responsibility for a successful outcome. Every tutorial includes:
+
+- `Before you begin` with a known starting state;
+- small stages that introduce only what the learner needs at that moment;
+- a `Verify...` section with an observable result;
+- `Troubleshooting` for likely blockers; and
+- `Next steps` that hand the reader to task-oriented guides, concepts, or reference.
+
+Avoid optional branches and exhaustive configuration discussion inside a tutorial. Link to a how-to guide when a competent reader needs to adapt the workflow to a real situation.
 
 ## Use the procedural article template
 
@@ -53,7 +80,7 @@ Map likely symptoms to causes and corrective actions.
 Link to two or three directly related guides, concepts, or reference pages.
 ````
 
-Every procedure needs a stated outcome, explicit prerequisites, numbered actions, validation, and an observable success condition. Prefer several small verified stages to one large configuration dump.
+Every procedure needs a stated outcome, explicit prerequisites, numbered actions, validation, and an observable success condition. Prefer several small verified stages to one large configuration dump. Keep commands and configuration representative of the workflow, then link to generated reference for the complete accepted flags, fields, operations, and schemas.
 
 ## Add diagrams only when they clarify structure
 
@@ -79,4 +106,4 @@ task docs:check
 bun run test:site
 ```
 
-`docs:check` parses every Mermaid fence, validates YAML examples, checks links and navigation ownership, and detects generated catalog drift. Browser tests cover responsive SVG rendering and theme changes. Before review, inspect the page at desktop, tablet, and compact widths and confirm the diagram adds information that the surrounding prose does not already communicate.
+`docs:check` requires every page to declare a supported documentation type. It enforces the tutorial sections above, keeps landing pages free of fenced code and connected to at least two documentation destinations, requires every how-to guide to expose a validation, verification, testing, or troubleshooting boundary, and requires authored reference pages to contain scannable lists, tables, or code contracts. It also parses every Mermaid fence, validates YAML examples, checks links and navigation ownership, crawls every rendered internal documentation link through redirects, validates fragment anchors, and detects generated catalog drift. External URLs are intentionally excluded from this deterministic check. Browser tests cover responsive SVG rendering and theme changes. Before review, inspect the page at desktop, tablet, and compact widths and confirm the diagram adds information that the surrounding prose does not already communicate.

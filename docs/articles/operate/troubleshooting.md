@@ -72,3 +72,5 @@ Review protected serving states and query leases, then use `--apply` only under 
 Record impact, start time, last known good deployment/image/revision, failing identities, relevant metrics and logs, attempted actions, and whether active state changed. Redact secrets but keep stable digests and IDs.
 
 Correct configuration, data, or project candidates through normal workflows. Repeated restarts, manual pointer edits, and deleting active state destroy evidence and can turn a contained failure into data loss.
+
+Use the generated [environment variable reference](/docs/configuration), [`config` CLI reference](/docs/cli/config), [`admin` CLI reference](/docs/cli/admin), and [API reference](/docs/api) when confirming exact names, flags, and operations during diagnosis.

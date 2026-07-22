@@ -1,34 +1,6 @@
 # Connect a data source
 
-Connections are project-global access definitions. Sources give individual files, objects, or tables stable logical names that workspaces can consume. Object storage is the normal production path; managed uploads remain the zero-dependency path when LeapView should own immutable revisions.
-
-For scoped S3 Parquet with workload or instance identity:
-
-```yaml
-apiVersion: leapview.dev/v1
-kind: Connection
-metadata: {name: commerce_lake}
-spec:
-  kind: s3
-  scope: s3://company-analytics/commerce/
-  credentials:
-    provider: ambient
-    region: eu-west-1
-```
-
-Then define a source within that connection's scope:
-
-```yaml
-apiVersion: leapview.dev/v1
-kind: Source
-metadata: {name: commerce.orders}
-spec:
-  connection: commerce_lake
-  path: s3://company-analytics/commerce/orders/v2026-07-18/*.parquet
-  format: parquet
-```
-
-Use `provider: env` with a secret environment-variable name when explicit keys are required. That variable contains the existing connector JSON object. Use `provider: none` only for deliberately public S3 or HTTP objects.
+Connections are project-global access definitions. Sources give individual files, objects, or tables stable logical names that workspaces can consume. This guide follows one managed-file workflow so that the procedure stays reproducible; use [Connection configuration](/docs/config/connection) and [Source configuration](/docs/config/source) for the complete set of external-system providers, credentials, formats, and fields.
 
 ## Before you begin
 

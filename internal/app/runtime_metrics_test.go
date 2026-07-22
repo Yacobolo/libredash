@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/Yacobolo/leapview/internal/dashboard"
@@ -28,6 +29,19 @@ func TestRuntimeMetricsQueryDashboardUsesRuntimeLease(t *testing.T) {
 	}
 	if provider.runtime.releasedDuringCall {
 		t.Fatal("runtime lease was released before query completed")
+	}
+}
+
+func TestRuntimeMetricsReleasesRuntimeLeaseWhenQueryFails(t *testing.T) {
+	wantErr := errors.New("query failed")
+	provider := &leaseRecordingProvider{runtime: leaseRecordingRuntime{queryErr: wantErr}}
+	metrics := NewRuntimeMetrics(provider, "test")
+
+	if _, err := metrics.QueryDashboardPage(context.Background(), "dashboard", "page", dashboard.Filters{}); !errors.Is(err, wantErr) {
+		t.Fatalf("query dashboard error = %v, want %v", err, wantErr)
+	}
+	if provider.lease == nil || !provider.lease.released {
+		t.Fatal("runtime lease was not released after query failure")
 	}
 }
 
@@ -70,10 +84,6 @@ type switchingLeaseProvider struct {
 	acquires int
 }
 
-func (p *switchingLeaseProvider) Active(context.Context) (runtimehost.Runtime, error) {
-	return p.current, nil
-}
-
 func (p *switchingLeaseProvider) Acquire(context.Context) (runtimehost.Lease, error) {
 	p.acquires++
 	p.lease = &recordingLease{runtime: p.current, snapshotID: 42}
@@ -100,10 +110,6 @@ type leaseRecordingProvider struct {
 	lease   *recordingLease
 }
 
-func (p *leaseRecordingProvider) Active(context.Context) (runtimehost.Runtime, error) {
-	return &p.runtime, nil
-}
-
 func (p *leaseRecordingProvider) Acquire(context.Context) (runtimehost.Lease, error) {
 	p.lease = &recordingLease{runtime: &p.runtime, snapshotID: 42}
 	p.runtime.lease = p.lease
@@ -114,6 +120,7 @@ type leaseRecordingRuntime struct {
 	lease              *recordingLease
 	called             bool
 	releasedDuringCall bool
+	queryErr           error
 }
 
 func (r *leaseRecordingRuntime) Close() error {
@@ -125,7 +132,7 @@ func (r *leaseRecordingRuntime) QueryDashboardPage(context.Context, string, stri
 	if r.lease != nil && r.lease.released {
 		r.releasedDuringCall = true
 	}
-	return dashboard.Patch{}, nil
+	return dashboard.Patch{}, r.queryErr
 }
 
 type recordingLease struct {

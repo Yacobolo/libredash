@@ -37,6 +37,7 @@ type rootOptions struct {
 	limit              int
 	pageToken          string
 	searchTypes        []string
+	searchWorkspaces   []string
 	autoApprove        bool
 	apply              bool
 	healthcheckURL     string

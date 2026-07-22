@@ -1,66 +1,32 @@
 # Deploy and operate LeapView
 
-Production delivery has two distinct layers: application delivery and project delivery. Keeping them separate lets operators upgrade the service without silently changing dashboards and lets data teams deploy reviewed projects without rebuilding the application image.
+LeapView separates application delivery from project delivery. Choose the workflow that matches what is changing, then use the focused operational guide for execution and verification.
 
-## Application delivery
+## Deliver the application
 
-Application delivery changes the LeapView binary or OCI image, browser assets, runtime configuration, and infrastructure. It also owns persistent storage attachment, TLS termination, health checks, backups, and upgrade rollback.
+Application delivery changes the LeapView binary or image, browser assets, runtime configuration, infrastructure, and persistent storage attachment.
 
-Build an immutable artifact in CI from a reviewed commit. Pin the artifact by digest or another immutable identifier in deployment configuration. Validate production environment requirements before the process is allowed to serve traffic:
+- Use [Production configuration](/docs/guides/operate/production-configuration) to establish secrets, public addresses, storage, and capacity boundaries.
+- Use [Self-hosting](/docs/guides/operate/self-hosting) to deploy the supported single-node topology.
+- Use [Upgrades and migrations](/docs/guides/operate/upgrades) to rehearse, apply, verify, and roll back an application release.
 
-```sh
-leapview config validate --production
-```
+Application releases should use immutable artifacts and should not silently modify project resources.
 
-An application release should not modify project YAML as a side effect. When a release changes resource schemas, publish explicit migration instructions and update projects through their normal delivery workflow.
+## Deliver a project
 
-## Project delivery
+Project delivery changes connections, sources, workspaces, model tables, semantic models, dashboards, access resources, and managed-data revision pins.
 
-Project delivery changes connections, sources, workspaces, model tables, semantic models, dashboards, access resources, and managed-data revision pins. The normal flow is:
+- Use [Validate, plan, and deploy](/docs/cli/validate-deploy) for the atomic project delivery workflow.
+- Use [Targets and environments](/docs/cli/targets) to keep local, staging, and production identities explicit.
+- Read [Projects, workspaces, and environments](/docs/concepts/projects-workspaces-environments) for the ownership and activation model behind that workflow.
 
-```sh
-leapview validate --project dashboards/leapview.yaml
+Promote the same reviewed project commit and managed revision identities through environments rather than maintaining separate dashboard trees.
 
-leapview plan \
-  --project dashboards/leapview.yaml \
-  --target "$LEAPVIEW_TARGET" \
-  --token "$LEAPVIEW_API_TOKEN" \
-  --environment prod
+## Run and recover the service
 
-leapview deploy \
-  --project dashboards/leapview.yaml \
-  --target "$LEAPVIEW_TARGET" \
-  --token "$LEAPVIEW_API_TOKEN" \
-  --environment prod
-```
+- Use [Health and observability](/docs/guides/operate/observability) for readiness, metrics, logs, refresh activity, query events, and synthetic verification.
+- Use [Backup and restore](/docs/guides/operate/backup-restore) for consistent instance recovery.
+- Use [Operational troubleshooting](/docs/guides/operate/troubleshooting) to locate failures across infrastructure, active data, semantic modeling, and dashboard behavior.
+- Use [Storage and recovery](/docs/guides/data/storage-recovery) for local and object-storage analytical boundaries.
 
-Add one `--revision connection=sha256:<digest>` flag for each managed connection. Use `--auto-approve` only in automation that already has a reviewed plan and explicit promotion controls.
-
-## Promotion
-
-Promote the same reviewed project commit, application artifact, and managed revision digests through environments. Environment-specific targets provide URLs and credentials; they should not require duplicated dashboard trees.
-
-A practical promotion record contains:
-
-- application image digest and version;
-- project commit and generated-plan artifact;
-- environment and target identity;
-- managed connection revision digests;
-- deployment ID and acting service principal;
-- validation and post-deployment evidence.
-
-## Runtime operations
-
-Operators are responsible for process readiness, storage capacity, backups, maintenance, refresh execution, and security configuration. Data teams remain responsible for project correctness, model invariants, and dashboard behavior. Both sides need a shared incident boundary because a failed query can originate in infrastructure, active data, semantic modeling, or the dashboard itself.
-
-Monitor `/healthz` for liveness, `/readyz` for readiness, protected Prometheus metrics, structured logs, deployment state, refresh runs, and audit/query events. Keep readiness checks cheap; use separate synthetic tests for representative analytical queries.
-
-## Recovery principles
-
-- Preserve the last active serving state when a candidate fails.
-- Back up authoritative control-plane, DuckLake, analytical, and managed-data boundaries together.
-- Use dry-run maintenance and storage cleanup before destructive modes.
-- Keep the previous immutable application artifact available during an upgrade.
-- Diagnose with deployment, revision, refresh, and request identities rather than manually editing state.
-
-Continue with [Production configuration](/docs/guides/operate/production-configuration), [Self-hosting](/docs/guides/operate/self-hosting), and [Health and observability](/docs/guides/operate/observability). Use the generated [CLI command reference](/docs/cli/reference) for exact flags.
+For accepted settings and flags, use the generated [Environment variable reference](/docs/configuration) and [CLI command reference](/docs/cli/reference).

@@ -1,4 +1,4 @@
-# LeapView DuckLake Storage Architecture Spec
+# Storage architecture
 
 ## Summary
 

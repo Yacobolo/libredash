@@ -118,6 +118,8 @@ func Page(clientID, csrfToken string, catalog dashboard.Catalog, report reportde
 	dashboardUpdatesURL := updatesURLWithParams(catalog.Workspace.ID, report.ID, activePage.ID, initialURLParams)
 	reloadAction := uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/reload", "runtime", "filters.controls")
 	filtersUpdate := "$filters = evt.detail.filters; $urlParams = evt.detail.urlParams; window.DatastarURLSync && window.DatastarURLSync.replace($urlParams); " + visualReset
+	agentTurn := "$agent.composer.value = evt.detail.input; $agentContext.references = evt.detail.references; $agentContext.filters = $filters; $agentContext.generation = $status.generation; " + uiactions.Post("/chats/turns", "agent", "agentContext")
+	agentRestore := "$agent.activeConversationId = evt.detail.conversationId; " + uiactions.Get("/chats/restore", "agent")
 	return pagestream.RenderPage(pagestream.PageSpec{
 		Title:             brand.Name,
 		DatastarScriptURL: datastarScriptURL(),
@@ -141,11 +143,16 @@ func Page(clientID, csrfToken string, catalog dashboard.Catalog, report reportde
 		UpdatesURL: dashboardUpdatesURL,
 		Body: []g.Node{
 			g.El("lv-app-shell",
+				g.Attr("data-on:lv-chat-reference-search__debounce.200ms", "$agentReferenceSearch.query = evt.detail.query; $agentReferenceSearch.requestId = evt.detail.requestId; "+uiactions.Get("/chats/references/search", "agentReferenceSearch", "agentContext")),
 				g.El("lv-dashboard-page",
 					g.Attr("slot", "page"),
 					g.Attr("workspace-id", catalog.Workspace.ID),
 					g.Attr("dashboard-id", report.ID),
 					g.Attr("page-id", activePage.ID),
+					g.Attr("data-indicator", "agentTurnPending"),
+					g.Attr("data-on:lv-chat-submit", agentTurn),
+					g.Attr("data-on:lv-chat-restore", agentRestore),
+					g.Attr("data-on:lv-chat-new", "$agent.activeConversationId = ''; $agent.transcript = []; $agent.composer.value = ''; $agentVisuals = {}"),
 					g.Attr("data-on:lv-filters-change", filtersUpdate+reloadAction),
 					g.Attr("data-on:lv-filters-reset", filtersUpdate+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/reset-filters", "runtime")),
 					g.Attr("data-on:lv-filters-refresh", reloadAction),
@@ -239,19 +246,23 @@ func BootstrapSignals(clientID, streamInstanceID string, catalog dashboard.Catal
 		}
 	}
 	return map[string]any{
-		"chrome":              envelope.Chrome,
-		"componentStatus":     envelope.ComponentStatus,
-		"page":                envelope.Page,
-		"runtime":             envelope.Runtime,
-		"filterConfig":        envelope.FilterConfig,
-		"filters":             envelope.Filters,
-		"urlParams":           envelope.URLParams,
-		"urlParamShape":       envelope.URLParamShape,
-		"filterOptions":       envelope.FilterOptions,
-		"interactionCommand":  envelope.InteractionCommand,
-		"visualWindowCommand": envelope.VisualWindowCommand,
-		"visuals":             envelope.Visuals,
-		"status":              envelope.Status,
+		"agent":                envelope.Agent,
+		"agentContext":         envelope.AgentContext,
+		"agentReferenceSearch": envelope.AgentReferenceSearch,
+		"agentVisuals":         envelope.AgentVisuals,
+		"chrome":               envelope.Chrome,
+		"componentStatus":      envelope.ComponentStatus,
+		"page":                 envelope.Page,
+		"runtime":              envelope.Runtime,
+		"filterConfig":         envelope.FilterConfig,
+		"filters":              envelope.Filters,
+		"urlParams":            envelope.URLParams,
+		"urlParamShape":        envelope.URLParamShape,
+		"filterOptions":        envelope.FilterOptions,
+		"interactionCommand":   envelope.InteractionCommand,
+		"visualWindowCommand":  envelope.VisualWindowCommand,
+		"visuals":              envelope.Visuals,
+		"status":               envelope.Status,
 	}
 }
 

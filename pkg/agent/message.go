@@ -2,6 +2,8 @@ package agent
 
 type Role string
 
+type MessageKind string
+
 const (
 	RoleSystem    Role = "system"
 	RoleUser      Role = "user"
@@ -10,9 +12,15 @@ const (
 	RoleSummary   Role = "summary"
 )
 
+const (
+	MessageKindExternalContext        MessageKind = "external_context"
+	messageKindExternalContextSummary MessageKind = "external_context_summary"
+)
+
 type Message struct {
 	ID             string       `json:"id,omitempty"`
 	Role           Role         `json:"role"`
+	Kind           MessageKind  `json:"kind,omitempty"`
 	Content        string       `json:"content,omitempty"`
 	DisplayContent any          `json:"display_content,omitempty"`
 	ToolCalls      []ToolCall   `json:"tool_calls,omitempty"`

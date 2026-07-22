@@ -88,3 +88,5 @@ Preserve correlation timestamps and inspect both provider logs and LeapView audi
 ## Next steps
 
 Configure [SCIM provisioning](/docs/security/scim) for directory lifecycle, review [Roles, grants, and policies](/docs/security/authorization), and complete the broader [Authentication and authorization](/docs/enterprise-auth) checklist.
+
+The configuration above shows the workflow. Use the generated [environment variable reference](/docs/configuration) for the complete OIDC, proxy, host, cookie, and production-validation contract.

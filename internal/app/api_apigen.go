@@ -71,7 +71,7 @@ func (a apiGenAdapter) HandleAPIGen(operationID string, w http.ResponseWriter, r
 
 func isGlobalAgentOperation(operationID string) bool {
 	switch operationID {
-	case "listAgentConversations", "createAgentConversation", "archiveAgentConversation", "getAgentConversation", "updateAgentConversation",
+	case "search", "listAgentConversations", "createAgentConversation", "archiveAgentConversation", "getAgentConversation", "updateAgentConversation",
 		"listAgentMessages", "listAgentRuns", "createAgentRun", "getAgentRun", "cancelAgentRun", "listAgentEvents":
 		return true
 	default:
@@ -418,8 +418,8 @@ func (a apiGenAdapter) ListWorkspaces(w http.ResponseWriter, r *http.Request, _ 
 	a.server.workspaceHTTPHandler().Workspaces(w, r)
 }
 
-func (a apiGenAdapter) SearchWorkspace(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenSearchWorkspaceParams) {
-	a.server.workspaceHTTPHandler().SearchWorkspace(w, r)
+func (a apiGenAdapter) Search(w http.ResponseWriter, r *http.Request, params apigenapi.GenSearchParams) {
+	a.server.searchAPI(w, r, params)
 }
 
 func (a apiGenAdapter) ListWorkspaceAssets(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenListWorkspaceAssetsParams) {

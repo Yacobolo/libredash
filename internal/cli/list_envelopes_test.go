@@ -86,8 +86,8 @@ func TestFriendlyListCommandsPassPaginationQuery(t *testing.T) {
 		{
 			name:    "search",
 			command: searchCommand,
-			args:    []string{"orders", "--type", "visual"},
-			path:    "/api/v1/workspaces/test/search",
+			args:    []string{"orders", "--workspace", "test", "--type", "visual"},
+			path:    "/api/v1/search",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -105,8 +105,11 @@ func TestFriendlyListCommandsPassPaginationQuery(t *testing.T) {
 					if got := r.URL.Query().Get("q"); got != "orders" {
 						t.Fatalf("q=%q", got)
 					}
-					if got := r.URL.Query().Get("types"); got != "visual" {
-						t.Fatalf("types=%q", got)
+					if got := r.URL.Query().Get("type"); got != "visual" {
+						t.Fatalf("type=%q", got)
+					}
+					if got := r.URL.Query().Get("workspace"); got != "test" {
+						t.Fatalf("workspace=%q", got)
 					}
 				}
 				writeCLIJSON(t, w, map[string]any{
@@ -132,7 +135,7 @@ func TestFriendlyListCommandsPassPaginationQuery(t *testing.T) {
 
 func TestSearchCommandRendersConciseRows(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/workspaces/test/search" {
+		if r.URL.Path != "/api/v1/search" {
 			t.Fatalf("path=%s", r.URL.Path)
 		}
 		if got := r.URL.Query().Get("q"); got != "orders" {
@@ -140,8 +143,7 @@ func TestSearchCommandRendersConciseRows(t *testing.T) {
 		}
 		writeCLIJSON(t, w, map[string]any{
 			"items": []map[string]any{{
-				"id":          "executive-sales.overview.orders",
-				"type":        "visual",
+				"reference":   map[string]any{"workspaceId": "test", "type": "visual", "id": "executive-sales.orders"},
 				"name":        "Orders",
 				"description": "Orders visual on Overview.",
 			}},
@@ -157,7 +159,7 @@ func TestSearchCommandRendersConciseRows(t *testing.T) {
 			t.Fatalf("run search: %v", err)
 		}
 	})
-	for _, want := range []string{"TYPE", "NAME", "DESCRIPTION", "ID", "visual", "Orders", "Orders visual on Overview."} {
+	for _, want := range []string{"WORKSPACE", "TYPE", "NAME", "DESCRIPTION", "ID", "test", "visual", "Orders", "Orders visual on Overview."} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("search output missing %q:\n%s", want, output)
 		}
@@ -170,16 +172,16 @@ func TestSearchCommandRendersConciseRows(t *testing.T) {
 func TestSearchGeneratedCLIMetadataUsesQueryAsOnlyPositionalArg(t *testing.T) {
 	var spec cligen.APIGenCommandSpec
 	for _, candidate := range cligen.APIGeneratedCommandSpecs {
-		if candidate.OperationID == "searchWorkspace" {
+		if candidate.OperationID == "search" {
 			spec = candidate
 			break
 		}
 	}
 	if spec.OperationID == "" {
-		t.Fatal("searchWorkspace CLI metadata missing")
+		t.Fatal("search CLI metadata missing")
 	}
 	if len(spec.Args) != 1 || spec.Args[0].Name != "q" || spec.Args[0].Source != "query" {
-		t.Fatalf("searchWorkspace CLI args = %#v, want one query arg q", spec.Args)
+		t.Fatalf("search CLI args = %#v, want one query arg q", spec.Args)
 	}
 }
 
@@ -364,7 +366,7 @@ func TestAgentToolsCommandListsGeneratedTools(t *testing.T) {
 			t.Fatalf("agent tools: %v", err)
 		}
 	})
-	for _, want := range []string{"NAME", "PRIVILEGE", "list_dashboards", "VIEW_ITEM", "list_assets", "describe_asset", "asset_lineage", "search_workspace", "query_dashboard_visual", "query_semantic_model", "explain_semantic_model_query", "query_visual"} {
+	for _, want := range []string{"NAME", "PRIVILEGE", "list_dashboards", "VIEW_ITEM", "list_assets", "describe_asset", "asset_lineage", "search", "query_dashboard_visual", "query_semantic_model", "explain_semantic_model_query", "query_visual"} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("agent tools output missing %q:\n%s", want, output)
 		}

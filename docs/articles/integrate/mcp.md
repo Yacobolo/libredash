@@ -1,4 +1,4 @@
-# Connect an MCP host to LeapView
+# Connect an MCP host
 
 LeapView exposes the same governed BI tool catalog used by its built-in agent through a tools-only MCP endpoint. The endpoint belongs to each LeapView deployment:
 
@@ -100,4 +100,4 @@ LeapView still performs live RBAC and data-policy checks for every tool call. In
 
 Successful calls return both MCP `structuredContent` and equivalent JSON text. Expected tool failures are returned as tool errors; malformed MCP requests use protocol errors. Request cancellation propagates into query execution, and every call is recorded through the agent-tool audit path.
 
-Review [Agent integrations](/docs/guides/integrate/agent), [Service principals and API tokens](/docs/security/tokens), [Audit events](/docs/security/audit), and [Production configuration](/docs/guides/operate/production-configuration) before enabling production clients.
+Review [Agent integrations](/docs/guides/integrate/agent), [Service principals and API tokens](/docs/security/tokens), [Audit events](/docs/security/audit), and [Production configuration](/docs/guides/operate/production-configuration) before enabling production clients. Use the generated [environment variable reference](/docs/configuration) and [Access API reference](/docs/api/access) for exact runtime and principal-management contracts.

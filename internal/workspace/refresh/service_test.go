@@ -135,6 +135,59 @@ func TestServiceExecuteClaimedJobRuntimePrepareFailureDoesNotActivate(t *testing
 	}
 }
 
+func TestServiceExecuteClaimedJobRuntimeActivationFailureDoesNotPublishOrActivate(t *testing.T) {
+	ctx := context.Background()
+	repo := newFakeRepo()
+	wantErr := errors.New("runtime activation failed")
+	runtime := &fakeRuntimeHost{activateErr: wantErr}
+	service := Service{
+		ServingStates: repo,
+		Runs:          repo,
+		Artifacts:     fakeArtifactLoader{definition: refreshTestDefinition()},
+		Materializer:  &fakeMaterializer{snapshotID: 42},
+		Runtime:       runtime,
+	}
+
+	err := service.ExecuteClaimedJob(ctx, materialize.JobRecord{
+		ID: "job_1", WorkspaceID: "sales", ServingStateID: "dep_candidate", RunID: "run_root", ModelID: "sales",
+		TargetType: materialize.TargetRefreshPipeline, TargetID: "sales.sales-refresh", Kind: materialize.JobKindRefreshPipeline,
+	})
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("execute claimed job error = %v, want %v", err, wantErr)
+	}
+	if repo.activatedDeployment != "" {
+		t.Fatalf("activated deployment = %s, want none", repo.activatedDeployment)
+	}
+	if runtime.committed {
+		t.Fatal("runtime was published after atomic activation failed")
+	}
+	if repo.failedDeployment != "dep_candidate" {
+		t.Fatalf("failed deployment = %s, want dep_candidate", repo.failedDeployment)
+	}
+}
+
+func TestServiceExecuteClaimedJobRequiresAtomicRuntimeHost(t *testing.T) {
+	ctx := context.Background()
+	repo := newFakeRepo()
+	service := Service{
+		ServingStates: repo,
+		Runs:          repo,
+		Artifacts:     fakeArtifactLoader{definition: refreshTestDefinition()},
+		Materializer:  &fakeMaterializer{snapshotID: 42},
+	}
+
+	err := service.ExecuteClaimedJob(ctx, materialize.JobRecord{
+		ID: "job_1", WorkspaceID: "sales", ServingStateID: "dep_candidate", RunID: "run_root", ModelID: "sales",
+		TargetType: materialize.TargetRefreshPipeline, TargetID: "sales.sales-refresh", Kind: materialize.JobKindRefreshPipeline,
+	})
+	if err == nil || !strings.Contains(err.Error(), "runtime host is required") {
+		t.Fatalf("execute claimed job error = %v, want required runtime host", err)
+	}
+	if repo.activatedDeployment != "" {
+		t.Fatalf("activated deployment = %s, want none", repo.activatedDeployment)
+	}
+}
+
 func TestServiceQueuePipelineRefreshCreatesFullSemanticModelRun(t *testing.T) {
 	repo := newFakeRepo()
 	service := Service{
@@ -469,9 +522,10 @@ func (m *fakeMaterializer) Materialize(_ context.Context, input MaterializeInput
 }
 
 type fakeRuntimeHost struct {
-	prepared   bool
-	committed  bool
-	prepareErr error
+	prepared    bool
+	committed   bool
+	prepareErr  error
+	activateErr error
 }
 
 func (h *fakeRuntimeHost) PrepareServingState(context.Context, string) (servingstate.PreparedRuntime, error) {
@@ -482,12 +536,16 @@ func (h *fakeRuntimeHost) PrepareServingState(context.Context, string) (servings
 	return fakePrepared{}, nil
 }
 
-func (h *fakeRuntimeHost) CommitPrepared(servingstate.PreparedRuntime) error {
+func (h *fakeRuntimeHost) ActivatePrepared(_ servingstate.PreparedRuntime, activate func() error) error {
+	if h.activateErr != nil {
+		return h.activateErr
+	}
+	if err := activate(); err != nil {
+		return err
+	}
 	h.committed = true
 	return nil
 }
-
-func (h *fakeRuntimeHost) Reload(context.Context) error { return nil }
 
 type fakePrepared struct{}
 

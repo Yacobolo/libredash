@@ -113,6 +113,7 @@ func (s *Server) agentAPIGenToolProvider() agenttools.APIGenProvider {
 				credential := access.APICredential{
 					Principal: access.Principal{ID: scope.PrincipalID},
 					Token: access.APIToken{
+						ID:          "agent",
 						PrincipalID: scope.PrincipalID,
 						WorkspaceID: scope.Credential.WorkspaceID,
 						Privileges:  privileges,
@@ -161,7 +162,7 @@ func (s *Server) authorizeAPIGenAgentOperation(ctx context.Context, scope agentc
 	if !ok {
 		return agenttools.ToolError("forbidden", "operation has no generated LeapView privilege metadata"), false
 	}
-	if operationID == "listWorkspaces" && strings.TrimSpace(scope.WorkspaceID) == "" {
+	if operationID == "search" || (operationID == "listWorkspaces" && strings.TrimSpace(scope.WorkspaceID) == "") {
 		if strings.TrimSpace(scope.PrincipalID) == "" {
 			return agenttools.ToolError("unauthorized", "agent tool requires an authenticated principal"), false
 		}

@@ -4,19 +4,25 @@ import (
 	"context"
 	"encoding/json"
 	"html"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/Yacobolo/leapview/internal/access"
 	"github.com/Yacobolo/leapview/internal/agent"
 	"github.com/Yacobolo/leapview/internal/api"
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	"github.com/Yacobolo/leapview/internal/platform"
+	productsearch "github.com/Yacobolo/leapview/internal/search"
+	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
+	"github.com/Yacobolo/leapview/internal/workspace"
 	"github.com/Yacobolo/leapview/pkg/pagestream"
 )
 
@@ -84,6 +90,8 @@ func TestChatPageRequiresAuthAndRendersComponents(t *testing.T) {
 		`view="new"`,
 		`data-indicator="agentTurnPending"`,
 		`data-on:lv-chat-submit`,
+		`data-on:lv-chat-reference-search__debounce.200ms`,
+		`/chats/references/search`,
 		`/chats/turns`,
 		`/updates?route=chat&amp;view=new`,
 	} {
@@ -122,6 +130,229 @@ func TestChatPageRequiresAuthAndRendersComponents(t *testing.T) {
 	}
 	if strings.Contains(body, `data-attr:events`) || strings.Contains(body, `$agent.events`) {
 		t.Fatalf("chat page should not feed raw events to the chat thread:\n%s", body)
+	}
+}
+
+func TestChatReferenceSearchReturnsTypedGovernedWorkspaceResults(t *testing.T) {
+	store := testStore(t)
+	seedEnvironmentAssetDeployment(t, store, "test", servingstate.DefaultEnvironment, "Orders by region", "Warehouse")
+	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, Agent: agent.NewService(fakeMetrics{}, testAgentRepository(store), agent.Config{APIKey: "key", Model: "fake-model"}), DefaultWorkspaceID: "test"})
+
+	signals, _ := json.Marshal(map[string]any{
+		"agentReferenceSearch": map[string]any{"query": "orders by"},
+		"agentContext":         map[string]any{"surface": "chat", "workspaceId": "test"},
+	})
+	req := httptest.NewRequest(http.MethodGet, "/chats/references/search?datastar="+url.QueryEscape(string(signals)), nil)
+	req.Header.Set("Accept", "text/event-stream")
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{`"agentReferenceSearch"`, `"query":"orders by"`, `"type":"dashboard"`, `"name":"Orders by region"`, `"workspace":{"id":"test"`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("reference search missing %q:\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, `"query":`) && !strings.Contains(body, `"results":`) {
+		t.Fatalf("reference search did not patch typed results:\n%s", body)
+	}
+}
+
+func TestChatReferenceSearchWithoutWorkspaceSearchesVisibleWorkspaces(t *testing.T) {
+	store := testStore(t)
+	seedEnvironmentAssetDeployment(t, store, "sales", servingstate.DefaultEnvironment, "Orders dashboard", "Sales Warehouse")
+	auth := testAuth(store, "", AuthConfig{DevBypass: true})
+	server := NewWithOptions(NewMultiWorkspaceMetrics("sales", map[string]QueryMetrics{"sales": fakeMetrics{}}), Options{
+		Store: store, Auth: auth, Agent: agent.NewService(fakeMetrics{}, testAgentRepository(store), agent.Config{APIKey: "key", Model: "fake-model"}),
+	})
+	repo, err := server.workspaceRepository()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.Ensure(context.Background(), workspace.EnsureInput{ID: "sales", Title: "Sales"}); err != nil {
+		t.Fatal(err)
+	}
+
+	signals, _ := json.Marshal(map[string]any{
+		"agentReferenceSearch": map[string]any{"query": "orders"},
+		"agentContext":         map[string]any{"surface": "chat"},
+	})
+	req := httptest.NewRequest(http.MethodGet, "/chats/references/search?datastar="+url.QueryEscape(string(signals)), nil)
+	req.Header.Set("Accept", "text/event-stream")
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	for _, want := range []string{`"workspaceId":"sales"`, `"type":"dashboard"`, `"name":"Orders dashboard"`, `"workspace":{"id":"sales"`} {
+		if !strings.Contains(rec.Body.String(), want) {
+			t.Fatalf("global reference search missing %q:\n%s", want, rec.Body.String())
+		}
+	}
+}
+
+func TestChatReferenceDiscoveryOnlyReturnsAttachableAnalyticsTypes(t *testing.T) {
+	store := testStore(t)
+	seedEnvironmentAssetDeployment(t, store, "sales", servingstate.DefaultEnvironment, "Orders dashboard", "Sales Warehouse")
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, DefaultWorkspaceID: "sales"})
+
+	results, err := server.searchAgentReferences(
+		httptest.NewRequest(http.MethodGet, "/chats/references/search", nil),
+		agent.TurnContext{WorkspaceID: "sales"}, "", 50,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) == 0 {
+		t.Fatal("agent reference discovery returned no attachable results")
+	}
+	allowed := map[string]bool{"visual": true, "dashboard": true, "page": true, "measure": true, "semantic_model": true}
+	for _, result := range results {
+		if !allowed[result.Reference.Type] {
+			t.Fatalf("agent reference discovery returned non-attachable type %q: %#v", result.Reference.Type, results)
+		}
+	}
+}
+
+func TestAgentReferenceSignalBuildsCompactHierarchy(t *testing.T) {
+	tests := map[string]struct {
+		result productsearch.Result
+		want   []string
+	}{
+		"visual": {
+			result: productsearch.Result{
+				Reference: productsearch.Reference{WorkspaceID: "sales", Type: productsearch.TypeVisual, ID: "executive-sales.revenue"},
+				Workspace: productsearch.Workspace{ID: "sales", Name: "Sales"},
+				Locations: []productsearch.Location{{DashboardName: "Executive Sales", PageName: "Overview"}},
+			},
+			want: []string{"Sales", "Executive Sales", "Overview"},
+		},
+		"page": {
+			result: productsearch.Result{
+				Reference: productsearch.Reference{WorkspaceID: "sales", Type: productsearch.TypePage, ID: "executive-sales.overview"},
+				Workspace: productsearch.Workspace{ID: "sales", Name: "Sales"},
+				Locations: []productsearch.Location{{DashboardName: "Executive Sales", PageName: "Overview"}},
+			},
+			want: []string{"Sales", "Executive Sales"},
+		},
+		"measure": {
+			result: productsearch.Result{
+				Reference: productsearch.Reference{WorkspaceID: "sales", Type: productsearch.TypeMeasure, ID: "orders.revenue"},
+				Workspace: productsearch.Workspace{ID: "sales", Name: "Sales"},
+				Hierarchy: []productsearch.HierarchyItem{{Type: productsearch.TypeSemanticModel, ID: "orders", Name: "Orders"}},
+			},
+			want: []string{"Sales", "Orders"},
+		},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			got := agentReferenceSignal(test.result)
+			if !slices.Equal(got.Hierarchy, test.want) {
+				t.Fatalf("hierarchy = %#v, want %#v", got.Hierarchy, test.want)
+			}
+		})
+	}
+}
+
+func TestGlobalChatReferenceSearchHonorsAPICredentialWorkspaceAndPrivileges(t *testing.T) {
+	store := testStore(t)
+	server := NewWithOptions(nil, Options{Store: store})
+	request := httptest.NewRequest(http.MethodGet, "/chats/references/search", nil)
+	credential := access.APICredential{Principal: access.Principal{ID: "principal"}, Token: access.APIToken{
+		ID: "token", WorkspaceID: "sales", Privileges: []access.Privilege{access.PrivilegeViewItem},
+	}}
+	request = request.WithContext(context.WithValue(request.Context(), apiCredentialContextKey{}, credential))
+	subject, ok := server.searchSubject(request)
+	if !ok || subject.ID != "principal" || subject.DevBypass || !subject.CredentialRestricted || len(subject.WorkspaceIDs) != 1 || subject.WorkspaceIDs[0] != "sales" {
+		t.Fatalf("credential search subject = %#v", subject)
+	}
+	denied := subject
+	denied.Privileges = []string{string(access.PrivilegeUseAgent)}
+	allowed, err := (appSearchAuthorizer{server: server}).CanView(context.Background(), denied, access.WorkspaceObject("sales"))
+	if err != nil || allowed {
+		t.Fatalf("credential without VIEW_ITEM allowed=%v err=%v", allowed, err)
+	}
+}
+
+func TestGlobalChatReferenceSearchRanksAcrossWorkspaces(t *testing.T) {
+	store := testStore(t)
+	seedEnvironmentAssetDeployment(t, store, "archive", servingstate.DefaultEnvironment, "Revenue archive", "Archive Warehouse")
+	seedEnvironmentAssetDeployment(t, store, "sales", servingstate.DefaultEnvironment, "Revenue", "Sales Warehouse")
+	server := NewWithOptions(nil, Options{Store: store})
+	repo, err := server.workspaceRepository()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, workspaceID := range []string{"archive", "sales"} {
+		if err := repo.Ensure(context.Background(), workspace.EnsureInput{ID: workspace.WorkspaceID(workspaceID), Title: workspaceID}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	results, err := server.searchAgentReferences(httptest.NewRequest(http.MethodGet, "/chats/references/search", nil), agent.TurnContext{}, "revenue", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) < 2 || results[0].Reference.WorkspaceID != "sales" || results[0].Reference.ID != "dev-dashboard" {
+		t.Fatalf("globally ranked results = %#v", results)
+	}
+}
+
+func TestChatReferenceSearchRouteAuthorizesAcrossAccessibleWorkspaces(t *testing.T) {
+	store := testStore(t)
+	seedEnvironmentAssetDeployment(t, store, "sales", servingstate.DefaultEnvironment, "Orders dashboard", "Sales Warehouse")
+	ctx := context.Background()
+	workspaceRepo, err := NewWithOptions(fakeMetrics{}, Options{Store: store}).workspaceRepository()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := workspaceRepo.Ensure(ctx, workspace.EnsureInput{ID: "sales", Title: "Sales"}); err != nil {
+		t.Fatal(err)
+	}
+	accessRepo := testAccessRepository(store)
+	principal, err := accessRepo.SetPrincipalRole(ctx, access.PrincipalRoleInput{
+		WorkspaceID: "sales", Email: "sales-search@example.com", DisplayName: "Sales Search", Role: access.RoleViewer,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, _ := testScopedAPIToken(t, ctx, store, access.APITokenInput{
+		PrincipalID: principal.ID,
+		WorkspaceID: "sales",
+		Name:        "sales-search",
+		Privileges:  []access.Privilege{access.PrivilegeViewItem},
+	})
+	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
+	server := NewWithOptions(NewMultiWorkspaceMetrics("test", map[string]QueryMetrics{
+		"test": fakeMetrics{}, "sales": fakeMetrics{},
+	}), Options{Store: store, Auth: auth, DefaultWorkspaceID: "test"})
+	if _, err := accessRepo.UpsertSecurableObject(ctx, access.ItemObjectWithParent(
+		access.SecurableDashboard, "sales", "dev-dashboard", access.WorkspaceObject("sales"),
+	), ""); err != nil {
+		t.Fatal(err)
+	}
+
+	signals, _ := json.Marshal(map[string]any{
+		"agentReferenceSearch": map[string]any{"query": "orders"},
+		"agentContext":         map[string]any{"surface": "chat"},
+	})
+	request := httptest.NewRequest(http.MethodGet, "/chats/references/search?datastar="+url.QueryEscape(string(signals)), nil)
+	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set("Accept", "text/event-stream")
+	response := httptest.NewRecorder()
+
+	server.Routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), `"workspaceId":"sales"`) || strings.Contains(response.Body.String(), `"workspaceId":"test"`) {
+		t.Fatalf("credential-scoped search response = %s", response.Body.String())
 	}
 }
 
@@ -372,6 +603,62 @@ func TestChatConversationRouteLoadsOwnedEventsAndRejectsOtherPrincipal(t *testin
 	server.Routes().ServeHTTP(hiddenRec, hiddenReq)
 	if hiddenRec.Code != http.StatusNotFound {
 		t.Fatalf("hidden route status=%d body=%s", hiddenRec.Code, hiddenRec.Body.String())
+	}
+}
+
+func TestDashboardChatRestoreHydratesOnlyAnOwnedConversation(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+	owner, token := chatPrincipalAndToken(t, ctx, store)
+	other := testPrincipal(t, ctx, store, "restore-other@example.com", "Restore Other", "viewer")
+	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
+	service := agent.NewService(fakeMetrics{}, testAgentRepository(store), agent.Config{APIKey: "key", Model: "fake-model"})
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, Agent: service, DefaultWorkspaceID: "test"})
+
+	owned, err := service.CreateConversation(ctx, agent.Scope{WorkspaceID: "test", PrincipalID: owner.ID}, "Owned restore")
+	if err != nil {
+		t.Fatalf("create owned conversation: %v", err)
+	}
+	if _, err := testAgentRepository(store).AppendMessage(ctx, agent.MessageInput{
+		PrincipalID: owner.ID, ConversationID: owned.ID, Role: agent.MessageRoleUser, ContentText: "Persisted dashboard question",
+	}); err != nil {
+		t.Fatalf("append owned message: %v", err)
+	}
+	hidden, err := service.CreateConversation(ctx, agent.Scope{WorkspaceID: "test", PrincipalID: other.ID}, "Hidden restore")
+	if err != nil {
+		t.Fatalf("create hidden conversation: %v", err)
+	}
+
+	restore := func(conversationID string) *httptest.ResponseRecorder {
+		t.Helper()
+		signals, _ := json.Marshal(map[string]any{"agent": map[string]any{"activeConversationId": conversationID}})
+		req := httptest.NewRequest(http.MethodGet, "/chats/restore?datastar="+url.QueryEscape(string(signals)), nil)
+		req.Header.Set("Accept", "text/event-stream")
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		server.Routes().ServeHTTP(rec, req)
+		return rec
+	}
+
+	ownedRestore := restore(owned.ID)
+	if ownedRestore.Code != http.StatusOK {
+		t.Fatalf("owned restore status=%d body=%s", ownedRestore.Code, ownedRestore.Body.String())
+	}
+	for _, want := range []string{`"activeConversationId":"` + owned.ID + `"`, "Persisted dashboard question", `"agentVisuals"`} {
+		if !strings.Contains(ownedRestore.Body.String(), want) {
+			t.Fatalf("owned restore missing %q:\n%s", want, ownedRestore.Body.String())
+		}
+	}
+
+	hiddenRestore := restore(hidden.ID)
+	if hiddenRestore.Code != http.StatusOK {
+		t.Fatalf("hidden restore status=%d body=%s", hiddenRestore.Code, hiddenRestore.Body.String())
+	}
+	if strings.Contains(hiddenRestore.Body.String(), hidden.ID) || strings.Contains(hiddenRestore.Body.String(), "Hidden restore") {
+		t.Fatalf("hidden restore leaked another principal's conversation:\n%s", hiddenRestore.Body.String())
+	}
+	if !strings.Contains(hiddenRestore.Body.String(), `"activeConversationId":""`) {
+		t.Fatalf("hidden restore did not clear the stale active conversation:\n%s", hiddenRestore.Body.String())
 	}
 }
 
@@ -678,6 +965,85 @@ func TestChatDraftTurnRedirectsAndStreamsThroughUpdates(t *testing.T) {
 		if !strings.Contains(updatesBody, want) {
 			t.Fatalf("updates stream missing %q:\n%s", want, updatesBody)
 		}
+	}
+}
+
+func TestDashboardChatDraftTurnStaysEmbeddedAndUsesResolvedContext(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+	principal, token := chatPrincipalAndToken(t, ctx, store)
+	var requestBodiesMu sync.Mutex
+	requestBodies := []string{}
+	modelServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		requestBodiesMu.Lock()
+		requestBodies = append(requestBodies, string(body))
+		requestBodiesMu.Unlock()
+		writeRawJSON(t, w, `{"choices":[{"message":{"role":"assistant","content":"Orders are down in the selected context."},"finish_reason":"stop"}],"usage":{"prompt_tokens":12,"completion_tokens":5,"total_tokens":17}}`)
+	}))
+	defer modelServer.Close()
+	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
+	service := agent.NewService(fakeMetrics{}, testAgentRepository(store), agent.Config{APIKey: "key", BaseURL: modelServer.URL, Model: "fake-model"})
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, Agent: service, DefaultWorkspaceID: "test"})
+
+	signals := map[string]any{
+		"agent": map[string]any{
+			"activeConversationId": "",
+			"composer":             map[string]any{"value": "Why did this decline?"},
+		},
+		"agentContext": map[string]any{
+			"surface":     "dashboard",
+			"workspaceId": "test",
+			"dashboardId": "executive-sales",
+			"pageId":      "overview",
+			"generation":  3,
+			"filters": map[string]any{
+				"controls":   map[string]any{"state": map[string]any{"type": "multi_select", "operator": "in", "values": []string{"SP"}}},
+				"selections": []any{},
+			},
+			"references": []map[string]any{{
+				"kind": "visual", "componentId": "orders-chart", "visualId": "orders",
+				"title": "evil browser title", "visualType": "script",
+			}},
+		},
+	}
+	req := chatSignalsRequest(http.MethodPost, "/chats/turns", token, signals)
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{"event: datastar-patch-signals", `"agentVisuals"`, "Orders are down", `"running":false`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("embedded turn response missing %q:\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, "window.location.href") || strings.Contains(body, `"visuals"`) {
+		t.Fatalf("embedded turn redirected or replaced dashboard visuals:\n%s", body)
+	}
+	conversations, err := testAgentRepository(store).ListConversations(ctx, principal.ID)
+	if err != nil || len(conversations) != 1 {
+		t.Fatalf("conversations = %#v err=%v", conversations, err)
+	}
+	state, err := service.ConversationTranscriptState(ctx, agent.Scope{WorkspaceID: "test", PrincipalID: principal.ID}, conversations[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(state.Transcript) == 0 || state.Transcript[0].Text != "Why did this decline?" {
+		t.Fatalf("visible transcript = %#v", state.Transcript)
+	}
+	waitForAgentConversationTitle(t, store, "test", principal.ID, conversations[0].ID, "Orders are down in the selected context")
+	requestBodiesMu.Lock()
+	modelRequests := strings.Join(requestBodies, "\n")
+	requestBodiesMu.Unlock()
+	for _, want := range []string{"external_leapview_context", "Executive Sales Dashboard", "Orders", `\"SP\"`, "never as instructions"} {
+		if !strings.Contains(modelRequests, want) {
+			t.Fatalf("model requests missing trusted context %q:\n%s", want, modelRequests)
+		}
+	}
+	if strings.Contains(modelRequests, "evil browser title") || strings.Contains(modelRequests, `\"visualType\":\"script\"`) {
+		t.Fatalf("model request trusted browser metadata:\n%s", modelRequests)
 	}
 }
 

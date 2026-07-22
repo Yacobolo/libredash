@@ -118,8 +118,18 @@ func TestGenerateGroupsSubcommandsOnTopLevelCommandPage(t *testing.T) {
 	if got, want := len(generatedCatalog.Documents), 1; got != want {
 		t.Fatalf("human documents = %d, want %d", got, want)
 	}
+	if got, want := generatedCatalog.Title, "CLI command reference"; got != want {
+		t.Fatalf("catalog title = %q, want %q", got, want)
+	}
 	if got, want := generatedCatalog.Documents[0].Slug, "semantic-models"; got != want {
 		t.Fatalf("human document slug = %q, want %q", got, want)
+	}
+	index, err := os.ReadFile(filepath.Join(out, "index.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(index), "\n# CLI command reference\n") {
+		t.Fatalf("index heading does not match its catalog title:\n%s", index)
 	}
 
 	article, err := os.ReadFile(filepath.Join(out, "semantic-models.md"))
@@ -131,14 +141,22 @@ func TestGenerateGroupsSubcommandsOnTopLevelCommandPage(t *testing.T) {
 		"## Subcommands",
 		"[`list`](#list)",
 		"[`query`](#query)",
-		"## list",
-		"## query",
+		"### list {#list}",
+		"### query {#query}",
+		"#### Usage",
+		"#### Behavior",
+		"#### Options",
 		"leapview semantic-models query <model> <dataset>",
 		"/docs/cli/commands/semantic-models-query.json",
 		"| `--limit` | int | `100` | maximum rows |",
 	} {
 		if !strings.Contains(string(article), want) {
 			t.Errorf("grouped article missing %q:\n%s", want, article)
+		}
+	}
+	for _, unwanted := range []string{"\n## list {#list}", "\n## query {#query}", "\n### Behavior"} {
+		if strings.Contains(string(article), unwanted) {
+			t.Errorf("grouped article unexpectedly contains %q:\n%s", unwanted, article)
 		}
 	}
 	if _, err := os.Stat(filepath.Join(out, "semantic-models-query.md")); !os.IsNotExist(err) {
