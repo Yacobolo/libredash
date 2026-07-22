@@ -32,6 +32,22 @@ func TestWithResultBudgetReusesLogicalBudget(t *testing.T) {
 	}
 }
 
+func TestWithIndependentResultBudgetStartsNewAccountingScope(t *testing.T) {
+	ctx := WithResultBudget(context.Background(), ResultLimits{MaxRows: 1, MaxBytes: 1024})
+	parent, _ := ResultBudgetFromContext(ctx)
+	childCtx := WithIndependentResultBudget(ctx, ResultLimits{MaxRows: 2, MaxBytes: 2048})
+	child, _ := ResultBudgetFromContext(childCtx)
+	if child == parent {
+		t.Fatal("independent result budget reused parent accounting scope")
+	}
+	if err := child.ConsumeRows([]Row{{"v": 1}, {"v": 2}}); err != nil {
+		t.Fatal(err)
+	}
+	if rows, _ := parent.Usage(); rows != 0 {
+		t.Fatalf("parent usage = %d, want 0", rows)
+	}
+}
+
 func TestResultBudgetConsumesBatchSize(t *testing.T) {
 	budget := &ResultBudget{limits: ResultLimits{MaxRows: 2, MaxBytes: 1 << 20}}
 	if err := budget.ConsumeSize(2, 128); err != nil {

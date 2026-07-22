@@ -403,6 +403,37 @@ func TestRuntimeBundleCacheAllHitExecutesZeroAdditionalSQL(t *testing.T) {
 	}
 }
 
+func TestRuntimeBundleChargesLogicalRowsOnceOnCacheMiss(t *testing.T) {
+	database := &budgetConsumingBundleDatabase{}
+	runtime := bundleCacheRuntime(database)
+	runtime.resultLimits = dataquery.ResultLimits{MaxRows: 2, MaxBytes: 1 << 20}
+
+	result, err := runtime.ExecuteDataQueryBundle(context.Background(), bundleCacheRequests())
+	if err != nil {
+		t.Fatalf("bundle within logical row limit: %v", err)
+	}
+	if got := result.Results["orders"].RowsReturned + result.Results["events"].RowsReturned; got != 2 {
+		t.Fatalf("logical rows = %d, want 2", got)
+	}
+}
+
+type budgetConsumingBundleDatabase struct{ bundleCountingDatabase }
+
+func (d *budgetConsumingBundleDatabase) Query(ctx context.Context, plan semanticquery.Plan) (semanticquery.Rows, error) {
+	rows, err := d.bundleCountingDatabase.Query(ctx, plan)
+	if err != nil {
+		return nil, err
+	}
+	if budget, ok := dataquery.ResultBudgetFromContext(ctx); ok {
+		for _, row := range rows {
+			if err := budget.ConsumeRow(row); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return rows, nil
+}
+
 func TestRuntimeBundleRejectsNonDashboardBranchesBeforeFlightCoalescing(t *testing.T) {
 	database := &bundleCountingDatabase{}
 	runtime := bundleCacheRuntime(database)

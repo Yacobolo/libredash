@@ -131,10 +131,24 @@ func (m Metrics) ExecuteDataQueryArrow(ctx context.Context, request dataquery.Qu
 	if err != nil {
 		return rejectedDataQueryResult(err)
 	}
+	_, publicationQuery := dashboardPublicationCapabilityFromContext(ctx)
+	if publicationQuery {
+		// Arrow transports release records as the executor runs, so persist a
+		// durable access identity before the sink can write its schema. The
+		// completion event below enriches the audit trail with the final outcome; a
+		// sustained completion-write failure is logged by PersistAuditEvent, but
+		// cannot retroactively turn an already delivered stream into a rejection.
+		if err := m.recordDataAccessAudit(ctx, governed, access.PrivilegeQueryData, dataQueryObjects(governed), "started", nil); err != nil {
+			return rejectedDataQueryResult(err)
+		}
+	}
 	ctx = dataquery.WithGovernanceApplied(ctx)
 	result, err := executor.ExecuteDataQueryArrow(ctx, governed, sink)
 	if transform != nil {
 		if transformErr := transform(&result, err); transformErr != nil {
+			if publicationQuery {
+				return result, err
+			}
 			return rejectedDataQueryResult(transformErr)
 		}
 	}

@@ -25767,6 +25767,8 @@ paths:
         mode: privilege
         privilege: QUERY_DATA
       x-leapview-object-scope: dashboard
+      x-leapview-response-trailers:
+        - X-Next-Cursor
   /api/v1/workspaces/{workspace}/data-policies:
     get:
       operationId: listDataPolicies
@@ -36927,6 +36929,8 @@ paths:
         mode: privilege
         privilege: PREVIEW_DATA
       x-leapview-object-scope: semantic-model
+      x-leapview-response-trailers:
+        - X-Next-Cursor
   /api/v1/workspaces/{workspace}/semantic-models/{model}/datasets/{dataset}/preview/explain:
     post:
       operationId: explainSemanticPreview
@@ -37930,6 +37934,8 @@ paths:
         mode: privilege
         privilege: QUERY_DATA
       x-leapview-object-scope: semantic-model
+      x-leapview-response-trailers:
+        - X-Next-Cursor
   /api/v1/workspaces/{workspace}/semantic-models/{model}/query/explain:
     post:
       operationId: explainSemanticModelQuery

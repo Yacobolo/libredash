@@ -41,6 +41,12 @@ For another topology, preserve the same invariants: one controlled writer for pe
 
 Do not run two application versions against shared writable state unless the release explicitly declares mixed-version compatibility.
 
+### SQLite-backed DuckLake catalogs
+
+The first release using the process-owned DuckDB runtime automatically migrates the former SQLite-backed DuckLake metadata catalog before opening analytical storage. With the default layout, `ducklake/catalog.sqlite` is copied atomically to `ducklake/catalog.duckdb` and the SQLite source remains in place as a rollback backup. If `LEAPVIEW_DUCKLAKE_CATALOG_PATH` still names a SQLite file, LeapView converts that path in place and preserves the source beside it with the suffix `.legacy.sqlite`.
+
+Budget disk space for both catalog files during the upgrade. Keep the legacy file until snapshot validation, representative queries, refresh, backup, and restore have all passed. The migration never replaces an existing DuckDB target; if an earlier failed start already created `catalog.duckdb`, preserve both files and resolve that partial upgrade before retrying.
+
 ## Verify after startup
 
 Check more than readiness:

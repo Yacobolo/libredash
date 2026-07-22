@@ -54,6 +54,14 @@ func WithResultBudget(ctx context.Context, limits ResultLimits) context.Context 
 	if _, ok := ResultBudgetFromContext(ctx); ok {
 		return ctx
 	}
+	return WithIndependentResultBudget(ctx, limits)
+}
+
+// WithIndependentResultBudget starts a distinct accounting scope even when the
+// parent operation already owns a logical result budget. Physical coalesced
+// work uses this to bound its retained rows without charging one caller's
+// logical result before the shared result is distributed.
+func WithIndependentResultBudget(ctx context.Context, limits ResultLimits) context.Context {
 	return context.WithValue(ctx, resultBudgetKey{}, &ResultBudget{limits: limits})
 }
 func ResultBudgetFromContext(ctx context.Context) (*ResultBudget, bool) {

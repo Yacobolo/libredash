@@ -943,6 +943,40 @@ func TestDerivedArtifactsAreGeneratedBuildInputs(t *testing.T) {
 	}
 }
 
+func TestArrowResponseContractDeclaresCursorTrailer(t *testing.T) {
+	root := repoRoot(t)
+	body, err := os.ReadFile(filepath.Join(root, "api", "typespec", "common.tsp"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	contract := string(body)
+	for _, fragment := range []string{
+		`@extension("x-leapview-response-trailers", #["X-Next-Cursor"])`,
+		`@header("Trailer") trailers: "X-Next-Cursor";`,
+	} {
+		if !strings.Contains(contract, fragment) {
+			t.Errorf("Arrow response contract missing trailer declaration %q", fragment)
+		}
+	}
+	if strings.Contains(contract, `@header("X-Next-Cursor")`) {
+		t.Error("Arrow response contract still advertises X-Next-Cursor as an initial header")
+	}
+	operations, err := os.ReadFile(filepath.Join(root, "api", "typespec", "bi.tsp"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Count(string(operations), `@extension("x-leapview-response-trailers", #["X-Next-Cursor"])`); got != 3 {
+		t.Errorf("Arrow operation trailer declarations = %d, want 3", got)
+	}
+	openAPI, err := os.ReadFile(filepath.Join(root, "docs", "api", "openapi.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Count(string(openAPI), "x-leapview-response-trailers:"); got != 3 {
+		t.Errorf("generated OpenAPI trailer declarations = %d, want 3", got)
+	}
+}
+
 func workflowStep(workflow, startMarker, endMarker string) string {
 	start := strings.Index(workflow, startMarker)
 	if start < 0 {

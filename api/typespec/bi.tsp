@@ -697,6 +697,7 @@ op listSemanticModelFields(@path workspace: string, @path("model") modelName: st
 @post
 @apigen.authz(#{ mode: "privilege", privilege: "QUERY_DATA" })
 @extension("x-leapview-object-scope", "semantic-model")
+@extension("x-leapview-response-trailers", #["X-Next-Cursor"])
 @apigen.cli(#{ command: #["semantic-models", "model-query"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "model", displayName: "model" }], output: #{ mode: "raw" } })
 @apigen.tool(#{
   name: "query_semantic_model", effect: "read", tags: #["semantic-model", "query"],
@@ -767,6 +768,7 @@ op listSemanticFields(@path workspace: string, @path("model") modelName: string,
 @post
 @apigen.authz(#{ mode: "privilege", privilege: "PREVIEW_DATA" })
 @extension("x-leapview-object-scope", "semantic-model")
+@extension("x-leapview-response-trailers", #["X-Next-Cursor"])
 @apigen.cli(#{ command: #["semantic-models", "preview"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "model", displayName: "model" }, #{ source: "path", name: "dataset", displayName: "dataset" }], output: #{ mode: "raw" } })
 @apigen.tool(#{
   name: "preview_semantic_dataset", effect: "read", tags: #["semantic-model", "dataset", "query"],
@@ -809,6 +811,7 @@ op queryDashboardPage(@path workspace: string, @path dashboard: string, @path pa
 @post
 @apigen.authz(#{ mode: "privilege", privilege: "QUERY_DATA" })
 @extension("x-leapview-object-scope", "dashboard")
+@extension("x-leapview-response-trailers", #["X-Next-Cursor"])
 @apigen.cli(#{ command: #["dashboards", "visual-data"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "dashboard", displayName: "dashboard" }, #{ source: "path", name: "page", displayName: "page" }, #{ source: "path", name: "visual", displayName: "visual" }], output: #{ mode: "raw" } })
 @apigen.tool(#{
   name: "query_dashboard_visual", effect: "read", tags: #["dashboard", "visual", "query"],

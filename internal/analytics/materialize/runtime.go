@@ -607,7 +607,7 @@ func (r *Runtime) ExecuteDataQueryBundle(ctx context.Context, requests []dataque
 		return dataquery.BundleResult{}, fmt.Errorf("encode aggregate bundle flight identity: %w", err)
 	}
 	flight, shared, err := r.queryCache.coalesce(ctx, string(flightKey), func() (any, error) {
-		execCtx, statements := withPhysicalStatementCounter(dataquery.WithResultBudget(ctx, r.queryResultLimits()))
+		execCtx, statements := withPhysicalStatementCounter(dataquery.WithIndependentResultBudget(ctx, r.queryResultLimits()))
 		var decoded map[string]semanticquery.Rows
 		summary, executeErr := admitPhysicalQuery(execCtx, representative, func(queryCtx context.Context) (dataquery.Result, error) {
 			queryResult, rows, queryErr := execute(queryCtx)

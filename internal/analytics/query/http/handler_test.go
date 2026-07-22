@@ -203,6 +203,9 @@ func TestWriteSemanticArrowResponseUsesNativeExecutorAndStreamsPaginationProbe(t
 	if response.Header.Get("X-LeapView-Arrow-Contract") != "native-v1" {
 		t.Fatalf("contract header = %q", response.Header.Get("X-LeapView-Arrow-Contract"))
 	}
+	if response.Header.Get("Trailer") != "X-Next-Cursor" {
+		t.Fatalf("declared response trailers = %q", response.Header.Get("Trailer"))
+	}
 	reader, err := ipc.NewReader(response.Body)
 	if err != nil {
 		t.Fatalf("open streamed Arrow: %v", err)

@@ -12,6 +12,7 @@ Runtime generations do not own DuckDB engines or catalog attachments. They own i
 .leapview/
   leapview.db               # node-local control-plane state
   ducklake/catalog.duckdb   # DuckDB-backed DuckLake metadata catalog
+  ducklake/catalog.sqlite   # retained legacy migration backup, when present
   data/                     # DuckLake-managed Parquet files
   artifacts/                # immutable workspace bundles
   runtime/                  # ephemeral extracted artifacts

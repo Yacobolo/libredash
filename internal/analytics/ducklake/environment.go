@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -208,6 +209,13 @@ func Open(ctx context.Context, config Config) (*Environment, error) {
 	}
 	if err := prepareLayout(layout); err != nil {
 		return nil, err
+	}
+	migrated, err := migrateLegacySQLiteCatalog(ctx, layout.CatalogPath)
+	if err != nil {
+		return nil, err
+	}
+	if migrated {
+		slog.InfoContext(ctx, "migrated legacy SQLite-backed DuckLake catalog", "catalog_path", layout.CatalogPath)
 	}
 	if strings.TrimSpace(config.TempDir) != "" {
 		if err := securefs.EnsurePrivateDir(config.TempDir); err != nil {
