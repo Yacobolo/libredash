@@ -22,19 +22,26 @@ var (
 )
 
 var globalStats struct {
-	results atomic.Int64
-	leases  atomic.Int64
-	bytes   atomic.Int64
+	results        atomic.Int64
+	leases         atomic.Int64
+	bytes          atomic.Int64
+	transientBytes atomic.Int64
 }
 
 type StatsSnapshot struct {
-	Results int64
-	Leases  int64
-	Bytes   int64
+	Results        int64
+	Leases         int64
+	Bytes          int64
+	TransientBytes int64
 }
 
 func Stats() StatsSnapshot {
-	return StatsSnapshot{Results: globalStats.results.Load(), Leases: globalStats.leases.Load(), Bytes: globalStats.bytes.Load()}
+	return StatsSnapshot{
+		Results:        globalStats.results.Load(),
+		Leases:         globalStats.leases.Load(),
+		Bytes:          globalStats.bytes.Load(),
+		TransientBytes: globalStats.transientBytes.Load(),
+	}
 }
 
 type Builder struct {
@@ -44,6 +51,8 @@ type Builder struct {
 	writer    *ipc.Writer
 	allocator memory.Allocator
 	rows      int64
+	transient int64
+	decoded   int64
 	finished  bool
 }
 
@@ -74,6 +83,7 @@ func (b *Builder) WriteSchema(schema *arrow.Schema) error {
 	metadata := schema.Metadata()
 	b.schema = arrow.NewSchema(append([]arrow.Field{}, schema.Fields()...), &metadata)
 	b.writer = ipc.NewWriter(&b.buffer, ipc.WithSchema(b.schema), ipc.WithAllocator(b.allocator))
+	b.updateTransientLocked()
 	return nil
 }
 
@@ -100,8 +110,10 @@ func (b *Builder) WriteRecord(record arrow.RecordBatch) error {
 	// reader advances. IPC materialization is the type-complete deep-copy
 	// boundary into Go-owned Arrow buffers.
 	if err := b.writer.Write(record); err != nil {
+		b.updateTransientLocked()
 		return fmt.Errorf("copy Arrow record: %w", err)
 	}
+	b.updateTransientLocked()
 	b.rows += record.NumRows()
 	return nil
 }
@@ -120,20 +132,26 @@ func (b *Builder) Finish() (*Result, error) {
 	}
 	if err := b.writer.Close(); err != nil {
 		b.finished = true
+		b.releaseTransientLocked()
 		return nil, fmt.Errorf("finish Arrow result stream: %w", err)
 	}
+	b.updateTransientLocked()
 	b.finished = true
+	defer b.releaseTransientLocked()
 	reader, err := ipc.NewReader(bytes.NewReader(b.buffer.Bytes()), ipc.WithAllocator(b.allocator))
 	if err != nil {
 		return nil, fmt.Errorf("open copied Arrow result: %w", err)
 	}
 	records := make([]arrow.RecordBatch, 0)
-	retainedBytes := retainedSchemaSize(reader.Schema())
+	retainedBytes := SchemaBytes(reader.Schema())
 	for reader.Next() {
 		record := reader.RecordBatch()
 		record.Retain()
 		records = append(records, record)
-		retainedBytes += arrowutil.TotalRecordSize(record)
+		recordBytes := arrowutil.TotalRecordSize(record)
+		retainedBytes += recordBytes
+		b.decoded += recordBytes
+		globalStats.transientBytes.Add(recordBytes)
 	}
 	if err := reader.Err(); err != nil {
 		for _, record := range records {
@@ -148,12 +166,33 @@ func (b *Builder) Finish() (*Result, error) {
 	result.refs.Store(1)
 	globalStats.results.Add(1)
 	globalStats.bytes.Add(retainedBytes)
-	b.schema, b.writer = nil, nil
-	b.buffer.Reset()
+	globalStats.transientBytes.Add(-b.decoded)
+	b.decoded = 0
 	return result, nil
 }
 
-func retainedSchemaSize(schema *arrow.Schema) int64 {
+func (b *Builder) updateTransientLocked() {
+	// Capacity is the memory retained by bytes.Buffer; Len would under-report
+	// allocation after geometric growth.
+	current := int64(b.buffer.Cap())
+	globalStats.transientBytes.Add(current - b.transient)
+	b.transient = current
+}
+
+func (b *Builder) releaseTransientLocked() {
+	globalStats.transientBytes.Add(-b.transient - b.decoded)
+	b.transient = 0
+	b.decoded = 0
+	b.schema, b.writer = nil, nil
+	// Reset keeps the backing allocation. Replace the buffer so a completed or
+	// aborted builder cannot retain the complete IPC copy until garbage collection.
+	b.buffer = bytes.Buffer{}
+}
+
+// SchemaBytes conservatively accounts the stable Arrow schema retained with a
+// result. Query limits use the same function before publishing the schema so a
+// cache miss and hit charge identical logical bytes.
+func SchemaBytes(schema *arrow.Schema) int64 {
 	if schema == nil {
 		return 0
 	}
@@ -186,8 +225,7 @@ func (b *Builder) Abort() {
 	if b.writer != nil {
 		_ = b.writer.Close()
 	}
-	b.schema, b.writer = nil, nil
-	b.buffer.Reset()
+	b.releaseTransientLocked()
 }
 
 type Result struct {
@@ -254,6 +292,15 @@ func (r *Result) releaseRef() {
 type Lease struct {
 	once   sync.Once
 	result *Result
+}
+
+// Acquire creates an independent sibling lease while this lease pins the
+// result. It is used when one coalesced execution fans out to multiple callers.
+func (l *Lease) Acquire() (*Lease, error) {
+	if l == nil || l.result == nil {
+		return nil, ErrResultReleased
+	}
+	return l.result.Acquire()
 }
 
 func (l *Lease) Schema() *arrow.Schema {

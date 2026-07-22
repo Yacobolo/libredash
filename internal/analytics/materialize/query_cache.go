@@ -43,41 +43,63 @@ func (c *queryResultCache) executeArrow(ctx context.Context, request dataquery.Q
 	if cached, ok, err := c.getArrow(ctx, request, key); err != nil || ok {
 		return cached, err
 	}
-	value, shared, err := c.scope.Coalesce(ctx, fmt.Sprintf("arrow-query:%d:%s", generation, key), func() (any, error) {
-		if cached, ok, lookupErr := c.getArrow(ctx, request, key); lookupErr != nil || ok {
-			return cached, lookupErr
+	var ownerSummary dataquery.Result
+	flight, status, err := c.scope.CoalesceArrow(ctx, fmt.Sprintf("arrow-query:%d:%s", generation, key), func() (resultcache.ArrowFlightValue, error) {
+		if entry, _, ok, lookupErr := c.scope.LookupArrow(key); lookupErr != nil {
+			return resultcache.ArrowFlightValue{}, lookupErr
+		} else if ok {
+			base, acquireErr := entry.Data().Acquire()
+			metadata := entry.Metadata()
+			entry.Release()
+			if acquireErr != nil {
+				return resultcache.ArrowFlightValue{}, acquireErr
+			}
+			return resultcache.ArrowFlightValue{Data: base, Metadata: metadata, Cached: true}, nil
 		}
 		execution, executeErr := execute()
+		ownerSummary = execution.summary
 		if execution.data != nil {
 			defer execution.data.Release()
 		}
 		if ownerErr := ctx.Err(); ownerErr != nil {
-			return dataquery.Result{}, canceledQueryCacheFlightError{err: ownerErr}
+			return resultcache.ArrowFlightValue{}, canceledQueryCacheFlightError{err: ownerErr}
 		}
 		if executeErr != nil {
-			return execution.summary, executeErr
+			return resultcache.ArrowFlightValue{}, executeErr
 		}
-		lease, acquireErr := execution.data.Acquire()
+		if execution.data == nil {
+			return resultcache.ArrowFlightValue{}, fmt.Errorf("Arrow query execution returned no data")
+		}
+		base, acquireErr := execution.data.Acquire()
 		if acquireErr != nil {
-			return dataquery.Result{}, acquireErr
+			return resultcache.ArrowFlightValue{}, acquireErr
 		}
-		result, decodeErr := decodeArrowQueryResult(request, lease, execution.metadata, execution.summary)
-		lease.Release()
-		if decodeErr != nil {
-			return dataquery.Result{}, decodeErr
-		}
-		result.CacheOutcome = dataquery.CacheMiss
 		c.scope.StoreArrow(key, resultcache.Token(generation), execution.data, execution.metadata)
 		c.syncStats()
-		return result, nil
+		return resultcache.ArrowFlightValue{Data: base, Metadata: execution.metadata}, nil
 	})
 	if err != nil {
 		return dataquery.Result{}, err
 	}
-	result := cloneDataQueryResult(value.(dataquery.Result))
-	if shared && result.CacheOutcome == dataquery.CacheMiss {
-		result.CacheOutcome = dataquery.CacheCoalesced
+	defer flight.Release()
+	outcome := dataquery.CacheMiss
+	if flight.Cached() {
+		outcome = dataquery.CacheHit
+	} else if !status.Owner {
+		outcome = dataquery.CacheCoalesced
 	}
+	if flight.Cached() || !status.Owner {
+		if budget, found := dataquery.ResultBudgetFromContext(ctx); found {
+			if err := budget.ConsumeSize(int(flight.Data().Rows()), flight.Data().Bytes()); err != nil {
+				return dataquery.Result{}, err
+			}
+		}
+	}
+	result, err := decodeArrowQueryResult(request, flight.Data(), flight.Metadata(), ownerSummary)
+	if err != nil {
+		return dataquery.Result{}, err
+	}
+	result.CacheOutcome = outcome
 	return result, nil
 }
 

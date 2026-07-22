@@ -58,6 +58,10 @@ func TestBuilderRetainsBorrowedRecordsUntilFinalLeaseRelease(t *testing.T) {
 	if first.Bytes() <= 0 {
 		t.Fatalf("bytes = %d, want positive", first.Bytes())
 	}
+	sibling, err := first.Acquire()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	result.Release()
 	first.Release()
@@ -66,6 +70,10 @@ func TestBuilderRetainsBorrowedRecordsUntilFinalLeaseRelease(t *testing.T) {
 		t.Fatal("second lease did not pin Arrow buffers")
 	}
 	second.Release()
+	if allocator.CurrentAlloc() == 0 {
+		t.Fatal("sibling lease did not independently pin Arrow buffers")
+	}
+	sibling.Release()
 }
 
 func TestBuilderRejectsInvalidLifecycle(t *testing.T) {
@@ -93,6 +101,56 @@ func TestBuilderRejectsInvalidLifecycle(t *testing.T) {
 	}
 }
 
+func TestBuilderOwnsSlicedDictionaryBuffers(t *testing.T) {
+	allocator := memory.NewCheckedAllocator(memory.DefaultAllocator)
+	defer allocator.AssertSize(t, 0)
+	dictionaryType := &arrow.DictionaryType{IndexType: arrow.PrimitiveTypes.Int8, ValueType: arrow.BinaryTypes.String}
+	dictionaryBuilder := array.NewDictionaryBuilder(allocator, dictionaryType)
+	values := dictionaryBuilder.(*array.BinaryDictionaryBuilder)
+	for _, value := range []string{"alpha", "beta", "alpha"} {
+		if err := values.AppendString(value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	dictionary := dictionaryBuilder.NewDictionaryArray()
+	dictionaryBuilder.Release()
+	sliced := array.NewSlice(dictionary, 1, 3)
+	dictionary.Release()
+	schema := arrow.NewSchema([]arrow.Field{{Name: "label", Type: dictionaryType}}, nil)
+	record := array.NewRecordBatch(schema, []arrow.Array{sliced}, 2)
+	sliced.Release()
+
+	before := Stats()
+	collector := NewBuilderWithAllocator(allocator)
+	if err := collector.WriteSchema(schema); err != nil {
+		t.Fatal(err)
+	}
+	if err := collector.WriteRecord(record); err != nil {
+		t.Fatal(err)
+	}
+	record.Release()
+	result, err := collector.Finish()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := Stats().TransientBytes; got != before.TransientBytes {
+		t.Fatalf("transient bytes after finish = %d, want %d", got, before.TransientBytes)
+	}
+	lease, err := result.Acquire()
+	result.Release()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := DecodeRows(lease)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rows[0]["label"] != "beta" || rows[1]["label"] != "alpha" {
+		t.Fatalf("decoded sliced dictionary = %#v", rows)
+	}
+	lease.Release()
+}
+
 func TestAbortReleasesRetainedRecords(t *testing.T) {
 	allocator := memory.NewCheckedAllocator(memory.DefaultAllocator)
 	defer allocator.AssertSize(t, 0)
@@ -104,13 +162,20 @@ func TestAbortReleasesRetainedRecords(t *testing.T) {
 	values.Release()
 
 	collector := NewBuilderWithAllocator(allocator)
+	before := Stats()
 	if err := collector.WriteSchema(record.Schema()); err != nil {
 		t.Fatal(err)
 	}
 	if err := collector.WriteRecord(record); err != nil {
 		t.Fatal(err)
 	}
+	if got := Stats().TransientBytes; got <= before.TransientBytes {
+		t.Fatalf("transient bytes = %d, want more than %d", got, before.TransientBytes)
+	}
 	record.Release()
 	collector.Abort()
 	collector.Abort()
+	if got := Stats().TransientBytes; got != before.TransientBytes {
+		t.Fatalf("transient bytes after abort = %d, want %d", got, before.TransientBytes)
+	}
 }

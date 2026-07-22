@@ -3,10 +3,18 @@ package arrowquery
 import (
 	"context"
 
+	"github.com/Yacobolo/leapview/internal/analytics/arrowresult"
 	"github.com/Yacobolo/leapview/internal/dataquery"
 	"github.com/apache/arrow-go/v18/arrow"
 	arrowutil "github.com/apache/arrow-go/v18/arrow/util"
 )
+
+func ConsumeSchemaBudget(ctx context.Context, schema *arrow.Schema) error {
+	if budget, ok := dataquery.ResultBudgetFromContext(ctx); ok {
+		return budget.ConsumeSize(0, arrowresult.SchemaBytes(schema))
+	}
+	return nil
+}
 
 // Sink consumes DuckDB-owned record batches. Schema and record arguments are
 // borrowed for the duration of each callback. A synchronous sink must not keep
