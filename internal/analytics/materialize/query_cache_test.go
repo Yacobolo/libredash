@@ -13,8 +13,9 @@ import (
 
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	semanticquery "github.com/Yacobolo/leapview/internal/analytics/query"
+	"github.com/Yacobolo/leapview/internal/analytics/resultcache"
 	"github.com/Yacobolo/leapview/internal/dataquery"
-	"github.com/Yacobolo/leapview/internal/execution"
+	"github.com/Yacobolo/leapview/internal/workload"
 )
 
 func TestQueryResultCacheUsesGovernedRequestAndReturnsDeepCopies(t *testing.T) {
@@ -85,8 +86,8 @@ func TestQueryResultCacheEnforcesByteBudgetAndRejectsOversizedEntries(t *testing
 	if cache.currentBytes > cache.maxBytes {
 		t.Fatalf("cache bytes = %d, budget = %d", cache.currentBytes, cache.maxBytes)
 	}
-	if cache.lru.Len() != 1 {
-		t.Fatalf("entries = %d, want byte-budget eviction", cache.lru.Len())
+	if entries := cache.scope.Stats().Entries; entries != 1 {
+		t.Fatalf("entries = %d, want byte-budget eviction", entries)
 	}
 
 	_, largeKey, generation, _, err := cache.lookup(large)
@@ -223,12 +224,16 @@ func TestQueryResultCacheLiveWaiterRetriesCanceledFlightAndCachesResult(t *testi
 		}
 		flightStarted := make(chan struct{})
 		releaseCanceledFlight := make(chan struct{})
-		cache.group.DoChan(fmt.Sprintf("%d:%s", generation, key), func() (any, error) {
-			close(flightStarted)
-			<-releaseCanceledFlight
-			return dataquery.Result{}, canceledQueryCacheFlightError{err: context.Canceled}
-		})
+		ownerContext, cancelOwner := context.WithCancel(context.Background())
+		go func() {
+			_, _, _ = cache.scope.Coalesce(ownerContext, fmt.Sprintf("query:%d:%s", generation, key), func() (any, error) {
+				close(flightStarted)
+				<-releaseCanceledFlight
+				return dataquery.Result{}, resultcache.OwnerCanceled(ownerContext.Err())
+			})
+		}()
 		<-flightStarted
+		cancelOwner()
 
 		var physicalExecutions atomic.Int32
 		secondResult := make(chan dataquery.Result, 1)
@@ -674,21 +679,26 @@ func TestRuntimeDashboardCacheHitDoesNotConsumeReadPermit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	admission := execution.New(execution.Config{MaxRunningReads: 1, MaxQueuedReads: -1})
+	admission, err := workload.New(workload.Config{MaxRunning: 1, Classes: map[workload.Class]workload.Policy{workload.Interactive: {MaximumRunning: 1}}})
+	if err != nil {
+		t.Fatal(err)
+	}
 	occupied := make(chan struct{})
 	release := make(chan struct{})
 	var occupying sync.WaitGroup
 	occupying.Add(1)
 	go func() {
 		defer occupying.Done()
-		_, _ = admission.SubmitRead(context.Background(), dataquery.Query{}, func(context.Context) (dataquery.Result, error) {
-			close(occupied)
-			<-release
-			return dataquery.Result{}, nil
-		})
+		lease, acquireErr := admission.Acquire(context.Background(), workload.Request{Class: workload.Interactive, WorkspaceID: "sales", Operation: "occupy"})
+		if acquireErr != nil {
+			return
+		}
+		close(occupied)
+		<-release
+		lease.Release()
 	}()
 	<-occupied
-	ctx := execution.WithReadAdmission(context.Background(), admission)
+	ctx := workload.WithAdmitter(context.Background(), admission)
 	result, err := runtime.ExecuteDataQuery(ctx, request)
 	close(release)
 	occupying.Wait()
@@ -746,13 +756,17 @@ func (failingDiscoveryRuntimeDatabase) DiscoverSchemas(context.Context, *semanti
 
 type cacheSourceRegistrar struct{}
 
-func (cacheSourceRegistrar) PrepareSourceRuntime(context.Context, *semanticmodel.Model) error {
-	return nil
+func (registrar cacheSourceRegistrar) Prepare(context.Context, *semanticmodel.Model) (PreparedSources, error) {
+	return cachePreparedSources{cacheSourceRegistrar: registrar}, nil
 }
 
 func (cacheSourceRegistrar) PlanModelTable(context.Context, *semanticmodel.Model, string, semanticmodel.Table) (ModelTablePlan, error) {
 	return ModelTablePlan{}, errors.New("unexpected model table")
 }
+
+type cachePreparedSources struct{ cacheSourceRegistrar }
+
+func (cachePreparedSources) Close() error { return nil }
 
 func (d *countingCacheRuntimeDatabase) Query(ctx context.Context, plan semanticquery.Plan) (semanticquery.Rows, error) {
 	d.queries.Add(1)
@@ -776,18 +790,20 @@ func TestRuntimeSeparatesConnectionWaitFromDatabaseExecution(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.ConnectionWaitMS != 20 {
-		t.Fatalf("connection wait = %dms, want 20ms", result.ConnectionWaitMS)
+	if result.ConnectionWaitMS != 10_000 {
+		t.Fatalf("connection wait = %dms, want 10000ms", result.ConnectionWaitMS)
 	}
-	if result.DatabaseMS < 5 || result.DatabaseMS > 20 {
-		t.Fatalf("database execution = %dms, want connection wait excluded", result.DatabaseMS)
+	if result.DatabaseMS != 0 {
+		t.Fatalf("database execution = %dms, want observed connection wait excluded", result.DatabaseMS)
 	}
 }
 
 type timingRuntimeDatabase struct{ cacheRuntimeDatabase }
 
 func (timingRuntimeDatabase) Query(ctx context.Context, _ semanticquery.Plan) (semanticquery.Rows, error) {
-	dataquery.ObserveConnectionWait(ctx, 20*time.Millisecond)
+	// Use a synthetic wait larger than any execution jitter. The runtime must
+	// clamp the remaining database duration at zero instead of underflowing.
+	dataquery.ObserveConnectionWait(ctx, 10*time.Second)
 	time.Sleep(30 * time.Millisecond)
 	return semanticquery.Rows{{"id": 1}}, nil
 }

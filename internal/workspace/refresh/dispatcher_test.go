@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/Yacobolo/leapview/internal/analytics/materialize"
-	"github.com/Yacobolo/leapview/internal/execution"
+	"github.com/Yacobolo/leapview/internal/workload"
 )
 
 func TestDispatcherMarksUnsupportedJobFailed(t *testing.T) {
@@ -19,8 +19,14 @@ func TestDispatcherMarksUnsupportedJobFailed(t *testing.T) {
 	}}}
 
 	Dispatcher{
-		Runs:         queue,
-		Executor:     execution.New(execution.Config{MaxRunningJobs: 1, MaxQueuedJobs: 1}),
+		Runs: queue,
+		Admitter: func() workload.Admitter {
+			controller, err := workload.New(workload.Config{MaxRunning: 1, MaximumQueued: 1, Classes: map[workload.Class]workload.Policy{workload.Refresh: {MaximumRunning: 1, MaximumQueued: 1, MaximumQueuedPerWorkspace: 1}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			return controller
+		}(),
 		Owner:        "test-owner",
 		LeaseTimeout: time.Minute,
 	}.Run(ctx)
@@ -33,6 +39,46 @@ func TestDispatcherMarksUnsupportedJobFailed(t *testing.T) {
 	}
 }
 
+func TestDispatcherAdmissionRejectionLeavesDurableJobRetryable(t *testing.T) {
+	queue := &fakeQueueRepository{jobs: []materialize.JobRecord{{ID: "job_1", WorkspaceID: "sales", RunID: "run_1", Kind: materialize.JobKindRefreshPipeline}}}
+	controller, err := workload.New(workload.Config{MaxRunning: 1, Classes: map[workload.Class]workload.Policy{
+		workload.Interactive: {MaximumRunning: 1}, workload.Refresh: {MaximumRunning: 1},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	held, err := controller.Acquire(context.Background(), workload.Request{Class: workload.Interactive, WorkspaceID: "sales", Operation: "hold"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	Dispatcher{Runs: queue, Admitter: controller, Owner: "test-owner", LeaseTimeout: time.Minute}.Run(context.Background())
+	held.Release()
+	if len(queue.jobs) != 1 || queue.claimOwner != "" {
+		t.Fatalf("rejected job was claimed: %#v", queue)
+	}
+	if queue.failedRun != "" {
+		t.Fatalf("rejected job was failed: %#v", queue)
+	}
+}
+
+func TestDispatcherReleasesRefreshPermitBeforeRunFinished(t *testing.T) {
+	queue := &fakeQueueRepository{jobs: []materialize.JobRecord{{ID: "job_1", WorkspaceID: "sales", RunID: "run_1", Kind: "unknown"}}}
+	controller, err := workload.New(workload.Config{MaxRunning: 1, Classes: map[workload.Class]workload.Policy{
+		workload.Refresh: {MaximumRunning: 1},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runningAtCallback := -1
+	Dispatcher{
+		Runs: queue, Admitter: controller, Owner: "test-owner", LeaseTimeout: time.Minute,
+		RunFinished: func(context.Context, materialize.JobRecord) { runningAtCallback = controller.Stats().Running },
+	}.Run(context.Background())
+	if runningAtCallback != 0 {
+		t.Fatalf("running permits at completion callback = %d, want 0", runningAtCallback)
+	}
+}
+
 type fakeQueueRepository struct {
 	jobs          []materialize.JobRecord
 	claimOwner    string
@@ -41,14 +87,23 @@ type fakeQueueRepository struct {
 	failedMessage string
 }
 
-func (r *fakeQueueRepository) ClaimNextExecutableJob(_ context.Context, _, owner string, _ time.Duration) (materialize.JobRecord, bool, error) {
-	r.claimOwner = owner
+func (r *fakeQueueRepository) ListExecutableJobs(context.Context, string, int) ([]materialize.JobRecord, error) {
 	if len(r.jobs) == 0 {
-		return materialize.JobRecord{}, false, nil
+		return nil, nil
 	}
-	job := r.jobs[0]
-	r.jobs = r.jobs[1:]
-	return job, true, nil
+	return append([]materialize.JobRecord(nil), r.jobs...), nil
+}
+
+func (r *fakeQueueRepository) ClaimExecutableJob(_ context.Context, candidate materialize.JobRecord, owner string, _ time.Duration) (materialize.JobRecord, bool, error) {
+	r.claimOwner = owner
+	for index, job := range r.jobs {
+		if job.ID != candidate.ID {
+			continue
+		}
+		r.jobs = append(r.jobs[:index], r.jobs[index+1:]...)
+		return job, true, nil
+	}
+	return materialize.JobRecord{}, false, nil
 }
 
 func (r *fakeQueueRepository) RenewJobLease(context.Context, string, string, time.Duration) error {

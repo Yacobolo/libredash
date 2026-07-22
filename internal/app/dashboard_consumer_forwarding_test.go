@@ -10,17 +10,20 @@ import (
 	"github.com/Yacobolo/leapview/internal/dashboard/consumer"
 	dashboardstream "github.com/Yacobolo/leapview/internal/dashboard/stream"
 	"github.com/Yacobolo/leapview/internal/dataquery"
+	"github.com/Yacobolo/leapview/internal/workload"
 )
 
 type consumerForwardingMetrics struct {
 	fakeMetrics
 	calls    int
 	governed bool
+	admitter bool
 }
 
 func (m *consumerForwardingMetrics) ExecuteConsumersPage(ctx context.Context, request consumer.Request, publish consumer.Publisher) error {
 	m.calls++
 	_, m.governed = dataquery.GovernorFromContext(ctx)
+	_, m.admitter = workload.FromContext(ctx)
 	dataquery.ObservePhysicalQuery(ctx, dataquery.PhysicalQueryObservation{Count: 1})
 	for _, target := range request.Targets {
 		publish(consumer.Result{Target: target, Visual: dashboard.Visual{ID: target.ID}, Queries: 1})
@@ -30,8 +33,14 @@ func (m *consumerForwardingMetrics) ExecuteConsumersPage(ctx context.Context, re
 
 func TestProductionDashboardWrappersForwardGovernedConsumerPlan(t *testing.T) {
 	underlying := &consumerForwardingMetrics{}
-	metrics := dashboardCommandMetrics{QueryMetrics: queryAuditMetrics{QueryMetrics: executionMetrics{
+	controller, err := workload.New(workload.DefaultConfig())
+	if err != nil {
+		t.Fatalf("new workload controller: %v", err)
+	}
+	t.Cleanup(controller.Close)
+	metrics := dashboardCommandMetrics{QueryMetrics: queryAuditMetrics{QueryMetrics: workloadMetrics{
 		QueryMetrics: queryauthz.New(underlying, queryauthz.Options{}),
+		admitter:     controller,
 	}}}
 
 	visuals := 0
@@ -49,7 +58,7 @@ func TestProductionDashboardWrappersForwardGovernedConsumerPlan(t *testing.T) {
 		return true
 	})
 
-	if underlying.calls != 1 || !underlying.governed || visuals != 2 {
-		t.Fatalf("calls=%d governed=%v visuals=%d", underlying.calls, underlying.governed, visuals)
+	if underlying.calls != 1 || !underlying.governed || !underlying.admitter || visuals != 2 {
+		t.Fatalf("calls=%d governed=%v admitter=%v visuals=%d", underlying.calls, underlying.governed, underlying.admitter, visuals)
 	}
 }

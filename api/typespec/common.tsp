@@ -105,6 +105,7 @@ model ArrowStreamResponse {
   @header contentType: "application/vnd.apache.arrow.stream";
   @header("X-Query-ID") queryId: string;
   @header("X-Serving-Snapshot") servingSnapshot: string;
+  @header("X-LeapView-Arrow-Contract") arrowContract: "native-v1";
   @header("X-Next-Cursor") nextCursor?: string;
   @header cacheControl: "no-store";
   @body body: bytes;

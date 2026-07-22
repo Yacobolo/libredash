@@ -89,7 +89,8 @@ func (h Handler) Updates(w nethttp.ResponseWriter, r *nethttp.Request) {
 	if registry == nil {
 		registry = dashboardstream.NewRegistry()
 	}
-	coordinator, closeCoordinator := registry.Open(streamID, r.Context(), func(event dashboardstream.RefreshEvent) {
+	coordinatorContext := h.analyticalContext(r.Context())
+	coordinator, closeCoordinator := registry.Open(streamID, coordinatorContext, func(event dashboardstream.RefreshEvent) {
 		broker.PublishEnvelope(streamID, lddatastar.RefreshEventEnvelope(event))
 	})
 	defer closeCoordinator()

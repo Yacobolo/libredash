@@ -3,13 +3,15 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"sync"
 	"time"
 
 	analyticsduckdb "github.com/Yacobolo/leapview/internal/analytics/duckdb"
-	materializeruntime "github.com/Yacobolo/leapview/internal/analytics/materialize"
+	analyticsducklake "github.com/Yacobolo/leapview/internal/analytics/ducklake"
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 	"github.com/Yacobolo/leapview/internal/dataquery"
+	"github.com/Yacobolo/leapview/internal/workload"
 )
 
 type testDataRuntimeFactory struct{}
@@ -18,14 +20,32 @@ func (testDataRuntimeFactory) OpenDashboardWorkspaceDataRuntimes(ctx context.Con
 	if config.Definition == nil {
 		return nil, fmt.Errorf("workspace definition is required")
 	}
-	runtime, err := analyticsduckdb.OpenWorkspaceMaterializeRuntime(ctx, analyticsduckdb.WorkspaceRuntimeConfig{
-		Models: config.Definition.Models,
-		DBDir:  config.DBDir,
-	})
+	database, err := analyticsducklake.Open(ctx, analyticsducklake.Config{RootDir: filepath.Join(config.DBDir, "ducklake"), MaxConnections: 2})
 	if err != nil {
 		return nil, err
 	}
-	sharedClose := &testSharedDataRuntimeCloser{runtime: runtime}
+	controller, err := workload.New(workload.DefaultConfig())
+	if err != nil {
+		_ = database.Close()
+		return nil, err
+	}
+	refreshLease, err := controller.Acquire(ctx, workload.Request{Class: workload.Refresh, WorkspaceID: "test", Operation: "dashboard-test-refresh"})
+	if err != nil {
+		controller.Close()
+		_ = database.Close()
+		return nil, err
+	}
+	runtime, err := analyticsduckdb.OpenWorkspaceMaterializeRuntime(refreshLease.Context(), analyticsduckdb.WorkspaceRuntimeConfig{
+		Models:   config.Definition.Models,
+		Database: database,
+	})
+	refreshLease.Release()
+	if err != nil {
+		controller.Close()
+		_ = database.Close()
+		return nil, err
+	}
+	sharedClose := &testSharedDataRuntimeCloser{runtime: runtime, database: database, controller: controller}
 	runtimes := make(map[string]DataRuntime, len(config.Definition.Models))
 	for modelID := range config.Definition.Models {
 		queries, err := runtime.Queries(modelID)
@@ -43,26 +63,12 @@ func (testDataRuntimeFactory) OpenDashboardWorkspaceDataRuntimes(ctx context.Con
 	return runtimes, nil
 }
 
-func (testDataRuntimeFactory) OpenDashboardDataRuntime(ctx context.Context, config DataRuntimeConfig) (DataRuntime, error) {
-	runtime, err := analyticsduckdb.OpenMaterializeRuntime(ctx, materializeruntime.RuntimeConfig{
-		ModelID: config.ModelID,
-		Model:   config.Model,
-		DBDir:   config.DBDir,
-	})
-	if err != nil {
-		return nil, err
-	}
-	queries := runtime.Queries
-	return testDataRuntime{
-		runtime: runtime,
-		data:    reportdef.NewDataQueryService(config.ModelID, reportdef.NewAnalyticsDataService(queries()), runtime),
-	}, nil
-}
-
 type testSharedDataRuntimeCloser struct {
-	once    sync.Once
-	runtime *analyticsduckdb.WorkspaceRuntime
-	err     error
+	once       sync.Once
+	runtime    *analyticsduckdb.WorkspaceRuntime
+	database   *analyticsducklake.Environment
+	controller *workload.Controller
+	err        error
 }
 
 func (c *testSharedDataRuntimeCloser) Close() error {
@@ -71,6 +77,10 @@ func (c *testSharedDataRuntimeCloser) Close() error {
 	}
 	c.once.Do(func() {
 		c.err = c.runtime.Close()
+		if err := c.database.Close(); c.err == nil {
+			c.err = err
+		}
+		c.controller.Close()
 	})
 	return c.err
 }
@@ -83,39 +93,53 @@ type testWorkspaceDataRuntime struct {
 }
 
 func (r testWorkspaceDataRuntime) Query(ctx context.Context, request reportdef.AggregateQuery) (reportdef.QueryRows, error) {
-	return r.data.Query(ctx, request)
+	return r.data.Query(r.readContext(ctx), request)
 }
 
 func (r testWorkspaceDataRuntime) Rows(ctx context.Context, request reportdef.RowQuery) (reportdef.QueryRows, error) {
-	return r.data.Rows(ctx, request)
+	return r.data.Rows(r.readContext(ctx), request)
 }
 
 func (r testWorkspaceDataRuntime) Count(ctx context.Context, request reportdef.CountQuery) (int, error) {
-	return r.data.Count(ctx, request)
+	return r.data.Count(r.readContext(ctx), request)
 }
 
 func (r testWorkspaceDataRuntime) Histogram(ctx context.Context, request reportdef.RawValueQuery, binCount int) ([]reportdef.HistogramBin, error) {
-	return r.data.Histogram(ctx, request, binCount)
+	return r.data.Histogram(r.readContext(ctx), request, binCount)
 }
 
 func (r testWorkspaceDataRuntime) Distribution(ctx context.Context, request reportdef.RawValueQuery, sort []reportdef.QuerySort, limit int) (reportdef.QueryRows, error) {
-	return r.data.Distribution(ctx, request, sort, limit)
+	return r.data.Distribution(r.readContext(ctx), request, sort, limit)
 }
 
 func (r testWorkspaceDataRuntime) ExecuteDataQuery(ctx context.Context, request dataquery.Query) (dataquery.Result, error) {
-	return r.runtime.ExecuteDataQuery(ctx, request)
+	return r.runtime.ExecuteDataQuery(r.readContext(ctx), request)
 }
 
 func (r testWorkspaceDataRuntime) ExecuteDataQueryBundle(ctx context.Context, requests []dataquery.BundleRequest) (dataquery.BundleResult, error) {
-	return r.runtime.ExecuteDataQueryBundle(ctx, requests)
+	return r.runtime.ExecuteDataQueryBundle(r.readContext(ctx), requests)
 }
 
 func (r testWorkspaceDataRuntime) Refresh(ctx context.Context) error {
-	return r.runtime.Refresh(ctx)
+	lease, err := r.close.controller.Acquire(ctx, workload.Request{Class: workload.Refresh, WorkspaceID: "test", Operation: "dashboard-test-refresh"})
+	if err != nil {
+		return err
+	}
+	defer lease.Release()
+	return r.runtime.Refresh(lease.Context())
 }
 
 func (r testWorkspaceDataRuntime) RefreshTables(ctx context.Context, tableNames []string) error {
-	return r.runtime.RefreshModelTables(ctx, r.modelID, tableNames)
+	lease, err := r.close.controller.Acquire(ctx, workload.Request{Class: workload.Refresh, WorkspaceID: "test", Operation: "dashboard-test-refresh"})
+	if err != nil {
+		return err
+	}
+	defer lease.Release()
+	return r.runtime.RefreshModelTables(lease.Context(), r.modelID, tableNames)
+}
+
+func (r testWorkspaceDataRuntime) readContext(ctx context.Context) context.Context {
+	return workload.WithAdmitter(ctx, r.close.controller)
 }
 
 func (r testWorkspaceDataRuntime) Close() error {
@@ -123,54 +147,5 @@ func (r testWorkspaceDataRuntime) Close() error {
 }
 
 func (r testWorkspaceDataRuntime) LastRefresh() time.Time {
-	return r.runtime.LastRefresh()
-}
-
-type testDataRuntime struct {
-	runtime *materializeruntime.Runtime
-	data    reportdef.DataService
-}
-
-func (r testDataRuntime) Query(ctx context.Context, request reportdef.AggregateQuery) (reportdef.QueryRows, error) {
-	return r.data.Query(ctx, request)
-}
-
-func (r testDataRuntime) Rows(ctx context.Context, request reportdef.RowQuery) (reportdef.QueryRows, error) {
-	return r.data.Rows(ctx, request)
-}
-
-func (r testDataRuntime) Count(ctx context.Context, request reportdef.CountQuery) (int, error) {
-	return r.data.Count(ctx, request)
-}
-
-func (r testDataRuntime) Histogram(ctx context.Context, request reportdef.RawValueQuery, binCount int) ([]reportdef.HistogramBin, error) {
-	return r.data.Histogram(ctx, request, binCount)
-}
-
-func (r testDataRuntime) Distribution(ctx context.Context, request reportdef.RawValueQuery, sort []reportdef.QuerySort, limit int) (reportdef.QueryRows, error) {
-	return r.data.Distribution(ctx, request, sort, limit)
-}
-
-func (r testDataRuntime) ExecuteDataQuery(ctx context.Context, request dataquery.Query) (dataquery.Result, error) {
-	return r.runtime.ExecuteDataQuery(ctx, request)
-}
-
-func (r testDataRuntime) ExecuteDataQueryBundle(ctx context.Context, requests []dataquery.BundleRequest) (dataquery.BundleResult, error) {
-	return r.runtime.ExecuteDataQueryBundle(ctx, requests)
-}
-
-func (r testDataRuntime) Refresh(ctx context.Context) error {
-	return r.runtime.Refresh(ctx)
-}
-
-func (r testDataRuntime) RefreshTables(ctx context.Context, tableNames []string) error {
-	return r.runtime.RefreshModelTables(ctx, tableNames)
-}
-
-func (r testDataRuntime) Close() error {
-	return r.runtime.Close()
-}
-
-func (r testDataRuntime) LastRefresh() time.Time {
 	return r.runtime.LastRefresh()
 }

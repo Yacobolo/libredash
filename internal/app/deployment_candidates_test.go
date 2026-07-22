@@ -118,12 +118,12 @@ func (runtimeAssetMetrics) WorkspaceAssets(workspaceID, servingStateID string) (
 		workspace.WorkspaceID(workspaceID),
 		workspace.ServingStateID(servingStateID),
 		workspace.AssetTypeConnection,
-		"quack.remote_quack",
+		"unsupported.remote",
 		"",
-		"remote_quack",
+		"remote",
 		"Runtime connection",
 		"connection.v1",
-		map[string]any{"Kind": "quack"},
+		map[string]any{"Kind": "unsupported"},
 	)
 	if err != nil {
 		return nil, nil, false
@@ -1083,7 +1083,7 @@ func TestConnectionsPageDoesNotFallbackToRuntimeAssetsWithoutActiveDeployment(t 
 	if !strings.Contains(body, "Connections") {
 		t.Fatalf("connections page missing heading:\n%s", body)
 	}
-	for _, forbidden := range []string{"remote_quack", "Runtime connection"} {
+	for _, forbidden := range []string{"unsupported.remote", "Runtime connection"} {
 		if strings.Contains(body, forbidden) {
 			t.Fatalf("connections page rendered runtime-only asset %q without active serving state:\n%s", forbidden, body)
 		}

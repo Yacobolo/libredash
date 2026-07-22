@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/Yacobolo/leapview/internal/analytics/arrowquery"
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	semanticquery "github.com/Yacobolo/leapview/internal/analytics/query"
 	"github.com/Yacobolo/leapview/internal/brand"
@@ -65,6 +66,10 @@ type semanticQueryRuntime interface {
 	ExecuteDataQuery(ctx context.Context, request dataquery.Query) (dataquery.Result, error)
 	QuerySemantic(ctx context.Context, modelID string, request reportdef.AggregateQuery) (reportdef.QueryRows, error)
 	PreviewSemantic(ctx context.Context, modelID string, request reportdef.RowQuery) (reportdef.QueryRows, error)
+}
+
+type semanticArrowQueryRuntime interface {
+	ExecuteDataQueryArrow(ctx context.Context, request dataquery.Query, sink arrowquery.Sink) (dataquery.Result, error)
 }
 
 func NewRuntimeMetrics(provider runtimehost.Provider, workspaceID string) QueryMetrics {
@@ -294,6 +299,22 @@ func (m runtimeMetrics) ExecuteDataQuery(ctx context.Context, request dataquery.
 		request.WorkspaceID = m.workspaceID
 	}
 	return port.ExecuteDataQuery(ctx, request)
+}
+
+func (m runtimeMetrics) ExecuteDataQueryArrow(ctx context.Context, request dataquery.Query, sink arrowquery.Sink) (dataquery.Result, error) {
+	runtime, release, err := m.active(ctx)
+	if err != nil {
+		return dataquery.Result{}, err
+	}
+	defer release()
+	port, ok := runtime.(semanticArrowQueryRuntime)
+	if !ok {
+		return dataquery.Result{}, fmt.Errorf("active runtime does not provide native Arrow query data")
+	}
+	if request.WorkspaceID == "" {
+		request.WorkspaceID = m.workspaceID
+	}
+	return port.ExecuteDataQueryArrow(ctx, request, sink)
 }
 
 func (m runtimeMetrics) PreviewSemantic(ctx context.Context, modelID string, request reportdef.RowQuery) (reportdef.QueryRows, error) {

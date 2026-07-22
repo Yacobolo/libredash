@@ -20,7 +20,7 @@ func TestRepositoryPersistsClaimsReclaimsAndOrderedEvents(t *testing.T) {
 	repo := NewRepository(store.SQLDB())
 
 	created, err := repo.Enqueue(t.Context(), asyncjob.EnqueueInput{
-		ID: "job-1", Kind: "release.finalize", ResourceKind: "release", ResourceID: "release-1", Payload: []byte(`{"project":"project-a"}`),
+		ID: "job-1", Kind: "release.finalize", WorkloadClass: "control", WorkspaceID: "_node", ResourceKind: "release", ResourceID: "release-1", Payload: []byte(`{"project":"project-a"}`),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -29,17 +29,21 @@ func TestRepositoryPersistsClaimsReclaimsAndOrderedEvents(t *testing.T) {
 		t.Fatalf("status = %q", created.Status)
 	}
 
-	claimed, ok, err := repo.Claim(t.Context(), "worker-a", time.Minute)
+	candidates, err := repo.Candidates(t.Context(), "control", 16)
+	if err != nil || len(candidates) != 1 {
+		t.Fatalf("candidates = %#v, %v", candidates, err)
+	}
+	claimed, ok, err := repo.ClaimByID(t.Context(), candidates[0].ID, "control", "worker-a", time.Minute)
 	if err != nil || !ok || claimed.ID != created.ID || claimed.Attempts != 1 {
 		t.Fatalf("claim = %#v, %v, %v", claimed, ok, err)
 	}
-	if _, ok, err := repo.Claim(t.Context(), "worker-b", time.Minute); err != nil || ok {
+	if _, ok, err := repo.ClaimByID(t.Context(), created.ID, "control", "worker-b", time.Minute); err != nil || ok {
 		t.Fatalf("leased job claimed twice: ok=%v err=%v", ok, err)
 	}
 	if _, err := store.SQLDB().ExecContext(t.Context(), `UPDATE api_async_jobs SET lease_expires_at = datetime('now', '-1 second') WHERE id = ?`, created.ID); err != nil {
 		t.Fatal(err)
 	}
-	reclaimed, ok, err := repo.Claim(t.Context(), "worker-b", time.Minute)
+	reclaimed, ok, err := repo.ClaimByID(t.Context(), created.ID, "control", "worker-b", time.Minute)
 	if err != nil || !ok || reclaimed.Attempts != 2 {
 		t.Fatalf("reclaim = %#v, %v, %v", reclaimed, ok, err)
 	}
@@ -70,13 +74,45 @@ func TestRepositoryRejectsIdempotentJobIDWithDifferentPayload(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	repo := NewRepository(store.SQLDB())
-	input := asyncjob.EnqueueInput{ID: "job-1", Kind: "release.finalize", ResourceKind: "release", ResourceID: "release-1", Payload: []byte(`{"a":1}`)}
+	input := asyncjob.EnqueueInput{ID: "job-1", Kind: "release.finalize", WorkloadClass: "control", WorkspaceID: "_node", ResourceKind: "release", ResourceID: "release-1", Payload: []byte(`{"a":1}`)}
 	if _, err := repo.Enqueue(t.Context(), input); err != nil {
 		t.Fatal(err)
 	}
 	input.Payload = []byte(`{"a":2}`)
 	if _, err := repo.Enqueue(t.Context(), input); err == nil {
 		t.Fatal("different payload reused the same durable job ID")
+	}
+}
+
+func TestRepositoryListsOnlyEachWorkspacesDurableHead(t *testing.T) {
+	store, err := platform.Open(t.Context(), filepath.Join(t.TempDir(), "platform.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	repo := NewRepository(store.SQLDB())
+	for _, input := range []asyncjob.EnqueueInput{
+		{ID: "a-1", Kind: "agent.run", WorkloadClass: "background", WorkspaceID: "a", ResourceKind: "agent", ResourceID: "a-1", Payload: []byte(`{}`)},
+		{ID: "a-2", Kind: "agent.run", WorkloadClass: "background", WorkspaceID: "a", ResourceKind: "agent", ResourceID: "a-2", Payload: []byte(`{}`)},
+		{ID: "b-1", Kind: "agent.run", WorkloadClass: "background", WorkspaceID: "b", ResourceKind: "agent", ResourceID: "b-1", Payload: []byte(`{}`)},
+	} {
+		if _, err := repo.Enqueue(t.Context(), input); err != nil {
+			t.Fatal(err)
+		}
+	}
+	candidates, err := repo.Candidates(t.Context(), "background", 16)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(candidates) != 2 {
+		t.Fatalf("candidates = %#v", candidates)
+	}
+	ids := map[string]bool{}
+	for _, candidate := range candidates {
+		ids[candidate.ID] = true
+	}
+	if !ids["a-1"] || !ids["b-1"] || ids["a-2"] {
+		t.Fatalf("candidate heads = %#v", ids)
 	}
 }
 

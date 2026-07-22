@@ -18,13 +18,17 @@ type Executor interface {
 	Exec(ctx context.Context, statement string) error
 }
 
-type SourceRegistrar interface {
-	PrepareSourceRuntime(ctx context.Context, model *semanticmodel.Model) error
+type ModelTablePlanner interface {
 	PlanModelTable(ctx context.Context, model *semanticmodel.Model, tableName string, table semanticmodel.Table) (ModelTablePlan, error)
 }
 
-type sourceRelationPlanner interface {
-	SourceRelation(model *semanticmodel.Model, source semanticmodel.Source) (string, error)
+type PreparedSources interface {
+	ModelTablePlanner
+	Close() error
+}
+
+type SourcePreparer interface {
+	Prepare(context.Context, *semanticmodel.Model) (PreparedSources, error)
 }
 
 type ModelTablePlan struct {
@@ -35,7 +39,6 @@ type ModelTablePlan struct {
 const (
 	PlanModeDirectSourceRead      = "direct_source_read"
 	PlanModeProjectedSourceInline = "projected_source_inline"
-	PlanModeWholeQueryPushdown    = "whole_query_pushdown"
 	PlanModeModelSQL              = "model_sql"
 )
 
@@ -55,15 +58,12 @@ func (e *MissingDataError) SetupRequired() bool {
 	return true
 }
 
-func Refresh(ctx context.Context, executor Executor, sources SourceRegistrar, model *semanticmodel.Model) (time.Time, error) {
+func Refresh(ctx context.Context, executor Executor, sources ModelTablePlanner, model *semanticmodel.Model) (time.Time, error) {
 	if executor == nil {
 		return time.Time{}, fmt.Errorf("materialization executor is required")
 	}
 	if sources == nil {
-		return time.Time{}, fmt.Errorf("source registrar is required")
-	}
-	if err := sources.PrepareSourceRuntime(ctx, model); err != nil {
-		return time.Time{}, err
+		return time.Time{}, fmt.Errorf("model table planner is required")
 	}
 	if err := ModelTables(ctx, executor, sources, model); err != nil {
 		return time.Time{}, err
@@ -71,15 +71,12 @@ func Refresh(ctx context.Context, executor Executor, sources SourceRegistrar, mo
 	return time.Now(), nil
 }
 
-func RefreshModelTables(ctx context.Context, executor Executor, sources SourceRegistrar, model *semanticmodel.Model, tableNames []string) (time.Time, error) {
+func RefreshModelTables(ctx context.Context, executor Executor, sources ModelTablePlanner, model *semanticmodel.Model, tableNames []string) (time.Time, error) {
 	if executor == nil {
 		return time.Time{}, fmt.Errorf("materialization executor is required")
 	}
 	if sources == nil {
-		return time.Time{}, fmt.Errorf("source registrar is required")
-	}
-	if err := sources.PrepareSourceRuntime(ctx, model); err != nil {
-		return time.Time{}, err
+		return time.Time{}, fmt.Errorf("model table planner is required")
 	}
 	if err := ModelTablesNamed(ctx, executor, sources, model, tableNames); err != nil {
 		return time.Time{}, err
@@ -161,12 +158,12 @@ func (defaultSourcePathResolver) ResolveSourcePath(model *semanticmodel.Model, s
 	}
 }
 
-func ModelTables(ctx context.Context, executor Executor, sources SourceRegistrar, model *semanticmodel.Model) error {
+func ModelTables(ctx context.Context, executor Executor, sources ModelTablePlanner, model *semanticmodel.Model) error {
 	if executor == nil {
 		return fmt.Errorf("materialization executor is required")
 	}
 	if sources == nil {
-		return fmt.Errorf("source registrar is required")
+		return fmt.Errorf("model table planner is required")
 	}
 	order, err := ModelTableOrder(model)
 	if err != nil {
@@ -175,12 +172,12 @@ func ModelTables(ctx context.Context, executor Executor, sources SourceRegistrar
 	return ModelTablesNamed(ctx, executor, sources, model, order)
 }
 
-func ModelTablesNamed(ctx context.Context, executor Executor, sources SourceRegistrar, model *semanticmodel.Model, tableNames []string) error {
+func ModelTablesNamed(ctx context.Context, executor Executor, sources ModelTablePlanner, model *semanticmodel.Model, tableNames []string) error {
 	if executor == nil {
 		return fmt.Errorf("materialization executor is required")
 	}
 	if sources == nil {
-		return fmt.Errorf("source registrar is required")
+		return fmt.Errorf("model table planner is required")
 	}
 	if model == nil {
 		return fmt.Errorf("semantic model is required")
@@ -242,7 +239,7 @@ func ModelTableDependencyOrder(model *semanticmodel.Model, selectedTable string)
 	return order, nil
 }
 
-func materializeModelTable(ctx context.Context, executor Executor, sources SourceRegistrar, model *semanticmodel.Model, name string) error {
+func materializeModelTable(ctx context.Context, executor Executor, sources ModelTablePlanner, model *semanticmodel.Model, name string) error {
 	table := model.Tables[name]
 	plan, err := sources.PlanModelTable(ctx, model, name, table)
 	if err != nil {

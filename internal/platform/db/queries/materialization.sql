@@ -29,6 +29,32 @@ WHERE COALESCE(r.parent_run_id, '') = ''
 ORDER BY COALESCE(NULLIF(j.queued_at, ''), j.created_at) ASC, j.id ASC
 LIMIT 1;
 
+-- name: ListExecutableRefreshJobHeads :many
+WITH eligible AS (
+  SELECT j.id, j.workspace_id, r.environment, COALESCE(j.serving_state_id, '') AS serving_state_id, j.model_id, j.kind, j.payload_json,
+         r.id AS run_id, r.target_type, r.target_id, r.trigger_type, j.attempt_count,
+         ROW_NUMBER() OVER (
+           PARTITION BY j.workspace_id
+           ORDER BY COALESCE(NULLIF(j.queued_at, ''), j.created_at) ASC, j.id ASC
+         ) AS workspace_position,
+         COALESCE(NULLIF(j.queued_at, ''), j.created_at) AS queue_position
+  FROM refresh_jobs j
+  JOIN refresh_job_runs r ON r.job_id = j.id
+  WHERE COALESCE(r.parent_run_id, '') = ''
+    AND j.kind = sqlc.arg(refresh_pipeline_kind)
+    AND r.environment = sqlc.arg(environment)
+    AND (
+      (j.status = sqlc.arg(queued_status) AND r.status = sqlc.arg(run_queued_status))
+      OR (j.status = sqlc.arg(running_status) AND (j.lease_expires_at IS NULL OR j.lease_expires_at <= CURRENT_TIMESTAMP))
+    )
+)
+SELECT id, workspace_id, environment, serving_state_id, model_id, kind, payload_json,
+       run_id, target_type, target_id, trigger_type, attempt_count
+FROM eligible
+WHERE workspace_position = 1
+ORDER BY queue_position ASC, id ASC
+LIMIT sqlc.arg(result_limit);
+
 -- name: ClaimRefreshJob :execresult
 UPDATE refresh_jobs
 SET status = sqlc.arg(running_status), started_at = COALESCE(started_at, CURRENT_TIMESTAMP), finished_at = NULL,

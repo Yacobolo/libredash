@@ -11,19 +11,8 @@ func (m *Model) ValidateDiscoveredSchemas() error {
 	if m == nil {
 		return fmt.Errorf("semantic model is required")
 	}
-	for sourceName, source := range m.Sources {
-		columns := map[string]struct{}{}
-		for _, column := range source.Schema.Columns {
-			columns[column.Name] = struct{}{}
-		}
-		if len(columns) == 0 {
-			return fmt.Errorf("source %q has no discovered schema", sourceName)
-		}
-		for field := range source.Fields {
-			if _, ok := columns[field]; !ok {
-				return fmt.Errorf("source %q field %q is not in discovered schema", sourceName, field)
-			}
-		}
+	if err := m.ValidateDiscoveredSourceSchemas(); err != nil {
+		return err
 	}
 	for tableName, table := range m.Tables {
 		columns := map[string]struct{}{}
@@ -57,6 +46,27 @@ func (m *Model) ValidateDiscoveredSchemas() error {
 			}
 			if _, err := m.ResolveDimension(ref); err != nil {
 				return fmt.Errorf("measure %q references unknown field %q", measureName, ref)
+			}
+		}
+	}
+	return nil
+}
+
+func (m *Model) ValidateDiscoveredSourceSchemas() error {
+	if m == nil {
+		return fmt.Errorf("semantic model is required")
+	}
+	for sourceName, source := range m.Sources {
+		columns := map[string]struct{}{}
+		for _, column := range source.Schema.Columns {
+			columns[column.Name] = struct{}{}
+		}
+		if len(columns) == 0 {
+			return fmt.Errorf("source %q has no discovered schema", sourceName)
+		}
+		for field := range source.Fields {
+			if _, ok := columns[field]; !ok {
+				return fmt.Errorf("source %q field %q is not in discovered schema", sourceName, field)
 			}
 		}
 	}

@@ -4,7 +4,6 @@ import "regexp"
 
 var (
 	semanticIdentifierPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-	envReferencePattern       = regexp.MustCompile(`^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$`)
 )
 
 type Model struct {
@@ -22,17 +21,19 @@ type Model struct {
 }
 
 type Connection struct {
-	Kind        string                `yaml:"kind"`
-	Description string                `yaml:"description"`
-	Path        string                `yaml:"path"`
-	Root        string                `yaml:"root"`
-	Scope       string                `yaml:"scope"`
-	Host        string                `yaml:"host"`
-	Port        int                   `yaml:"port"`
-	Database    string                `yaml:"database"`
-	Username    string                `yaml:"username"`
-	SSLMode     string                `yaml:"sslMode"`
-	Auth        ConnectionAuth        `yaml:"auth" json:"-"`
+	Kind        string `yaml:"kind"`
+	Description string `yaml:"description"`
+	Path        string `yaml:"path"`
+	Root        string `yaml:"root"`
+	Scope       string `yaml:"scope"`
+	Host        string `yaml:"host"`
+	Port        int    `yaml:"port"`
+	Database    string `yaml:"database"`
+	Username    string `yaml:"username"`
+	SSLMode     string `yaml:"sslMode"`
+	// Auth is populated only on a short-lived refresh copy by the injected
+	// credential resolver. It is deliberately absent from authored contracts.
+	Auth        ConnectionAuth        `yaml:"-" json:"-"`
 	Credentials ConnectionCredentials `yaml:"credentials" json:"credentials,omitempty"`
 	Options     map[string]any        `yaml:"options"`
 	Defaults    ConnectionDefaults    `yaml:"defaults"`

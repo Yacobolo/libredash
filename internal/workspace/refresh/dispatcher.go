@@ -7,31 +7,35 @@ import (
 	"time"
 
 	"github.com/Yacobolo/leapview/internal/analytics/materialize"
-	"github.com/Yacobolo/leapview/internal/execution"
+	"github.com/Yacobolo/leapview/internal/workload"
 )
 
 type QueueRepository interface {
 	RunRepository
-	ClaimNextExecutableJob(ctx context.Context, environment, owner string, lease time.Duration) (materialize.JobRecord, bool, error)
+	ListExecutableJobs(ctx context.Context, environment string, limit int) ([]materialize.JobRecord, error)
+	ClaimExecutableJob(ctx context.Context, candidate materialize.JobRecord, owner string, lease time.Duration) (materialize.JobRecord, bool, error)
 	RenewJobLease(ctx context.Context, jobID, owner string, lease time.Duration) error
 	JobQueueStats(ctx context.Context, environment string) (materialize.JobQueueStats, error)
 }
 
 type Dispatcher struct {
-	Runs           QueueRepository
-	Service        Service
-	Executor       *execution.Service
-	LeaseTimeout   time.Duration
-	Logger         *slog.Logger
-	Owner          string
-	Environment    string
-	ExecutionStats func() execution.Stats
-	RunFinished    func(context.Context, materialize.JobRecord)
+	Runs          QueueRepository
+	Service       Service
+	Admitter      workload.Admitter
+	LeaseTimeout  time.Duration
+	Logger        *slog.Logger
+	Owner         string
+	Environment   string
+	WorkloadStats func() workload.Stats
+	RunFinished   func(context.Context, materialize.JobRecord)
 }
 
 func (d Dispatcher) Run(ctx context.Context) {
 	if d.Runs == nil {
 		return
+	}
+	if d.Admitter == nil {
+		d.Admitter, _ = workload.New(workload.DefaultConfig())
 	}
 	owner := d.Owner
 	if owner == "" {
@@ -39,45 +43,71 @@ func (d Dispatcher) Run(ctx context.Context) {
 	}
 	for {
 		queueStats, _ := d.Runs.JobQueueStats(ctx, d.Environment)
-		job, ok, err := d.Runs.ClaimNextExecutableJob(ctx, d.Environment, owner, d.leaseTimeout())
+		candidates, err := d.Runs.ListExecutableJobs(ctx, d.Environment, 16)
 		if err != nil {
 			if d.Logger != nil {
-				d.Logger.WarnContext(ctx, "claim refresh job failed", "error", err)
+				d.Logger.WarnContext(ctx, "list refresh job candidates failed", "error", err)
 			}
 			return
 		}
-		if !ok {
+		if len(candidates) == 0 {
 			return
 		}
-		if d.Logger != nil {
-			stats := execution.Stats{}
-			if d.ExecutionStats != nil {
-				stats = d.ExecutionStats()
-			}
-			d.Logger.InfoContext(ctx, "dispatch refresh job",
-				"workspace", job.WorkspaceID,
-				"run", job.RunID,
-				"kind", job.Kind,
-				"queued_jobs", queueStats.QueuedJobs,
-				"running_jobs", queueStats.RunningJobs,
-				"stale_leased_jobs", queueStats.StaleLeasedJobs,
-				"running_reads", stats.RunningReads,
-				"queued_reads", stats.QueuedReads,
-				"running_writes", stats.RunningJobs,
-			)
+		finished := make(chan bool, len(candidates))
+		for _, candidate := range candidates {
+			candidate := candidate
+			go func() { finished <- d.dispatchCandidate(ctx, owner, candidate, queueStats) }()
 		}
-		err = d.executionService().SubmitJob(ctx, execution.JobRef{WorkspaceID: job.WorkspaceID, RunID: job.RunID, Kind: job.Kind}, func(ctx context.Context) error {
-			stopRenew := d.renewJobLease(ctx, job.ID, owner)
-			defer stopRenew()
-			return d.executeClaimedJob(ctx, job)
-		})
-		if err != nil {
-			_, _ = d.Runs.MarkRunFailed(context.Background(), job.WorkspaceID, job.RunID, err.Error())
-			d.notifyRunFinished(job)
+		claimed := false
+		for range candidates {
+			claimed = <-finished || claimed
+		}
+		if !claimed {
 			return
 		}
-		d.notifyRunFinished(job)
 	}
+}
+
+func (d Dispatcher) dispatchCandidate(ctx context.Context, owner string, candidate materialize.JobRecord, queueStats materialize.JobQueueStats) bool {
+	lease, err := d.admitter().Acquire(ctx, workload.Request{Class: workload.Refresh, WorkspaceID: candidate.WorkspaceID, Operation: "materialization.refresh"})
+	if err != nil {
+		if d.Logger != nil {
+			d.Logger.InfoContext(ctx, "refresh admission deferred", "workspace", candidate.WorkspaceID, "run", candidate.RunID, "error", err)
+		}
+		return false
+	}
+	defer lease.Release()
+	job, ok, err := d.Runs.ClaimExecutableJob(lease.Context(), candidate, owner, d.leaseTimeout())
+	if err != nil {
+		if d.Logger != nil {
+			d.Logger.WarnContext(ctx, "claim refresh job failed", "job", candidate.ID, "error", err)
+		}
+		return false
+	}
+	if !ok {
+		return false
+	}
+	if d.Logger != nil {
+		stats := workload.Stats{}
+		if d.WorkloadStats != nil {
+			stats = d.WorkloadStats()
+		}
+		d.Logger.InfoContext(ctx, "dispatch refresh job",
+			"workspace", job.WorkspaceID, "run", job.RunID, "kind", job.Kind,
+			"queued_jobs", queueStats.QueuedJobs, "running_jobs", queueStats.RunningJobs,
+			"stale_leased_jobs", queueStats.StaleLeasedJobs,
+			"workload_running", stats.Running, "workload_queued", stats.Queued,
+		)
+	}
+	stopRenew := d.renewJobLease(lease.Context(), job.ID, owner)
+	err = d.executeClaimedJob(lease.Context(), job)
+	stopRenew()
+	if err != nil {
+		_, _ = d.Runs.MarkRunFailed(context.Background(), job.WorkspaceID, job.RunID, err.Error())
+	}
+	lease.Release()
+	d.notifyRunFinished(job)
+	return true
 }
 
 func (d Dispatcher) notifyRunFinished(job materialize.JobRecord) {
@@ -127,11 +157,12 @@ func (d Dispatcher) renewJobLease(ctx context.Context, jobID, owner string) func
 	}
 }
 
-func (d Dispatcher) executionService() *execution.Service {
-	if d.Executor != nil {
-		return d.Executor
+func (d Dispatcher) admitter() workload.Admitter {
+	if d.Admitter != nil {
+		return d.Admitter
 	}
-	return execution.New(execution.DefaultConfig())
+	controller, _ := workload.New(workload.DefaultConfig())
+	return controller
 }
 
 func (d Dispatcher) leaseTimeout() time.Duration {

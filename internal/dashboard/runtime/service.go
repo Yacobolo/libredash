@@ -14,23 +14,13 @@ import (
 	"github.com/Yacobolo/leapview/internal/workspace"
 )
 
-type DataRuntimeConfig struct {
-	ModelID string
-	Model   *semanticmodel.Model
-	DBDir   string
-}
-
 type DataRuntimeFactory interface {
-	OpenDashboardDataRuntime(ctx context.Context, config DataRuntimeConfig) (DataRuntime, error)
+	OpenDashboardWorkspaceDataRuntimes(ctx context.Context, config WorkspaceDataRuntimeConfig) (map[string]DataRuntime, error)
 }
 
 type WorkspaceDataRuntimeConfig struct {
 	Definition *workspace.Definition
 	DBDir      string
-}
-
-type WorkspaceDataRuntimeFactory interface {
-	OpenDashboardWorkspaceDataRuntimes(ctx context.Context, config WorkspaceDataRuntimeConfig) (map[string]DataRuntime, error)
 }
 
 type DataRuntime interface {
@@ -73,17 +63,17 @@ type modelRuntime struct {
 	missing   error
 }
 
-func NewFromDefinition(duckDBDir string, factory DataRuntimeFactory, definition *workspace.Definition) (*Service, error) {
+func NewFromDefinition(ctx context.Context, duckDBDir string, factory DataRuntimeFactory, definition *workspace.Definition) (*Service, error) {
 	if factory == nil {
 		return nil, fmt.Errorf("dashboard data runtime factory is required")
 	}
 	if definition == nil {
 		return nil, fmt.Errorf("workspace definition is required")
 	}
-	return newFromDefinition(duckDBDir, factory, definition)
+	return newFromDefinition(ctx, duckDBDir, factory, definition)
 }
 
-func newFromDefinition(duckDBDir string, factory DataRuntimeFactory, definition *workspace.Definition) (*Service, error) {
+func newFromDefinition(ctx context.Context, duckDBDir string, factory DataRuntimeFactory, definition *workspace.Definition) (*Service, error) {
 	service := &Service{
 		runtimes: map[string]*modelRuntime{},
 	}
@@ -118,54 +108,32 @@ func newFromDefinition(duckDBDir string, factory DataRuntimeFactory, definition 
 		}
 		service.runtimes[modelID] = &modelRuntime{model: model, optimizer: optimizer}
 	}
-	if workspaceFactory, ok := factory.(WorkspaceDataRuntimeFactory); ok {
-		dataRuntimes, err := workspaceFactory.OpenDashboardWorkspaceDataRuntimes(context.Background(), WorkspaceDataRuntimeConfig{
-			Definition: definition,
-			DBDir:      duckDBDir,
-		})
-		if err != nil {
-			if setupRequired(err) {
-				for _, runtime := range service.runtimes {
-					runtime.missing = err
-				}
-				return service, nil
-			}
-			return nil, err
-		}
-		for modelID, runtime := range service.runtimes {
-			dataRuntime, ok := dataRuntimes[modelID]
-			if !ok {
-				return nil, fmt.Errorf("workspace data runtime missing semantic model %q", modelID)
-			}
-			runtime.data = newGovernedDataRuntime(definition.Catalog.Workspace.ID, modelID, dataRuntime)
-			runtime.ready = true
-		}
-		for modelID := range dataRuntimes {
-			if _, ok := service.runtimes[modelID]; !ok {
-				return nil, fmt.Errorf("workspace data runtime returned unknown semantic model %q", modelID)
-			}
-		}
-		return service, nil
-	}
-
-	for modelID, model := range definition.Models {
-		runtime := service.runtimes[modelID]
-		dataRuntime, err := factory.OpenDashboardDataRuntime(context.Background(), DataRuntimeConfig{
-			ModelID: modelID,
-			Model:   model,
-			DBDir:   duckDBDir,
-		})
-		if err != nil {
-			if setupRequired(err) {
+	dataRuntimes, err := factory.OpenDashboardWorkspaceDataRuntimes(ctx, WorkspaceDataRuntimeConfig{
+		Definition: definition,
+		DBDir:      duckDBDir,
+	})
+	if err != nil {
+		if setupRequired(err) {
+			for _, runtime := range service.runtimes {
 				runtime.missing = err
-				continue
 			}
-			return nil, err
+			return service, nil
+		}
+		return nil, err
+	}
+	for modelID, runtime := range service.runtimes {
+		dataRuntime, ok := dataRuntimes[modelID]
+		if !ok {
+			return nil, fmt.Errorf("workspace data runtime missing semantic model %q", modelID)
 		}
 		runtime.data = newGovernedDataRuntime(definition.Catalog.Workspace.ID, modelID, dataRuntime)
 		runtime.ready = true
 	}
-
+	for modelID := range dataRuntimes {
+		if _, ok := service.runtimes[modelID]; !ok {
+			return nil, fmt.Errorf("workspace data runtime returned unknown semantic model %q", modelID)
+		}
+	}
 	return service, nil
 }
 

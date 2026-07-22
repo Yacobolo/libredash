@@ -92,10 +92,31 @@ func CompileModel(model *semanticmodel.Model) (*CompiledModel, error) {
 	return compiled, nil
 }
 
-func NewCompiledPlanner(model *semanticmodel.Model) (*Planner, error) {
+type PlannerOption func(*Planner) error
+
+func WithTableRelation(relation TableRelation) PlannerOption {
+	return func(planner *Planner) error {
+		if relation == nil {
+			return fmt.Errorf("table relation resolver is required")
+		}
+		planner.tableRelation = relation
+		return nil
+	}
+}
+
+func NewCompiledPlanner(model *semanticmodel.Model, options ...PlannerOption) (*Planner, error) {
 	compiled, err := CompileModel(model)
 	if err != nil {
 		return nil, err
 	}
-	return &Planner{Model: model, Compiled: compiled}, nil
+	planner := &Planner{Model: model, Compiled: compiled}
+	for _, option := range options {
+		if option == nil {
+			return nil, fmt.Errorf("planner option is required")
+		}
+		if err := option(planner); err != nil {
+			return nil, err
+		}
+	}
+	return planner, nil
 }

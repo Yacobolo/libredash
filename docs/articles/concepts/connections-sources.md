@@ -4,7 +4,7 @@ Connections and sources deliberately answer different questions: **how can LeapV
 
 ## Connections
 
-A connection describes a physical access method and its defaults. Supported connection kinds are defined by the generated schema and currently include managed data, object storage, HTTP, relational databases, SQLite, DuckLake, and Quack-compatible access.
+A connection describes a physical access method and its defaults. Supported connection kinds are defined by the generated schema and currently include managed data, object storage, HTTP, relational databases, SQLite, and DuckLake.
 
 ```yaml
 apiVersion: leapview.dev/v1

@@ -34,15 +34,16 @@ func (r *runtimeAuditRecorder) RecordDataQuery(_ context.Context, query dataquer
 
 func newLegacyRuntime(t *testing.T, dataDir string) (*Service, error) {
 	t.Helper()
-	return newManagedFixtureRuntime(dataDir, "sales")
+	return newManagedFixtureRuntime(t, dataDir, "sales")
 }
 
 func newOperationsRuntime(t *testing.T, dataDir string) (*Service, error) {
 	t.Helper()
-	return newManagedFixtureRuntime(dataDir, "operations")
+	return newManagedFixtureRuntime(t, dataDir, "operations")
 }
 
-func newManagedFixtureRuntime(dataDir, workspaceID string) (*Service, error) {
+func newManagedFixtureRuntime(t *testing.T, dataDir, workspaceID string) (*Service, error) {
+	t.Helper()
 	projectPath := filepath.Join("..", "..", "..", "dashboards", "leapview.yaml")
 	compiled, err := workspacecompiler.CompileProject(projectPath, workspacecompiler.Options{})
 	if err != nil {
@@ -53,7 +54,7 @@ func newManagedFixtureRuntime(dataDir, workspaceID string) (*Service, error) {
 		return nil, fmt.Errorf("showcase project has no %s workspace", workspaceID)
 	}
 	bindManagedFixtureRoots(compiledWorkspace.Definition, dataDir)
-	return NewFromDefinition(filepath.Join(dataDir, workspaceID), testDataRuntimeFactory{}, compiledWorkspace.Definition)
+	return NewFromDefinition(t.Context(), filepath.Join(dataDir, workspaceID), testDataRuntimeFactory{}, compiledWorkspace.Definition)
 }
 
 func bindManagedFixtureRoots(definition *workspace.Definition, root string) {
@@ -76,7 +77,7 @@ o2,20
 `)
 	definition := sharedOrdersWorkspaceDefinition(t)
 	bindManagedFixtureRoots(definition, dir)
-	metrics, err := NewFromDefinition(dir, testDataRuntimeFactory{}, definition)
+	metrics, err := NewFromDefinition(t.Context(), dir, testDataRuntimeFactory{}, definition)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,10 +99,11 @@ o2,20
 		t.Fatalf("close runtime: %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(dir, "catalog.sqlite")); err != nil {
-		t.Fatalf("catalog.sqlite stat error = %v", err)
+	catalogPath := filepath.Join(dir, "ducklake", "catalog.duckdb")
+	if _, err := os.Stat(catalogPath); err != nil {
+		t.Fatalf("catalog.duckdb stat error = %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "data")); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, "ducklake", "data")); err != nil {
 		t.Fatalf("data dir stat error = %v", err)
 	}
 	db, err := sql.Open("duckdb", ":memory:")
@@ -110,9 +112,8 @@ o2,20
 	}
 	defer db.Close()
 	for _, stmt := range []string{
-		"LOAD sqlite",
 		"LOAD ducklake",
-		"ATTACH 'ducklake:sqlite:" + strings.ReplaceAll(filepath.Join(dir, "catalog.sqlite"), "'", "''") + "' AS lake",
+		"ATTACH 'ducklake:" + strings.ReplaceAll(catalogPath, "'", "''") + "' AS lake",
 	} {
 		if _, err := db.ExecContext(context.Background(), stmt); err != nil {
 			t.Fatal(err)
@@ -400,13 +401,6 @@ r2,o2,4,,,2018-01-16,2018-01-16 10:00:00
 	if modelResult.TotalRows != 2 || len(modelResult.Rows) != 1 || modelResult.Rows[0]["order_id"] != "o2" {
 		t.Fatalf("unified model table result = %#v", modelResult)
 	}
-	sourceResult, err := metrics.ExecuteDataQuery(ctx, dataquery.SourceRows("sales", "olist.orders", []string{"order_id", "order_status"}, []dataquery.Sort{{Field: "order_status", Direction: "desc"}}, 0, 1, true))
-	if err != nil {
-		t.Fatalf("unified source query: %v", err)
-	}
-	if sourceResult.TotalRows != 2 || len(sourceResult.Rows) != 1 || sourceResult.Rows[0]["order_id"] != "o2" {
-		t.Fatalf("unified source result = %#v", sourceResult)
-	}
 	if _, err := metrics.ExecuteDataQuery(ctx, dataquery.ModelTableRows("sales", "missing", nil, nil, 0, 1, false)); err == nil {
 		t.Fatal("missing model table preview error = nil")
 	}
@@ -552,10 +546,10 @@ relogios_presentes,watches_gifts
 		t.Fatal(err)
 	}
 	defer metrics.Close()
-	if _, err := os.Stat(filepath.Join(dir, "sales", "catalog.sqlite")); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, "sales", "ducklake", "catalog.duckdb")); err != nil {
 		t.Fatalf("expected DuckLake catalog: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "sales", "data")); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, "sales", "ducklake", "data")); err != nil {
 		t.Fatalf("expected DuckLake data directory: %v", err)
 	}
 

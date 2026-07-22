@@ -336,7 +336,7 @@ start() {
   if [[ "$runner" == "air" ]]; then
     air -c .air.toml >> "$LOG_FILE" 2>&1 &
   else
-    go build -o "$TMP_DIR/leapview-dev" ./cmd/leapview
+    go build -tags=duckdb_arrow -o "$TMP_DIR/leapview-dev" ./cmd/leapview
     "$TMP_DIR/leapview-dev" >> "$LOG_FILE" 2>&1 &
   fi
   local pid="$!"

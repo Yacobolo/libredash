@@ -49,7 +49,7 @@ func TestDashboardPublicationCapabilityRejectsExpansion(t *testing.T) {
 		{name: "surface", modify: func(_ *DashboardPublicationCapability, q *dataquery.Query) { q.Surface = dataquery.SurfaceAPI }},
 		{name: "model", modify: func(_ *DashboardPublicationCapability, q *dataquery.Query) { q.ModelID = "other" }},
 		{name: "operation", modify: func(_ *DashboardPublicationCapability, q *dataquery.Query) { q.Operation = dataquery.OperationAPIQuery }},
-		{name: "kind", modify: func(_ *DashboardPublicationCapability, q *dataquery.Query) { q.Kind = dataquery.KindSourceRows }},
+		{name: "kind", modify: func(_ *DashboardPublicationCapability, q *dataquery.Query) { q.Kind = dataquery.KindModelTableRows }},
 		{name: "field", objects: []access.ObjectRef{access.ItemObject(access.SecurableColumn, "visuals", "visuals/orders/secret")}},
 		{name: "semantic field", objects: []access.ObjectRef{access.ItemObject(access.SecurableSemanticField, "visuals", "visuals/secret_measure")}},
 		{name: "dataset", objects: []access.ObjectRef{access.ItemObject(access.SecurableDataset, "visuals", "visuals/customers")}},

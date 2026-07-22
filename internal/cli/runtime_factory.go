@@ -6,8 +6,12 @@ import (
 	"os"
 	"path/filepath"
 
+	analyticsduckdb "github.com/Yacobolo/leapview/internal/analytics/duckdb"
 	dashboardadapter "github.com/Yacobolo/leapview/internal/analytics/duckdb/dashboardadapter"
+	analyticsducklake "github.com/Yacobolo/leapview/internal/analytics/ducklake"
+	"github.com/Yacobolo/leapview/internal/analytics/resultcache"
 	dashboardruntime "github.com/Yacobolo/leapview/internal/dashboard/runtime"
+	"github.com/Yacobolo/leapview/internal/dataquery"
 	manageddataruntimebinding "github.com/Yacobolo/leapview/internal/manageddata/runtimebinding"
 	"github.com/Yacobolo/leapview/internal/runtimehost"
 	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
@@ -15,13 +19,14 @@ import (
 )
 
 type servingStateRuntimeFactory struct {
-	duckDBDir        string
-	runtimeDir       string
-	catalogPath      string
-	duckLakeDataPath string
+	duckDBDir    string
+	runtimeDir   string
+	environment  *analyticsducklake.Environment
+	cachePool    *resultcache.Pool
+	resultLimits dataquery.ResultLimits
 }
 
-func (f servingStateRuntimeFactory) Prepare(_ context.Context, input runtimehost.RuntimeInput) (runtimehost.Runtime, error) {
+func (f servingStateRuntimeFactory) Prepare(ctx context.Context, input runtimehost.RuntimeInput) (runtimehost.Runtime, error) {
 	duckDBDir := runtimeFirstNonEmpty(input.DuckDBDir, f.duckDBDir)
 	runtimeDir := runtimeFirstNonEmpty(input.RuntimeDir, f.runtimeDir)
 	targetDir := filepath.Join(runtimeDir, string(input.State.ID)+"-"+shortDigest(input.Artifact.Digest))
@@ -45,14 +50,13 @@ func (f servingStateRuntimeFactory) Prepare(_ context.Context, input runtimehost
 	if err := manageddataruntimebinding.BindRoots(compiled.Definition, input.ManagedData); err != nil {
 		return nil, err
 	}
-	dataPath := runtimeFirstNonEmpty(f.duckLakeDataPath, filepath.Join(duckDir, "data"))
 	factoryOptions := dashboardadapter.Options{
-		SnapshotID: input.State.DuckLakeSnapshotID, CatalogPath: f.catalogPath, DuckLakeDataPath: dataPath,
+		Database: f.environment, CredentialResolver: analyticsduckdb.EnvironmentCredentialResolver{}, CachePool: f.cachePool, ResultLimits: f.resultLimits, SnapshotID: input.State.DuckLakeSnapshotID,
 		ServingStateID: string(input.State.ID), WorkspaceID: string(input.State.WorkspaceID),
 		Environment: string(servingstate.NormalizeEnvironment(input.State.Environment)), SemanticModelDigest: input.State.Digest,
 		ArtifactDigest: input.Artifact.Digest, SourceDataDigest: input.ManagedData.RevisionID,
 	}
-	service, err := dashboardruntime.NewFromDefinition(duckDir, dashboardadapter.NewFactory(factoryOptions), compiled.Definition)
+	service, err := dashboardruntime.NewFromDefinition(ctx, duckDir, dashboardadapter.NewFactory(factoryOptions), compiled.Definition)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +67,7 @@ func (f servingStateRuntimeFactory) Prepare(_ context.Context, input runtimehost
 				return nil, err
 			}
 			factoryOptions.SnapshotID = snapshotID
-			service, err = dashboardruntime.NewFromDefinition(duckDir, dashboardadapter.NewFactory(factoryOptions), compiled.Definition)
+			service, err = dashboardruntime.NewFromDefinition(ctx, duckDir, dashboardadapter.NewFactory(factoryOptions), compiled.Definition)
 			if err != nil {
 				return nil, err
 			}

@@ -24,7 +24,7 @@ func (m *dynamicRuntimeMetrics) ExecuteConsumersPage(ctx context.Context, reques
 	return executeConsumersFrom(ctx, m.defaultMetrics(), request, publish)
 }
 
-func (m executionMetrics) ExecuteConsumersPage(ctx context.Context, request consumer.Request, publish consumer.Publisher) error {
+func (m workloadMetrics) ExecuteConsumersPage(ctx context.Context, request consumer.Request, publish consumer.Publisher) error {
 	return executeConsumersFrom(m.readContext(ctx), m.QueryMetrics, request, publish)
 }
 

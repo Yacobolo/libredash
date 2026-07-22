@@ -8,20 +8,21 @@ import (
 	"time"
 
 	"github.com/Yacobolo/leapview/internal/configspec"
+	"github.com/Yacobolo/leapview/internal/workload"
 )
 
-func TestLoadRejectsMalformedExecutionConfiguration(t *testing.T) {
-	t.Setenv("LEAPVIEW_EXEC_MAX_RUNNING_READS", "many")
+func TestLoadRejectsMalformedWorkloadConfiguration(t *testing.T) {
+	t.Setenv("LEAPVIEW_WORKLOAD_INTERACTIVE_MAX_RUNNING", "many")
 	if _, err := Load(); err == nil {
-		t.Fatal("Load() accepted malformed execution concurrency")
-	} else if !strings.Contains(err.Error(), "LEAPVIEW_EXEC_MAX_RUNNING_READS") {
+		t.Fatal("Load() accepted malformed workload concurrency")
+	} else if !strings.Contains(err.Error(), "LEAPVIEW_WORKLOAD_INTERACTIVE_MAX_RUNNING") {
 		t.Fatalf("Load() error does not name the environment variable: %v", err)
 	}
 
-	t.Setenv("LEAPVIEW_EXEC_MAX_RUNNING_READS", "4")
-	t.Setenv("LEAPVIEW_EXEC_READ_TIMEOUT", "eventually")
+	t.Setenv("LEAPVIEW_WORKLOAD_INTERACTIVE_MAX_RUNNING", "4")
+	t.Setenv("LEAPVIEW_WORKLOAD_INTERACTIVE_EXECUTION_TIMEOUT", "eventually")
 	if _, err := Load(); err == nil {
-		t.Fatal("Load() accepted malformed execution timeout")
+		t.Fatal("Load() accepted malformed workload timeout")
 	}
 }
 
@@ -31,8 +32,8 @@ func TestLoadRejectsMalformedTypedValues(t *testing.T) {
 		value string
 	}{
 		{name: "LEAPVIEW_PRODUCTION", value: "sometimes"},
-		{name: "LEAPVIEW_EXEC_MAX_QUEUED_WRITES", value: "several"},
-		{name: "LEAPVIEW_EXEC_JOB_LEASE_TIMEOUT", value: "later"},
+		{name: "LEAPVIEW_WORKLOAD_REFRESH_MAX_QUEUED", value: "several"},
+		{name: "LEAPVIEW_REFRESH_JOB_LEASE_TIMEOUT", value: "later"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			t.Setenv(test.name, test.value)
@@ -107,22 +108,24 @@ func TestGeneratedEnvironmentExampleValidates(t *testing.T) {
 	}
 }
 
-func TestLoadIncludesExecutionConfiguration(t *testing.T) {
-	t.Setenv("LEAPVIEW_EXEC_MAX_RUNNING_READS", "7")
-	t.Setenv("LEAPVIEW_EXEC_MAX_QUEUED_READS", "9")
-	t.Setenv("LEAPVIEW_EXEC_READ_QUEUE_TIMEOUT", "11s")
-	t.Setenv("LEAPVIEW_EXEC_READ_TIMEOUT", "13s")
+func TestLoadIncludesWorkloadConfiguration(t *testing.T) {
+	t.Setenv("LEAPVIEW_WORKLOAD_MAX_RUNNING", "7")
+	t.Setenv("LEAPVIEW_WORKLOAD_INTERACTIVE_MAX_RUNNING", "7")
+	t.Setenv("LEAPVIEW_WORKLOAD_INTERACTIVE_MAX_QUEUED", "9")
+	t.Setenv("LEAPVIEW_WORKLOAD_INTERACTIVE_QUEUE_TIMEOUT", "11s")
+	t.Setenv("LEAPVIEW_WORKLOAD_INTERACTIVE_EXECUTION_TIMEOUT", "13s")
 
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	execution := cfg.ExecutionConfig()
-	if execution.MaxRunningReads != 7 || execution.MaxQueuedReads != 9 {
-		t.Fatalf("execution concurrency = %#v", execution)
+	workloads := cfg.WorkloadConfig()
+	interactive := workloads.Classes[workload.Interactive]
+	if workloads.MaxRunning != 7 || interactive.MaximumRunning != 7 || interactive.MaximumQueued != 9 {
+		t.Fatalf("workload concurrency = %#v", workloads)
 	}
-	if execution.ReadQueueWait != 11*time.Second || execution.ReadExecutionTimeout != 13*time.Second {
-		t.Fatalf("execution timeouts = %#v", execution)
+	if interactive.QueueTimeout != 11*time.Second || interactive.ExecutionTimeout != 13*time.Second {
+		t.Fatalf("workload timeouts = %#v", workloads)
 	}
 }
 
@@ -131,7 +134,7 @@ func TestDuckLakeCatalogPathDefaultsOutsidePlatformDB(t *testing.T) {
 	if got, want := cfg.DBPath(), "/var/lib/leapview/leapview.db"; got != want {
 		t.Fatalf("DBPath = %q, want %q", got, want)
 	}
-	if got, want := cfg.DuckLakeCatalogPath(), "/var/lib/leapview/ducklake/catalog.sqlite"; got != want {
+	if got, want := cfg.DuckLakeCatalogPath(), "/var/lib/leapview/ducklake/catalog.duckdb"; got != want {
 		t.Fatalf("DuckLakeCatalogPath = %q, want %q", got, want)
 	}
 	if cfg.DuckLakeCatalogPath() == cfg.DBPath() {
@@ -140,8 +143,8 @@ func TestDuckLakeCatalogPathDefaultsOutsidePlatformDB(t *testing.T) {
 }
 
 func TestDuckLakeCatalogPathHonorsExplicitPath(t *testing.T) {
-	cfg := Config{HomeDir: "/var/lib/leapview", DuckLakeCatalog: "/mnt/catalog.sqlite"}
-	if got, want := cfg.DuckLakeCatalogPath(), "/mnt/catalog.sqlite"; got != want {
+	cfg := Config{HomeDir: "/var/lib/leapview", DuckLakeCatalog: "/mnt/catalog.duckdb"}
+	if got, want := cfg.DuckLakeCatalogPath(), "/mnt/catalog.duckdb"; got != want {
 		t.Fatalf("DuckLakeCatalogPath = %q, want %q", got, want)
 	}
 }
@@ -187,6 +190,7 @@ func TestValidateProductionAuthAllowsGenericOIDC(t *testing.T) {
 		CSRFKey:            "0123456789abcdef0123456789abcdef",
 		MetricsBearerToken: "0123456789abcdef0123456789abcdef",
 	}
+	cfg = withAnalyticalTestDefaults(cfg)
 	if err := cfg.ValidateProductionAuth(); err != nil {
 		t.Fatalf("validate production auth: %v", err)
 	}
@@ -219,6 +223,7 @@ func TestValidateProductionAuthAllowsLocalAuth(t *testing.T) {
 		CSRFKey:            "0123456789abcdef0123456789abcdef",
 		MetricsBearerToken: "0123456789abcdef0123456789abcdef",
 	}
+	cfg = withAnalyticalTestDefaults(cfg)
 	if err := cfg.ValidateProductionAuth(); err != nil {
 		t.Fatalf("validate production auth: %v", err)
 	}
@@ -241,6 +246,7 @@ func TestValidateProductionAuthRejectsInsecureBrowserAuthCookies(t *testing.T) {
 
 	cfg.APITokenOnlyAuth = true
 	cfg.PublicURL = "https://app.example"
+	cfg = withAnalyticalTestDefaults(cfg)
 	if err := cfg.ValidateProductionAuth(); err != nil {
 		t.Fatalf("api-token-only production should allow explicitly insecure browser cookies: %v", err)
 	}
@@ -324,6 +330,7 @@ func TestValidateProductionAuthRequiresStrongSCIMBearerWhenConfigured(t *testing
 
 	cfg.SCIMBearerToken = "0123456789abcdef0123456789abcdef"
 	cfg.PublicURL = "https://leapview.example.com"
+	cfg = withAnalyticalTestDefaults(cfg)
 	if err := cfg.ValidateProductionAuth(); err != nil {
 		t.Fatalf("strong SCIM bearer token rejected: %v", err)
 	}
@@ -343,6 +350,7 @@ func TestValidateProductionAuthRequiresStrongMetricsBearerWhenConfigured(t *test
 
 	cfg.MetricsBearerToken = "0123456789abcdef0123456789abcdef"
 	cfg.PublicURL = "https://leapview.example.com"
+	cfg = withAnalyticalTestDefaults(cfg)
 	if err := cfg.ValidateProductionAuth(); err != nil {
 		t.Fatalf("strong metrics bearer token rejected: %v", err)
 	}
@@ -360,6 +368,7 @@ func TestValidateProductionAuthRequiresAllowedHostForAPITokenOnly(t *testing.T) 
 	}
 
 	cfg.PublicURL = "https://leapview.example.com"
+	cfg = withAnalyticalTestDefaults(cfg)
 	if err := cfg.ValidateProductionAuth(); err != nil {
 		t.Fatalf("production public URL rejected: %v", err)
 	}
@@ -398,6 +407,7 @@ func TestValidateProductionAuthRejectsInsecureExternalMCPOAuthIssuer(t *testing.
 		t.Fatal("expected insecure external MCP OAuth issuer to fail production validation")
 	}
 	cfg.MCPOAuthIssuerURL = "https://identity.example.com"
+	cfg = withAnalyticalTestDefaults(cfg)
 	if err := cfg.ValidateProductionAuth(); err != nil {
 		t.Fatalf("secure external MCP OAuth issuer rejected: %v", err)
 	}
@@ -427,9 +437,25 @@ func TestProductionAllowedHostsDerivesBrowserAuthCallbackHosts(t *testing.T) {
 			t.Fatalf("allowed hosts = %#v, missing %q", hosts, want)
 		}
 	}
+	cfg = withAnalyticalTestDefaults(cfg)
 	if err := cfg.ValidateProductionAuth(); err != nil {
 		t.Fatalf("derived callback hosts should satisfy production validation: %v", err)
 	}
+}
+
+func withAnalyticalTestDefaults(cfg Config) Config {
+	cfg.DuckDBNodeMemoryMaxBytes = 256 << 20
+	cfg.DuckDBNodeTempMaxBytes = 1 << 30
+	cfg.DuckDBNodeMaxThreads = 2
+	cfg.QueryResultMaxRows = 10_000
+	cfg.QueryResultMaxBytes = 32 << 20
+	cfg.QueryCacheRuntimeMaxEntries = 16
+	cfg.QueryCacheRuntimeMaxBytes = 4 << 20
+	cfg.QueryCacheWorkspaceMaxEntries = 32
+	cfg.QueryCacheWorkspaceMaxBytes = 8 << 20
+	cfg.QueryCacheNodeMaxEntries = 64
+	cfg.QueryCacheNodeMaxBytes = 16 << 20
+	return cfg
 }
 
 func TestProductionAllowedHostsRejectsInvalidEntries(t *testing.T) {

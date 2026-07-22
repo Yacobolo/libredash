@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/Yacobolo/leapview/internal/analytics/arrowquery"
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 	"github.com/Yacobolo/leapview/internal/dataquery"
@@ -60,6 +61,23 @@ func (m queryAuditMetrics) ExecuteDataQuery(ctx context.Context, request dataque
 		request.WorkspaceID = m.defaultWorkspaceID
 	}
 	return dataquery.ExecuteAudited(ctx, request, m.QueryMetrics.ExecuteDataQuery)
+}
+
+func (m queryAuditMetrics) ExecuteDataQueryArrow(ctx context.Context, request dataquery.Query, sink arrowquery.Sink) (dataquery.Result, error) {
+	if m.QueryMetrics == nil {
+		return dataquery.Result{}, errors.New("query metrics are not configured")
+	}
+	executor, ok := m.QueryMetrics.(arrowquery.Executor)
+	if !ok {
+		return dataquery.Result{}, errors.New("query metrics do not support native Arrow execution")
+	}
+	ctx = m.auditContext(ctx)
+	if request.WorkspaceID == "" {
+		request.WorkspaceID = m.defaultWorkspaceID
+	}
+	return dataquery.ExecuteAudited(ctx, request, func(ctx context.Context, request dataquery.Query) (dataquery.Result, error) {
+		return executor.ExecuteDataQueryArrow(ctx, request, sink)
+	})
 }
 
 func (m queryAuditMetrics) QueryDashboard(ctx context.Context, dashboardID string, filters dashboard.Filters) (dashboard.Patch, error) {

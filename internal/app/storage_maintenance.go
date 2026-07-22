@@ -6,6 +6,7 @@ import (
 
 	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
 	storagemaintenance "github.com/Yacobolo/leapview/internal/storage/maintenance"
+	"github.com/Yacobolo/leapview/internal/workload"
 )
 
 type leasedSnapshotProvider interface {
@@ -17,6 +18,14 @@ type retentionRepository interface {
 }
 
 func (s *Server) reconcileStorageRetention(ctx context.Context, dryRun bool) error {
+	if _, _, admitted := workload.Current(ctx); !admitted {
+		lease, err := s.workloadController().Acquire(ctx, workload.Request{Class: workload.Maintenance, Operation: "storage.retention"})
+		if err != nil {
+			return nil
+		}
+		defer lease.Release()
+		ctx = lease.Context()
+	}
 	repo, ok := s.servingStateRepo.(retentionRepository)
 	if !ok || repo == nil {
 		return nil
@@ -32,6 +41,7 @@ func (s *Server) reconcileStorageRetention(ctx context.Context, dryRun bool) err
 		protected = provider.LeasedSnapshots()
 	}
 	_, err := storagemaintenance.Run(ctx, repo, storagemaintenance.Options{
+		DuckDBEnvironment:            s.duckDBEnvironment,
 		Environment:                  servingstate.Environment(s.defaultEnvironment),
 		RootDir:                      rootDir,
 		CatalogPath:                  catalogPath,

@@ -88,7 +88,8 @@ func (h Handler) handleCommandWithBefore(w nethttp.ResponseWriter, r *nethttp.Re
 	if broker == nil {
 		broker = pagestream.NewBroker()
 	}
-	coordinator := registry.Ensure(streamID, context.WithoutCancel(r.Context()), func(event dashboardstream.RefreshEvent) {
+	coordinatorContext := h.analyticalContext(context.WithoutCancel(r.Context()))
+	coordinator := registry.Ensure(streamID, coordinatorContext, func(event dashboardstream.RefreshEvent) {
 		broker.PublishEnvelope(streamID, lddatastar.RefreshEventEnvelope(event))
 	})
 	h.observeRefreshes(coordinator, dashboardID, pageID)

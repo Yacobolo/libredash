@@ -93,13 +93,50 @@ func (r *SQLRunRepository) createRun(ctx context.Context, input materialize.RunI
 }
 
 func (r *SQLRunRepository) ClaimNextExecutableJob(ctx context.Context, environment, owner string, lease time.Duration) (materialize.JobRecord, bool, error) {
+	candidates, err := r.ListExecutableJobs(ctx, environment, 1)
+	if err != nil || len(candidates) == 0 {
+		return materialize.JobRecord{}, false, err
+	}
+	return r.ClaimExecutableJob(ctx, candidates[0], owner, lease)
+}
+
+func (r *SQLRunRepository) ListExecutableJobs(ctx context.Context, environment string, limit int) ([]materialize.JobRecord, error) {
+	if r == nil || r.db == nil {
+		return nil, fmt.Errorf("refresh run database is required")
+	}
+	environment = string(servingstate.NormalizeEnvironment(servingstate.Environment(environment)))
+	if limit <= 0 {
+		limit = 16
+	}
+	rows, err := r.q.ListExecutableRefreshJobHeads(ctx, platformdb.ListExecutableRefreshJobHeadsParams{
+		ResultLimit: int64(limit), RefreshPipelineKind: materialize.JobKindRefreshPipeline,
+		Environment: environment, QueuedStatus: materialize.RunStatusQueued,
+		RunQueuedStatus: materialize.RunStatusQueued, RunningStatus: materialize.RunStatusRunning,
+	})
+	if err != nil {
+		return nil, err
+	}
+	jobs := make([]materialize.JobRecord, 0, len(rows))
+	for _, row := range rows {
+		jobs = append(jobs, materialize.JobRecord{
+			ID: row.ID, WorkspaceID: row.WorkspaceID, Environment: row.Environment, ServingStateID: row.ServingStateID, ModelID: row.ModelID,
+			Kind: row.Kind, PayloadJSON: row.PayloadJson, RunID: row.RunID, TargetType: row.TargetType,
+			TargetID: row.TargetID, TriggerType: row.TriggerType, AttemptCount: int(row.AttemptCount),
+		})
+	}
+	return jobs, nil
+}
+
+func (r *SQLRunRepository) ClaimExecutableJob(ctx context.Context, job materialize.JobRecord, owner string, lease time.Duration) (materialize.JobRecord, bool, error) {
 	if r == nil || r.db == nil {
 		return materialize.JobRecord{}, false, fmt.Errorf("refresh run database is required")
 	}
 	owner = strings.TrimSpace(owner)
-	environment = string(servingstate.NormalizeEnvironment(servingstate.Environment(environment)))
 	if owner == "" {
 		return materialize.JobRecord{}, false, fmt.Errorf("lease owner is required")
+	}
+	if strings.TrimSpace(job.ID) == "" || strings.TrimSpace(job.RunID) == "" {
+		return materialize.JobRecord{}, false, fmt.Errorf("refresh job and run ids are required")
 	}
 	if lease <= 0 {
 		lease = time.Minute
@@ -110,22 +147,6 @@ func (r *SQLRunRepository) ClaimNextExecutableJob(ctx context.Context, environme
 	}
 	defer tx.Rollback()
 	q := r.q.WithTx(tx)
-	row, err := q.NextExecutableRefreshJob(ctx, platformdb.NextExecutableRefreshJobParams{
-		RefreshPipelineKind: materialize.JobKindRefreshPipeline,
-		QueuedStatus:        materialize.RunStatusQueued, RunQueuedStatus: materialize.RunStatusQueued, RunningStatus: materialize.RunStatusRunning,
-		Environment: environment,
-	})
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return materialize.JobRecord{}, false, nil
-		}
-		return materialize.JobRecord{}, false, err
-	}
-	job := materialize.JobRecord{
-		ID: row.ID, WorkspaceID: row.WorkspaceID, Environment: row.Environment, ServingStateID: row.ServingStateID, ModelID: row.ModelID,
-		Kind: row.Kind, PayloadJSON: row.PayloadJson, RunID: row.RunID, TargetType: row.TargetType,
-		TargetID: row.TargetID, TriggerType: row.TriggerType, AttemptCount: int(row.AttemptCount),
-	}
 	leaseExpr := sqliteLeaseModifier(lease)
 	result, err := q.ClaimRefreshJob(ctx, platformdb.ClaimRefreshJobParams{
 		RunningStatus: materialize.RunStatusRunning, LeaseOwner: owner, LeaseModifier: leaseExpr,

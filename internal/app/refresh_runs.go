@@ -10,8 +10,8 @@ import (
 	"github.com/Yacobolo/leapview/internal/analytics/materialize"
 	materializehttp "github.com/Yacobolo/leapview/internal/analytics/materialize/http"
 	materializesqlite "github.com/Yacobolo/leapview/internal/analytics/materialize/sqlite"
-	"github.com/Yacobolo/leapview/internal/execution"
 	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
+	"github.com/Yacobolo/leapview/internal/workload"
 	"github.com/Yacobolo/leapview/internal/workspace/refresh"
 )
 
@@ -108,9 +108,9 @@ func (s *Server) refreshRunRepository() (*materializesqlite.SQLRunRepository, er
 	return materializesqlite.NewSQLRunRepository(s.store.SQLDB()), nil
 }
 
-func (s *Server) executionService() *execution.Service {
-	if s.executor == nil {
-		s.executor = execution.New(execution.DefaultConfig())
+func (s *Server) workloadController() *workload.Controller {
+	if s.workloads == nil {
+		s.workloads, _ = workload.New(workload.DefaultConfig())
 	}
-	return s.executor
+	return s.workloads
 }

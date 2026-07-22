@@ -3,7 +3,6 @@ package storage
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,14 +10,27 @@ import (
 	"strconv"
 	"strings"
 
+	analyticsresource "github.com/Yacobolo/leapview/internal/analytics/resource"
 	"github.com/Yacobolo/leapview/internal/ui"
-	_ "github.com/duckdb/duckdb-go/v2"
+	"github.com/Yacobolo/leapview/internal/workload"
 )
 
 type Service struct {
-	CatalogPath string
-	DataPath    string
-	Environment string
+	CatalogPath  string
+	DataPath     string
+	Environment  string
+	ControlPlane DatabaseProvider
+	Analytics    AnalyticalProvider
+	Admitter     workload.Admitter
+}
+
+type DatabaseProvider interface {
+	SQLDB() *sql.DB
+}
+
+type AnalyticalProvider interface {
+	analyticsresource.Provider
+	analyticsresource.SessionProvider
 }
 
 const DuckLakeCatalogID = "ducklake-catalog"
@@ -67,7 +79,13 @@ func (s Service) Data(ctx context.Context) ui.AdminStorageData {
 		SizeBytes: data.TotalSizeBytes,
 		SizeLabel: data.TotalSizeLabel,
 	}}
-	metadata, err := inspectDuckLakeStorage(ctx, data.CatalogPath, data.DataPath, s.Environment)
+	ctx, analytics, release, err := s.acquireAnalytics(ctx, "admin.storage.read")
+	if err != nil {
+		data.Status = err.Error()
+		return data
+	}
+	defer release()
+	metadata, err := inspectDuckLakeStorage(ctx, data.CatalogPath, data.DataPath, providedDatabase(s.ControlPlane), analytics, s.Environment)
 	if err != nil {
 		data.Status = err.Error()
 		return data
@@ -99,7 +117,12 @@ func (s Service) SelectTable(ctx context.Context, command ui.AdminStorageCommand
 	if strings.TrimSpace(s.CatalogPath) == "" || strings.TrimSpace(s.DataPath) == "" {
 		return nil, fmt.Errorf("DuckLake catalog is not configured")
 	}
-	metadata, err := inspectDuckLakeStorage(ctx, s.CatalogPath, s.DataPath, s.Environment)
+	ctx, analytics, release, err := s.acquireAnalytics(ctx, "admin.storage.select")
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	metadata, err := inspectDuckLakeStorage(ctx, s.CatalogPath, s.DataPath, providedDatabase(s.ControlPlane), analytics, s.Environment)
 	if err != nil {
 		return nil, err
 	}
@@ -122,29 +145,68 @@ type duckLakeStorageMetadata struct {
 	TotalDataSizeBytes int64
 }
 
-func inspectDuckLakeStorage(ctx context.Context, catalogPath, dataPath, environment string) (duckLakeStorageMetadata, error) {
-	db, err := openDuckLakeMetadataForInspection(ctx, catalogPath, dataPath)
-	if err != nil {
-		return duckLakeStorageMetadata{}, fmt.Errorf("DuckLake catalog could not be opened: %w", err)
+func providedDatabase(provider DatabaseProvider) *sql.DB {
+	if provider == nil {
+		return nil
 	}
-	defer db.Close()
+	return provider.SQLDB()
+}
 
-	serving_states, err := inspectDuckLakeServingStates(ctx, db, environment)
-	if err != nil {
-		return duckLakeStorageMetadata{}, err
+func (s Service) acquireAnalytics(ctx context.Context, operation string) (context.Context, analyticsresource.Session, func(), error) {
+	if s.Admitter == nil || s.Analytics == nil {
+		return ctx, nil, func() {}, fmt.Errorf("DuckLake analytical session is not configured")
 	}
-	tables, err := inspectDuckLakeTables(ctx, db, serving_states)
+	workloadLease, err := s.Admitter.Acquire(ctx, workload.Request{Class: workload.Control, Operation: operation})
+	if err != nil {
+		return ctx, nil, func() {}, err
+	}
+	analyticalLease, err := s.Analytics.Acquire(workloadLease.Context())
+	if err != nil {
+		workloadLease.Release()
+		return ctx, nil, func() {}, err
+	}
+	session, err := s.Analytics.Session(analyticalLease.Context())
+	if err != nil {
+		analyticalLease.Release()
+		workloadLease.Release()
+		return ctx, nil, func() {}, err
+	}
+	return analyticalLease.Context(), session, func() {
+		analyticalLease.Release()
+		workloadLease.Release()
+	}, nil
+}
+
+type queryDatabase interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func inspectDuckLakeStorage(ctx context.Context, catalogPath, dataPath string, controlPlane *sql.DB, analytics queryDatabase, environment string) (duckLakeStorageMetadata, error) {
+	var serving_states []ui.AdminStorageServingState
+	if controlPlane != nil {
+		var err error
+		serving_states, err = inspectDuckLakeServingStates(ctx, controlPlane, environment)
+		if err != nil {
+			return duckLakeStorageMetadata{}, err
+		}
+	}
+	if analytics == nil {
+		return duckLakeStorageMetadata{}, fmt.Errorf("DuckLake analytical session is not configured")
+	}
+
+	tables, err := inspectDuckLakeTables(ctx, analytics, serving_states)
 	if err != nil {
 		return duckLakeStorageMetadata{}, err
 	}
 	for i := range tables {
 		tables[i].DatabasePath = catalogPath
 	}
-	snapshots, err := inspectDuckLakeSnapshots(ctx, db, serving_states)
+	snapshots, err := inspectDuckLakeSnapshots(ctx, analytics, serving_states)
 	if err != nil {
 		return duckLakeStorageMetadata{}, err
 	}
-	summary, err := inspectDuckLakeSummary(ctx, db)
+	summary, err := inspectDuckLakeSummary(ctx, analytics)
 	if err != nil {
 		return duckLakeStorageMetadata{}, err
 	}
@@ -158,37 +220,18 @@ func inspectDuckLakeStorage(ctx context.Context, catalogPath, dataPath, environm
 	}, nil
 }
 
-func openDuckLakeMetadataForInspection(ctx context.Context, catalogPath, dataPath string) (*sql.DB, error) {
-	db, err := openDuckDBConnection(ctx, ":memory:")
-	if err != nil {
-		return nil, err
-	}
-	for _, stmt := range []string{
-		"LOAD sqlite",
-		"LOAD ducklake",
-		fmt.Sprintf("ATTACH 'ducklake:sqlite:%s' AS lake (DATA_PATH '%s')", sqlString(catalogPath), sqlString(dataPath)),
-		fmt.Sprintf("ATTACH '%s' AS meta (TYPE sqlite)", sqlString(catalogPath)),
-	} {
-		if _, err := db.ExecContext(ctx, stmt); err != nil {
-			_ = db.Close()
-			return nil, err
-		}
-	}
-	return db, nil
-}
-
 type duckLakeStorageSummary struct {
 	SnapshotCount      int
 	DataFileCount      int
 	TotalDataSizeBytes int64
 }
 
-func inspectDuckLakeSummary(ctx context.Context, db *sql.DB) (duckLakeStorageSummary, error) {
+func inspectDuckLakeSummary(ctx context.Context, db queryDatabase) (duckLakeStorageSummary, error) {
 	row := db.QueryRowContext(ctx, `
 SELECT
-	(SELECT count(*) FROM meta.ducklake_snapshot),
-	(SELECT count(*) FROM meta.ducklake_data_file WHERE end_snapshot IS NULL),
-	(SELECT coalesce(sum(file_size_bytes), 0) FROM meta.ducklake_data_file WHERE end_snapshot IS NULL)`)
+	(SELECT count(*) FROM __ducklake_metadata_lake.ducklake_snapshot),
+	(SELECT count(*) FROM __ducklake_metadata_lake.ducklake_data_file WHERE end_snapshot IS NULL),
+	(SELECT coalesce(sum(file_size_bytes), 0) FROM __ducklake_metadata_lake.ducklake_data_file WHERE end_snapshot IS NULL)`)
 	var summary duckLakeStorageSummary
 	if err := row.Scan(&summary.SnapshotCount, &summary.DataFileCount, &summary.TotalDataSizeBytes); err != nil {
 		return duckLakeStorageSummary{}, duckLakeMetadataError(err)
@@ -196,7 +239,7 @@ SELECT
 	return summary, nil
 }
 
-func inspectDuckLakeTables(ctx context.Context, db *sql.DB, serving_states []ui.AdminStorageServingState) ([]ui.AdminStorageTable, error) {
+func inspectDuckLakeTables(ctx context.Context, db queryDatabase, serving_states []ui.AdminStorageServingState) ([]ui.AdminStorageTable, error) {
 	columns, err := inspectDuckLakeColumns(ctx, db)
 	if err != nil {
 		return nil, err
@@ -213,17 +256,17 @@ func inspectDuckLakeTables(ctx context.Context, db *sql.DB, serving_states []ui.
 	rows, err := db.QueryContext(ctx, `
 WITH active_tables AS (
 	SELECT s.schema_name, s.path AS schema_path, t.table_name, t.path AS table_path, t.table_id, t.table_uuid, t.begin_snapshot, t.end_snapshot
-	FROM meta.ducklake_table t
-	JOIN meta.ducklake_schema s ON s.schema_id = t.schema_id
+	FROM __ducklake_metadata_lake.ducklake_table t
+	JOIN __ducklake_metadata_lake.ducklake_schema s ON s.schema_id = t.schema_id
 	WHERE t.end_snapshot IS NULL
 ), file_rollup AS (
 	SELECT table_id, count(*) AS file_count, coalesce(sum(record_count), 0) AS row_count, coalesce(sum(file_size_bytes), 0) AS byte_count
-	FROM meta.ducklake_data_file
+	FROM __ducklake_metadata_lake.ducklake_data_file
 	WHERE end_snapshot IS NULL
 	GROUP BY table_id
 ), column_rollup AS (
 	SELECT table_id, count(*) AS column_count
-	FROM meta.ducklake_column
+	FROM __ducklake_metadata_lake.ducklake_column
 	WHERE end_snapshot IS NULL AND parent_column IS NULL
 	GROUP BY table_id
 )
@@ -284,7 +327,7 @@ ORDER BY a.schema_name, a.table_name`)
 	return tables, nil
 }
 
-func inspectDuckLakeColumns(ctx context.Context, db *sql.DB) (map[int64][]ui.AdminStorageColumn, error) {
+func inspectDuckLakeColumns(ctx context.Context, db queryDatabase) (map[int64][]ui.AdminStorageColumn, error) {
 	stats, err := inspectDuckLakeColumnStats(ctx, db)
 	if err != nil {
 		return nil, err
@@ -292,7 +335,7 @@ func inspectDuckLakeColumns(ctx context.Context, db *sql.DB) (map[int64][]ui.Adm
 	rows, err := db.QueryContext(ctx, `
 SELECT table_id, column_id, column_name, column_type, column_order, nulls_allowed, default_value,
        initial_default, default_value_type, default_value_dialect, begin_snapshot
-FROM meta.ducklake_column
+FROM __ducklake_metadata_lake.ducklake_column
 WHERE end_snapshot IS NULL AND parent_column IS NULL
 ORDER BY table_id, column_order`)
 	if err != nil {
@@ -305,14 +348,14 @@ ORDER BY table_id, column_order`)
 		var name, columnType string
 		var ordinal int
 		var columnID, beginSnapshot int64
-		var nullable sql.NullInt64
+		var nullable sql.NullBool
 		var defaultValue, initialDefault, defaultValueType, defaultValueDialect sql.NullString
 		if err := rows.Scan(&tableID, &columnID, &name, &columnType, &ordinal, &nullable, &defaultValue, &initialDefault, &defaultValueType, &defaultValueDialect, &beginSnapshot); err != nil {
 			return nil, err
 		}
 		nullableLabel := "-"
 		if nullable.Valid {
-			if nullable.Int64 == 0 {
+			if !nullable.Bool {
 				nullableLabel = "No"
 			} else {
 				nullableLabel = "Yes"
@@ -348,10 +391,10 @@ type duckLakeColumnStats struct {
 	ExtraStats   string
 }
 
-func inspectDuckLakeColumnStats(ctx context.Context, db *sql.DB) (map[string]duckLakeColumnStats, error) {
+func inspectDuckLakeColumnStats(ctx context.Context, db queryDatabase) (map[string]duckLakeColumnStats, error) {
 	rows, err := db.QueryContext(ctx, `
 SELECT table_id, column_id, contains_null, contains_nan, min_value, max_value, extra_stats
-FROM meta.ducklake_table_column_stats`)
+FROM __ducklake_metadata_lake.ducklake_table_column_stats`)
 	if err != nil {
 		return nil, duckLakeMetadataError(err)
 	}
@@ -359,7 +402,7 @@ FROM meta.ducklake_table_column_stats`)
 	stats := map[string]duckLakeColumnStats{}
 	for rows.Next() {
 		var tableID, columnID int64
-		var containsNull, containsNaN sql.NullInt64
+		var containsNull, containsNaN sql.NullBool
 		var minValue, maxValue, extraStats sql.NullString
 		if err := rows.Scan(&tableID, &columnID, &containsNull, &containsNaN, &minValue, &maxValue, &extraStats); err != nil {
 			return nil, err
@@ -391,20 +434,20 @@ func duckLakeTablePath(schemaPath, tablePath string) string {
 	return strings.TrimRight(schemaPath, "/") + "/" + strings.TrimLeft(tablePath, "/")
 }
 
-func ternaryStatLabel(value sql.NullInt64) string {
+func ternaryStatLabel(value sql.NullBool) string {
 	if !value.Valid {
 		return "-"
 	}
-	if value.Int64 == 0 {
+	if !value.Bool {
 		return "No"
 	}
 	return "Yes"
 }
 
-func inspectDuckLakeFiles(ctx context.Context, db *sql.DB) (map[int64][]ui.AdminStorageFile, error) {
+func inspectDuckLakeFiles(ctx context.Context, db queryDatabase) (map[int64][]ui.AdminStorageFile, error) {
 	rows, err := db.QueryContext(ctx, `
 SELECT table_id, data_file_id, path, file_format, record_count, file_size_bytes, begin_snapshot, end_snapshot
-FROM meta.ducklake_data_file
+FROM __ducklake_metadata_lake.ducklake_data_file
 WHERE end_snapshot IS NULL
 ORDER BY table_id, file_order, data_file_id`)
 	if err != nil {
@@ -429,25 +472,25 @@ ORDER BY table_id, file_order, data_file_id`)
 	return files, rows.Err()
 }
 
-func inspectDuckLakeTableHistory(ctx context.Context, db *sql.DB) (map[int64][]ui.AdminStorageTableHistory, error) {
+func inspectDuckLakeTableHistory(ctx context.Context, db queryDatabase) (map[int64][]ui.AdminStorageTableHistory, error) {
 	rows, err := db.QueryContext(ctx, `
 WITH table_events AS (
 	SELECT table_id, begin_snapshot AS snapshot_id, 'table' AS source
-	FROM meta.ducklake_table
+	FROM __ducklake_metadata_lake.ducklake_table
 	UNION ALL
 	SELECT table_id, begin_snapshot AS snapshot_id, 'column' AS source
-	FROM meta.ducklake_column
+	FROM __ducklake_metadata_lake.ducklake_column
 	WHERE parent_column IS NULL
 	UNION ALL
 	SELECT table_id, begin_snapshot AS snapshot_id, 'data_file' AS source
-	FROM meta.ducklake_data_file
+	FROM __ducklake_metadata_lake.ducklake_data_file
 )
 SELECT e.table_id, s.snapshot_id, s.snapshot_time, s.schema_version,
        group_concat(DISTINCT e.source),
        coalesce(c.changes_made, ''), coalesce(c.author, ''), coalesce(c.commit_message, ''), coalesce(c.commit_extra_info, '')
 FROM table_events e
-JOIN meta.ducklake_snapshot s ON s.snapshot_id = e.snapshot_id
-LEFT JOIN meta.ducklake_snapshot_changes c ON c.snapshot_id = s.snapshot_id
+JOIN __ducklake_metadata_lake.ducklake_snapshot s ON s.snapshot_id = e.snapshot_id
+LEFT JOIN __ducklake_metadata_lake.ducklake_snapshot_changes c ON c.snapshot_id = s.snapshot_id
 GROUP BY e.table_id, s.snapshot_id, s.snapshot_time, s.schema_version, c.changes_made, c.author, c.commit_message, c.commit_extra_info
 ORDER BY e.table_id, s.snapshot_id`)
 	if err != nil {
@@ -466,12 +509,12 @@ ORDER BY e.table_id, s.snapshot_id`)
 	return history, rows.Err()
 }
 
-func inspectDuckLakeSnapshots(ctx context.Context, db *sql.DB, serving_states []ui.AdminStorageServingState) ([]ui.AdminStorageSnapshot, error) {
+func inspectDuckLakeSnapshots(ctx context.Context, db queryDatabase, serving_states []ui.AdminStorageServingState) ([]ui.AdminStorageSnapshot, error) {
 	rows, err := db.QueryContext(ctx, `
 SELECT s.snapshot_id, s.snapshot_time, s.schema_version,
        coalesce(c.changes_made, ''), coalesce(c.author, ''), coalesce(c.commit_message, ''), coalesce(c.commit_extra_info, '')
-FROM meta.ducklake_snapshot s
-LEFT JOIN meta.ducklake_snapshot_changes c ON c.snapshot_id = s.snapshot_id
+FROM __ducklake_metadata_lake.ducklake_snapshot s
+LEFT JOIN __ducklake_metadata_lake.ducklake_snapshot_changes c ON c.snapshot_id = s.snapshot_id
 ORDER BY s.snapshot_id`)
 	if err != nil {
 		return nil, duckLakeMetadataError(err)
@@ -501,18 +544,15 @@ func inspectDuckLakeServingStates(ctx context.Context, db *sql.DB, environment s
 SELECT d.workspace_id, d.environment, d.id, d.status, d.ducklake_snapshot_id, d.digest,
        coalesce(d.activated_at, ''),
        CASE WHEN active.serving_state_id IS NOT NULL THEN 1 ELSE 0 END
-FROM meta.serving_states d
-LEFT JOIN meta.workspace_active_serving_states active
+FROM serving_states d
+LEFT JOIN workspace_active_serving_states active
   ON active.workspace_id = d.workspace_id
  AND active.environment = d.environment
  AND active.serving_state_id = d.id
 WHERE d.ducklake_snapshot_id > 0
   AND (? = '' OR d.environment = ?)
-ORDER BY d.workspace_id, d.environment, d.created_at, d.id`, environment, environment)
+	ORDER BY d.workspace_id, d.environment, d.created_at, d.id`, environment, environment)
 	if err != nil {
-		if isMissingSQLiteTableError(err) {
-			return nil, nil
-		}
 		return nil, err
 	}
 	defer rows.Close()
@@ -556,49 +596,6 @@ func isMissingSQLiteTableError(err error) bool {
 	}
 	message := strings.ToLower(err.Error())
 	return strings.Contains(message, "no such table") || strings.Contains(message, "does not exist")
-}
-
-func openDuckDBConnection(ctx context.Context, dsn string) (*sql.DB, error) {
-	db, err := sql.Open("duckdb", dsn)
-	if err == nil {
-		db.SetMaxOpenConns(1)
-		db.SetMaxIdleConns(1)
-		if pingErr := db.PingContext(ctx); pingErr == nil {
-			return db, nil
-		} else {
-			_ = db.Close()
-			err = pingErr
-		}
-	}
-	return nil, err
-}
-
-func openDuckDBForInspection(ctx context.Context, path string) (*sql.DB, error) {
-	db, err := openDuckDBConnection(ctx, duckDBReadOnlyDSN(path))
-	if err == nil {
-		return db, nil
-	}
-	fallbackDB, fallbackErr := openDuckDBConnection(ctx, path)
-	if fallbackErr == nil {
-		return fallbackDB, nil
-	}
-	return nil, errors.Join(err, fallbackErr)
-}
-
-func duckDBReadOnlyDSN(path string) string {
-	before, query, hasQuery := strings.Cut(path, "?")
-	if !hasQuery {
-		return path + "?access_mode=READ_ONLY"
-	}
-	values := strings.Split(query, "&")
-	for i, value := range values {
-		key, _, _ := strings.Cut(value, "=")
-		if key == "access_mode" {
-			values[i] = "access_mode=READ_ONLY"
-			return before + "?" + strings.Join(values, "&")
-		}
-	}
-	return path + "&access_mode=READ_ONLY"
 }
 
 func directorySize(root string) (int64, error) {

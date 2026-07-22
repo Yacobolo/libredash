@@ -4,10 +4,12 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	dashboardstream "github.com/Yacobolo/leapview/internal/dashboard/stream"
 	"github.com/Yacobolo/leapview/internal/secret"
+	"github.com/Yacobolo/leapview/internal/workload"
 	"github.com/go-chi/chi/v5"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -25,6 +27,14 @@ type httpTelemetry struct {
 	dashboardRefreshCancellations *prometheus.CounterVec
 	dashboardCacheOutcomes        *prometheus.CounterVec
 	dashboardTargetOutcomes       *prometheus.CounterVec
+	workloadRunning               *prometheus.GaugeVec
+	workloadQueued                *prometheus.GaugeVec
+	workloadBorrowed              *prometheus.GaugeVec
+	workloadAdmissions            *prometheus.CounterVec
+	workloadQueueWait             *prometheus.HistogramVec
+	workloadExecution             *prometheus.HistogramVec
+	workloadMu                    sync.Mutex
+	workloadLabels                map[string][2]string
 	publicDashboardDocuments      *prometheus.CounterVec
 	publicDashboardStreams        *prometheus.GaugeVec
 	publicDashboardCommands       *prometheus.CounterVec
@@ -80,6 +90,13 @@ func newHTTPTelemetry() *httpTelemetry {
 			Name: "leapview_dashboard_target_outcomes_total",
 			Help: "Dashboard refresh target outcomes.",
 		}, []string{"kind", "outcome"}),
+		workloadRunning:    prometheus.NewGaugeVec(prometheus.GaugeOpts{Name: "leapview_workload_running", Help: "Currently running workload operations."}, []string{"class", "workspace"}),
+		workloadQueued:     prometheus.NewGaugeVec(prometheus.GaugeOpts{Name: "leapview_workload_queued", Help: "Currently queued workload operations."}, []string{"class", "workspace"}),
+		workloadBorrowed:   prometheus.NewGaugeVec(prometheus.GaugeOpts{Name: "leapview_workload_borrowed", Help: "Capacity currently borrowed above each class reservation."}, []string{"class"}),
+		workloadAdmissions: prometheus.NewCounterVec(prometheus.CounterOpts{Name: "leapview_workload_admissions_total", Help: "Workload admission outcomes."}, []string{"class", "outcome", "reason"}),
+		workloadQueueWait:  prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "leapview_workload_queue_wait_seconds", Help: "Time spent waiting for workload admission.", Buckets: prometheus.ExponentialBuckets(0.001, 2, 17)}, []string{"class"}),
+		workloadExecution:  prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "leapview_workload_execution_duration_seconds", Help: "Admitted workload execution duration.", Buckets: prometheus.ExponentialBuckets(0.005, 2, 18)}, []string{"class"}),
+		workloadLabels:     map[string][2]string{},
 		publicDashboardDocuments: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "leapview_public_dashboard_documents_total",
 			Help: "Public dashboard document load outcomes.",
@@ -109,12 +126,64 @@ func newHTTPTelemetry() *httpTelemetry {
 		telemetry.dashboardRefreshCancellations,
 		telemetry.dashboardCacheOutcomes,
 		telemetry.dashboardTargetOutcomes,
+		telemetry.workloadRunning,
+		telemetry.workloadQueued,
+		telemetry.workloadBorrowed,
+		telemetry.workloadAdmissions,
+		telemetry.workloadQueueWait,
+		telemetry.workloadExecution,
 		telemetry.publicDashboardDocuments,
 		telemetry.publicDashboardStreams,
 		telemetry.publicDashboardCommands,
 		telemetry.publicDashboardRateLimits,
 	)
 	return telemetry
+}
+
+func (t *httpTelemetry) ObserveWorkload(stats workload.Stats) {
+	if t == nil {
+		return
+	}
+	t.workloadMu.Lock()
+	defer t.workloadMu.Unlock()
+	for _, labels := range t.workloadLabels {
+		t.workloadRunning.WithLabelValues(labels[0], labels[1]).Set(0)
+		t.workloadQueued.WithLabelValues(labels[0], labels[1]).Set(0)
+	}
+	t.workloadLabels = map[string][2]string{}
+	for class, classStats := range stats.Classes {
+		classLabel := string(class)
+		t.workloadBorrowed.WithLabelValues(classLabel).Set(float64(classStats.Borrowed))
+		for workspace, workspaceStats := range classStats.Workspaces {
+			labels := [2]string{classLabel, workspace}
+			t.workloadLabels[classLabel+"\x00"+workspace] = labels
+			t.workloadRunning.WithLabelValues(classLabel, workspace).Set(float64(workspaceStats.Running))
+			t.workloadQueued.WithLabelValues(classLabel, workspace).Set(float64(workspaceStats.Queued))
+		}
+	}
+}
+
+func (t *httpTelemetry) ObserveAdmission(event workload.AdmissionEvent) {
+	if t == nil {
+		return
+	}
+	outcome := event.Outcome
+	switch outcome {
+	case "admitted", "rejected", "completed", "timeout", "canceled":
+	default:
+		outcome = "other"
+	}
+	reason := string(event.Reason)
+	if reason == "" {
+		reason = "none"
+	}
+	t.workloadAdmissions.WithLabelValues(string(event.Class), outcome, reason).Inc()
+	if outcome == "admitted" || outcome == "rejected" {
+		t.workloadQueueWait.WithLabelValues(string(event.Class)).Observe(event.QueueWait.Seconds())
+	}
+	if outcome == "completed" || outcome == "timeout" || outcome == "canceled" {
+		t.workloadExecution.WithLabelValues(string(event.Class)).Observe(event.Execution.Seconds())
+	}
 }
 
 func (t *httpTelemetry) dashboardRefreshStarted(command string) {

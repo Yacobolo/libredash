@@ -67,6 +67,7 @@ type SharedCommandPrepare func(
 type Handler struct {
 	Metrics              Metrics
 	MetricsForWorkspace  func(workspaceID string) (Metrics, bool)
+	AnalyticalContext    func(context.Context) context.Context
 	Broker               SignalBroker
 	Coordinators         *dashboardstream.Registry
 	Logger               *slog.Logger
@@ -83,6 +84,13 @@ type Handler struct {
 	CommandGuard         func(*nethttp.Request, Metrics, command.Request, dashboard.Signals) error
 	SharedCommandPrepare SharedCommandPrepare
 	AgentBootstrap       func(*nethttp.Request, string) ui.ChatViewState
+}
+
+func (h Handler) analyticalContext(ctx context.Context) context.Context {
+	if h.AnalyticalContext == nil {
+		return ctx
+	}
+	return h.AnalyticalContext(ctx)
 }
 
 func (h Handler) filterAuthorizedDashboards(ctx context.Context, principalID, workspaceID string, rows []api.DashboardSummary) ([]api.DashboardSummary, error) {

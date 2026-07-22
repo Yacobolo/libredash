@@ -423,7 +423,7 @@ func (p *Planner) compileFactAggregate(request Request, resolved aggregateResolu
 	if err != nil {
 		return "", nil, nil, err
 	}
-	from, err := joinPathSQL(p.Model, aliases)
+	from, err := joinPathSQL(p, aliases)
 	if err != nil {
 		return "", nil, nil, err
 	}

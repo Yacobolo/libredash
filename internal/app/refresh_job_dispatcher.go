@@ -7,7 +7,7 @@ import (
 
 	"github.com/Yacobolo/leapview/internal/analytics/materialize"
 	materializehttp "github.com/Yacobolo/leapview/internal/analytics/materialize/http"
-	"github.com/Yacobolo/leapview/internal/execution"
+	"github.com/Yacobolo/leapview/internal/workload"
 	"github.com/Yacobolo/leapview/internal/workspace/refresh"
 )
 
@@ -72,18 +72,21 @@ func (s *Server) runRefreshJobDispatcher(ctx context.Context) {
 	dispatcher := refresh.Dispatcher{
 		Runs:         repo,
 		Service:      service,
-		Executor:     s.executionService(),
+		Admitter:     s.workloadController(),
 		LeaseTimeout: s.jobLeaseTimeout,
 		Logger:       s.logger,
 		Owner:        fmt.Sprintf("leapview-%d", time.Now().UnixNano()),
 		Environment:  string(s.defaultServingEnvironment()),
-		ExecutionStats: func() execution.Stats {
-			return s.executionService().Stats()
+		WorkloadStats: func() workload.Stats {
+			return s.workloadController().Stats()
 		},
 		RunFinished: func(ctx context.Context, job materialize.JobRecord) {
 			run, err := repo.GetRun(ctx, job.WorkspaceID, job.RunID)
 			if err != nil {
 				return
+			}
+			if run.Status == materialize.RunStatusSucceeded {
+				_ = s.reconcileStorageRetention(ctx, false)
 			}
 			response, ok := materializehttp.PipelineRunResponseFor(run)
 			if !ok {

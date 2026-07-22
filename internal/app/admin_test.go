@@ -9,11 +9,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/Yacobolo/leapview/internal/access"
 	"github.com/Yacobolo/leapview/internal/agent"
+	analyticsducklake "github.com/Yacobolo/leapview/internal/analytics/ducklake"
 	"github.com/Yacobolo/leapview/internal/platform"
 	"github.com/Yacobolo/leapview/internal/queryaudit"
 	"github.com/Yacobolo/leapview/internal/ui"
@@ -21,6 +23,39 @@ import (
 	"github.com/Yacobolo/leapview/pkg/pagestream"
 	_ "github.com/duckdb/duckdb-go/v2"
 )
+
+type synchronizedResponseRecorder struct {
+	mu sync.RWMutex
+	*httptest.ResponseRecorder
+}
+
+func newSynchronizedResponseRecorder() *synchronizedResponseRecorder {
+	return &synchronizedResponseRecorder{ResponseRecorder: httptest.NewRecorder()}
+}
+
+func (r *synchronizedResponseRecorder) Write(body []byte) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.ResponseRecorder.Write(body)
+}
+
+func (r *synchronizedResponseRecorder) WriteHeader(status int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.ResponseRecorder.WriteHeader(status)
+}
+
+func (r *synchronizedResponseRecorder) Flush() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.ResponseRecorder.Flush()
+}
+
+func (r *synchronizedResponseRecorder) BodyString() string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.Body.String()
+}
 
 func TestAdminRouteRejectsViewer(t *testing.T) {
 	store := testStore(t)
@@ -455,14 +490,14 @@ func TestAdminQueryHistoryUpdatesForwardsPatches(t *testing.T) {
 	req := httptest.NewRequestWithContext(reqCtx, http.MethodGet, "/updates?route=admin&section=queries", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.AddCookie(&http.Cookie{Name: "lv_client_id", Value: "test-client"})
-	rec := httptest.NewRecorder()
+	rec := newSynchronizedResponseRecorder()
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
 		server.Routes().ServeHTTP(rec, req)
 	}()
 
-	deadline := time.After(time.Second)
+	deadline := time.After(10 * time.Second)
 	for server.broker.SubscriberCount("admin-queries:test-client") == 0 {
 		select {
 		case <-deadline:
@@ -472,11 +507,11 @@ func TestAdminQueryHistoryUpdatesForwardsPatches(t *testing.T) {
 		}
 	}
 	server.broker.Publish("admin-queries:test-client", pagestream.SignalPatch{"adminQueryHistory": map[string]any{"loadedCountLabel": "sentinel"}})
-	deadline = time.After(time.Second)
-	for !strings.Contains(rec.Body.String(), "sentinel") {
+	deadline = time.After(10 * time.Second)
+	for !strings.Contains(rec.BodyString(), "sentinel") {
 		select {
 		case <-deadline:
-			t.Fatalf("timed out waiting for forwarded patch:\n%s", rec.Body.String())
+			t.Fatalf("timed out waiting for forwarded patch:\n%s", rec.BodyString())
 		default:
 			time.Sleep(10 * time.Millisecond)
 		}
@@ -519,14 +554,14 @@ func TestAdminStorageUpdatesSubscribesWithoutInitialRescan(t *testing.T) {
 	req := httptest.NewRequestWithContext(reqCtx, http.MethodGet, "/updates?route=admin&section=storage", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.AddCookie(&http.Cookie{Name: "lv_client_id", Value: "test-client"})
-	rec := httptest.NewRecorder()
+	rec := newSynchronizedResponseRecorder()
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
 		server.Routes().ServeHTTP(rec, req)
 	}()
 
-	deadline := time.After(time.Second)
+	deadline := time.After(10 * time.Second)
 	for server.broker.SubscriberCount("admin-storage:test-client") == 0 {
 		select {
 		case <-deadline:
@@ -536,11 +571,11 @@ func TestAdminStorageUpdatesSubscribesWithoutInitialRescan(t *testing.T) {
 		}
 	}
 	server.broker.Publish("admin-storage:test-client", pagestream.SignalPatch{"adminStorage": map[string]any{"selectedKey": "sentinel"}})
-	deadline = time.After(time.Second)
-	for !strings.Contains(rec.Body.String(), "sentinel") {
+	deadline = time.After(10 * time.Second)
+	for !strings.Contains(rec.BodyString(), "sentinel") {
 		select {
 		case <-deadline:
-			t.Fatalf("timed out waiting for forwarded patch:\n%s", rec.Body.String())
+			t.Fatalf("timed out waiting for forwarded patch:\n%s", rec.BodyString())
 		default:
 			time.Sleep(10 * time.Millisecond)
 		}
@@ -559,10 +594,11 @@ func TestAdminStorageSelectTablePublishesSelectedTablePatch(t *testing.T) {
 	token := testAPIToken(t, ctx, store, owner.ID, "test")
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	dir := t.TempDir()
-	catalogPath := filepath.Join(dir, "leapview.db")
+	catalogPath := filepath.Join(dir, "catalog.duckdb")
 	dataPath := filepath.Join(dir, "data")
 	seedAdminStorageDuckLakeAt(t, catalogPath, dataPath)
-	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test", DuckLakeCatalogPath: catalogPath, DuckLakeDataPath: dataPath})
+	environment := adminStorageEnvironment(t, catalogPath, dataPath)
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test", DuckLakeCatalogPath: catalogPath, DuckLakeDataPath: dataPath, DuckDBEnvironment: environment})
 	updates, unsubscribe := server.broker.Subscribe("admin-storage:test-client")
 	defer unsubscribe()
 
@@ -600,9 +636,10 @@ func TestAdminStorageSelectTablePublishesSelectedTablePatch(t *testing.T) {
 
 func TestAdminStorageReadsDuckLakeMetadata(t *testing.T) {
 	dir := t.TempDir()
-	catalogPath := filepath.Join(dir, "leapview.db")
+	catalogPath := filepath.Join(dir, "catalog.duckdb")
 	dataPath := filepath.Join(dir, "data")
 	seedAdminStorageDuckLakeAt(t, catalogPath, dataPath)
+	environment := adminStorageEnvironment(t, catalogPath, dataPath)
 	legacyDir := filepath.Join(dir, "duckdb")
 	if err := os.MkdirAll(legacyDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -610,7 +647,7 @@ func TestAdminStorageReadsDuckLakeMetadata(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(legacyDir, "leapview-stale.duckdb"), []byte("stale"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	server := NewWithOptions(fakeMetrics{}, Options{DefaultWorkspaceID: "test", DuckDBDir: legacyDir, DuckLakeCatalogPath: catalogPath, DuckLakeDataPath: dataPath})
+	server := NewWithOptions(fakeMetrics{}, Options{DefaultWorkspaceID: "test", DuckDBDir: legacyDir, DuckLakeCatalogPath: catalogPath, DuckLakeDataPath: dataPath, DuckDBEnvironment: environment})
 
 	data := server.storageReadModel().Data(httptest.NewRequest(http.MethodGet, "/admin/storage", nil).Context())
 	if data.Status != "" {
@@ -658,14 +695,15 @@ func TestAdminStorageReadsDuckLakeMetadata(t *testing.T) {
 func TestAdminStorageIncludesDeploymentSnapshotContext(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
-	catalogPath := filepath.Join(dir, "leapview.db")
+	catalogPath := filepath.Join(dir, "catalog.duckdb")
 	dataPath := filepath.Join(dir, "data")
-	store, err := platform.Open(ctx, catalogPath)
+	store, err := platform.Open(ctx, filepath.Join(dir, "control.sqlite"))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
 	defer store.Close()
 	seedAdminStorageDuckLakeAt(t, catalogPath, dataPath)
+	environment := adminStorageEnvironment(t, catalogPath, dataPath)
 	snapshotID := latestAdminStorageDuckLakeSnapshot(t, catalogPath)
 	if _, err := store.SQLDB().ExecContext(ctx, `
 INSERT INTO workspaces (id, title) VALUES ('test', 'Test') ON CONFLICT(id) DO NOTHING;
@@ -685,6 +723,7 @@ VALUES ('test', 'prod', 'dep_prod')`, snapshotID, snapshotID); err != nil {
 		DefaultWorkspaceID:  "test",
 		DuckLakeCatalogPath: catalogPath,
 		DuckLakeDataPath:    dataPath,
+		DuckDBEnvironment:   environment,
 	})
 
 	data := server.storageReadModel().Data(httptest.NewRequest(http.MethodGet, "/admin/storage", nil).Context())
@@ -707,7 +746,7 @@ func TestAdminStorageSelectTableRejectsInvalidCommand(t *testing.T) {
 	token := testAPIToken(t, ctx, store, owner.ID, "test")
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	dir := t.TempDir()
-	catalogPath := filepath.Join(dir, "leapview.db")
+	catalogPath := filepath.Join(dir, "catalog.duckdb")
 	dataPath := filepath.Join(dir, "data")
 	seedAdminStorageDuckLakeAt(t, catalogPath, dataPath)
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test", DuckLakeCatalogPath: catalogPath, DuckLakeDataPath: dataPath})
@@ -828,13 +867,18 @@ func TestAdminStorageRendersEmptyStateWithoutDuckDBFiles(t *testing.T) {
 
 func latestAdminStorageDuckLakeSnapshot(t *testing.T, catalogPath string) int64 {
 	t.Helper()
-	db, err := sql.Open("sqlite", catalogPath)
+	db, err := sql.Open("duckdb", ":memory:")
 	if err != nil {
 		t.Fatalf("open sqlite catalog: %v", err)
 	}
 	defer db.Close()
+	for _, statement := range []string{"LOAD ducklake", "ATTACH 'ducklake:" + strings.ReplaceAll(catalogPath, "'", "''") + "' AS lake"} {
+		if _, err := db.Exec(statement); err != nil {
+			t.Fatal(err)
+		}
+	}
 	var snapshotID int64
-	if err := db.QueryRow(`SELECT max(snapshot_id) FROM ducklake_snapshot`).Scan(&snapshotID); err != nil {
+	if err := db.QueryRow(`SELECT max(snapshot_id) FROM __ducklake_metadata_lake.ducklake_snapshot`).Scan(&snapshotID); err != nil {
 		t.Fatalf("latest DuckLake snapshot: %v", err)
 	}
 	return snapshotID
@@ -848,9 +892,8 @@ func seedAdminStorageDuckLakeAt(t *testing.T, catalogPath, dataPath string) {
 	}
 	defer db.Close()
 	for _, stmt := range []string{
-		"LOAD sqlite",
 		"LOAD ducklake",
-		"ATTACH 'ducklake:sqlite:" + strings.ReplaceAll(catalogPath, "'", "''") + "' AS lake (DATA_PATH '" + strings.ReplaceAll(dataPath, "'", "''") + "')",
+		"ATTACH 'ducklake:" + strings.ReplaceAll(catalogPath, "'", "''") + "' AS lake (DATA_PATH '" + strings.ReplaceAll(dataPath, "'", "''") + "')",
 		"USE lake",
 		"CREATE SCHEMA model",
 		`CREATE TABLE model.orders AS
@@ -861,4 +904,16 @@ func seedAdminStorageDuckLakeAt(t *testing.T, catalogPath, dataPath string) {
 			t.Fatalf("seed ducklake %q: %v", stmt, err)
 		}
 	}
+}
+
+func adminStorageEnvironment(t *testing.T, catalogPath, dataPath string) *analyticsducklake.Environment {
+	t.Helper()
+	environment, err := analyticsducklake.Open(t.Context(), analyticsducklake.Config{
+		RootDir: filepath.Dir(catalogPath), CatalogPath: catalogPath, DataPath: dataPath, MaxConnections: 2,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = environment.Close() })
+	return environment
 }

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/Yacobolo/leapview/internal/access"
+	"github.com/Yacobolo/leapview/internal/analytics/arrowquery"
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	semanticquery "github.com/Yacobolo/leapview/internal/analytics/query"
 	"github.com/Yacobolo/leapview/internal/dashboard"
@@ -113,6 +114,31 @@ func (m Metrics) ExecuteDataQuery(ctx context.Context, request dataquery.Query) 
 		return result, err
 	}
 	return result, nil
+}
+
+func (m Metrics) ExecuteDataQueryArrow(ctx context.Context, request dataquery.Query, sink arrowquery.Sink) (dataquery.Result, error) {
+	if m.Metrics == nil {
+		return dataquery.Result{}, errors.New("query metrics are not configured")
+	}
+	executor, ok := m.Metrics.(arrowquery.Executor)
+	if !ok {
+		return dataquery.Result{}, errors.New("query metrics do not support native Arrow execution")
+	}
+	if m.repo == nil {
+		return executor.ExecuteDataQueryArrow(ctx, request, sink)
+	}
+	governed, transform, err := m.GovernDataQuery(ctx, request)
+	if err != nil {
+		return rejectedDataQueryResult(err)
+	}
+	ctx = dataquery.WithGovernanceApplied(ctx)
+	result, err := executor.ExecuteDataQueryArrow(ctx, governed, sink)
+	if transform != nil {
+		if transformErr := transform(&result, err); transformErr != nil {
+			return rejectedDataQueryResult(transformErr)
+		}
+	}
+	return result, err
 }
 
 func (m Metrics) GovernDataQuery(ctx context.Context, request dataquery.Query) (dataquery.Query, dataquery.ResultTransformer, error) {
@@ -643,7 +669,7 @@ func dataQueryPrivilege(request dataquery.Query) access.Privilege {
 		return access.PrivilegePreviewData
 	}
 	switch request.Kind {
-	case dataquery.KindModelTableRows, dataquery.KindSourceRows:
+	case dataquery.KindModelTableRows:
 		return access.PrivilegePreviewData
 	case dataquery.KindSemanticRows:
 		if request.Surface == dataquery.SurfaceDashboard || request.Surface == dataquery.SurfacePublicDashboard {
@@ -660,8 +686,6 @@ func dataQueryObjects(request dataquery.Query) []access.ObjectRef {
 	modelID := request.ModelID
 	objects := []access.ObjectRef{}
 	switch request.Kind {
-	case dataquery.KindSourceRows:
-		objects = append(objects, access.ItemObject(access.SecurableSource, workspaceID, request.Target))
 	case dataquery.KindModelTableRows:
 		objects = append(objects, access.ItemObjectWithParent(access.SecurableModelTable, workspaceID, modelID+"/"+request.Target, access.ItemObject(access.SecurableSemanticModel, workspaceID, modelID)))
 	default:

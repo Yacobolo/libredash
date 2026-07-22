@@ -25,7 +25,7 @@ func (m *dynamicRuntimeMetrics) WithDashboardRefreshLease(ctx context.Context, r
 	return withDashboardRefreshLease(ctx, m.defaultMetrics(), run)
 }
 
-func (m executionMetrics) WithDashboardRefreshLease(ctx context.Context, run func(context.Context) error) error {
+func (m workloadMetrics) WithDashboardRefreshLease(ctx context.Context, run func(context.Context) error) error {
 	return withDashboardRefreshLease(m.readContext(ctx), m.QueryMetrics, run)
 }
 
@@ -62,7 +62,7 @@ func (m *dynamicRuntimeMetrics) DashboardTargetConcurrency() int {
 	return dashboardConcurrencyFrom(m.defaultMetrics())
 }
 
-func (m executionMetrics) DashboardTargetConcurrency() int {
+func (m workloadMetrics) DashboardTargetConcurrency() int {
 	return dashboardConcurrencyFrom(m.QueryMetrics)
 }
 

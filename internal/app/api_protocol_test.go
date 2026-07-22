@@ -52,6 +52,24 @@ func TestAPIGenResponseBufferNormalizesLegacyErrorsAsProblemDetails(t *testing.T
 	}
 }
 
+func TestAPIGenResponseBufferPreservesBoundedProblemCode(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/sales/query", nil)
+	recorder := httptest.NewRecorder()
+	buffer := newAPIGenResponseBuffer(recorder, req)
+	buffer.Header().Set("Content-Type", "application/json")
+	buffer.WriteHeader(http.StatusServiceUnavailable)
+	_, _ = buffer.Write([]byte(`{"code":503,"message":"overloaded","details":{"problemCode":"WORKLOAD_OVERLOADED"}}`))
+	buffer.flush()
+
+	var problem apigenapi.ProblemDetails
+	if err := json.Unmarshal(recorder.Body.Bytes(), &problem); err != nil {
+		t.Fatalf("decode problem: %v", err)
+	}
+	if problem.Code != "WORKLOAD_OVERLOADED" || problem.Type != "https://leapview.dev/problems/workload_overloaded" {
+		t.Fatalf("problem = %#v", problem)
+	}
+}
+
 func TestAPIGenResponseBufferCompletesProblemDetailsIdentifiers(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces?limit=bad", nil)
 	req.Header.Set("X-Request-ID", "req_existing_problem")

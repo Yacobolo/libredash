@@ -75,13 +75,11 @@ func (s *Server) workspaceRefreshService(runRepo refresh.RunRepository) (refresh
 		Runs:          runRepo,
 		Artifacts:     appRefreshArtifactLoader{},
 		Materializer: analyticsduckdb.WorkspaceRefreshMaterializer{
-			DuckDBDir:       s.duckDBDir,
-			DuckLakeCatalog: s.duckLakeCatalogPath,
-			DuckLakeData:    s.duckLakeDataPath,
-			ManagedData:     s.managedDataResolver,
+			Environment: s.duckDBEnvironment,
+			ManagedData: s.managedDataResolver,
+			Credentials: analyticsduckdb.EnvironmentCredentialResolver{},
 		},
 		Runtime:                  appRefreshRuntimeHost{reloader: s.reloader},
-		Retention:                appRefreshRetention{server: s},
 		Publisher:                appRefreshPublisher{server: s},
 		DataVersions:             s.refreshPipelineRepo,
 		CandidateValidationHooks: hooks,
@@ -131,17 +129,6 @@ func (h appRefreshRuntimeHost) ActivatePrepared(prepared servingstate.PreparedRu
 		return fmt.Errorf("metadata activation is required")
 	}
 	return h.reloader.ActivatePrepared(prepared, activate)
-}
-
-type appRefreshRetention struct {
-	server *Server
-}
-
-func (r appRefreshRetention) Run(ctx context.Context, dryRun bool) error {
-	if r.server == nil {
-		return nil
-	}
-	return r.server.reconcileStorageRetention(ctx, dryRun)
 }
 
 type appRefreshPublisher struct {

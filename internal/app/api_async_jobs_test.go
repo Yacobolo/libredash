@@ -14,7 +14,7 @@ func TestBackgroundLifecycleReclaimsPersistedAPIJobs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := repo.Enqueue(t.Context(), asyncjob.EnqueueInput{ID: "job-restart", Kind: "test.unsupported", ResourceKind: "test", ResourceID: "resource-1", Payload: []byte(`{}`)}); err != nil {
+	if _, err := repo.Enqueue(t.Context(), asyncjob.EnqueueInput{ID: "job-restart", Kind: "test.unsupported", WorkloadClass: "control", WorkspaceID: "_node", ResourceKind: "test", ResourceID: "resource-1", Payload: []byte(`{}`)}); err != nil {
 		t.Fatal(err)
 	}
 

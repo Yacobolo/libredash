@@ -21,12 +21,13 @@ func NewRepository(db platformdb.DBTX) *Repository { return &Repository{q: platf
 
 func (r *Repository) Enqueue(ctx context.Context, input asyncjob.EnqueueInput) (asyncjob.Job, error) {
 	input.ID, input.Kind = strings.TrimSpace(input.ID), strings.TrimSpace(input.Kind)
+	input.WorkloadClass, input.WorkspaceID = strings.TrimSpace(input.WorkloadClass), strings.TrimSpace(input.WorkspaceID)
 	input.ResourceKind, input.ResourceID = strings.TrimSpace(input.ResourceKind), strings.TrimSpace(input.ResourceID)
-	if input.ID == "" || input.Kind == "" || input.ResourceKind == "" || input.ResourceID == "" || !json.Valid(input.Payload) {
+	if input.ID == "" || input.Kind == "" || input.WorkloadClass == "" || input.WorkspaceID == "" || input.ResourceKind == "" || input.ResourceID == "" || !json.Valid(input.Payload) {
 		return asyncjob.Job{}, fmt.Errorf("invalid async job")
 	}
 	digest := jobDigest(input)
-	err := r.q.EnqueueAPIAsyncJob(ctx, platformdb.EnqueueAPIAsyncJobParams{ID: input.ID, JobKind: input.Kind,
+	err := r.q.EnqueueAPIAsyncJob(ctx, platformdb.EnqueueAPIAsyncJobParams{ID: input.ID, JobKind: input.Kind, WorkloadClass: input.WorkloadClass, WorkspaceID: input.WorkspaceID,
 		ResourceKind: input.ResourceKind, ResourceID: input.ResourceID, PayloadJson: string(input.Payload), RequestDigest: digest})
 	if err != nil {
 		existing, getErr := r.Get(ctx, input.ID)
@@ -42,7 +43,7 @@ func (r *Repository) Enqueue(ctx context.Context, input asyncjob.EnqueueInput) (
 }
 
 func jobDigest(input asyncjob.EnqueueInput) string {
-	sum := sha256.Sum256([]byte(input.Kind + "\x00" + input.ResourceKind + "\x00" + input.ResourceID + "\x00" + string(input.Payload)))
+	sum := sha256.Sum256([]byte(input.Kind + "\x00" + input.WorkloadClass + "\x00" + input.WorkspaceID + "\x00" + input.ResourceKind + "\x00" + input.ResourceID + "\x00" + string(input.Payload)))
 	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
@@ -54,13 +55,29 @@ func (r *Repository) Get(ctx context.Context, id string) (asyncjob.Job, error) {
 	return jobFromGetRow(row), err
 }
 
-func (r *Repository) Claim(ctx context.Context, owner string, lease time.Duration) (asyncjob.Job, bool, error) {
-	owner = strings.TrimSpace(owner)
-	if owner == "" || lease <= 0 {
-		return asyncjob.Job{}, false, fmt.Errorf("worker owner and positive lease are required")
+func (r *Repository) Candidates(ctx context.Context, workloadClass string, limit int) ([]asyncjob.Job, error) {
+	workloadClass = strings.TrimSpace(workloadClass)
+	if workloadClass == "" || limit < 1 || limit > 200 {
+		return nil, fmt.Errorf("workload class and candidate limit are required")
+	}
+	rows, err := r.q.ListAPIAsyncJobCandidates(ctx, platformdb.ListAPIAsyncJobCandidatesParams{WorkloadClass: workloadClass, ResultLimit: int64(limit)})
+	if err != nil {
+		return nil, err
+	}
+	jobs := make([]asyncjob.Job, 0, len(rows))
+	for _, row := range rows {
+		jobs = append(jobs, jobFromCandidateRow(row))
+	}
+	return jobs, nil
+}
+
+func (r *Repository) ClaimByID(ctx context.Context, id, workloadClass, owner string, lease time.Duration) (asyncjob.Job, bool, error) {
+	id, workloadClass, owner = strings.TrimSpace(id), strings.TrimSpace(workloadClass), strings.TrimSpace(owner)
+	if id == "" || workloadClass == "" || owner == "" || lease <= 0 {
+		return asyncjob.Job{}, false, fmt.Errorf("job id, workload class, worker owner, and positive lease are required")
 	}
 	modifier := fmt.Sprintf("+%d seconds", max(1, int(lease.Seconds())))
-	row, err := r.q.ClaimAPIAsyncJob(ctx, platformdb.ClaimAPIAsyncJobParams{LeaseOwner: owner, LeaseModifier: modifier})
+	row, err := r.q.ClaimAPIAsyncJobByID(ctx, platformdb.ClaimAPIAsyncJobByIDParams{ID: id, WorkloadClass: workloadClass, LeaseOwner: owner, LeaseModifier: modifier})
 	if errors.Is(err, sql.ErrNoRows) {
 		return asyncjob.Job{}, false, nil
 	}
@@ -131,13 +148,19 @@ func (r *Repository) event(ctx context.Context, kind, id string, eventID int64) 
 }
 
 func jobFromGetRow(row platformdb.GetAPIAsyncJobRow) asyncjob.Job {
-	return asyncjob.Job{ID: row.ID, Kind: row.JobKind, ResourceKind: row.ResourceKind, ResourceID: row.ResourceID,
+	return asyncjob.Job{ID: row.ID, Kind: row.JobKind, WorkloadClass: row.WorkloadClass, WorkspaceID: row.WorkspaceID, ResourceKind: row.ResourceKind, ResourceID: row.ResourceID,
 		Payload: []byte(row.PayloadJson), Status: asyncjob.Status(row.Status), Attempts: int(row.AttemptCount), LeaseOwner: row.LeaseOwner,
 		LeaseExpiresAt: row.LeaseExpiresAt, CreatedAt: row.CreatedAt, StartedAt: row.StartedAt, FinishedAt: row.FinishedAt, ErrorJSON: row.ErrorJson}
 }
 
-func jobFromClaimRow(row platformdb.ClaimAPIAsyncJobRow) asyncjob.Job {
-	return asyncjob.Job{ID: row.ID, Kind: row.JobKind, ResourceKind: row.ResourceKind, ResourceID: row.ResourceID,
+func jobFromClaimRow(row platformdb.ClaimAPIAsyncJobByIDRow) asyncjob.Job {
+	return asyncjob.Job{ID: row.ID, Kind: row.JobKind, WorkloadClass: row.WorkloadClass, WorkspaceID: row.WorkspaceID, ResourceKind: row.ResourceKind, ResourceID: row.ResourceID,
+		Payload: []byte(row.PayloadJson), Status: asyncjob.Status(row.Status), Attempts: int(row.AttemptCount), LeaseOwner: row.LeaseOwner,
+		LeaseExpiresAt: row.LeaseExpiresAt, CreatedAt: row.CreatedAt, StartedAt: row.StartedAt, FinishedAt: row.FinishedAt, ErrorJSON: row.ErrorJson}
+}
+
+func jobFromCandidateRow(row platformdb.ListAPIAsyncJobCandidatesRow) asyncjob.Job {
+	return asyncjob.Job{ID: row.ID, Kind: row.JobKind, WorkloadClass: row.WorkloadClass, WorkspaceID: row.WorkspaceID, ResourceKind: row.ResourceKind, ResourceID: row.ResourceID,
 		Payload: []byte(row.PayloadJson), Status: asyncjob.Status(row.Status), Attempts: int(row.AttemptCount), LeaseOwner: row.LeaseOwner,
 		LeaseExpiresAt: row.LeaseExpiresAt, CreatedAt: row.CreatedAt, StartedAt: row.StartedAt, FinishedAt: row.FinishedAt, ErrorJSON: row.ErrorJson}
 }

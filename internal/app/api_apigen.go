@@ -304,6 +304,9 @@ func (w *apiGenResponseBuffer) normalizedBody(status int) []byte {
 	}
 	errors := []apigenapi.ProblemFieldError{}
 	if details, ok := value["details"].(map[string]any); ok {
+		if problemCode, ok := details["problemCode"].(string); ok && problemCode != "" {
+			code = problemCode
+		}
 		if field, ok := details["field"].(string); ok && field != "" {
 			errors = append(errors, apigenapi.ProblemFieldError{Field: field, Code: code, Detail: message})
 		}

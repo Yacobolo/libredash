@@ -13,7 +13,6 @@ const (
 	KindSemanticAggregate    Kind = "semantic_aggregate"
 	KindSemanticRows         Kind = "semantic_rows"
 	KindModelTableRows       Kind = "model_table_rows"
-	KindSourceRows           Kind = "source_rows"
 	KindSemanticHistogram    Kind = "semantic_histogram"
 	KindSemanticDistribution Kind = "semantic_distribution"
 )
@@ -247,10 +246,6 @@ func ModelTableRows(modelID, table string, columns []string, sort []Sort, offset
 	return Query{ModelID: modelID, Kind: KindModelTableRows, Target: table, Fields: fieldsFromNames(columns), Sort: sort, Offset: offset, Limit: limit, IncludeTotal: includeTotal}
 }
 
-func SourceRows(modelID, source string, columns []string, sort []Sort, offset, limit int, includeTotal bool) Query {
-	return Query{ModelID: modelID, Kind: KindSourceRows, Target: source, Fields: fieldsFromNames(columns), Sort: sort, Offset: offset, Limit: limit, IncludeTotal: includeTotal}
-}
-
 func SemanticHistogram(modelID, target string, dimensions []Field, measure Field, filters []Filter, binCount int) Query {
 	return Query{ModelID: modelID, Kind: KindSemanticHistogram, Target: target, Fields: dimensions, Value: measure, Filters: filters, BinCount: binCount}
 }
@@ -283,7 +278,7 @@ func (q Query) Validate() error {
 		if len(q.Fields) == 0 && len(q.Measures) == 0 && q.Time.Field == "" && !(q.Kind == KindSemanticRows && q.IncludeTotal) {
 			return fmt.Errorf("%s query requires at least one selected field", q.Kind)
 		}
-	case KindModelTableRows, KindSourceRows:
+	case KindModelTableRows:
 		if strings.TrimSpace(q.Target) == "" {
 			return fmt.Errorf("%s query requires target", q.Kind)
 		}

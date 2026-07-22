@@ -9,9 +9,15 @@ import (
 )
 
 type Planner struct {
-	Model    *semanticmodel.Model
-	Compiled *CompiledModel
+	Model         *semanticmodel.Model
+	Compiled      *CompiledModel
+	tableRelation TableRelation
 }
+
+// TableRelation resolves a validated semantic table name to the physical SQL
+// relation used by a serving plan. Adapters use it to bind immutable storage
+// versions without teaching the semantic planner about a storage engine.
+type TableRelation func(table string) (string, error)
 
 type tableAlias struct {
 	Table string
@@ -32,6 +38,31 @@ func NewPlanner(model *semanticmodel.Model) *Planner {
 		return &Planner{Model: model}
 	}
 	return planner
+}
+
+func (p *Planner) physicalTable(table string) (string, error) {
+	identifier, err := quoteIdent(table)
+	if err != nil {
+		return "", err
+	}
+	if p == nil || p.tableRelation == nil {
+		return "model." + identifier, nil
+	}
+	relation, err := p.tableRelation(identifier)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(relation) == "" {
+		return "", fmt.Errorf("physical relation for table %q is empty", table)
+	}
+	return relation, nil
+}
+
+func (p *Planner) TableRelation() TableRelation {
+	if p == nil {
+		return nil
+	}
+	return p.tableRelation
 }
 
 func (p *Planner) metricExpression(name string, metric semanticmodel.Metric) (semanticmodel.Expression, error) {

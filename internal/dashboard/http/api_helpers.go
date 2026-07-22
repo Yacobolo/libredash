@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -11,7 +12,9 @@ import (
 	"strings"
 	"time"
 
+	analyticsresource "github.com/Yacobolo/leapview/internal/analytics/resource"
 	"github.com/Yacobolo/leapview/internal/cursorsigning"
+	"github.com/Yacobolo/leapview/internal/dataquery"
 )
 
 type pageResponse struct {
@@ -220,10 +223,36 @@ func writeJSON(w nethttp.ResponseWriter, status int, value any) {
 }
 
 func writeJSONError(w nethttp.ResponseWriter, err error, status int) {
+	details := map[string]any{}
+	var rejection interface{ WorkloadRejectionReason() string }
+	if errors.As(err, &rejection) {
+		if rejection.WorkloadRejectionReason() == "queue_timeout" {
+			status = nethttp.StatusGatewayTimeout
+			details["problemCode"] = "WORKLOAD_QUEUE_TIMEOUT"
+		} else {
+			status = nethttp.StatusServiceUnavailable
+			w.Header().Set("Retry-After", "1")
+			details["problemCode"] = "WORKLOAD_OVERLOADED"
+		}
+	} else if reason, ok := dataquery.ResultLimitReasonOf(err); ok {
+		status = nethttp.StatusUnprocessableEntity
+		if reason == dataquery.ResultRows {
+			details["problemCode"] = "QUERY_RESULT_ROW_LIMIT"
+		} else {
+			details["problemCode"] = "QUERY_RESULT_BYTE_LIMIT"
+		}
+	} else if _, ok := analyticsresource.ResourceExhaustedReasonOf(err); ok {
+		status = nethttp.StatusServiceUnavailable
+		w.Header().Set("Retry-After", "1")
+		details["problemCode"] = "ANALYTICS_RESOURCE_EXHAUSTED"
+	} else if errors.Is(err, context.DeadlineExceeded) {
+		status = nethttp.StatusGatewayTimeout
+		details["problemCode"] = "WORKLOAD_EXECUTION_TIMEOUT"
+	}
 	writeJSON(w, status, map[string]any{
 		"code":      status,
 		"message":   err.Error(),
-		"details":   map[string]any{},
+		"details":   details,
 		"requestId": "",
 	})
 }

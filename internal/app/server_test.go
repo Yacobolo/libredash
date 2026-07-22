@@ -214,7 +214,7 @@ func (fakeMetrics) ExecuteDataQuery(ctx context.Context, request dataquery.Query
 			Offset:     request.Offset,
 		})
 		return fakeDataQueryResult(rows, request.IncludeTotal), err
-	case dataquery.KindSourceRows, dataquery.KindModelTableRows:
+	case dataquery.KindModelTableRows:
 		return dataquery.Result{
 			Columns:        dataquery.ColumnsFromNames([]string{"order_id", "status"}),
 			Rows:           []dataquery.Row{{"order_id": "o1", "status": "delivered"}, {"order_id": "o2", "status": "shipped"}},
@@ -1168,14 +1168,24 @@ func TestWorkspaceAssetDetailsUpdatesExcludeRefreshesTableAndUnusedRefreshFields
 	seedActiveDeploymentFromWorkspaceAssets(t, store, "test", emptyPageRuntimeAssetMetrics{})
 	server := NewWithOptions(emptyPageRuntimeAssetMetrics{}, Options{Store: store, DefaultWorkspaceID: "test"})
 	assetID := workspace.NewAssetID(workspace.AssetTypeSemanticModel, "olist")
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/updates?route=workspace_asset&workspace=test&asset="+string(assetID)+"&section=details", nil)
-	rec := httptest.NewRecorder()
+	rec := newSynchronizedRecorder()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		server.Routes().ServeHTTP(rec, req)
+	}()
 
-	server.Routes().ServeHTTP(rec, req)
+	deadline := time.Now().Add(2 * time.Second)
+	for !strings.Contains(rec.BodyString(), "datastar-patch-signals") && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	cancel()
+	<-done
 
-	body := rec.Body.String()
+	body := rec.BodyString()
 	patches := ssetest.PatchSignals(t, body)
 	if len(patches) == 0 {
 		t.Fatalf("details updates did not stream patches:\n%s", body)

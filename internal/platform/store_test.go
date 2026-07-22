@@ -775,10 +775,11 @@ func TestStorePingReportsOpenState(t *testing.T) {
 	}
 }
 
-func TestStoreCatalogCanBeSharedWithDuckLake(t *testing.T) {
+func TestStoreAndDuckLakeUseSeparateCatalogs(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "leapview.db")
+	catalogPath := filepath.Join(dir, "ducklake", "catalog.duckdb")
 	store, err := Open(ctx, dbPath)
 	if err != nil {
 		t.Fatalf("open store: %v", err)
@@ -790,9 +791,9 @@ func TestStoreCatalogCanBeSharedWithDuckLake(t *testing.T) {
 	}
 
 	env, err := analyticsducklake.Open(ctx, analyticsducklake.Config{
-		RootDir:     filepath.Join(dir, "duckdb", "dev"),
-		CatalogPath: dbPath,
-		DataPath:    filepath.Join(dir, "duckdb", "dev", "data"),
+		RootDir:     filepath.Dir(catalogPath),
+		CatalogPath: catalogPath,
+		DataPath:    filepath.Join(dir, "ducklake", "data"),
 	})
 	if duckLakeExtensionUnavailable(err) {
 		t.Skipf("ducklake extension unavailable: %v", err)
@@ -812,6 +813,9 @@ func TestStoreCatalogCanBeSharedWithDuckLake(t *testing.T) {
 	}
 	if roleCount == 0 {
 		t.Fatal("roles were not preserved after DuckLake commit")
+	}
+	if _, err := os.Stat(catalogPath); err != nil {
+		t.Fatalf("separate DuckLake catalog was not created: %v", err)
 	}
 }
 

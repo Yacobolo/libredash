@@ -23,21 +23,23 @@ const (
 )
 
 type EnqueueInput struct {
-	ID           string
-	Kind         string
-	ResourceKind string
-	ResourceID   string
-	Payload      []byte
+	ID            string
+	Kind          string
+	WorkloadClass string
+	WorkspaceID   string
+	ResourceKind  string
+	ResourceID    string
+	Payload       []byte
 }
 
 type Job struct {
-	ID, Kind, ResourceKind, ResourceID string
-	Payload                            []byte
-	Status                             Status
-	Attempts                           int
-	LeaseOwner, LeaseExpiresAt         string
-	CreatedAt, StartedAt, FinishedAt   string
-	ErrorJSON                          string
+	ID, Kind, WorkloadClass, WorkspaceID, ResourceKind, ResourceID string
+	Payload                                                        []byte
+	Status                                                         Status
+	Attempts                                                       int
+	LeaseOwner, LeaseExpiresAt                                     string
+	CreatedAt, StartedAt, FinishedAt                               string
+	ErrorJSON                                                      string
 }
 
 type Event struct {
@@ -54,7 +56,8 @@ type Event struct {
 type Repository interface {
 	Enqueue(context.Context, EnqueueInput) (Job, error)
 	Get(context.Context, string) (Job, error)
-	Claim(context.Context, string, time.Duration) (Job, bool, error)
+	Candidates(context.Context, string, int) ([]Job, error)
+	ClaimByID(context.Context, string, string, string, time.Duration) (Job, bool, error)
 	Renew(context.Context, string, string, time.Duration) error
 	Complete(context.Context, string, string) error
 	Fail(context.Context, string, string, []byte) error

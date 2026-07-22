@@ -252,23 +252,6 @@ sources:
     object: main.orders
 ```
 
-Experimental Quack remote query:
-
-```yaml
-connections:
-  remote_quack:
-    kind: quack
-    path: quack:quack.example.com:443
-    credentials:
-      provider: env
-      secret: LEAPVIEW_QUACK_TOKEN
-
-sources:
-  remote_schemata:
-    connection: remote_quack
-    object: information_schema.schemata
-```
-
 LeapView owns the credential contract. Use `credentials.provider: env` with an environment-variable name for explicit JSON credentials, `provider: ambient` for the S3 or Azure default credential chain, and `provider: none` only for deliberately public S3/HTTP data. LeapView validates each mode and compiles temporary, path-scoped DuckDB secrets internally.
 
 For file and table paths, LeapView infers `format` from clear extensions such as `.csv`, `.csv.gz`, `.json`, `.jsonl`, `.ndjson`, `.parquet`, `.xlsx`, `.txt`, `.blob`, `.vortex`, and `.lance`. Set source-level `format` explicitly for ambiguous paths or table directories such as `events/*`, `format: delta`, and `format: iceberg`. Advanced DuckDB integrations should be modeled explicitly before being exposed in source YAML.

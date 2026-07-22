@@ -13,7 +13,9 @@ import (
 	accesssqlite "github.com/Yacobolo/leapview/internal/access/sqlite"
 	"github.com/Yacobolo/leapview/internal/agent"
 	agentopenai "github.com/Yacobolo/leapview/internal/agent/openai"
+	analyticsducklake "github.com/Yacobolo/leapview/internal/analytics/ducklake"
 	queryauthz "github.com/Yacobolo/leapview/internal/analytics/query/authz"
+	"github.com/Yacobolo/leapview/internal/analytics/resultcache"
 	apiidempotencysqlite "github.com/Yacobolo/leapview/internal/apiidempotency/sqlite"
 	"github.com/Yacobolo/leapview/internal/asyncjob"
 	asyncjobsqlite "github.com/Yacobolo/leapview/internal/asyncjob/sqlite"
@@ -23,7 +25,6 @@ import (
 	publicationsqlite "github.com/Yacobolo/leapview/internal/dashboard/publication/sqlite"
 	dashboardstream "github.com/Yacobolo/leapview/internal/dashboard/stream"
 	deploymenthttp "github.com/Yacobolo/leapview/internal/deployment/http"
-	"github.com/Yacobolo/leapview/internal/execution"
 	manageddatabinding "github.com/Yacobolo/leapview/internal/manageddata/binding"
 	"github.com/Yacobolo/leapview/internal/manageddata/control"
 	manageddatahttp "github.com/Yacobolo/leapview/internal/manageddata/http"
@@ -41,6 +42,7 @@ import (
 	servingstatesqlite "github.com/Yacobolo/leapview/internal/servingstate/sqlite"
 	"github.com/Yacobolo/leapview/internal/staticasset"
 	"github.com/Yacobolo/leapview/internal/ui"
+	"github.com/Yacobolo/leapview/internal/workload"
 	"github.com/Yacobolo/leapview/internal/workspace"
 	workspacesqlite "github.com/Yacobolo/leapview/internal/workspace/sqlite"
 	agentcore "github.com/Yacobolo/leapview/pkg/agent"
@@ -84,7 +86,7 @@ func (m multiWorkspaceMetrics) defaultMetrics() QueryMetrics {
 
 type Server struct {
 	metrics                         QueryMetrics
-	executor                        *execution.Service
+	workloads                       *workload.Controller
 	broker                          *pagestream.Broker
 	publicationBroker               dashboardhttp.SignalBroker
 	pageStreamTrace                 *pagestream.TraceStore
@@ -111,6 +113,8 @@ type Server struct {
 	duckDBDir                       string
 	duckLakeCatalogPath             string
 	duckLakeDataPath                string
+	duckDBEnvironment               *analyticsducklake.Environment
+	queryResultCache                *resultcache.Pool
 	defaultWorkspaceID              string
 	defaultEnvironment              string
 	scimBearerToken                 string
@@ -189,6 +193,8 @@ type Options struct {
 	DuckDBDir                 string
 	DuckLakeCatalogPath       string
 	DuckLakeDataPath          string
+	DuckDBEnvironment         *analyticsducklake.Environment
+	QueryResultCache          *resultcache.Pool
 	DefaultWorkspaceID        string
 	DefaultEnvironment        string
 	SCIMBearerToken           string
@@ -199,7 +205,7 @@ type Options struct {
 	RequestBodyLimit          RequestBodyLimitConfig
 	RequestLogging            bool
 	Logger                    *slog.Logger
-	Executor                  *execution.Service
+	Workload                  *workload.Controller
 	JobLeaseTimeout           time.Duration
 	ManagedData               manageddatahttp.Options
 	Deployment                deploymenthttp.Options
@@ -216,13 +222,39 @@ type MCPOAuthConfig struct {
 	IssuerURL string
 }
 
+func (s *Server) AnalyticalFatal() <-chan struct{} {
+	if s == nil || s.duckDBEnvironment == nil {
+		return nil
+	}
+	return s.duckDBEnvironment.Fatal()
+}
+
+func (s *Server) AnalyticalHealth() error {
+	if s == nil || s.duckDBEnvironment == nil {
+		return nil
+	}
+	return s.duckDBEnvironment.Healthy()
+}
+
+func (s *Server) StopWorkloadAdmission() {
+	if s != nil && s.workloads != nil {
+		s.workloads.Close()
+	}
+}
+
 func NewWithOptions(metrics QueryMetrics, options Options) *Server {
-	executor := options.Executor
-	if executor == nil {
-		executor = execution.New(execution.DefaultConfig())
+	telemetry := newHTTPTelemetry()
+	if options.DuckDBEnvironment != nil || options.QueryResultCache != nil {
+		telemetry.registry.MustRegister(newAnalyticalCollector(options.DuckDBEnvironment, options.QueryResultCache))
+	}
+	controller := options.Workload
+	if controller == nil {
+		controller, _ = workload.New(workload.DefaultConfig(), workload.WithObserver(telemetry))
+	} else {
+		controller.SetObserver(telemetry)
 	}
 	if metrics != nil {
-		metrics = executionMetrics{QueryMetrics: metrics, executor: executor, defaultWorkspaceID: options.DefaultWorkspaceID}
+		metrics = workloadMetrics{QueryMetrics: metrics, admitter: controller, defaultWorkspaceID: options.DefaultWorkspaceID}
 	}
 	dataAccessRepo := options.AccessRepo
 	if dataAccessRepo == nil && options.Auth != nil && options.Store != nil {
@@ -258,12 +290,13 @@ func NewWithOptions(metrics QueryMetrics, options Options) *Server {
 		}
 	}
 	server := New(metrics)
+	server.telemetry = telemetry
 	server.publicationBroker = server.broker
 	server.refreshPipelineClock = options.RefreshPipelineClock
 	if server.refreshPipelineClock == nil {
 		server.refreshPipelineClock = refreshpipeline.RealClock{}
 	}
-	server.executor = executor
+	server.workloads = controller
 	server.store = options.Store
 	if options.Store != nil {
 		server.asyncJobs = asyncjobsqlite.NewRepository(options.Store.SQLDB())
@@ -310,6 +343,8 @@ func NewWithOptions(metrics QueryMetrics, options Options) *Server {
 	server.duckDBDir = options.DuckDBDir
 	server.duckLakeCatalogPath = options.DuckLakeCatalogPath
 	server.duckLakeDataPath = options.DuckLakeDataPath
+	server.duckDBEnvironment = options.DuckDBEnvironment
+	server.queryResultCache = options.QueryResultCache
 	server.defaultWorkspaceID = options.DefaultWorkspaceID
 	server.defaultEnvironment = string(servingstate.NormalizeEnvironment(servingstate.Environment(options.DefaultEnvironment)))
 	server.publicURL = strings.TrimSuffix(strings.TrimSpace(options.PublicURL), "/")
@@ -443,7 +478,13 @@ func (s *Server) startManagedDataMaintenance(ctx context.Context) {
 	go func() {
 		defer s.jobDispatchWG.Done()
 		run := func() {
-			result, err := s.managedDataExpirer.ExpireUploads(ctx)
+			lease, err := s.workloadController().Acquire(ctx, workload.Request{Class: workload.Maintenance, Operation: "managed_data.collect"})
+			if err != nil {
+				s.logger.DebugContext(ctx, "managed-data maintenance skipped", "error", err)
+				return
+			}
+			defer lease.Release()
+			result, err := s.managedDataExpirer.ExpireUploads(lease.Context())
 			if err != nil {
 				s.logger.WarnContext(ctx, "managed-data upload expiration failed", "error", err)
 				return
@@ -632,6 +673,9 @@ func (s *Server) dashboardHTTP() dashboardhttp.Handler {
 	}
 	return dashboardhttp.Handler{
 		Metrics: metrics,
+		AnalyticalContext: func(ctx context.Context) context.Context {
+			return workload.WithAdmitter(ctx, s.workloadController())
+		},
 		MetricsForWorkspace: func(workspaceID string) (dashboardhttp.Metrics, bool) {
 			selected, ok := s.metricsForWorkspace(workspaceID)
 			if !ok {

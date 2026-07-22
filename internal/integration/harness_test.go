@@ -20,12 +20,13 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	accesssqlite "github.com/Yacobolo/leapview/internal/access/sqlite"
 	analyticsduckdb "github.com/Yacobolo/leapview/internal/analytics/duckdb"
-	materializeruntime "github.com/Yacobolo/leapview/internal/analytics/materialize"
+	analyticsducklake "github.com/Yacobolo/leapview/internal/analytics/ducklake"
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	"github.com/Yacobolo/leapview/internal/app"
 	"github.com/Yacobolo/leapview/internal/dashboard"
@@ -39,6 +40,7 @@ import (
 	servingstatefs "github.com/Yacobolo/leapview/internal/servingstate/filesystem"
 	servingstatesqlite "github.com/Yacobolo/leapview/internal/servingstate/sqlite"
 	"github.com/Yacobolo/leapview/internal/testutil/ssetest"
+	"github.com/Yacobolo/leapview/internal/workload"
 	"github.com/Yacobolo/leapview/internal/workspace"
 	workspacecompiler "github.com/Yacobolo/leapview/internal/workspace/compiler"
 	workspacesqlite "github.com/Yacobolo/leapview/internal/workspace/sqlite"
@@ -223,8 +225,13 @@ func newHarnessRuntime(dataDir, catalogPath, duckDBDir string) (*dashboardruntim
 	if err := bindManagedConnectionRoots(compiledWorkspace.Definition, dataDir); err != nil {
 		return nil, err
 	}
-	service, err := dashboardruntime.NewFromDefinition(filepath.Join(duckDBDir, "sales"), integrationDataRuntimeFactory{}, compiledWorkspace.Definition)
+	environment, err := analyticsducklake.Open(context.Background(), analyticsducklake.Config{RootDir: filepath.Join(duckDBDir, "ducklake"), MaxConnections: 2})
 	if err != nil {
+		return nil, err
+	}
+	service, err := dashboardruntime.NewFromDefinition(context.Background(), filepath.Join(duckDBDir, "sales"), integrationDataRuntimeFactory{environment: environment}, compiledWorkspace.Definition)
+	if err != nil {
+		_ = environment.Close()
 		return nil, fmt.Errorf("loading workspace %q: %w", "sales", err)
 	}
 	return service, nil
@@ -867,26 +874,59 @@ func integrationZeroArtifact(deploymentID servingstate.ID, workspaceID string) s
 	}
 }
 
-type integrationDataRuntimeFactory struct{}
+type integrationDataRuntimeFactory struct {
+	environment *analyticsducklake.Environment
+}
 
-func (integrationDataRuntimeFactory) OpenDashboardDataRuntime(ctx context.Context, config dashboardruntime.DataRuntimeConfig) (dashboardruntime.DataRuntime, error) {
-	runtime, err := analyticsduckdb.OpenMaterializeRuntime(ctx, materializeruntime.RuntimeConfig{
-		ModelID: config.ModelID,
-		Model:   config.Model,
-		DBDir:   config.DBDir,
-	})
+func (f integrationDataRuntimeFactory) OpenDashboardWorkspaceDataRuntimes(ctx context.Context, config dashboardruntime.WorkspaceDataRuntimeConfig) (map[string]dashboardruntime.DataRuntime, error) {
+	controller, err := workload.New(workload.DefaultConfig())
 	if err != nil {
 		return nil, err
 	}
-	return integrationDataRuntime{
-		runtime: runtime,
-		data:    reportdef.NewDataQueryService(config.ModelID, reportdef.NewAnalyticsDataService(runtime.Queries()), runtime),
-	}, nil
+	lease, err := controller.Acquire(ctx, workload.Request{Class: workload.Refresh, WorkspaceID: config.Definition.Catalog.Workspace.ID, Operation: "integration-refresh"})
+	if err != nil {
+		controller.Close()
+		return nil, err
+	}
+	runtime, err := analyticsduckdb.OpenWorkspaceMaterializeRuntime(lease.Context(), analyticsduckdb.WorkspaceRuntimeConfig{Models: config.Definition.Models, Database: f.environment})
+	lease.Release()
+	controller.Close()
+	if err != nil {
+		return nil, err
+	}
+	closer := &integrationRuntimeCloser{runtime: runtime, environment: f.environment}
+	runtimes := make(map[string]dashboardruntime.DataRuntime, len(config.Definition.Models))
+	for modelID := range config.Definition.Models {
+		queries, queryErr := runtime.Queries(modelID)
+		if queryErr != nil {
+			_ = closer.Close()
+			return nil, queryErr
+		}
+		runtimes[modelID] = integrationDataRuntime{modelID: modelID, runtime: runtime, close: closer, data: reportdef.NewDataQueryService(modelID, reportdef.NewAnalyticsDataService(queries), runtime)}
+	}
+	return runtimes, nil
 }
 
 type integrationDataRuntime struct {
-	runtime *materializeruntime.Runtime
+	modelID string
+	runtime *analyticsduckdb.WorkspaceRuntime
+	close   *integrationRuntimeCloser
 	data    reportdef.DataService
+}
+
+type integrationRuntimeCloser struct {
+	once        sync.Once
+	runtime     *analyticsduckdb.WorkspaceRuntime
+	environment *analyticsducklake.Environment
+	err         error
+}
+
+func (c *integrationRuntimeCloser) Close() error {
+	c.once.Do(func() {
+		c.err = c.runtime.Close()
+		c.err = errors.Join(c.err, c.environment.Close())
+	})
+	return c.err
 }
 
 func (r integrationDataRuntime) Query(ctx context.Context, request reportdef.AggregateQuery) (reportdef.QueryRows, error) {
@@ -913,16 +953,20 @@ func (r integrationDataRuntime) ExecuteDataQuery(ctx context.Context, request da
 	return r.runtime.ExecuteDataQuery(ctx, request)
 }
 
+func (r integrationDataRuntime) ExecuteDataQueryBundle(ctx context.Context, requests []dataquery.BundleRequest) (dataquery.BundleResult, error) {
+	return r.runtime.ExecuteDataQueryBundle(ctx, requests)
+}
+
 func (r integrationDataRuntime) Refresh(ctx context.Context) error {
 	return r.runtime.Refresh(ctx)
 }
 
 func (r integrationDataRuntime) RefreshTables(ctx context.Context, tableNames []string) error {
-	return r.runtime.RefreshModelTables(ctx, tableNames)
+	return r.runtime.RefreshModelTables(ctx, r.modelID, tableNames)
 }
 
 func (r integrationDataRuntime) Close() error {
-	return r.runtime.Close()
+	return r.close.Close()
 }
 
 func (r integrationDataRuntime) LastRefresh() time.Time {

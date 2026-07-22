@@ -60,7 +60,7 @@ COPY --from=web /src/static ./static
 
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
-    CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /out/leapview ./cmd/leapview && \
+    CGO_ENABLED=1 go build -tags=duckdb_arrow -trimpath -ldflags="-s -w" -o /out/leapview ./cmd/leapview && \
     CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/leapviewctl ./cmd/leapviewctl
 
 FROM debian:bookworm-slim@sha256:60eac759739651111db372c07be67863818726f754804b8707c90979bda511df AS runtime

@@ -33,12 +33,13 @@ func applyAliases(expr string, aliases map[string]tableAlias, fallbackAlias stri
 	return expr
 }
 
-func joinSQL(model *semanticmodel.Model, base string, aliases map[string]tableAlias) (string, error) {
-	baseIdent, err := quoteIdent(base)
+func joinSQL(planner *Planner, base string, aliases map[string]tableAlias) (string, error) {
+	baseRelation, err := planner.physicalTable(base)
 	if err != nil {
 		return "", err
 	}
-	parts := []string{"model." + baseIdent + " t0"}
+	model := planner.Model
+	parts := []string{baseRelation + " t0"}
 	joinAliases := make([]tableAlias, 0, len(aliases)-1)
 	for table, alias := range aliases {
 		if table != base {
@@ -64,7 +65,7 @@ func joinSQL(model *semanticmodel.Model, base string, aliases map[string]tableAl
 		if err != nil {
 			return "", err
 		}
-		rightIdent, err := quoteIdent(alias.Table)
+		rightRelation, err := planner.physicalTable(alias.Table)
 		if err != nil {
 			return "", err
 		}
@@ -87,13 +88,13 @@ func joinSQL(model *semanticmodel.Model, base string, aliases map[string]tableAl
 		}
 		leftExpr := applyAliases(leftEndpoint.SQLExpression(), aliases, left.Alias)
 		rightExpr := applyAliases(rightEndpoint.SQLExpression(), aliases, right.Alias)
-		parts = append(parts, fmt.Sprintf("LEFT JOIN model.%s %s ON %s = %s", rightIdent, alias.Alias, leftExpr, rightExpr))
+		parts = append(parts, fmt.Sprintf("LEFT JOIN %s %s ON %s = %s", rightRelation, alias.Alias, leftExpr, rightExpr))
 	}
 	return strings.Join(parts, "\n"), nil
 }
 
-func joinPathSQL(model *semanticmodel.Model, aliases pathAliasSet) (string, error) {
-	baseIdent, err := quoteIdent(aliases.BaseTable)
+func joinPathSQL(planner *Planner, aliases pathAliasSet) (string, error) {
+	baseRelation, err := planner.physicalTable(aliases.BaseTable)
 	if err != nil {
 		return "", err
 	}
@@ -101,7 +102,8 @@ func joinPathSQL(model *semanticmodel.Model, aliases pathAliasSet) (string, erro
 	if !ok {
 		return "", fmt.Errorf("missing base alias for fact %q", aliases.BaseTable)
 	}
-	parts := []string{"model." + baseIdent + " " + baseAlias.Alias}
+	model := planner.Model
+	parts := []string{baseRelation + " " + baseAlias.Alias}
 	for _, alias := range aliases.Ordered {
 		if len(alias.Path) == 0 {
 			return "", fmt.Errorf("join alias %q has no relationship path", alias.Alias)
@@ -130,7 +132,7 @@ func joinPathSQL(model *semanticmodel.Model, aliases pathAliasSet) (string, erro
 		default:
 			return "", fmt.Errorf("relationship path %q cannot join %q to %q", relationshipPathSignature(alias.Path), parent.Table, alias.Table)
 		}
-		rightIdent, err := quoteIdent(alias.Table)
+		rightRelation, err := planner.physicalTable(alias.Table)
 		if err != nil {
 			return "", err
 		}
@@ -144,7 +146,7 @@ func joinPathSQL(model *semanticmodel.Model, aliases pathAliasSet) (string, erro
 		}
 		leftExpr := applyAliases(leftEndpoint.SQLExpression(), leftAliases, parent.Alias)
 		rightExpr := applyAliases(rightEndpoint.SQLExpression(), rightAliases, alias.Alias)
-		parts = append(parts, fmt.Sprintf("LEFT JOIN model.%s %s ON %s = %s", rightIdent, alias.Alias, leftExpr, rightExpr))
+		parts = append(parts, fmt.Sprintf("LEFT JOIN %s %s ON %s = %s", rightRelation, alias.Alias, leftExpr, rightExpr))
 	}
 	return strings.Join(parts, "\n"), nil
 }

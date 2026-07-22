@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/Yacobolo/leapview/internal/agent"
 	"github.com/Yacobolo/leapview/internal/asyncjob"
 	"github.com/Yacobolo/leapview/internal/deployment/apiadapter"
 	"github.com/Yacobolo/leapview/internal/manageddata/control"
+	"github.com/Yacobolo/leapview/internal/workload"
 )
 
 const (
@@ -51,7 +53,22 @@ func (s *Server) enqueueAsyncJobPayload(ctx context.Context, id, kind, resourceK
 	if err != nil {
 		return err
 	}
-	return s.enqueueAsyncJob(ctx, asyncjob.EnqueueInput{ID: id, Kind: kind, ResourceKind: resourceKind, ResourceID: resourceID, Payload: encoded})
+	class := workload.Control
+	workspaceID := workload.NodeWorkspace
+	if agentJob, ok := payload.(agentRunJob); ok {
+		class = workload.Background
+		workspaceID = agentJob.Scope.WorkspaceID
+		if workspaceID == "" {
+			workspaceID = agentJob.Scope.Credential.WorkspaceID
+		}
+		if workspaceID == "" {
+			workspaceID = s.defaultWorkspaceID
+		}
+		if workspaceID == "" {
+			workspaceID = workload.GlobalWorkspace
+		}
+	}
+	return s.enqueueAsyncJob(ctx, asyncjob.EnqueueInput{ID: id, Kind: kind, WorkloadClass: string(class), WorkspaceID: workspaceID, ResourceKind: resourceKind, ResourceID: resourceID, Payload: encoded})
 }
 
 func (s *Server) appendAsyncEvent(ctx context.Context, resourceKind, resourceID, eventType string, data any) error {
@@ -105,17 +122,32 @@ func (s *Server) runAsyncJobDispatcher(ctx context.Context) {
 		return
 	}
 	owner := fmt.Sprintf("leapview-api-%d", time.Now().UnixNano())
+	var pumps sync.WaitGroup
+	for _, class := range []workload.Class{workload.Control, workload.Background} {
+		class := class
+		pumps.Add(1)
+		go func() { defer pumps.Done(); s.runAsyncJobPump(ctx, repo, owner, class) }()
+	}
+	pumps.Wait()
+}
+
+func (s *Server) runAsyncJobPump(ctx context.Context, repo asyncjob.Repository, owner string, class workload.Class) {
 	poll := time.NewTicker(250 * time.Millisecond)
 	defer poll.Stop()
 	for {
-		job, ok, claimErr := repo.Claim(ctx, owner, s.jobLeaseTimeout)
-		if claimErr != nil {
+		candidates, listErr := repo.Candidates(ctx, string(class), 16)
+		if listErr != nil {
 			if s.logger != nil {
-				s.logger.WarnContext(ctx, "claim API async job failed", "error", claimErr)
+				s.logger.WarnContext(ctx, "list API async job candidates failed", "class", class, "error", listErr)
 			}
-		} else if ok {
-			s.executeClaimedAsyncJob(ctx, repo, owner, job)
-			continue
+		} else if len(candidates) > 0 {
+			var batch sync.WaitGroup
+			for _, candidate := range candidates {
+				candidate := candidate
+				batch.Add(1)
+				go func() { defer batch.Done(); s.dispatchAsyncCandidate(ctx, repo, owner, class, candidate) }()
+			}
+			batch.Wait()
 		}
 		select {
 		case <-ctx.Done():
@@ -123,6 +155,28 @@ func (s *Server) runAsyncJobDispatcher(ctx context.Context) {
 		case <-poll.C:
 		}
 	}
+}
+
+func (s *Server) dispatchAsyncCandidate(ctx context.Context, repo asyncjob.Repository, owner string, class workload.Class, candidate asyncjob.Job) {
+	lease, err := s.workloadController().Acquire(ctx, workload.Request{Class: class, WorkspaceID: candidate.WorkspaceID, Operation: candidate.Kind})
+	if err != nil {
+		if s.logger != nil {
+			s.logger.InfoContext(ctx, "async job admission deferred", "class", class, "workspace", candidate.WorkspaceID, "job", candidate.ID, "error", err)
+		}
+		return
+	}
+	defer lease.Release()
+	job, ok, err := repo.ClaimByID(lease.Context(), candidate.ID, string(class), owner, s.jobLeaseTimeout)
+	if err != nil {
+		if s.logger != nil {
+			s.logger.WarnContext(ctx, "claim API async job failed", "class", class, "job", candidate.ID, "error", err)
+		}
+		return
+	}
+	if !ok {
+		return
+	}
+	s.executeClaimedAsyncJob(lease.Context(), repo, owner, job)
 }
 
 func (s *Server) executeClaimedAsyncJob(parent context.Context, repo asyncjob.Repository, owner string, job asyncjob.Job) {

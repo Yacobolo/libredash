@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Yacobolo/leapview/internal/manageddata/control"
+	"github.com/Yacobolo/leapview/internal/workload"
 )
 
 func TestManagedDataTusRouteRejectsClientCreatedUploads(t *testing.T) {
@@ -55,6 +56,41 @@ func TestManagedDataUploadExpirationUsesBackgroundLifecycle(t *testing.T) {
 	case <-called:
 	case <-time.After(time.Second):
 		t.Fatal("managed-data upload expiration did not run")
+	}
+	cancel()
+	if err := server.StopBackgroundJobs(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestManagedDataMaintenanceSkipsSaturatedPassWithoutQueueing(t *testing.T) {
+	controller, err := workload.New(workload.Config{MaxRunning: 1, Classes: map[workload.Class]workload.Policy{
+		workload.Interactive: {MaximumRunning: 1}, workload.Maintenance: {MaximumRunning: 1},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	held, err := controller.Acquire(context.Background(), workload.Request{Class: workload.Interactive, WorkspaceID: "sales", Operation: "hold"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	called := make(chan struct{}, 1)
+	server := NewWithOptions(fakeMetrics{}, Options{Workload: controller, ManagedDataExpirer: testManagedDataExpirer{called: called}, ManagedDataExpireInterval: 10 * time.Millisecond})
+	ctx, cancel := context.WithCancel(context.Background())
+	server.StartBackgroundJobs(ctx)
+	select {
+	case <-called:
+		t.Fatal("maintenance ran while node capacity was saturated")
+	case <-time.After(40 * time.Millisecond):
+	}
+	if stats := controller.Stats(); stats.Queued != 0 {
+		t.Fatalf("maintenance queued: %#v", stats)
+	}
+	held.Release()
+	select {
+	case <-called:
+	case <-time.After(time.Second):
+		t.Fatal("maintenance did not retry on its normal schedule")
 	}
 	cancel()
 	if err := server.StopBackgroundJobs(context.Background()); err != nil {
