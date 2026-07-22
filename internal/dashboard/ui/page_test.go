@@ -110,10 +110,10 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 		}
 	}
 	commandSignalFilters := map[string][]string{
-		"data-on:ld-interaction-select":   {"runtime", "interactionCommand"},
-		"data-on:ld-visual-window-change": {"runtime", "visualWindowCommand"},
-		"data-on:ld-filters-change":       {"runtime", "filters[.]controls"},
-		"data-on:ld-selection-clear":      {"runtime"},
+		"data-on:ld-interaction-select":           {"runtime", "interactionCommand"},
+		"data-on:ld-visualization-window-request": {"runtime", "visualWindowCommand"},
+		"data-on:ld-filters-change":               {"runtime", "filters[.]controls"},
+		"data-on:ld-selection-clear":              {"runtime"},
 	}
 	for attr, signalPaths := range commandSignalFilters {
 		segment := renderedAttrSegment(showcase, attr)
@@ -130,6 +130,9 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 				t.Fatalf("%s segment = %q, must not post heavy signal %q", attr, segment, forbidden)
 			}
 		}
+	}
+	if strings.Contains(showcase, "data-on:ld-visual-window-change") {
+		t.Fatalf("showcase page retained the retired table-specific window event:\n%s", showcase)
 	}
 	showcaseSignals := html.UnescapeString(jsonString(BootstrapSignals("client", "stream-instance", dashboard.Catalog{}, compiled, model, definitions, report.Pages, report.Pages[0], dashboard.Filters{})))
 	if !strings.Contains(showcaseSignals, `"active_chart"`) || !strings.Contains(showcaseSignals, `"active_kpi"`) {

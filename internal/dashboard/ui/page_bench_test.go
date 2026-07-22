@@ -149,7 +149,7 @@ func benchmarkDashboardCommandAttrs(catalog dashboard.Catalog, report reportdef.
 		g.Attr("data-on:ld-filters-refresh", reloadAction),
 		g.Attr("data-on:ld-selection-clear", "$filters.selections = []; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/clear-selection", "runtime")),
 		g.Attr("data-on:ld-interaction-select", "$interactionCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/select", "runtime", "interactionCommand")),
-		g.Attr("data-on:ld-visual-window-change", "$visualWindowCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/visual-window", "runtime", "visualWindowCommand")),
+		g.Attr("data-on:ld-visualization-window-request", "$visualWindowCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/visual-window", "runtime", "visualWindowCommand")),
 	}
 }
 

@@ -32,6 +32,57 @@ export class VisualizationHost extends LitElement {
     .surface.headerless { grid-template-rows: minmax(0, 1fr); }
     .renderer-stage { position: relative; min-width: 0; min-height: 0; overflow: hidden; background: var(--ld-chart-surface); }
     .renderer { display: block; width: 100%; height: 100%; min-width: 0; min-height: 0; overflow: hidden; }
+    .ld-kpi-card {
+      position: relative;
+      display: grid;
+      align-content: center;
+      box-sizing: border-box;
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+      gap: var(--base-size-4);
+      padding: var(--base-size-12) var(--base-size-16) var(--base-size-12) var(--base-size-20);
+      overflow: hidden;
+      background: var(--ld-chart-surface);
+    }
+    .ld-kpi-card::before {
+      content: '';
+      position: absolute;
+      inset-block: 0;
+      inset-inline-start: 0;
+      width: var(--base-size-4);
+      background: var(--ld-line-muted);
+    }
+    .ld-kpi-card[data-tone='success']::before { background: var(--ld-fg-success); }
+    .ld-kpi-card[data-tone='warning']::before { background: var(--ld-fg-warning); }
+    .ld-kpi-card[data-tone='danger']::before { background: var(--ld-fg-danger); }
+    .ld-kpi-card[data-tone='ink']::before { background: var(--ld-data-1); }
+    .ld-visualization-label {
+      color: var(--ld-fg-muted);
+      font-size: var(--ld-font-size-caption);
+      font-weight: var(--ld-font-weight-strong);
+      line-height: var(--ld-line-height-compact);
+      text-transform: uppercase;
+    }
+    .ld-visualization-kpi {
+      display: block;
+      overflow: hidden;
+      color: var(--ld-fg-default);
+      font-size: clamp(var(--ld-font-size-title-md, var(--ld-font-size-title-sm)), 2.5vw, var(--ld-font-size-display));
+      font-weight: var(--ld-font-weight-strong);
+      line-height: var(--ld-line-height-none);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .ld-visualization-note {
+      overflow: hidden;
+      color: var(--ld-fg-muted);
+      font-size: var(--ld-font-size-body-sm);
+      font-weight: var(--ld-font-weight-medium);
+      line-height: var(--ld-line-height-compact);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     .initial-loading {
       position: absolute;
       inset: 0;

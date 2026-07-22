@@ -646,7 +646,7 @@ func tableFormat(column dashboard.TableColumn) *ir.VisualizationFormat {
 		value := ir.VisualizationFormat{Value: &ir.CurrencyVisualizationFormat{Kind: "currency", Currency: "BRL"}}
 		return &value
 	case "days":
-		value := ir.VisualizationFormat{Value: &ir.DurationVisualizationFormat{Kind: "duration", Unit: "day"}}
+		value := ir.VisualizationFormat{Value: &ir.DurationVisualizationFormat{Kind: "duration", Unit: "days"}}
 		return &value
 	case "date", "timestamp":
 		value := ir.VisualizationFormat{Value: &ir.TemporalVisualizationFormat{Kind: "temporal"}}

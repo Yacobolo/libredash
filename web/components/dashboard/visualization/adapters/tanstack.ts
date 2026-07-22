@@ -6,8 +6,9 @@ type ReportTableElement = HTMLElement & { tableId: string; table: TableSignal }
 
 export const adapter: RendererAdapter = {
   async mount(container, envelope) {
-    await import('../../table/report-table')
-    const table = document.createElement('ld-report-table') as ReportTableElement
+    const { ReportTable } = await import('../../table/report-table')
+    await customElements.whenDefined('ld-report-table')
+    const table = new ReportTable() as ReportTableElement
     container.replaceChildren(table)
     const handle = new TanStackHandle(container, table)
     handle.update(envelope)

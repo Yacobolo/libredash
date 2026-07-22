@@ -26,6 +26,9 @@ func validateVisualQueryShape(name string, visual Visual) error {
 		return nil
 	}
 	shape := visual.ShapeOrDefault()
+	if (shape == "binned_measure" || shape == "distribution") && strings.TrimSpace(visual.Query.Table) == "" {
+		return fmt.Errorf("visual %q shape %s requires query.table", name, shape)
+	}
 	switch shape {
 	case "ohlc":
 		if len(visual.Query.Measures) != 4 {

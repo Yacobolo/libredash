@@ -44,8 +44,9 @@ export class DashboardVisualizationSignalDecoder {
   }
 }
 
-function validTransportHeader(transport: VisualizationDataStateTransport, signal: DashboardVisualizationSignal): boolean {
-  return transport.schemaVersion === 1
+function validTransportHeader(transport: VisualizationDataStateTransport | undefined, signal: DashboardVisualizationSignal): boolean {
+  return transport !== undefined
+    && transport.schemaVersion === 1
     && transport.encoding === 'json'
     && (transport.kind === 'inline' || transport.kind === 'windowed' || transport.kind === 'spatial_windowed')
     && transport.specRevision === signal.specRevision

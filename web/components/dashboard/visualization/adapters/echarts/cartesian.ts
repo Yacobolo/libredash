@@ -46,7 +46,7 @@ export function cartesianOption(envelope: VisualizationEnvelope, context: Render
     return {
       dataset: split.datasets, legend: legend(spec.presentation.legend, context), xAxis: axis(envelope, spec.x, axisType(envelope, spec.x, 'category'), context),
       yAxis: secondary ? [axis(envelope, spec.y[0]!, 'value', context), axis(envelope, spec.y[0]!, 'value', context)] : axis(envelope, spec.y[0]!, 'value', context),
-      dataZoom, series: split.series,
+      dataZoom, series: [...split.series, ...interactionHitSeries(envelope, spec, split.series)],
     }
   }
   const series = spec.y.map((value) => ({
@@ -56,7 +56,32 @@ export function cartesianOption(envelope: VisualizationEnvelope, context: Render
     stack: spec.presentation.stacked ? 'total' : undefined, areaStyle: spec.presentation.area || spec.mark === 'area' ? {} : undefined,
     step: spec.presentation.step ? 'middle' : false, label: chartLabel(envelope, value, spec, context),
   }))
-  return { ...axes, legend: legend(spec.presentation.legend, context), dataZoom, series }
+  return { ...axes, legend: legend(spec.presentation.legend, context), dataZoom, series: [...series, ...interactionHitSeries(envelope, spec, series)] }
+}
+
+function interactionHitSeries(envelope: VisualizationEnvelope, spec: CartesianSpec, series: EChartsTranslation[]): EChartsTranslation[] {
+  if (!spec.interactions.some((interaction) => interaction.kind === 'select')) return []
+  return series.flatMap((candidate, index) => {
+    if (candidate.type !== 'line') return []
+    const yField = typeof candidate.encode?.y === 'string' ? candidate.encode.y : spec.y[index]?.field ?? `value-${index}`
+    const identity = candidate.datasetId
+      ? `${spec.x.dataset}:${spec.x.field}:${encodeURIComponent(String(candidate.datasetId))}`
+      : `${spec.x.dataset}:${spec.x.field}:${yField}`
+    return [{
+      id: `series:interaction-hit:${identity}`,
+      type: 'scatter',
+      ...(candidate.datasetId ? { datasetId: candidate.datasetId } : {}),
+      encode: candidate.encode,
+      ...(candidate.xAxisIndex !== undefined ? { xAxisIndex: candidate.xAxisIndex } : {}),
+      ...(candidate.yAxisIndex !== undefined ? { yAxisIndex: candidate.yAxisIndex } : {}),
+      symbolSize: Math.max(18, spec.presentation.symbolSize ?? 0),
+      itemStyle: { color: 'rgba(0,0,0,0.001)' },
+      emphasis: { disabled: true },
+      tooltip: { show: false },
+      silent: false,
+      z: 10,
+    }]
+  })
 }
 
 function chartLabel(envelope: VisualizationEnvelope, value: CartesianSpec['y'][number] | undefined, spec: CartesianSpec, context: RendererContext) {

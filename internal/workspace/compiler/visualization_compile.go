@@ -411,6 +411,7 @@ func compileBuiltInVisualizationSpec(id string, authored reportdef.Visual, model
 		}
 		fields[index] = visualizationir.VisualizationField{ID: column, Role: role, DataType: compiledShapeDataType(column), Nullable: true, Label: compiledShapeLabel(column)}
 	}
+	applyBuiltInFieldSemantics(fields, shape, authored, model)
 	title := compiledVisualTitle(authored, id, model)
 	accessibilityTitle := title
 	if authored.Accessibility.Title != "" {
@@ -511,6 +512,146 @@ func compileBuiltInVisualizationSpec(id string, authored reportdef.Visual, model
 			Presentation: visualizationir.CartesianVisualizationPresentation{VisualizationPresentation: common, Smooth: presentation.Smooth, Stacked: presentation.Stacked, ShowSymbols: showSymbols, DataZoom: presentation.DataZoom, Area: area, Step: presentation.Step, Orientation: compiledOptionalOrientation(presentation.Orientation), LabelPosition: compiledLabelPosition(presentation.LabelPosition), SymbolSize: optionalPositiveFloat(presentation.SymbolSize), HistogramBins: optionalPositiveInt32(presentation.HistogramBins), ComboSeries: compiledComboSeries(presentation.SeriesTypes, presentation.DualAxis)},
 		}}, nil
 	}
+}
+
+func applyBuiltInFieldSemantics(fields []visualizationir.VisualizationField, shape string, authored reportdef.Visual, model *semanticmodel.Model) {
+	if model == nil {
+		return
+	}
+	byID := make(map[string]*visualizationir.VisualizationField, len(fields))
+	for index := range fields {
+		byID[fields[index].ID] = &fields[index]
+	}
+	decorate := func(id string, binding reportdef.FieldRef) {
+		field := byID[id]
+		if field == nil || strings.TrimSpace(binding.Field) == "" {
+			return
+		}
+		applySemanticField(field, binding.Field, model)
+	}
+	var dimension reportdef.FieldRef
+	if len(authored.Query.Dimensions) > 0 {
+		dimension = authored.Query.Dimensions[0]
+	} else if authored.Query.Time.Field != "" {
+		dimension = reportdef.FieldRef{Field: authored.Query.Time.Field, Alias: authored.Query.Time.Alias}
+	}
+	var measure reportdef.FieldRef
+	if len(authored.Query.Measures) > 0 {
+		measure = authored.Query.Measures[0]
+	}
+
+	switch shape {
+	case "single_value", "category_value", "category_series_value", "category_multi_measure", "category_delta", "binned_measure", "ohlc", "distribution":
+		decorate("label", dimension)
+	case "matrix":
+		decorate("row", dimension)
+	case "graph":
+		if len(authored.Query.Dimensions) > 0 {
+			decorate("source", authored.Query.Dimensions[0])
+		}
+		if len(authored.Query.Dimensions) > 1 {
+			decorate("target", authored.Query.Dimensions[1])
+		}
+	}
+	if !authored.Query.Series.IsZero() {
+		decorate("series", authored.Query.Series)
+	}
+	// A normalized multi-measure frame stores heterogeneous measures in one
+	// value column. Do not attach one measure's format or source identity to all
+	// rows; row-specific formatting requires a future typed series-format map.
+	if shape != "category_multi_measure" {
+		for _, id := range []string{"value", "start", "end", "binStart", "binEnd"} {
+			decorate(id, measure)
+		}
+	}
+	if shape == "ohlc" || shape == "distribution" {
+		for index, binding := range authored.Query.Measures {
+			alias := binding.Alias
+			if alias == "" {
+				alias = fieldAlias(binding.Field)
+			}
+			if byID[alias] != nil {
+				decorate(alias, binding)
+				continue
+			}
+			ordered := map[string][]string{"ohlc": {"open", "close", "low", "high"}, "distribution": {"min", "q1", "median", "q3", "max"}}[shape]
+			if index < len(ordered) {
+				decorate(ordered[index], binding)
+			}
+		}
+	}
+}
+
+func applySemanticField(field *visualizationir.VisualizationField, source string, model *semanticmodel.Model) {
+	field.SourceRef = &source
+	if dimension, err := model.ResolveDimension(source); err == nil {
+		if dimension.Label != "" {
+			field.Label = dimension.Label
+		}
+		field.DataType = compiledDimensionDataType(dimension.Type)
+		field.Format = compiledVisualizationFormat(compiledDimensionFormat(dimension.Type), "")
+		return
+	}
+	if measure, err := model.ResolveMeasure(source); err == nil {
+		if measure.Label != "" {
+			field.Label = measure.Label
+		}
+		field.DataType = compiledMeasureDataType(measure.Format)
+		field.Format = compiledVisualizationFormat(measure.Format, measure.Unit)
+		return
+	}
+	if metric, ok := model.Metrics[source]; ok {
+		if metric.Label != "" {
+			field.Label = metric.Label
+		}
+		field.DataType = compiledMeasureDataType(metric.Format)
+		field.Format = compiledVisualizationFormat(metric.Format, metric.Unit)
+	}
+}
+
+func compiledDimensionDataType(dimensionType string) visualizationir.VisualizationDataType {
+	switch dimensionType {
+	case "boolean":
+		return visualizationir.VisualizationDataTypeBoolean
+	case "date":
+		return visualizationir.VisualizationDataTypeDate
+	case "timestamp":
+		return visualizationir.VisualizationDataTypeTemporal
+	case "number":
+		return visualizationir.VisualizationDataTypeDecimal
+	default:
+		return visualizationir.VisualizationDataTypeString
+	}
+
+}
+
+func compiledMeasureDataType(format string) visualizationir.VisualizationDataType {
+	if format == "integer" {
+		return visualizationir.VisualizationDataTypeInteger
+	}
+	return visualizationir.VisualizationDataTypeDecimal
+}
+
+func compiledVisualizationFormat(format, unit string) *visualizationir.VisualizationFormat {
+	var value visualizationir.VisualizationFormat
+	switch format {
+	case "integer", "decimal":
+		value.Value = &visualizationir.NumberVisualizationFormat{Kind: "number"}
+	case "currency":
+		currency := "BRL"
+		switch strings.TrimSpace(unit) {
+		case "$", "USD":
+			currency = "USD"
+		case "€", "EUR":
+			currency = "EUR"
+		}
+		value.Value = &visualizationir.CurrencyVisualizationFormat{Kind: "currency", Currency: currency}
+	case "date", "timestamp":
+		value.Value = &visualizationir.TemporalVisualizationFormat{Kind: "temporal"}
+	default:
+		return nil
+	}
+	return &value
 }
 
 func compiledShapeColumns(shape string) []string {
@@ -1239,17 +1380,28 @@ func compiledVisualLimit(authored reportdef.Visual) int64 {
 
 func compiledVisualFrameLimit(authored reportdef.Visual, shape string) int64 {
 	limit := compiledVisualLimit(authored)
-	if shape != "hierarchy" || authored.DataBudget.MaxRows > 0 {
+	if authored.DataBudget.MaxRows > 0 {
 		return limit
 	}
-	levels := len(authored.Query.Dimensions)
-	if authored.Query.Time.Field != "" {
-		levels++
+	switch shape {
+	case "category_multi_measure":
+		series := len(authored.Query.Measures)
+		if series < 1 {
+			series = 1
+		}
+		return limit * int64(series)
+	case "hierarchy":
+		levels := len(authored.Query.Dimensions)
+		if authored.Query.Time.Field != "" {
+			levels++
+		}
+		if levels < 1 {
+			levels = 1
+		}
+		return limit * int64(levels)
+	default:
+		return limit
 	}
-	if levels < 1 {
-		levels = 1
-	}
-	return limit * int64(levels)
 }
 
 func visualizationSpecBase(spec *visualizationir.VisualizationSpec) *visualizationir.VisualizationSpecBase {

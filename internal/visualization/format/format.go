@@ -78,7 +78,7 @@ func Value(locale string, format ir.VisualizationFormat, value any) (string, err
 		if err != nil {
 			return "", err
 		}
-		return duration(value, spec.Unit)
+		return duration(data, value, spec.Unit)
 	case ir.DurationVisualizationFormat:
 		return Value(locale, ir.VisualizationFormat{Value: &spec}, value)
 	case *ir.TemporalVisualizationFormat:
@@ -171,7 +171,10 @@ func digits(value *int32, fallback int) int {
 	return int(*value)
 }
 
-func duration(value float64, unit string) (string, error) {
+func duration(locale localeData, value float64, unit string) (string, error) {
+	if unit == "days" {
+		return number(locale, value, 0, 1, "d")
+	}
 	seconds := int64(math.Round(value))
 	switch unit {
 	case "milliseconds":

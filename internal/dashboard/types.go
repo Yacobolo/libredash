@@ -10,12 +10,27 @@ import (
 )
 
 type Signals struct {
-	Filters                    Filters                 `json:"filters"`
-	Runtime                    Runtime                 `json:"runtime"`
-	VisualWindowCommand        TableRequest            `json:"visualWindowCommand"`
-	VisualSpatialWindowCommand SpatialWindowRequest    `json:"visualSpatialWindowCommand"`
-	InteractionCommand         InteractionCommand      `json:"interactionCommand"`
-	SpatialInteractionCommand  SpatialSelectionCommand `json:"spatialInteractionCommand"`
+	Filters                    Filters                    `json:"filters"`
+	Runtime                    Runtime                    `json:"runtime"`
+	VisualWindowCommand        VisualizationWindowRequest `json:"visualWindowCommand"`
+	VisualSpatialWindowCommand SpatialWindowRequest       `json:"visualSpatialWindowCommand"`
+	InteractionCommand         InteractionCommand         `json:"interactionCommand"`
+	SpatialInteractionCommand  SpatialSelectionCommand    `json:"spatialInteractionCommand"`
+}
+
+// VisualizationWindowRequest is the renderer-independent window command sent
+// by every grid visualization. TableRequest remains an internal query-runtime
+// shape and must not leak back across the browser boundary.
+type VisualizationWindowRequest struct {
+	VisualID     string                              `json:"visualID"`
+	SpecRevision string                              `json:"specRevision"`
+	DataRevision int64                               `json:"dataRevision"`
+	RequestSeq   int64                               `json:"requestSeq"`
+	ResetVersion int64                               `json:"resetVersion"`
+	Start        int64                               `json:"start"`
+	Limit        int64                               `json:"limit"`
+	Sort         []visualizationir.VisualizationSort `json:"sort"`
+	BlockID      string                              `json:"blockID"`
 }
 
 type SpatialBounds struct {

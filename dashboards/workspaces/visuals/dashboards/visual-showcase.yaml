@@ -265,6 +265,7 @@ spec:
       description: Summarizes delivery-day distribution by speed bucket.
       type: boxplot
       query:
+        table: orders
         dimensions:
           delivery_bucket: orders.delivery_bucket
         measures:
@@ -368,6 +369,7 @@ spec:
       presentation:
         histogram_bins: 16
       query:
+        table: orders
         measures:
           delivery_days: null
     status_radar:
@@ -1151,6 +1153,7 @@ spec:
       title: Review score distribution
       type: boxplot
       query:
+        table: orders
         dimensions:
           status: orders.status
         measures:
@@ -1164,6 +1167,7 @@ spec:
       presentation:
         data_zoom: true
       query:
+        table: orders
         dimensions:
           category: orders.category
         measures:
@@ -1239,6 +1243,7 @@ spec:
       presentation:
         histogram_bins: 18
       query:
+        table: orders
         measures:
           revenue: null
     review_histogram:
@@ -1248,6 +1253,7 @@ spec:
         histogram_bins: 10
         show_labels: true
       query:
+        table: orders
         measures:
           review_score: null
     delivery_radar:

@@ -492,11 +492,11 @@ func TestServiceTableInteractiveCap(t *testing.T) {
 	if got := len(table.Blocks["a"].Rows); got != dashboard.TableChunkSize {
 		t.Fatalf("initial block rows = %d, want %d", got, dashboard.TableChunkSize)
 	}
-	if _, ok := table.Blocks["b"]; ok {
-		t.Fatalf("initial table unexpectedly loaded block b: %#v", table.Blocks["b"])
+	if got := len(table.Blocks["b"].Rows); got != dashboard.TableChunkSize {
+		t.Fatalf("initial block b rows = %d, want %d", got, dashboard.TableChunkSize)
 	}
-	if _, ok := table.Blocks["c"]; ok {
-		t.Fatalf("initial table unexpectedly loaded block c: %#v", table.Blocks["c"])
+	if got := len(table.Blocks["c"].Rows); got != dashboard.TableChunkSize {
+		t.Fatalf("initial block c rows = %d, want %d", got, dashboard.TableChunkSize)
 	}
 	if len(recorder.queries) != 2 {
 		t.Fatalf("initial table data queries = %d, want rows plus count: %#v", len(recorder.queries), recorder.queries)
@@ -531,6 +531,19 @@ func TestServiceTableInteractiveCap(t *testing.T) {
 	}
 	if len(recorder.queries) != 2 || recorder.queries[0].IncludeTotal || !recorder.queries[1].IncludeTotal {
 		t.Fatalf("next block queries = %#v, want independent rows and count", recorder.queries)
+	}
+
+	jump, err := metrics.queries.visualizations.queryTableRowsPage(ctx, "executive-sales", "", dashboard.Filters{}, dashboard.TableRequest{
+		Table: "orders_table", Block: "all", Start: 5_000, Count: dashboard.TableChunkSize, RequestSeq: 12, ResetVersion: 3,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for id, wantStart := range map[string]int{"a": 4_950, "b": 5_000, "c": 5_050} {
+		block := jump.Blocks[id]
+		if block.Start != wantStart || len(block.Rows) != dashboard.TableChunkSize || block.RequestSeq != 12 || block.ResetVersion != 3 {
+			t.Fatalf("jump block %s = %#v, want start %d with a complete chunk", id, block, wantStart)
+		}
 	}
 
 	overshoot, err := metrics.queries.visualizations.queryTableRowsPage(ctx, "executive-sales", "", dashboard.Filters{}, dashboard.TableRequest{

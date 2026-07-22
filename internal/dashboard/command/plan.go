@@ -6,6 +6,7 @@ import (
 
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	"github.com/Yacobolo/libredash/internal/dashboard/consumer"
+	dashboarddefinition "github.com/Yacobolo/libredash/internal/dashboard/definition"
 	"github.com/Yacobolo/libredash/internal/dashboard/report"
 	visualizationdefinition "github.com/Yacobolo/libredash/internal/visualization/definition"
 	visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
@@ -41,6 +42,9 @@ func (s Service) PrepareSelect(request Request, authoritative dashboard.Filters)
 	if err != nil {
 		return PreparedRefresh{}, fmt.Errorf("invalid interaction selection: %w", err)
 	}
+	if err := s.requireVisualizationOnPage(request, command.SourceID); err != nil {
+		return PreparedRefresh{}, fmt.Errorf("invalid interaction selection: %w", err)
+	}
 	filters = report.NormalizeFilters(s.Metrics, request.DashboardID, request.PageID, filters.ApplyInteraction(command))
 	targets, err := s.selectionTargets(request, command.SourceKind, command.SourceID)
 	if err != nil {
@@ -53,6 +57,9 @@ func (s Service) PrepareSpatialSelect(request Request, authoritative dashboard.F
 	filters := report.NormalizeFilters(s.Metrics, request.DashboardID, request.PageID, authoritative)
 	command, err := canonicalSpatialInteractionCommand(s.Metrics, request.DashboardID, request.SpatialInteractionCommand)
 	if err != nil {
+		return PreparedRefresh{}, fmt.Errorf("invalid spatial interaction selection: %w", err)
+	}
+	if err := s.requireVisualizationOnPage(request, command.VisualID); err != nil {
 		return PreparedRefresh{}, fmt.Errorf("invalid spatial interaction selection: %w", err)
 	}
 	filters = report.NormalizeFilters(s.Metrics, request.DashboardID, request.PageID, filters.ApplySpatialInteraction(command))
@@ -119,7 +126,10 @@ func (s Service) PrepareInitial(request Request, initial dashboard.Filters) (Pre
 
 func (s Service) PrepareVisualWindow(request Request, authoritative dashboard.Filters) (PreparedRefresh, error) {
 	filters := report.NormalizeFilters(s.Metrics, request.DashboardID, request.PageID, authoritative)
-	tableRequest := s.Metrics.NormalizeTableRequest(request.DashboardID, request.VisualWindowCommand)
+	tableRequest, err := s.visualWindowTableRequest(request.DashboardID, request.VisualWindowCommand)
+	if err != nil {
+		return PreparedRefresh{}, err
+	}
 	return PreparedRefresh{
 		Filters: filters,
 		Plan: RefreshPlan{Command: "visual_window", Targets: []Target{{
@@ -128,6 +138,71 @@ func (s Service) PrepareVisualWindow(request Request, authoritative dashboard.Fi
 			TableRequest: tableRequest,
 		}}},
 	}, nil
+}
+
+func (s Service) visualWindowTableRequest(dashboardID string, window dashboard.VisualizationWindowRequest) (dashboard.TableRequest, error) {
+	if window.VisualID == "" {
+		return dashboard.TableRequest{}, fmt.Errorf("visual window requires a visual ID")
+	}
+	definition, _, ok := s.Metrics.Report(dashboardID)
+	if !ok {
+		return dashboard.TableRequest{}, fmt.Errorf("dashboard %q is not published", dashboardID)
+	}
+	visual, ok := definition.Visualizations[window.VisualID]
+	if !ok {
+		return dashboard.TableRequest{}, fmt.Errorf("unknown windowed visual %q", window.VisualID)
+	}
+	if visual.Query.Kind != visualizationdefinition.QueryDetail && visual.Query.Kind != visualizationdefinition.QueryMatrix && visual.Query.Kind != visualizationdefinition.QueryPivot {
+		return dashboard.TableRequest{}, fmt.Errorf("visual %q is not windowed", window.VisualID)
+	}
+	if window.SpecRevision != "" && window.SpecRevision != visual.SpecRevision {
+		return dashboard.TableRequest{}, fmt.Errorf("visual %q specification revision is stale", window.VisualID)
+	}
+	if window.DataRevision < 0 || window.RequestSeq <= 0 || window.ResetVersion < 0 || window.Start < 0 || window.Start > math.MaxInt || window.Limit <= 0 || window.Limit > dashboard.TableMaxRequestCount {
+		return dashboard.TableRequest{}, fmt.Errorf("invalid window coordinates for visual %q", window.VisualID)
+	}
+	if window.BlockID != "all" && window.BlockID != "a" && window.BlockID != "b" && window.BlockID != "c" {
+		return dashboard.TableRequest{}, fmt.Errorf("invalid window block %q", window.BlockID)
+	}
+	if len(window.Sort) > 1 {
+		return dashboard.TableRequest{}, fmt.Errorf("visual window supports exactly one active sort")
+	}
+	request := dashboard.TableRequest{
+		Table: window.VisualID, Block: window.BlockID, Start: int(window.Start), Count: int(window.Limit),
+		RequestSeq: int(window.RequestSeq), ResetVersion: int(window.ResetVersion),
+	}
+	if len(window.Sort) == 1 {
+		sort := window.Sort[0]
+		if sort.Field.Dataset == "" || sort.Field.Field == "" {
+			return dashboard.TableRequest{}, fmt.Errorf("visual window sort field is required")
+		}
+		request.Sort.Key = sort.Field.Field
+		switch sort.Direction {
+		case visualizationir.VisualizationSortDirectionAscending:
+			request.Sort.Direction = "asc"
+		case visualizationir.VisualizationSortDirectionDescending:
+			request.Sort.Direction = "desc"
+		default:
+			return dashboard.TableRequest{}, fmt.Errorf("unsupported visual window sort direction %q", sort.Direction)
+		}
+	}
+	return s.Metrics.NormalizeTableRequest(dashboardID, request), nil
+}
+
+func internalTableRequest(window dashboard.VisualizationWindowRequest) dashboard.TableRequest {
+	request := dashboard.TableRequest{
+		Table: window.VisualID, Block: window.BlockID, Start: int(window.Start), Count: int(window.Limit),
+		RequestSeq: int(window.RequestSeq), ResetVersion: int(window.ResetVersion),
+	}
+	if len(window.Sort) > 0 {
+		request.Sort.Key = window.Sort[0].Field.Field
+		if window.Sort[0].Direction == visualizationir.VisualizationSortDirectionDescending {
+			request.Sort.Direction = "desc"
+		} else {
+			request.Sort.Direction = "asc"
+		}
+	}
+	return request
 }
 
 func (s Service) PrepareVisualSpatialWindow(request Request, authoritative dashboard.Filters) (PreparedRefresh, error) {
@@ -177,7 +252,7 @@ func (s Service) fullPlan(request Request, commandName string) RefreshPlan {
 	if !ok {
 		return RefreshPlan{Command: commandName}
 	}
-	tableRequest := s.Metrics.NormalizeTableRequest(request.DashboardID, request.VisualWindowCommand).Reset()
+	tableRequest := s.Metrics.NormalizeTableRequest(request.DashboardID, internalTableRequest(request.VisualWindowCommand)).Reset()
 	targets := make([]Target, 0, len(page.Visuals))
 	seen := map[string]struct{}{}
 	for _, item := range page.Visuals {
@@ -240,10 +315,17 @@ func (s Service) selectionTargets(request Request, sourceKind, sourceID string) 
 	default:
 		return nil, fmt.Errorf("unknown source kind %q", sourceKind)
 	}
-	tableRequest := s.Metrics.NormalizeTableRequest(request.DashboardID, request.VisualWindowCommand).Reset()
+	pageIDs, err := visualizationIDsForPage(definition, request.PageID)
+	if err != nil {
+		return nil, err
+	}
+	tableRequest := s.Metrics.NormalizeTableRequest(request.DashboardID, internalTableRequest(request.VisualWindowCommand)).Reset()
 	targets := make([]Target, 0, len(ids))
 	seen := map[string]struct{}{}
 	for _, id := range ids {
+		if _, onPage := pageIDs[id]; !onPage {
+			continue
+		}
 		var target Target
 		targetDefinition, ok := definition.Visualizations[id]
 		if !ok {
@@ -299,10 +381,17 @@ func (s Service) targetsForIDs(request Request, ids []string) ([]Target, error) 
 	if !ok {
 		return nil, fmt.Errorf("dashboard %q is not published", request.DashboardID)
 	}
-	tableRequest := s.Metrics.NormalizeTableRequest(request.DashboardID, request.VisualWindowCommand).Reset()
+	pageIDs, err := visualizationIDsForPage(definition, request.PageID)
+	if err != nil {
+		return nil, err
+	}
+	tableRequest := s.Metrics.NormalizeTableRequest(request.DashboardID, internalTableRequest(request.VisualWindowCommand)).Reset()
 	targets := make([]Target, 0, len(ids))
 	seen := map[string]struct{}{}
 	for _, id := range ids {
+		if _, onPage := pageIDs[id]; !onPage {
+			continue
+		}
 		targetDefinition, ok := definition.Visualizations[id]
 		if !ok {
 			return nil, fmt.Errorf("interaction references unknown target %q", id)
@@ -324,6 +413,38 @@ func (s Service) targetsForIDs(request Request, ids []string) ([]Target, error) 
 		targets = append(targets, target)
 	}
 	return targets, nil
+}
+
+func (s Service) requireVisualizationOnPage(request Request, visualID string) error {
+	definition, _, ok := s.Metrics.Report(request.DashboardID)
+	if !ok {
+		return fmt.Errorf("dashboard %q is not published", request.DashboardID)
+	}
+	ids, err := visualizationIDsForPage(definition, request.PageID)
+	if err != nil {
+		return err
+	}
+	if _, ok := ids[visualID]; !ok {
+		return fmt.Errorf("source visual %q is not on page %q", visualID, request.PageID)
+	}
+	return nil
+}
+
+func visualizationIDsForPage(definition dashboarddefinition.Definition, pageID string) (map[string]struct{}, error) {
+	page, ok := definition.PageOrDefault(pageID)
+	if !ok || (pageID != "" && page.ID != pageID) {
+		return nil, fmt.Errorf("unknown dashboard page %q", pageID)
+	}
+	ids := make(map[string]struct{}, len(page.Visuals))
+	for _, placement := range page.Visuals {
+		if placement.Visual != "" {
+			ids[placement.Visual] = struct{}{}
+		}
+		if placement.Table != "" {
+			ids[placement.Table] = struct{}{}
+		}
+	}
+	return ids, nil
 }
 
 func spatialTarget(definition visualizationdefinition.Definition, current dashboard.SpatialWindowRequest, reset bool) (Target, bool) {

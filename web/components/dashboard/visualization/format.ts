@@ -23,7 +23,7 @@ export function formatValue(locale: string, format: VisualizationFormat, value: 
       const [scale, suffix] = absolute >= 1e9 ? [1e9, 'B'] : absolute >= 1e6 ? [1e6, 'M'] : absolute >= 1e3 ? [1e3, 'K'] : [1, '']
       return number(data, numericValue / scale, 0, format.maximumFractionDigits ?? 1, suffix)
     }
-    case 'duration': return duration(numeric(value), format.unit)
+    case 'duration': return duration(data, numeric(value), format.unit)
     case 'temporal': {
       if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(value)) throw new Error('temporal visualization value must be RFC 3339 UTC')
       return format.timeStyle && !format.dateStyle ? value.slice(11, 19) : value.slice(0, 10)
@@ -55,7 +55,8 @@ function group(value: string, separator: string): string {
   return output
 }
 
-function duration(value: number, unit: string): string {
+function duration(locale: LocaleData, value: number, unit: string): string {
+  if (unit === 'days') return number(locale, value, 0, 1, 'd')
   let seconds = Math.round(value)
   if (unit === 'milliseconds') seconds = Math.round(value / 1000)
   else if (unit === 'minutes') seconds *= 60

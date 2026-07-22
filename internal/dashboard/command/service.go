@@ -119,7 +119,7 @@ type Request struct {
 	PageID                     string
 	ModelID                    string
 	Filters                    dashboard.Filters
-	VisualWindowCommand        dashboard.TableRequest
+	VisualWindowCommand        dashboard.VisualizationWindowRequest
 	VisualSpatialWindowCommand dashboard.SpatialWindowRequest
 	InteractionCommand         dashboard.InteractionCommand
 	SpatialInteractionCommand  dashboard.SpatialSelectionCommand

@@ -14,11 +14,11 @@ export function proportionalOption(envelope: VisualizationEnvelope, context: Ren
     encode: { itemName: spec.category.field, value: spec.value.field },
     label: { show: presentation.showLabels, position: presentation.labelPosition === 'inside' ? 'inside' : 'outside', formatter: labelFormatter(envelope, spec.value, context) },
     roseType: presentation.rose ? 'radius' : false,
-    radius,
   }
+  if (radius !== undefined) series.radius = radius
   if (spec.mark === 'funnel') {
     series.orient = presentation.orientation
-    series.funnelAlign = presentation.align
+    if (presentation.align !== undefined) series.funnelAlign = presentation.align
     series.sort = presentation.sort === 'ascending' ? 'ascending' : presentation.sort === 'descending' ? 'descending' : 'none'
   }
   const center = presentation.centerLabel && spec.mark === 'donut' ? {

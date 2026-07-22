@@ -64,9 +64,12 @@ func (m fakeMetrics) Report(string) (dashboarddefinition.Definition, *semanticmo
 			},
 		},
 		Tables: map[string]reportdef.TableVisual{"orders": {Query: reportdef.TableQuery{Table: "orders", Fields: []string{"orders.state"}}}},
-		Pages: []dashboard.Page{{ID: "overview", Visuals: []dashboard.PageVisual{
-			{Kind: "filter_card", Filter: "state"}, {Kind: "visual", Visual: "chart"}, {Kind: "visual", Visual: "customer_map"}, {Kind: "table", Table: "orders"},
-		}}},
+		Pages: []dashboard.Page{
+			{ID: "overview", Visuals: []dashboard.PageVisual{
+				{Kind: "filter_card", Filter: "state"}, {Kind: "visual", Visual: "chart"}, {Kind: "visual", Visual: "customer_map"}, {Kind: "table", Table: "orders"},
+			}},
+			{ID: "boolean", Visuals: []dashboard.PageVisual{{Kind: "visual", Visual: "boolean_chart"}, {Kind: "table", Table: "orders"}}},
+		},
 	}
 	model := &semanticmodel.Model{
 		Name: "model",
@@ -140,6 +143,39 @@ func TestPrepareVisualSpatialWindowValidatesCompiledIdentity(t *testing.T) {
 	}
 }
 
+func TestPrepareVisualWindowValidatesTypedIdentityAndCoordinates(t *testing.T) {
+	definition, _, _ := (fakeMetrics{}).Report("dash")
+	request := dashboard.VisualizationWindowRequest{
+		VisualID: "orders", SpecRevision: definition.Visualizations["orders"].SpecRevision, DataRevision: 9,
+		RequestSeq: 7, ResetVersion: 2, Start: 150, Limit: 50, BlockID: "b",
+		Sort: []visualizationir.VisualizationSort{{
+			Field:     visualizationir.VisualizationFieldRef{Dataset: "primary", Field: "state"},
+			Direction: visualizationir.VisualizationSortDirectionDescending,
+		}},
+	}
+	prepared, err := (Service{Metrics: fakeMetrics{}}).PrepareVisualWindow(Request{DashboardID: "dash", PageID: "overview", VisualWindowCommand: request}, dashboard.Filters{}.WithDefaults())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(prepared.Plan.Targets) != 1 {
+		t.Fatalf("targets = %#v", prepared.Plan.Targets)
+	}
+	target := prepared.Plan.Targets[0]
+	if target.Kind != TargetTable || target.ID != "orders" || target.TableRequest.Block != "b" || target.TableRequest.Start != 150 || target.TableRequest.Count != 50 || target.TableRequest.RequestSeq != 7 || target.TableRequest.Sort.Key != "state" || target.TableRequest.Sort.Direction != "desc" {
+		t.Fatalf("target = %#v", target)
+	}
+
+	request.SpecRevision = "sha256:forged"
+	if _, err := (Service{Metrics: fakeMetrics{}}).PrepareVisualWindow(Request{DashboardID: "dash", VisualWindowCommand: request}, dashboard.Filters{}); err == nil {
+		t.Fatal("forged table revision was accepted")
+	}
+	request.SpecRevision = definition.Visualizations["orders"].SpecRevision
+	request.RequestSeq = 0
+	if _, err := (Service{Metrics: fakeMetrics{}}).PrepareVisualWindow(Request{DashboardID: "dash", VisualWindowCommand: request}, dashboard.Filters{}); err == nil {
+		t.Fatal("non-positive table request sequence was accepted")
+	}
+}
+
 func TestPrepareSelectUsesAuthoritativeFiltersAndExplicitTargetsOnly(t *testing.T) {
 	prepared, err := (Service{Metrics: fakeMetrics{}}).PrepareSelect(Request{
 		DashboardID: "dash", PageID: "overview",
@@ -161,9 +197,31 @@ func TestPrepareSelectUsesAuthoritativeFiltersAndExplicitTargetsOnly(t *testing.
 	}
 }
 
+func TestPrepareSelectRestrictsExplicitTargetsToActivePage(t *testing.T) {
+	definition, _, _ := (fakeMetrics{}).Report("dash")
+	chart := definition.Visualizations["chart"]
+	spec := chart.Spec.Value.(*visualizationir.CartesianVisualizationSpec)
+	spec.Interactions[0].Targets = []string{"orders", "boolean_chart"}
+	definition.Visualizations["chart"] = chart
+
+	prepared, err := (Service{Metrics: fakeMetrics{report: &definition}}).PrepareSelect(Request{
+		DashboardID: "dash", PageID: "overview",
+		InteractionCommand: dashboard.InteractionCommand{
+			SourceKind: "visual", SourceID: "chart", InteractionKind: "point_selection", Action: "set",
+			Mappings: []dashboard.InteractionCommandMapping{{Field: "state", Value: "RJ"}},
+		},
+	}, dashboard.Filters{}.WithDefaults())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(prepared.Plan.Targets) != 1 || prepared.Plan.Targets[0].ID != "orders" {
+		t.Fatalf("off-page targets leaked into active stream plan: %#v", prepared.Plan.Targets)
+	}
+}
+
 func TestPrepareSelectCanonicalizesTypedMappings(t *testing.T) {
 	prepared, err := (Service{Metrics: fakeMetrics{}}).PrepareSelect(Request{
-		DashboardID: "dash", PageID: "overview",
+		DashboardID: "dash", PageID: "boolean",
 		InteractionCommand: dashboard.InteractionCommand{
 			SourceKind: "visual", SourceID: "boolean_chart", InteractionKind: "point_selection", Action: "set",
 			Mappings: []dashboard.InteractionCommandMapping{{Field: "active", Value: false}},
@@ -195,7 +253,7 @@ func TestPrepareClearSelectionPlansAffectedTargetUnion(t *testing.T) {
 	definition, _, _ := (fakeMetrics{}).Report("dash")
 	chart := definition.Visualizations["chart"]
 	spec := chart.Spec.Value.(*visualizationir.CartesianVisualizationSpec)
-	spec.Interactions[0].Targets = []string{"orders", "boolean_chart"}
+	spec.Interactions[0].Targets = []string{"orders", "customer_map"}
 	definition.Visualizations["chart"] = chart
 	prepared, err := (Service{Metrics: fakeMetrics{report: &definition}}).PrepareClearSelection(Request{
 		DashboardID: "dash", PageID: "overview",

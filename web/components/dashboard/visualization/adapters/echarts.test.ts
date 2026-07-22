@@ -61,6 +61,41 @@ test('ECharts interactions translate stable IR field mappings without renderer r
   expect(option.visualMap.dimension).toBe('__ld_selected')
 })
 
+test('ECharts gives selectable line and area rows reliable hit targets at either symbol setting', () => {
+  for (const mark of ['line', 'area'] as const) {
+    const envelope = cartesianFixture(mark) as any
+    envelope.spec.datasets[0].fields[0].role = 'identity'
+    envelope.spec.interactions = [{
+      id: 'point_selection', kind: 'select', mode: 'multiple', requiresStableIdentity: true, targets: ['details'], mappings: [
+        { source: { dataset: 'primary', field: 'label' }, targetFieldID: 'orders.purchase_month', targetFactID: 'orders' },
+      ],
+    }]
+
+    const option = echartsOption(envelope, defaultRendererContext) as any
+    expect(option.series).toHaveLength(2)
+    expect(option.series[0]).toMatchObject({ type: 'line', symbol: 'none' })
+    expect(option.series[1]).toMatchObject({
+      id: 'series:interaction-hit:primary:label:value',
+      type: 'scatter',
+      encode: { x: 'label', y: 'value' },
+      symbolSize: 18,
+      itemStyle: { color: 'rgba(0,0,0,0.001)' },
+      tooltip: { show: false },
+    })
+    expect(option.series[1].silent).toBe(false)
+  }
+
+  const authoredSymbols = cartesianFixture('line') as any
+  authoredSymbols.spec.presentation.showSymbols = true
+  authoredSymbols.spec.interactions = [{
+    id: 'point_selection', kind: 'select', mode: 'multiple', requiresStableIdentity: true, targets: ['details'], mappings: [
+      { source: { dataset: 'primary', field: 'label' }, targetFieldID: 'orders.purchase_month', targetFactID: 'orders' },
+    ],
+  }]
+  expect((echartsOption(authoredSymbols, defaultRendererContext) as any).series).toHaveLength(2)
+  expect((echartsOption(cartesianFixture('line'), defaultRendererContext) as any).series).toHaveLength(1)
+})
+
 test('ECharts translation preserves combo series marks and axes', () => {
   const base = {
     schemaVersion: 3, visualID: 'combo', rendererID: 'echarts', specRevision: 'sha256:test', dataRevision: 1,
@@ -334,6 +369,16 @@ test('ECharts honors proportional presentation and hierarchy/network layout', ()
     expect(option.series[0].id).toBe(`series:hierarchy:${mark}`)
     expect(option.series[0].data[0].children[0].name).toBe('child')
   }
+})
+
+test('ECharts leaves absent proportional geometry fields to renderer defaults', () => {
+  const pie = echartsOption(proportionalFixture('pie'), defaultRendererContext) as any
+  expect(Object.hasOwn(pie.series[0], 'radius')).toBe(false)
+
+  const defaultFunnelEnvelope = proportionalFixture('funnel') as any
+  defaultFunnelEnvelope.spec.presentation.align = undefined
+  const defaultFunnel = echartsOption(defaultFunnelEnvelope, defaultRendererContext) as any
+  expect(Object.hasOwn(defaultFunnel.series[0], 'funnelAlign')).toBe(false)
 })
 
 test('ECharts formats gauges, applies semantic thresholds, and renders status states', () => {

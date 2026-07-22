@@ -352,12 +352,15 @@ func selectionSignal(sourceID, field, value string) map[string]any {
 
 func visualWindowCommand(visual, block string, start, count, requestSeq, resetVersion int) map[string]any {
 	return map[string]any{
-		"visual":       visual,
-		"block":        block,
+		"visualID":     visual,
+		"specRevision": "",
+		"dataRevision": 0,
+		"blockID":      block,
 		"start":        start,
-		"count":        count,
+		"limit":        count,
 		"requestSeq":   requestSeq,
 		"resetVersion": resetVersion,
+		"sort":         []map[string]any{},
 	}
 }
 

@@ -68,6 +68,10 @@ for (const viewport of [{ name: 'desktop', width: 1280, height: 820 }, { name: '
         const tableHost = hosts.find((host) => host.envelope?.visualID === 'orders')
         const table = tableHost?.shadowRoot?.querySelector('ld-report-table') as any
         await table?.updateComplete
+        const kpiHost = hosts.find((host) => host.envelope?.visualID === 'orders_kpi')
+        const kpi = kpiHost?.shadowRoot?.querySelector('.ld-kpi-card') as HTMLElement | null
+        const kpiLabel = kpi?.querySelector('.ld-visualization-label') as HTMLElement | null
+        const kpiValue = kpi?.querySelector('.ld-visualization-kpi') as HTMLElement | null
         const canvas = root.querySelector('ld-report-canvas') as any
         await canvas.updateComplete
         const assigned = (canvas.shadowRoot.querySelector('slot') as HTMLSlotElement).assignedElements() as HTMLElement[]
@@ -80,7 +84,17 @@ for (const viewport of [{ name: 'desktop', width: 1280, height: 820 }, { name: '
           kinds: hosts.map((host) => host.envelope?.spec?.kind).sort(),
           statuses: Object.fromEntries(hosts.map((host) => [host.envelope?.visualID, host.envelope?.status?.kind])),
           tableText: table?.shadowRoot?.textContent?.replace(/\s+/g, ' ').trim(),
+          tableUpgraded: Boolean(table?.updateComplete && table?.shadowRoot?.childElementCount),
           tableAlert: tableHost?.shadowRoot?.querySelector('[role="alert"]')?.textContent?.trim(),
+          kpi: {
+            tone: kpi?.dataset.tone,
+            label: kpiLabel?.textContent?.trim(),
+            value: kpiValue?.textContent?.trim(),
+            note: kpi?.querySelector('.ld-visualization-note')?.textContent?.trim(),
+            display: kpi ? getComputedStyle(kpi).display : '',
+            valueSize: kpiValue ? Number.parseFloat(getComputedStyle(kpiValue).fontSize) : 0,
+            labelSize: kpiLabel ? Number.parseFloat(getComputedStyle(kpiLabel).fontSize) : 0,
+          },
           presentationMode: canvas.shadowRoot.querySelector('.surface')?.dataset.presentationMode,
           chartHeight: chart?.height ?? 0, tableHeight: tableFrame?.height ?? 0,
           tableAfterChart: (tableFrame?.top ?? 0) > (chart?.bottom ?? 0),
@@ -93,6 +107,9 @@ for (const viewport of [{ name: 'desktop', width: 1280, height: 820 }, { name: '
       expect(state.statuses).toEqual({ orders_kpi: 'ready', orders_chart: 'loading', orders: 'error' })
       expect(state.tableAlert).toBe('Ratings query failed')
       expect(state.tableText).toContain('o1')
+      expect(state.tableUpgraded).toBe(true)
+      expect(state.kpi).toMatchObject({ tone: 'ink', label: 'Orders', value: '42', note: 'Filtered', display: 'grid' })
+      expect(state.kpi.valueSize).toBeGreaterThan(state.kpi.labelSize)
       if (viewport.name === 'mobile') {
         expect(state.presentationMode).toBe('responsive')
         expect(state.chartHeight).toBeGreaterThanOrEqual(280)
@@ -104,6 +121,53 @@ for (const viewport of [{ name: 'desktop', width: 1280, height: 820 }, { name: '
     } finally { await page.close() }
   })
 }
+
+test('windowed table keeps a bounded DOM and requests unloaded chunks while scrolling', async () => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => {
+      const dashboard = document.querySelector('ld-dashboard-page') as any
+      const hosts = Array.from(dashboard?.shadowRoot?.querySelectorAll('ld-visualization-host') ?? []) as any[]
+      const tableHost = hosts.find((host) => host.envelope?.visualID === 'orders')
+      return Boolean(tableHost?.shadowRoot?.querySelector('ld-report-table')?.shadowRoot?.querySelector('.table-scrollport'))
+    })
+    const result = await page.locator('ld-dashboard-page').evaluate(async (dashboard: any) => {
+      const hosts = Array.from(dashboard.shadowRoot.querySelectorAll('ld-visualization-host')) as any[]
+      const tableHost = hosts.find((host) => host.envelope?.visualID === 'orders')
+      const table = tableHost.shadowRoot.querySelector('ld-report-table') as any
+      await table.updateComplete
+      const scrollport = table.shadowRoot.querySelector('.table-scrollport') as HTMLElement
+      const request = new Promise<any>((resolve, reject) => {
+        const timeout = window.setTimeout(() => reject(new Error('window request was not emitted')), 1_000)
+        dashboard.addEventListener('ld-visualization-window-request', (event: Event) => {
+          window.clearTimeout(timeout)
+          resolve((event as CustomEvent).detail)
+        }, { once: true })
+      })
+      scrollport.scrollTop = 100 * 28
+      scrollport.dispatchEvent(new Event('scroll'))
+      const detail = await request
+      await table.updateComplete
+      return {
+        detail,
+        renderedRows: table.shadowRoot.querySelectorAll('.canvas > .row').length,
+        totalRows: table.table.availableRows,
+        loadingVisible: table.shadowRoot.textContent?.includes('loading'),
+      }
+    })
+    expect(result.detail).toMatchObject({
+      visualID: 'orders', specRevision: `sha256:${'3'.repeat(64)}`, dataRevision: 1,
+      resetVersion: 0, limit: 50,
+    })
+    expect(result.detail.requestSeq).toBeGreaterThan(0)
+    expect(result.detail.start).toBeGreaterThanOrEqual(50)
+    expect(['all', 'a', 'b', 'c']).toContain(result.detail.blockID)
+    expect(result.renderedRows).toBeLessThan(40)
+    expect(result.totalRows).toBe(250)
+    expect(result.loadingVisible).toBe(true)
+  } finally { await page.close() }
+})
 
 test('dashboard refresh progress is owned by the latest stream generation', async () => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
@@ -287,7 +351,7 @@ function testVisualizationEnvelopes() {
   return {
     orders_kpi: { schemaVersion: 3, visualID: 'orders_kpi', rendererID: 'html', specRevision: kpiRevision, dataRevision: 1, spec: { ...base('Orders', [field('value', 'measure', 'decimal', 'Orders')]), kind: 'kpi', value: { dataset: 'primary', field: 'value' }, presentation: { trend: 'neutral', tone: 'ink', note: 'Filtered' } }, dataState: inline(kpiRevision, ['value'], [[42]]), selection: [], status: { kind: 'ready' }, diagnostics: [] },
     orders_chart: { schemaVersion: 3, visualID: 'orders_chart', rendererID: 'echarts', specRevision: chartRevision, dataRevision: 1, spec: { ...base('Orders by status', [field('label', 'identity', 'string', 'Status'), field('value', 'measure', 'decimal', 'Orders')]), kind: 'cartesian', mark: 'bar', interactions: [{ id: 'selection', kind: 'select', mappings: [{ source: { dataset: 'primary', field: 'label' }, targetFieldID: 'orders.status', targetFactID: 'orders' }], targets: ['orders_kpi', 'orders'], mode: 'multiple', requiresStableIdentity: true }], x: { dataset: 'primary', field: 'label' }, y: [{ dataset: 'primary', field: 'value' }], presentation: { legend: 'hidden', showLabels: false, smooth: false, stacked: false, showSymbols: true, dataZoom: false, area: false, step: false } }, dataState: inline(chartRevision, ['label', 'value'], [['delivered', 42], ['shipped', 7]]), selection: [], status: { kind: 'loading', message: 'Refreshing' }, diagnostics: [] },
-    orders: { schemaVersion: 3, visualID: 'orders', rendererID: 'tanstack', specRevision: tableRevision, dataRevision: 1, spec: { ...base('Orders', [field('order_id', 'identity', 'string', 'Order')]), kind: 'table', dataBudget: { maxRows: 1000, requiredCompleteness: 'partial' }, columns: [{ field: { dataset: 'primary', field: 'order_id' }, label: 'Order', width: 180, formatting: [] }], defaultSort: [{ field: { dataset: 'primary', field: 'order_id' }, direction: 'ascending' }], presentation: { rowHeight: 28, striped: true, showHeader: true } }, dataState: { kind: 'windowed', specRevision: tableRevision, dataRevision: 1, generation: 3, schema: { id: 'primary', fields: [field('order_id', 'identity', 'string', 'Order')] }, cardinality: { kind: 'exact', count: 1 }, availableRows: 1, rowCap: 1000, chunkSize: 100, resetVersion: 0, sort: [{ field: { dataset: 'primary', field: 'order_id' }, direction: 'ascending' }], blocks: { a: { id: 'a', start: 0, rows: [['o1']], requestSeq: 0, resetVersion: 0, sort: [{ field: { dataset: 'primary', field: 'order_id' }, direction: 'ascending' }] } } }, selection: [], status: { kind: 'error', message: 'Ratings query failed' }, diagnostics: [{ code: 'query_failed', severity: 'error', message: 'Ratings query failed' }] },
+    orders: { schemaVersion: 3, visualID: 'orders', rendererID: 'tanstack', specRevision: tableRevision, dataRevision: 1, spec: { ...base('Orders', [field('order_id', 'identity', 'string', 'Order')]), kind: 'table', dataBudget: { maxRows: 1000, requiredCompleteness: 'partial' }, columns: [{ field: { dataset: 'primary', field: 'order_id' }, label: 'Order', width: 180, formatting: [] }], defaultSort: [{ field: { dataset: 'primary', field: 'order_id' }, direction: 'ascending' }], presentation: { rowHeight: 28, striped: true, showHeader: true } }, dataState: { kind: 'windowed', specRevision: tableRevision, dataRevision: 1, generation: 3, schema: { id: 'primary', fields: [field('order_id', 'identity', 'string', 'Order')] }, cardinality: { kind: 'exact', count: 250 }, availableRows: 250, rowCap: 1000, chunkSize: 50, resetVersion: 0, sort: [{ field: { dataset: 'primary', field: 'order_id' }, direction: 'ascending' }], blocks: { a: { id: 'a', start: 0, rows: Array.from({ length: 50 }, (_, index) => [`o${index + 1}`]), requestSeq: 0, resetVersion: 0, sort: [{ field: { dataset: 'primary', field: 'order_id' }, direction: 'ascending' }] } } }, selection: [], status: { kind: 'error', message: 'Ratings query failed' }, diagnostics: [{ code: 'query_failed', severity: 'error', message: 'Ratings query failed' }] },
   }
 }
 

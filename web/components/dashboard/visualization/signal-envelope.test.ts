@@ -46,6 +46,12 @@ test('dashboard visualization signal decoder fails closed on transport and paylo
   expect(decoder.decode({ ...valid, dataState: { ...valid.dataState, payload: '{invalid' } })).toBeUndefined()
 })
 
+test('dashboard visualization signal decoder ignores incomplete unknown visual patches', () => {
+  const decoder = new DashboardVisualizationSignalDecoder()
+
+  expect(decoder.decodeAll({ off_page: { status: { kind: 'error', message: 'not on page' } } as any })).toEqual({})
+})
+
 function visualizationSignal(state: Record<string, unknown>): DashboardVisualizationSignal {
   const kind = state.kind as 'inline' | 'windowed' | 'spatial_windowed'
   const specRevision = state.specRevision as string

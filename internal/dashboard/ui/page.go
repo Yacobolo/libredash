@@ -142,7 +142,7 @@ func Page(clientID, csrfToken string, catalog dashboard.Catalog, report dashboar
 					g.Attr("data-on:ld-selection-clear", "$filters.selections = []; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/clear-selection", "runtime")),
 					g.Attr("data-on:ld-interaction-select", "$interactionCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/select", "runtime", "interactionCommand")),
 					g.Attr("data-on:ld-interaction-spatial-select", "$spatialInteractionCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/spatial-select", "runtime", "spatialInteractionCommand")),
-					g.Attr("data-on:ld-visual-window-change", "$visualWindowCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/visual-window", "runtime", "visualWindowCommand")),
+					g.Attr("data-on:ld-visualization-window-request", "$visualWindowCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/visual-window", "runtime", "visualWindowCommand")),
 					g.Attr("data-on:ld-visual-spatial-window-change", "$visualSpatialWindowCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/visual-spatial-window", "runtime", "visualSpatialWindowCommand")),
 				),
 			),
@@ -196,5 +196,5 @@ func newStreamInstanceID() string {
 
 func visualResetExpression() string {
 	count := strconv.Itoa(dashboard.TableChunkSize)
-	return "$visualWindowCommand.block = 'all'; $visualWindowCommand.start = 0; $visualWindowCommand.count = " + count + "; $visualWindowCommand.resetVersion = ($visualWindowCommand.resetVersion || 0) + 1; "
+	return "$visualWindowCommand.blockID = 'all'; $visualWindowCommand.start = 0; $visualWindowCommand.limit = " + count + "; $visualWindowCommand.resetVersion = ($visualWindowCommand.resetVersion || 0) + 1; "
 }

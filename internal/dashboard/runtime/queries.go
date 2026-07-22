@@ -347,10 +347,19 @@ func (s *VisualizationDataService) queryDataTableWindow(ctx context.Context, run
 		count = dashboard.TableMaxRequestCount
 	}
 	start := request.Start
+	queryCount := count
+	blockStarts := map[string]int{request.Block: start}
 	if request.Block == "all" {
-		start = 0
+		currentStart := max(0, (start/count)*count)
+		if currentStart == 0 {
+			blockStarts = map[string]int{"a": 0, "b": count, "c": count * 2}
+		} else {
+			blockStarts = map[string]int{"a": max(0, currentStart-count), "b": currentStart, "c": currentStart + count}
+		}
+		start = blockStarts["a"]
+		queryCount = count * 3
 	}
-	rowRequest, err := s.tableRowRequest(ctx, runtime, report, tableModel, filters, request, start, count)
+	rowRequest, err := s.tableRowRequest(ctx, runtime, report, tableModel, filters, request, start, queryCount)
 	if err != nil {
 		return dashboard.EmptyTable(request, err), nil
 	}
@@ -362,7 +371,7 @@ func (s *VisualizationDataService) queryDataTableWindow(ctx context.Context, run
 	// A short first page proves the exact cardinality. At a non-zero offset it
 	// only proves that the requested window reached or overshot the end; the
 	// true count may be lower than start and must remain unknown.
-	totalRowsKnown := start == 0 && len(rows) < count
+	totalRowsKnown := start == 0 && len(rows) < queryCount
 	totalRows := 0
 	cardinality := dashboard.TableCardinality{Kind: dashboard.CardinalityUnknown}
 	availableRows := dashboard.TableInteractiveRowCap
@@ -373,9 +382,24 @@ func (s *VisualizationDataService) queryDataTableWindow(ctx context.Context, run
 	} else if len(rows) > 0 {
 		cardinality = dashboard.LowerBoundCardinality(start + len(rows))
 	}
-	block := request.Block
-	if block == "all" {
-		block = "a"
+	blocks := make(map[string]dashboard.TableBlock, len(blockStarts))
+	for _, block := range []string{"a", "b", "c"} {
+		blockStart, ok := blockStarts[block]
+		if !ok {
+			continue
+		}
+		rowStart := min(len(rows), max(0, blockStart-start))
+		rowEnd := min(len(rows), rowStart+count)
+		blocks[block] = dashboard.TableBlock{
+			Start: blockStart, RequestSeq: request.RequestSeq, ResetVersion: request.ResetVersion,
+			Sort: request.Sort, Rows: rows[rowStart:rowEnd],
+		}
+	}
+	if request.Block != "all" {
+		blocks[request.Block] = dashboard.TableBlock{
+			Start: start, RequestSeq: request.RequestSeq, ResetVersion: request.ResetVersion,
+			Sort: request.Sort, Rows: rows,
+		}
 	}
 	style := tableModel.Style.WithDefaults()
 	return dashboard.Table{
@@ -394,11 +418,9 @@ func (s *VisualizationDataService) queryDataTableWindow(ctx context.Context, run
 		RowHeight:     style.RowHeight(),
 		ResetVersion:  request.ResetVersion,
 		Sort:          request.Sort,
-		Blocks: map[string]dashboard.TableBlock{
-			block: {Start: start, RequestSeq: request.RequestSeq, ResetVersion: request.ResetVersion, Sort: request.Sort, Rows: rows},
-		},
-		LoadingBlock: "",
-		Error:        "",
+		Blocks:        blocks,
+		LoadingBlock:  "",
+		Error:         "",
 	}, nil
 }
 

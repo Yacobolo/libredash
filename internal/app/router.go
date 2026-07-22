@@ -324,7 +324,11 @@ func staticAssetCache(next http.Handler) http.Handler {
 		case version != "dev" && r.URL.Query().Get("v") == version:
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		case immutableStaticPath(r.URL.Path):
-			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			// Bun's chunk hash covers the chunk's source, but not the final hashed
+			// URLs of its lazy dependencies. A parent chunk can therefore keep its
+			// filename while its import graph changes. Revalidate split chunks so a
+			// cached parent can never point at a removed child chunk.
+			w.Header().Set("Cache-Control", "no-cache")
 		case fontStaticPath(r.URL.Path):
 			w.Header().Set("Cache-Control", "public, max-age=86400")
 		default:

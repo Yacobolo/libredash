@@ -653,9 +653,9 @@ func TestStaticAssetCacheHeaderClasses(t *testing.T) {
 			want: "public, max-age=31536000, immutable",
 		},
 		{
-			name: "hashed chunk asset",
+			name: "split chunk asset",
 			path: "/static/chunks/shared-app-shell-sv895r5c.js",
-			want: "public, max-age=31536000, immutable",
+			want: "no-cache",
 		},
 		{
 			name: "font asset",
@@ -1085,7 +1085,7 @@ func TestUpdatesStreamsPageScopedChartSignals(t *testing.T) {
 }
 
 func TestDashboardRefreshCommandRouteIsRemoved(t *testing.T) {
-	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"runtime":{"clientId":"test-client"},"visualWindowCommand":{"visual":"order_rows","block":"all","start":0,"count":50}}`)
+	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"runtime":{"clientId":"test-client"},"visualWindowCommand":{"visualID":"order_rows","blockID":"all","start":0,"limit":50,"sort":[]}}`)
 	req := httptest.NewRequest(http.MethodPost, "/workspaces/test-workspace/commands/refresh", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -1098,7 +1098,7 @@ func TestDashboardRefreshCommandRouteIsRemoved(t *testing.T) {
 }
 
 func TestSelectCommandAcceptsDatastarSignals(t *testing.T) {
-	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}},"selections":[]},"runtime":{"clientId":"test-client"},"interactionCommand":{"sourceKind":"visual","sourceId":"orders","interactionKind":"point_selection","action":"set","toggle":true,"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]},"visualWindowCommand":{"visual":"order_rows","block":"all","start":0,"count":50}}`)
+	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}},"selections":[]},"runtime":{"clientId":"test-client"},"interactionCommand":{"sourceKind":"visual","sourceId":"orders","interactionKind":"point_selection","action":"set","toggle":true,"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]},"visualWindowCommand":{"visualID":"order_rows","blockID":"all","start":0,"limit":50,"sort":[]}}`)
 	req := httptest.NewRequest(http.MethodPost, "/workspaces/test-workspace/commands/select", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -1131,24 +1131,24 @@ func TestPageCommandsQueryActivePage(t *testing.T) {
 		{
 			name:    "interaction select",
 			path:    "/workspaces/test-workspace/commands/select",
-			body:    `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"selections":[]},"interactionCommand":{"sourceKind":"visual","sourceId":"ops_pipeline","interactionKind":"point_selection","action":"set","toggle":true,"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]},"visualWindowCommand":{"block":"all","start":0,"count":50}}`,
+			body:    `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"selections":[]},"interactionCommand":{"sourceKind":"visual","sourceId":"ops_pipeline","interactionKind":"point_selection","action":"set","toggle":true,"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]},"visualWindowCommand":{"blockID":"all","start":0,"limit":50,"sort":[]}}`,
 			queries: 1,
 		},
 		{
 			name: "clear selection",
 			path: "/workspaces/test-workspace/commands/clear-selection",
-			body: `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"selections":[{"sourceKind":"visual","sourceId":"ops_pipeline","interactionKind":"point_selection","entries":[{"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]}]}]},"visualWindowCommand":{"block":"all","start":0,"count":50}}`,
+			body: `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"selections":[{"sourceKind":"visual","sourceId":"ops_pipeline","interactionKind":"point_selection","entries":[{"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]}]}]},"visualWindowCommand":{"blockID":"all","start":0,"limit":50,"sort":[]}}`,
 		},
 		{
 			name:    "reload",
 			path:    "/workspaces/test-workspace/commands/reload",
-			body:    `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"visualWindowCommand":{"block":"all","start":200,"count":50}}`,
+			body:    `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"visualWindowCommand":{"blockID":"all","start":200,"limit":50,"sort":[]}}`,
 			queries: 2,
 		},
 		{
 			name:    "reset filters",
 			path:    "/workspaces/test-workspace/commands/reset-filters",
-			body:    `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"visualWindowCommand":{"block":"all","start":200,"count":50}}`,
+			body:    `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"visualWindowCommand":{"blockID":"all","start":200,"limit":50,"sort":[]}}`,
 			queries: 2,
 		},
 	}
@@ -1184,7 +1184,7 @@ func TestDashboardRefreshCommandDoesNotPersistRefreshRun(t *testing.T) {
 	token := testAPIToken(t, ctx, store, principal.ID, "dashboard-refresh")
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test"})
-	body := strings.NewReader(`{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations","modelId":"test"},"filters":{},"visualWindowCommand":{"block":"all","start":0,"count":50}}`)
+	body := strings.NewReader(`{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations","modelId":"test"},"filters":{},"visualWindowCommand":{"blockID":"all","start":0,"limit":50,"sort":[]}}`)
 	req := httptest.NewRequest(http.MethodPost, "/workspaces/test/commands/refresh", body)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -1259,7 +1259,7 @@ func TestLegacySemanticModelRefreshRouteIsRemoved(t *testing.T) {
 }
 
 func TestClearSelectionCommandAcceptsDatastarSignals(t *testing.T) {
-	body := strings.NewReader(`{"filters":{"selections":[{"sourceKind":"visual","sourceId":"orders","interactionKind":"point_selection","entries":[{"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]}]}]},"runtime":{"clientId":"test-client"},"visualWindowCommand":{"visual":"order_rows","block":"all","start":0,"count":50}}`)
+	body := strings.NewReader(`{"filters":{"selections":[{"sourceKind":"visual","sourceId":"orders","interactionKind":"point_selection","entries":[{"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]}]}]},"runtime":{"clientId":"test-client"},"visualWindowCommand":{"visualID":"order_rows","blockID":"all","start":0,"limit":50,"sort":[]}}`)
 	req := httptest.NewRequest(http.MethodPost, "/workspaces/test-workspace/commands/clear-selection", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -1270,7 +1270,7 @@ func TestClearSelectionCommandAcceptsDatastarSignals(t *testing.T) {
 }
 
 func TestResetFiltersCommandAcceptsDatastarSignals(t *testing.T) {
-	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}},"selections":[{"sourceKind":"visual","sourceId":"orders","interactionKind":"point_selection","entries":[{"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]}]}]},"runtime":{"clientId":"test-client"},"visualWindowCommand":{"visual":"order_rows","block":"all","start":200,"count":50}}`)
+	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}},"selections":[{"sourceKind":"visual","sourceId":"orders","interactionKind":"point_selection","entries":[{"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]}]}]},"runtime":{"clientId":"test-client"},"visualWindowCommand":{"visualID":"order_rows","blockID":"all","start":200,"limit":50,"sort":[]}}`)
 	req := httptest.NewRequest(http.MethodPost, "/workspaces/test-workspace/commands/reset-filters", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -1281,7 +1281,7 @@ func TestResetFiltersCommandAcceptsDatastarSignals(t *testing.T) {
 }
 
 func TestTableWindowCommandAcceptsDatastarSignals(t *testing.T) {
-	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"runtime":{"clientId":"test-client"},"visualWindowCommand":{"visual":"order_rows","block":"a","start":400,"count":50,"requestSeq":42,"sort":{"key":"revenue","direction":"desc"}}}`)
+	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"runtime":{"clientId":"test-client"},"visualWindowCommand":{"visualID":"order_rows","specRevision":"","dataRevision":3,"blockID":"a","start":400,"limit":50,"requestSeq":42,"resetVersion":0,"sort":[{"field":{"dataset":"primary","field":"revenue"},"direction":"descending"}]}}`)
 	req := httptest.NewRequest(http.MethodPost, "/workspaces/test-workspace/commands/visual-window", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -1296,7 +1296,7 @@ func TestTableWindowCommandDoesNotPublishCanceledQueries(t *testing.T) {
 	updates, unsubscribe := server.broker.Subscribe("test-client:executive-sales:overview")
 	defer unsubscribe()
 
-	body := strings.NewReader(`{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"overview"},"visualWindowCommand":{"visual":"order_rows","block":"all","start":400,"count":50,"requestSeq":42}}`)
+	body := strings.NewReader(`{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"overview"},"visualWindowCommand":{"visualID":"order_rows","specRevision":"","dataRevision":3,"blockID":"all","start":400,"limit":50,"requestSeq":42,"resetVersion":0,"sort":[]}}`)
 	req := httptest.NewRequest(http.MethodPost, "/workspaces/test-workspace/commands/visual-window", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
