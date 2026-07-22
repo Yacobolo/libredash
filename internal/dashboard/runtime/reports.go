@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/Yacobolo/leapview/internal/analytics/arrowquery"
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
@@ -55,6 +56,25 @@ func (m *Service) ExecuteDataQuery(ctx context.Context, request dataquery.Query)
 		m.mu.RLock()
 		defer m.mu.RUnlock()
 		return runtime.data.ExecuteDataQuery(ctx, request)
+	})
+}
+
+func (m *Service) ExecuteDataQueryArrow(ctx context.Context, request dataquery.Query, sink arrowquery.Sink) (dataquery.Result, error) {
+	if request.WorkspaceID == "" && m.reports != nil && m.reports.workspace != nil {
+		request.WorkspaceID = m.reports.workspace.Catalog.Workspace.ID
+	}
+	return dataquery.ExecuteAudited(ctx, request, func(ctx context.Context, request dataquery.Query) (dataquery.Result, error) {
+		runtime, err := m.semanticRuntime(request.ModelID)
+		if err != nil {
+			return dataquery.Result{}, err
+		}
+		arrowRuntime, ok := runtime.data.(arrowquery.Executor)
+		if !ok {
+			return dataquery.Result{}, fmt.Errorf("semantic model runtime does not support native Arrow execution")
+		}
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+		return arrowRuntime.ExecuteDataQueryArrow(ctx, request, sink)
 	})
 }
 

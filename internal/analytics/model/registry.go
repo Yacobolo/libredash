@@ -12,8 +12,7 @@ const (
 	AttachDatabase = connectors.AttachDatabase
 	AttachDuckLake = connectors.AttachDuckLake
 
-	ObjectRelationAttach     = connectors.ObjectRelationAttach
-	ObjectRelationQuackQuery = connectors.ObjectRelationQuackQuery
+	ObjectRelationAttach = connectors.ObjectRelationAttach
 )
 
 type Format = connectors.Format

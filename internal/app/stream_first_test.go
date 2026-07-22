@@ -32,24 +32,24 @@ func streamBootstrapBody(t *testing.T, server *Server, pageBody, authorization s
 		req.Header.Set("Authorization", authorization)
 	}
 	req.AddCookie(&http.Cookie{Name: "lv_client_id", Value: "stream-first-test"})
-	rec := httptest.NewRecorder()
+	rec := newSynchronizedRecorder()
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
 		server.Routes().ServeHTTP(rec, req)
 	}()
 	deadline := time.Now().Add(time.Second)
-	for !strings.Contains(rec.Body.String(), "datastar-patch-signals") {
+	for !strings.Contains(rec.BodyString(), "datastar-patch-signals") {
 		if time.Now().After(deadline) {
 			cancel()
 			<-done
-			t.Fatalf("updates bootstrap did not emit signal patch for %q:\n%s", matches[1], rec.Body.String())
+			t.Fatalf("updates bootstrap did not emit signal patch for %q:\n%s", matches[1], rec.BodyString())
 		}
 		time.Sleep(time.Millisecond)
 	}
 	cancel()
 	<-done
-	body := html.UnescapeString(rec.Body.String())
+	body := html.UnescapeString(rec.BodyString())
 	for _, forbidden := range []string{`"updatesUrl"`, `"routeKey"`, `"csrfToken"`} {
 		if strings.Contains(body, forbidden) {
 			t.Fatalf("updates bootstrap leaked %s for %q:\n%s", forbidden, matches[1], body)

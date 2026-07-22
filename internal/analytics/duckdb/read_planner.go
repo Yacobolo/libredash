@@ -7,7 +7,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Yacobolo/leapview/internal/analytics/connectors"
 	"github.com/Yacobolo/leapview/internal/analytics/duckdb/queryjson"
 	analyticsmaterialize "github.com/Yacobolo/leapview/internal/analytics/materialize"
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
@@ -17,6 +16,10 @@ import (
 const rowPresenceColumn = "__leapview_row_present"
 
 func PlanModelTable(ctx context.Context, runtimeDB queryContext, model *semanticmodel.Model, tableName string, table semanticmodel.Table) (analyticsmaterialize.ModelTablePlan, error) {
+	return planModelTable(ctx, runtimeDB, model, tableName, table, nil)
+}
+
+func planModelTable(ctx context.Context, runtimeDB queryContext, model *semanticmodel.Model, tableName string, table semanticmodel.Table, staged map[string]string) (analyticsmaterialize.ModelTablePlan, error) {
 	if err := validateIdentifier(tableName); err != nil {
 		return analyticsmaterialize.ModelTablePlan{}, err
 	}
@@ -25,7 +28,7 @@ func PlanModelTable(ctx context.Context, runtimeDB queryContext, model *semantic
 		sqlText = strings.TrimSpace(table.SQL)
 	}
 	if table.Source != "" && sqlText == "" {
-		return planDirectSourceTable(ctx, runtimeDB, model, tableName, table)
+		return planDirectSourceTable(ctx, runtimeDB, model, tableName, table, staged)
 	}
 	if sqlText == "" {
 		return analyticsmaterialize.ModelTablePlan{}, fmt.Errorf("model table %q requires source or transform.sql", tableName)
@@ -50,17 +53,6 @@ func PlanModelTable(ctx context.Context, runtimeDB queryContext, model *semantic
 	if err := validateSQLAnalysis(tableName, table, sqlAnalysis); err != nil {
 		return analyticsmaterialize.ModelTablePlan{}, err
 	}
-	if remoteSQL, ok, err := wholeQueryPushdownSQL(model, table, sqlText, sqlAnalysis); err != nil {
-		return analyticsmaterialize.ModelTablePlan{}, err
-	} else if ok {
-		source := model.Sources[table.SourceDependencies[0]]
-		connection := model.Connections[source.Connection]
-		call, err := quackQueryCall(connection.Path, remoteSQL, connection.Options)
-		if err != nil {
-			return analyticsmaterialize.ModelTablePlan{}, err
-		}
-		return materializationPlan(analyticsmaterialize.PlanModeWholeQueryPushdown, tableName, "SELECT * FROM "+call), nil
-	}
 	sourceSchemas, err := discoverPlanningSourceSchemas(ctx, runtimeDB, model, table.SourceDependencies)
 	if err != nil {
 		return analyticsmaterialize.ModelTablePlan{}, err
@@ -80,7 +72,7 @@ func PlanModelTable(ctx context.Context, runtimeDB queryContext, model *semantic
 	if err != nil {
 		return analyticsmaterialize.ModelTablePlan{}, err
 	}
-	replacements, err := inlineSourceReplacements(model, plans)
+	replacements, err := inlineSourceReplacements(model, plans, staged)
 	if err != nil {
 		return analyticsmaterialize.ModelTablePlan{}, err
 	}
@@ -91,7 +83,7 @@ func PlanModelTable(ctx context.Context, runtimeDB queryContext, model *semantic
 	return materializationPlan(analyticsmaterialize.PlanModeProjectedSourceInline, tableName, rewritten), nil
 }
 
-func planDirectSourceTable(ctx context.Context, runtimeDB queryContext, model *semanticmodel.Model, tableName string, table semanticmodel.Table) (analyticsmaterialize.ModelTablePlan, error) {
+func planDirectSourceTable(ctx context.Context, runtimeDB queryContext, model *semanticmodel.Model, tableName string, table semanticmodel.Table, staged map[string]string) (analyticsmaterialize.ModelTablePlan, error) {
 	source, ok := model.Sources[table.Source]
 	if !ok {
 		return analyticsmaterialize.ModelTablePlan{}, fmt.Errorf("unknown source %q", table.Source)
@@ -104,7 +96,7 @@ func planDirectSourceTable(ctx context.Context, runtimeDB queryContext, model *s
 			model.Sources[table.Source] = source
 		}
 	}
-	relation, err := SourceReadRelation(model, source, nil, modelTableReadColumns(table), false)
+	relation, err := sourceReadRelation(model, table.Source, source, nil, modelTableReadColumns(table), false, staged)
 	if err != nil {
 		return analyticsmaterialize.ModelTablePlan{}, err
 	}
@@ -413,14 +405,14 @@ func sourceReadPlansFromExplain(tableName string, table semanticmodel.Table, sou
 	return plans, nil
 }
 
-func inlineSourceReplacements(model *semanticmodel.Model, plans []sourceReadPlan) (map[string]string, error) {
+func inlineSourceReplacements(model *semanticmodel.Model, plans []sourceReadPlan, staged map[string]string) (map[string]string, error) {
 	replacements := map[string]string{}
 	for _, plan := range plans {
 		source, ok := model.Sources[plan.Source]
 		if !ok {
 			return nil, fmt.Errorf("unknown source %q", plan.Source)
 		}
-		relation, err := SourceReadRelation(model, source, plan.Fields, plan.Columns, plan.RowPresenceOnly)
+		relation, err := sourceReadRelation(model, plan.Source, source, plan.Fields, plan.Columns, plan.RowPresenceOnly, staged)
 		if err != nil {
 			return nil, fmt.Errorf("compiling source %s relation: %w", plan.Source, err)
 		}
@@ -429,41 +421,11 @@ func inlineSourceReplacements(model *semanticmodel.Model, plans []sourceReadPlan
 	return replacements, nil
 }
 
-func wholeQueryPushdownSQL(model *semanticmodel.Model, table semanticmodel.Table, sqlText string, analysis queryjson.SQLAnalysis) (string, bool, error) {
-	if len(table.ModelDependencies) > 0 || len(table.SourceDependencies) == 0 {
-		return "", false, nil
+func sourceReadRelation(model *semanticmodel.Model, sourceName string, source semanticmodel.Source, fields []string, columns []sourceReadColumn, rowPresenceOnly bool, staged map[string]string) (string, error) {
+	if relation := staged[sourceName]; relation != "" {
+		return projectedRelation(relation, fields, columns, rowPresenceOnly)
 	}
-	connectionName := ""
-	replacements := map[string]string{}
-	for _, sourceName := range table.SourceDependencies {
-		source, ok := model.Sources[sourceName]
-		if !ok {
-			return "", false, fmt.Errorf("unknown source %q", sourceName)
-		}
-		if source.Kind() != connectors.KindObject {
-			return "", false, nil
-		}
-		connection := model.Connections[source.Connection]
-		connectionSpec, ok := connectors.LookupConnection(connection.Kind)
-		if !ok || !connectionSpec.TransformPushdown || connectionSpec.ObjectRelation != connectors.ObjectRelationQuackQuery {
-			return "", false, nil
-		}
-		if connectionName == "" {
-			connectionName = source.Connection
-		} else if connectionName != source.Connection {
-			return "", false, nil
-		}
-		object, err := qualifiedSQLName(source.Object)
-		if err != nil {
-			return "", false, err
-		}
-		replacements[sourceName] = object
-	}
-	rewritten, err := queryjson.RewriteSourceRefs(sqlText, analysis.TableRefs, replacements)
-	if err != nil {
-		return "", false, fmt.Errorf("rewriting Quack transform SQL: %w", err)
-	}
-	return rewritten, true, nil
+	return SourceReadRelation(model, source, fields, columns, rowPresenceOnly)
 }
 
 func validatePlannedFields(source string, columns []semanticmodel.ColumnSchema, fields []string) error {

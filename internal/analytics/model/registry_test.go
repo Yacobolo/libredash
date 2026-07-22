@@ -16,7 +16,7 @@ func TestRegistryIncludesSupportedFormats(t *testing.T) {
 }
 
 func TestRegistryIncludesSupportedConnectionKinds(t *testing.T) {
-	expected := []string{"managed", "s3", "r2", "gcs", "http", "azure_blob", "postgres", "mysql", "sqlite", "ducklake", "quack"}
+	expected := []string{"managed", "s3", "r2", "gcs", "http", "azure_blob", "postgres", "mysql", "sqlite", "ducklake"}
 	for _, kind := range expected {
 		connection, ok := LookupConnection(kind)
 		if !ok {
@@ -75,13 +75,6 @@ func TestRegistrySpecializedCapabilities(t *testing.T) {
 		t.Fatalf("s3 registry = %#v, want httpfs path source", s3)
 	}
 
-	quack, _ := LookupConnection("quack")
-	if quack.RequiredExtension != "quack" || quack.SecretType != "quack" || quack.ObjectRelation != ObjectRelationQuackQuery || !quack.TransformPushdown || !quack.AllowsObjectSource || quack.AllowsPathSource {
-		t.Fatalf("quack registry = %#v, want quack object source", quack)
-	}
-	if postgres.TransformPushdown || s3.TransformPushdown {
-		t.Fatalf("non-pushdown connections should not advertise transform pushdown: postgres=%#v s3=%#v", postgres, s3)
-	}
 }
 
 func TestRegistryConnectionAuthPolicy(t *testing.T) {
@@ -98,10 +91,6 @@ func TestRegistryConnectionAuthPolicy(t *testing.T) {
 		t.Fatalf("azure required auth sets = %#v, want connection string or service principal", azure.RequiredAuthSets)
 	}
 
-	quack, _ := LookupConnection("quack")
-	if !contains(quack.AuthKeys, "token") || len(quack.RequiredAuthSets) != 1 || len(quack.RequiredAuthSets[0]) != 1 {
-		t.Fatalf("quack auth policy = %#v, want token auth", quack)
-	}
 }
 
 func TestPathHelpers(t *testing.T) {

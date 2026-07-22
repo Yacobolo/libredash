@@ -101,7 +101,7 @@ func TestWorkloadImportsNoProductCapabilities(t *testing.T) {
 }
 
 func TestOnlyWorkloadAdaptersAndCompositionDependOnWorkload(t *testing.T) {
-	allowed := []string{"internal/app", "internal/cli", "internal/config", "internal/integration", "internal/workspace/refresh", "internal/analytics/materialize", "internal/analytics/query/http"}
+	allowed := []string{"internal/app", "internal/cli", "internal/config", "internal/integration", "internal/tools", "internal/admin/storage", "internal/workspace/refresh", "internal/analytics/materialize", "internal/analytics/ducklake", "internal/analytics/query/http"}
 	for _, file := range productionGoFiles(t) {
 		for _, imported := range file.imports {
 			if imported != modulePath+"/internal/workload" {
@@ -669,7 +669,7 @@ func TestDevelopmentServerTracksCompiledFallbackProcess(t *testing.T) {
 	}
 	serverText := string(server)
 	for _, want := range []string{
-		`go build -o "$TMP_DIR/leapview-dev" ./cmd/leapview`,
+		`go build -tags=duckdb_arrow -o "$TMP_DIR/leapview-dev" ./cmd/leapview`,
 		`"$TMP_DIR/leapview-dev" >> "$LOG_FILE" 2>&1 &`,
 		`LEAPVIEW_MANAGED_DATA_MIN_FREE_BYTES="${LEAPVIEW_MANAGED_DATA_MIN_FREE_BYTES:-67108864}"`,
 	} {
@@ -1039,7 +1039,7 @@ func TestAPIv1SQLiteAdaptersUseSQLC(t *testing.T) {
 	}
 }
 
-func TestStorageArchitectureSpecDocumentsGlobalDuckLakeCatalog(t *testing.T) {
+func TestStorageArchitectureSpecDocumentsProcessOwnedDuckDB(t *testing.T) {
 	root := repoRoot(t)
 	spec, err := os.ReadFile(filepath.Join(root, "docs", "storage-architecture-spec.md"))
 	if err != nil {
@@ -1047,25 +1047,88 @@ func TestStorageArchitectureSpecDocumentsGlobalDuckLakeCatalog(t *testing.T) {
 	}
 	text := string(spec)
 	for _, want := range []string{
-		"one global DuckLake catalog",
-		"leapview.db              # LeapView control-plane tables",
-		"ducklake/catalog.sqlite   # global DuckLake analytical metadata catalog",
-		"data/                     # DuckLake-managed Parquet files",
-		"ATTACH 'ducklake:sqlite:.leapview/ducklake/catalog.sqlite' AS lake",
-		"Use one global DuckLake catalog per LeapView instance.",
-		"Do not create per-workspace DuckLake catalogs.",
+		"one process-owned DuckDB `DatabaseInstance`",
+		"leapview.db               # node-local control-plane state",
+		"ducklake/catalog.duckdb   # DuckDB-backed DuckLake metadata catalog",
+		"Every physical relation in a serving plan",
+		"AT (VERSION => 42)",
+		"Runtime retirement closes generation-scoped cache state",
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("storage architecture spec missing global catalog contract fragment %q", want)
 		}
 	}
 	for _, forbidden := range []string{
-		"LeapView control-plane tables + DuckLake metadata tables",
-		"ducklake:sqlite:.leapview/leapview.db",
-		"Use one metadata catalog per LeapView instance.",
+		"ducklake:sqlite:",
+		"PostgreSQL as the server/multi-user DuckLake catalog backend",
+		"one DuckDB file per semantic model",
 	} {
 		if strings.Contains(text, forbidden) {
 			t.Fatalf("storage architecture spec still contains obsolete shared-catalog contract fragment %q", forbidden)
+		}
+	}
+}
+
+func TestServingRuntimeConstructsDuckDBOnlyInComposition(t *testing.T) {
+	root := repoRoot(t)
+	serve, err := os.ReadFile(filepath.Join(root, "internal", "cli", "serve.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Count(string(serve), "analyticsducklake.Open("); got != 1 {
+		t.Fatalf("serve composition constructs DuckDB %d times, want exactly once", got)
+	}
+	for _, path := range []string{
+		"internal/cli/runtime_factory.go",
+		"internal/analytics/duckdb/materialize.go",
+		"internal/analytics/duckdb/workspace_refresh.go",
+		"internal/analytics/duckdb/dashboardadapter/factory.go",
+		"internal/runtimehost/manager.go",
+	} {
+		body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(body), "analyticsducklake.Open(") || strings.Contains(string(body), "OpenSnapshot(") {
+			t.Errorf("%s constructs a runtime-owned DuckDB instance", path)
+		}
+	}
+}
+
+func TestGovernedAnalyticalSessionBoundaryHasNoLegacyServingEscape(t *testing.T) {
+	root := repoRoot(t)
+	for _, path := range []string{
+		"internal/analytics/ducklake/environment.go",
+		"internal/analytics/duckdb/dashboardadapter/factory.go",
+		"internal/dashboard/runtime/service.go",
+		"internal/dataquery/query.go",
+	} {
+		body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(body)
+		for _, forbidden := range []string{"func (e *Environment) SQLDB(", "OpenMaterializeRuntime", "OpenDashboardDataRuntime", "KindSourceRows"} {
+			if strings.Contains(text, forbidden) {
+				t.Errorf("%s retains legacy analytical escape %q", path, forbidden)
+			}
+		}
+	}
+}
+
+func TestCurrentConnectorRegistryExcludesFutureQuackProduct(t *testing.T) {
+	root := repoRoot(t)
+	for _, path := range []string{
+		"internal/analytics/connectors/registry.go",
+		"internal/configschema/contracts/contracts.cue",
+		"schemas/json/connection.schema.json",
+	} {
+		body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(strings.ToLower(string(body)), "quack") {
+			t.Errorf("%s exposes future Quack product as a current connector", path)
 		}
 	}
 }
@@ -1133,6 +1196,7 @@ func isSQLDBAllowedFile(file goFile) bool {
 	}
 	if file.pkgDir == "internal/cli" ||
 		file.pkgDir == "internal/integration" ||
+		strings.HasPrefix(file.pkgDir, "internal/admin/storage") ||
 		strings.HasPrefix(file.pkgDir, "internal/analytics/duckdb") ||
 		strings.HasPrefix(file.pkgDir, "internal/analytics/ducklake") ||
 		strings.HasSuffix(file.pkgDir, "/sqlite") ||
@@ -1246,6 +1310,7 @@ func isAdapterOrCompositionPackage(pkgDir string) bool {
 		strings.HasPrefix(pkgDir, "internal/platform/") ||
 		pkgDir == "internal/storage" ||
 		strings.HasPrefix(pkgDir, "internal/storage/") ||
+		pkgDir == "internal/analytics/resource" ||
 		pkgDir == "internal/access/oidc" ||
 		pkgDir == "internal/access/httpauth" ||
 		pkgDir == "internal/access/scimprov" ||

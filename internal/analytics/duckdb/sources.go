@@ -2,7 +2,6 @@ package duckdb
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"path/filepath"
 	"regexp"
@@ -13,22 +12,12 @@ import (
 	"github.com/Yacobolo/leapview/internal/analytics/connectors"
 	analyticsmaterialize "github.com/Yacobolo/leapview/internal/analytics/materialize"
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	analyticsresource "github.com/Yacobolo/leapview/internal/analytics/resource"
 )
 
 var identifierPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
-func PrepareSourceRuntime(ctx context.Context, db *sql.DB, model *semanticmodel.Model, attachedConnections map[string]struct{}) error {
-	for _, extension := range RequiredExtensions(model) {
-		if err := validateIdentifier(extension); err != nil {
-			return fmt.Errorf("invalid extension %q: %w", extension, err)
-		}
-		if _, err := db.ExecContext(ctx, "INSTALL "+extension); err != nil {
-			return fmt.Errorf("installing DuckDB extension %s: %w", extension, err)
-		}
-		if _, err := db.ExecContext(ctx, "LOAD "+extension); err != nil {
-			return fmt.Errorf("loading DuckDB extension %s: %w", extension, err)
-		}
-	}
+func prepareRefreshSourceAccess(ctx context.Context, db analyticsresource.Session, model *semanticmodel.Model, attachedConnections map[string]struct{}) error {
 	for _, name := range sortedKeys(model.Connections) {
 		stmt, ok, err := compileConnectionSecret(name, model.Connections[name])
 		if err != nil {
@@ -205,16 +194,6 @@ func (attachedObjectSourceAdapter) CompileRead(plan sourcePlan) (string, error) 
 	return projectedRelation(fmt.Sprintf("%s.%s", alias, object), plan.fields, plan.columns, plan.rowPresenceOnly)
 }
 
-type quackSourceAdapter struct{}
-
-func (quackSourceAdapter) CompileRead(plan sourcePlan) (string, error) {
-	object, err := qualifiedSQLName(plan.object)
-	if err != nil {
-		return "", err
-	}
-	return quackQueryRelation(plan.connectionConfig.Path, object, plan.fields, plan.columns, plan.rowPresenceOnly, plan.connectionConfig.Options)
-}
-
 func sourceAdapterForPlan(plan sourcePlan) (sourceAdapter, error) {
 	switch plan.kind {
 	case connectors.KindPath:
@@ -223,8 +202,6 @@ func sourceAdapterForPlan(plan sourcePlan) (sourceAdapter, error) {
 		switch plan.connectionSpec.ObjectRelation {
 		case connectors.ObjectRelationAttach:
 			return attachedObjectSourceAdapter{}, nil
-		case connectors.ObjectRelationQuackQuery:
-			return quackSourceAdapter{}, nil
 		default:
 			return nil, fmt.Errorf("unsupported object relation mode %q", plan.connectionSpec.ObjectRelation)
 		}
@@ -235,39 +212,6 @@ func sourceAdapterForPlan(plan sourcePlan) (sourceAdapter, error) {
 
 func connectionRequiresObjectAttach(connection connectors.ConnectionSpec) bool {
 	return connection.ObjectRelation == connectors.ObjectRelationAttach
-}
-
-func quackQueryRelation(uri, object string, fields []string, columns []sourceReadColumn, rowPresenceOnly bool, options map[string]any) (string, error) {
-	projection := "*"
-	if rowPresenceOnly {
-		projection = "1 AS " + rowPresenceColumn
-	} else if len(fields) > 0 || len(columns) > 0 {
-		var err error
-		projection, err = projectionSQL(fields, columns, false)
-		if err != nil {
-			return "", err
-		}
-	}
-	call, err := quackQueryCall(uri, "SELECT "+projection+" FROM "+object, options)
-	if err != nil {
-		return "", err
-	}
-	return "SELECT * FROM " + call, nil
-}
-
-func quackQueryCall(uri, remoteSQL string, options map[string]any) (string, error) {
-	args := []string{
-		"'" + sqlString(uri) + "'",
-		"'" + sqlString(remoteSQL) + "'",
-	}
-	if value, ok := options["disable_ssl"]; ok {
-		disableSSL, ok := value.(bool)
-		if !ok {
-			return "", fmt.Errorf("quack disable_ssl option must be a boolean")
-		}
-		args = append(args, fmt.Sprintf("disable_ssl => %t", disableSSL))
-	}
-	return fmt.Sprintf("quack_query(%s)", strings.Join(args, ", ")), nil
 }
 
 func replacementScanRelation(path string) string {
@@ -517,13 +461,11 @@ func compileTypedConnectionSecret(name string, connection semanticmodel.Connecti
 		return "", false, err
 	}
 	parts := []string{"TYPE " + secretType}
-	if secretType != "quack" {
-		provider := duckDBSecretProvider(secretType, auth)
-		if ambient {
-			provider = "credential_chain"
-		}
-		parts = append(parts, "PROVIDER "+provider)
+	provider := duckDBSecretProvider(secretType, auth)
+	if ambient {
+		provider = "credential_chain"
 	}
+	parts = append(parts, "PROVIDER "+provider)
 	for _, key := range sortedKeys(auth) {
 		if err := validateIdentifier(key); err != nil {
 			return "", false, fmt.Errorf("invalid auth param %q: %w", key, err)
@@ -533,15 +475,12 @@ func compileTypedConnectionSecret(name string, connection semanticmodel.Connecti
 	if scope := duckDBSecretScope(secretType, connection); scope != "" {
 		parts = append(parts, "SCOPE '"+sqlString(scope)+"'")
 	}
-	return fmt.Sprintf("CREATE OR REPLACE SECRET %s (%s)", secret, strings.Join(parts, ", ")), true, nil
+	return fmt.Sprintf("CREATE OR REPLACE TEMPORARY SECRET %s (%s)", secret, strings.Join(parts, ", ")), true, nil
 }
 
 func duckDBSecretScope(secretType string, connection semanticmodel.Connection) string {
 	if connection.Scope != "" {
 		return connection.Scope
-	}
-	if secretType == "quack" {
-		return connection.Path
 	}
 	return ""
 }

@@ -1,5 +1,8 @@
 version: '3'
 
+env:
+  GOFLAGS: -tags=duckdb_arrow
+
 tasks:
   dev:
     desc: Start the managed LeapView dev server for this worktree
@@ -17,13 +20,6 @@ tasks:
       - task: bootstrap:movielens
       - LEAPVIEW_DEV_RESTART=1 LEAPVIEW_DEV_READY_ATTEMPTS=1800 ./scripts/dev-server.sh start dashboards/experiments/movielens/leapview.yaml movielens .data/movielens
 
-  dev:quack:
-    desc: Start the managed LeapView dev server with the local Quack profile
-    cmds:
-      - task: generate
-      - task: build
-      - ./scripts/dev-profile.sh quack start
-
   bootstrap:
     desc: Download/sync Olist CSVs if missing
     cmds:
@@ -38,11 +34,6 @@ tasks:
     desc: Stop the managed LeapView dev server for this worktree
     cmds:
       - ./scripts/dev-server.sh stop
-
-  dev:quack:stop:
-    desc: Stop the managed LeapView dev server with the local Quack profile
-    cmds:
-      - ./scripts/dev-profile.sh quack stop
 
   dev:status:
     desc: Show managed LeapView dev server status
@@ -62,20 +53,10 @@ tasks:
         printf '%s\n' "$REVISION" | grep -Eq '^sha256:[0-9a-f]{64}$' || { echo "Managed data sync did not return a canonical revision."; exit 1; }
         go run ./cmd/leapview deploy --project dashboards/leapview.yaml --revision "olist=$REVISION" --target "http://localhost:${PORT}" --token dev --auto-approve
 
-  dev:quack:status:
-    desc: Show managed LeapView dev server status with the local Quack profile
-    cmds:
-      - ./scripts/dev-profile.sh quack status
-
   dev:logs:
     desc: Tail managed LeapView dev server logs
     cmds:
       - ./scripts/dev-server.sh logs
-
-  dev:quack:logs:
-    desc: Tail managed LeapView dev server logs with the local Quack profile
-    cmds:
-      - ./scripts/dev-profile.sh quack logs
 
   node:deps:
     desc: Install JavaScript dependencies with Bun

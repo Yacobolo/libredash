@@ -36,6 +36,7 @@ type Metrics interface {
 type Handler struct {
 	Metrics              Metrics
 	MetricsForWorkspace  func(workspaceID string) (Metrics, bool)
+	AnalyticalContext    func(context.Context) context.Context
 	Broker               *pagestream.Broker
 	Coordinators         *dashboardstream.Registry
 	Logger               *slog.Logger
@@ -49,6 +50,13 @@ type Handler struct {
 	ChromeDecorators     func(r *nethttp.Request) []reportui.ChromeDecorator
 	Environment          func(*nethttp.Request) string
 	DataRefreshedAt      func(context.Context, string, string, string) string
+}
+
+func (h Handler) analyticalContext(ctx context.Context) context.Context {
+	if h.AnalyticalContext == nil {
+		return ctx
+	}
+	return h.AnalyticalContext(ctx)
 }
 
 func (h Handler) filterAuthorizedDashboards(ctx context.Context, principalID, workspaceID string, rows []api.DashboardSummary) ([]api.DashboardSummary, error) {

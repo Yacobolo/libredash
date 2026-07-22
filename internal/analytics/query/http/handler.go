@@ -19,6 +19,7 @@ import (
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	semanticquery "github.com/Yacobolo/leapview/internal/analytics/query"
 	queryauthz "github.com/Yacobolo/leapview/internal/analytics/query/authz"
+	analyticsresource "github.com/Yacobolo/leapview/internal/analytics/resource"
 	"github.com/Yacobolo/leapview/internal/api"
 	"github.com/Yacobolo/leapview/internal/cursorsigning"
 	"github.com/Yacobolo/leapview/internal/dashboard"
@@ -209,6 +210,10 @@ func (h Handler) QuerySemanticModel(w nethttp.ResponseWriter, r *nethttp.Request
 		return
 	}
 	ctx := dataquery.WithMetadata(r.Context(), h.requestQueryMetadata(r, dataquery.SurfaceAPI, dataquery.OperationAPIQuery, "semantic_model", modelID))
+	if acceptsMediaType(r.Header.Get("Accept"), arrowStreamMediaType) {
+		writeSemanticArrowResponse(w, r.WithContext(ctx), metrics, aggregateDataQuery(modelID, request), limit, request.Offset, queryIDForRequest(r), snapshot, scope)
+		return
+	}
 	rows, err := executeAggregateRows(ctx, metrics, modelID, request)
 	if err != nil {
 		writeJSONError(w, err, statusForDataExecutionError(err))
@@ -325,6 +330,10 @@ func (h Handler) QuerySemanticDataset(w nethttp.ResponseWriter, r *nethttp.Reque
 		return
 	}
 	ctx := dataquery.WithMetadata(r.Context(), h.requestQueryMetadata(r, dataquery.SurfaceAPI, dataquery.OperationAPIQuery, "semantic_dataset", modelID+":"+datasetID))
+	if acceptsMediaType(r.Header.Get("Accept"), arrowStreamMediaType) {
+		writeSemanticArrowResponse(w, r.WithContext(ctx), metrics, aggregateDataQuery(modelID, request), limit, request.Offset, queryIDForRequest(r), snapshot, scope)
+		return
+	}
 	rows, err := executeAggregateRows(ctx, metrics, modelID, request)
 	if err != nil {
 		writeJSONError(w, err, statusForDataExecutionError(err))
@@ -359,6 +368,10 @@ func (h Handler) PreviewSemanticDataset(w nethttp.ResponseWriter, r *nethttp.Req
 		return
 	}
 	ctx := dataquery.WithMetadata(r.Context(), h.requestQueryMetadata(r, dataquery.SurfaceAPI, dataquery.OperationAPIPreview, "semantic_dataset", modelID+":"+datasetID))
+	if acceptsMediaType(r.Header.Get("Accept"), arrowStreamMediaType) {
+		writeSemanticArrowResponse(w, r.WithContext(ctx), metrics, previewDataQuery(modelID, request), limit, request.Offset, queryIDForRequest(r), snapshot, scope)
+		return
+	}
 	rows, err := executePreviewRows(ctx, metrics, modelID, request)
 	if err != nil {
 		writeJSONError(w, err, statusForDataExecutionError(err))
@@ -942,7 +955,12 @@ func semanticQueryWarnings(sorts []api.SemanticSort) []string {
 }
 
 func executeAggregateRows(ctx context.Context, metrics Metrics, modelID string, request reportdef.AggregateQuery) (reportdef.QueryRows, error) {
-	result, err := metrics.ExecuteDataQuery(ctx, dataquery.Query{
+	result, err := metrics.ExecuteDataQuery(ctx, aggregateDataQuery(modelID, request))
+	return queryRowsFromDataResult(result.Rows), err
+}
+
+func aggregateDataQuery(modelID string, request reportdef.AggregateQuery) dataquery.Query {
+	return dataquery.Query{
 		ModelID:  modelID,
 		Kind:     dataquery.KindSemanticAggregate,
 		Target:   request.Table,
@@ -953,12 +971,16 @@ func executeAggregateRows(ctx context.Context, metrics Metrics, modelID string, 
 		Sort:     querySortToDataSort(request.Sort),
 		Limit:    request.Limit,
 		Offset:   request.Offset,
-	})
-	return queryRowsFromDataResult(result.Rows), err
+	}
 }
 
 func executePreviewRows(ctx context.Context, metrics Metrics, modelID string, request reportdef.RowQuery) (reportdef.QueryRows, error) {
-	result, err := metrics.ExecuteDataQuery(ctx, dataquery.Query{
+	result, err := metrics.ExecuteDataQuery(ctx, previewDataQuery(modelID, request))
+	return queryRowsFromDataResult(result.Rows), err
+}
+
+func previewDataQuery(modelID string, request reportdef.RowQuery) dataquery.Query {
+	return dataquery.Query{
 		ModelID:  modelID,
 		Kind:     dataquery.KindSemanticRows,
 		Target:   request.Table,
@@ -968,8 +990,7 @@ func executePreviewRows(ctx context.Context, metrics Metrics, modelID string, re
 		Sort:     querySortToDataSort(request.Sort),
 		Limit:    request.Limit,
 		Offset:   request.Offset,
-	})
-	return queryRowsFromDataResult(result.Rows), err
+	}
 }
 
 func statusForDataExecutionError(err error) int {
@@ -1323,6 +1344,17 @@ func writeJSONError(w nethttp.ResponseWriter, err error, status int) {
 			w.Header().Set("Retry-After", "1")
 			details["problemCode"] = "WORKLOAD_OVERLOADED"
 		}
+	} else if reason, ok := dataquery.ResultLimitReasonOf(err); ok {
+		status = nethttp.StatusUnprocessableEntity
+		if reason == dataquery.ResultRows {
+			details["problemCode"] = "QUERY_RESULT_ROW_LIMIT"
+		} else {
+			details["problemCode"] = "QUERY_RESULT_BYTE_LIMIT"
+		}
+	} else if _, ok := analyticsresource.ResourceExhaustedReasonOf(err); ok {
+		status = nethttp.StatusServiceUnavailable
+		w.Header().Set("Retry-After", "1")
+		details["problemCode"] = "ANALYTICS_RESOURCE_EXHAUSTED"
 	} else if errors.Is(err, context.DeadlineExceeded) {
 		status = nethttp.StatusGatewayTimeout
 		details["problemCode"] = "WORKLOAD_EXECUTION_TIMEOUT"

@@ -134,7 +134,7 @@ func TestDuckLakeCatalogPathDefaultsOutsidePlatformDB(t *testing.T) {
 	if got, want := cfg.DBPath(), "/var/lib/leapview/leapview.db"; got != want {
 		t.Fatalf("DBPath = %q, want %q", got, want)
 	}
-	if got, want := cfg.DuckLakeCatalogPath(), "/var/lib/leapview/ducklake/catalog.sqlite"; got != want {
+	if got, want := cfg.DuckLakeCatalogPath(), "/var/lib/leapview/ducklake/catalog.duckdb"; got != want {
 		t.Fatalf("DuckLakeCatalogPath = %q, want %q", got, want)
 	}
 	if cfg.DuckLakeCatalogPath() == cfg.DBPath() {
@@ -143,8 +143,8 @@ func TestDuckLakeCatalogPathDefaultsOutsidePlatformDB(t *testing.T) {
 }
 
 func TestDuckLakeCatalogPathHonorsExplicitPath(t *testing.T) {
-	cfg := Config{HomeDir: "/var/lib/leapview", DuckLakeCatalog: "/mnt/catalog.sqlite"}
-	if got, want := cfg.DuckLakeCatalogPath(), "/mnt/catalog.sqlite"; got != want {
+	cfg := Config{HomeDir: "/var/lib/leapview", DuckLakeCatalog: "/mnt/catalog.duckdb"}
+	if got, want := cfg.DuckLakeCatalogPath(), "/mnt/catalog.duckdb"; got != want {
 		t.Fatalf("DuckLakeCatalogPath = %q, want %q", got, want)
 	}
 }
@@ -190,6 +190,7 @@ func TestValidateProductionAuthAllowsGenericOIDC(t *testing.T) {
 		CSRFKey:            "0123456789abcdef0123456789abcdef",
 		MetricsBearerToken: "0123456789abcdef0123456789abcdef",
 	}
+	cfg = withAnalyticalTestDefaults(cfg)
 	if err := cfg.ValidateProductionAuth(); err != nil {
 		t.Fatalf("validate production auth: %v", err)
 	}
@@ -222,6 +223,7 @@ func TestValidateProductionAuthAllowsLocalAuth(t *testing.T) {
 		CSRFKey:            "0123456789abcdef0123456789abcdef",
 		MetricsBearerToken: "0123456789abcdef0123456789abcdef",
 	}
+	cfg = withAnalyticalTestDefaults(cfg)
 	if err := cfg.ValidateProductionAuth(); err != nil {
 		t.Fatalf("validate production auth: %v", err)
 	}
@@ -244,6 +246,7 @@ func TestValidateProductionAuthRejectsInsecureBrowserAuthCookies(t *testing.T) {
 
 	cfg.APITokenOnlyAuth = true
 	cfg.PublicURL = "https://app.example"
+	cfg = withAnalyticalTestDefaults(cfg)
 	if err := cfg.ValidateProductionAuth(); err != nil {
 		t.Fatalf("api-token-only production should allow explicitly insecure browser cookies: %v", err)
 	}
@@ -327,6 +330,7 @@ func TestValidateProductionAuthRequiresStrongSCIMBearerWhenConfigured(t *testing
 
 	cfg.SCIMBearerToken = "0123456789abcdef0123456789abcdef"
 	cfg.PublicURL = "https://leapview.example.com"
+	cfg = withAnalyticalTestDefaults(cfg)
 	if err := cfg.ValidateProductionAuth(); err != nil {
 		t.Fatalf("strong SCIM bearer token rejected: %v", err)
 	}
@@ -346,6 +350,7 @@ func TestValidateProductionAuthRequiresStrongMetricsBearerWhenConfigured(t *test
 
 	cfg.MetricsBearerToken = "0123456789abcdef0123456789abcdef"
 	cfg.PublicURL = "https://leapview.example.com"
+	cfg = withAnalyticalTestDefaults(cfg)
 	if err := cfg.ValidateProductionAuth(); err != nil {
 		t.Fatalf("strong metrics bearer token rejected: %v", err)
 	}
@@ -363,6 +368,7 @@ func TestValidateProductionAuthRequiresAllowedHostForAPITokenOnly(t *testing.T) 
 	}
 
 	cfg.PublicURL = "https://leapview.example.com"
+	cfg = withAnalyticalTestDefaults(cfg)
 	if err := cfg.ValidateProductionAuth(); err != nil {
 		t.Fatalf("production public URL rejected: %v", err)
 	}
@@ -401,6 +407,7 @@ func TestValidateProductionAuthRejectsInsecureExternalMCPOAuthIssuer(t *testing.
 		t.Fatal("expected insecure external MCP OAuth issuer to fail production validation")
 	}
 	cfg.MCPOAuthIssuerURL = "https://identity.example.com"
+	cfg = withAnalyticalTestDefaults(cfg)
 	if err := cfg.ValidateProductionAuth(); err != nil {
 		t.Fatalf("secure external MCP OAuth issuer rejected: %v", err)
 	}
@@ -430,9 +437,25 @@ func TestProductionAllowedHostsDerivesBrowserAuthCallbackHosts(t *testing.T) {
 			t.Fatalf("allowed hosts = %#v, missing %q", hosts, want)
 		}
 	}
+	cfg = withAnalyticalTestDefaults(cfg)
 	if err := cfg.ValidateProductionAuth(); err != nil {
 		t.Fatalf("derived callback hosts should satisfy production validation: %v", err)
 	}
+}
+
+func withAnalyticalTestDefaults(cfg Config) Config {
+	cfg.DuckDBNodeMemoryMaxBytes = 256 << 20
+	cfg.DuckDBNodeTempMaxBytes = 1 << 30
+	cfg.DuckDBNodeMaxThreads = 2
+	cfg.QueryResultMaxRows = 10_000
+	cfg.QueryResultMaxBytes = 32 << 20
+	cfg.QueryCacheRuntimeMaxEntries = 16
+	cfg.QueryCacheRuntimeMaxBytes = 4 << 20
+	cfg.QueryCacheWorkspaceMaxEntries = 32
+	cfg.QueryCacheWorkspaceMaxBytes = 8 << 20
+	cfg.QueryCacheNodeMaxEntries = 64
+	cfg.QueryCacheNodeMaxBytes = 16 << 20
+	return cfg
 }
 
 func TestProductionAllowedHostsRejectsInvalidEntries(t *testing.T) {

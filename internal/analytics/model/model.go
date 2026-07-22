@@ -1,9 +1,7 @@
 package model
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -959,17 +957,8 @@ func connectionAllowsOption(connection ConnectionSpec, option string) bool {
 }
 
 func validateConnectionOptions(name string, connection Connection) error {
-	switch connection.Kind {
-	case "quack":
-		if !strings.HasPrefix(connection.Path, "quack:") {
-			return fmt.Errorf("connection %q quack path must start with quack:", name)
-		}
-		if value, ok := connection.Options["disable_ssl"]; ok {
-			if _, ok := value.(bool); !ok {
-				return fmt.Errorf("connection %q disable_ssl option must be a boolean", name)
-			}
-		}
-	}
+	_ = name
+	_ = connection
 	return nil
 }
 
@@ -988,9 +977,6 @@ func validateConnectionCredentials(name, kind, scope string, credentials Connect
 	case "env":
 		if credentials.Secret == "" {
 			return fmt.Errorf("connection %q env credentials require secret", name)
-		}
-		if _, ok := os.LookupEnv(credentials.Secret); !ok {
-			return fmt.Errorf("connection %q env credential %q is not set", name, credentials.Secret)
 		}
 		if credentials.Region != "" || credentials.Endpoint != "" || credentials.AccountName != "" {
 			return fmt.Errorf("connection %q env credentials cannot set ambient metadata", name)
@@ -1025,28 +1011,10 @@ func validateConnectionCredentials(name, kind, scope string, credentials Connect
 
 func validateConnectionAuth(name string, connection Connection, spec ConnectionSpec) (ConnectionAuth, error) {
 	if len(connection.Auth) == 0 {
-		if connection.Credentials.Provider == "ambient" {
+		if connection.Credentials.Provider == "ambient" || connection.Credentials.Provider == "env" {
 			return nil, nil
 		}
 		if connection.Credentials.Provider == "none" && connection.Kind == "s3" {
-			return nil, nil
-		}
-		if connection.Credentials.Provider != "" && connection.Credentials.Provider != "none" {
-			resolved, err := ResolveConnectionAuth(connection)
-			if err != nil {
-				return nil, fmt.Errorf("connection %q credentials: %w", name, err)
-			}
-			for key := range resolved {
-				if err := validateSemanticIdentifier(key); err != nil {
-					return nil, fmt.Errorf("connection %q credential key %q is invalid: %w", name, key, err)
-				}
-				if !connectionAllowsAuthKey(spec, key) {
-					return nil, fmt.Errorf("connection %q credentials include unsupported auth key %q", name, key)
-				}
-			}
-			if !connectionHasRequiredAuth(resolved, spec.RequiredAuthSets) {
-				return nil, fmt.Errorf("connection %q %s credentials are missing required values", name, connection.Kind)
-			}
 			return nil, nil
 		}
 		if connection.Kind == "ducklake" && duckLakeNeedsAuth(connection) {
@@ -1068,11 +1036,7 @@ func validateConnectionAuth(name string, connection Connection, spec ConnectionS
 		if !connectionAllowsAuthKey(spec, key) {
 			return nil, fmt.Errorf("connection %q has unsupported auth key %q", name, key)
 		}
-		resolvedValue, err := resolveAuthValue(name, key, value)
-		if err != nil {
-			return nil, err
-		}
-		resolved[key] = resolvedValue
+		resolved[key] = value
 	}
 	if !connectionHasRequiredAuth(resolved, spec.RequiredAuthSets) {
 		return nil, fmt.Errorf("connection %q %s auth is missing required credentials", name, connection.Kind)
@@ -1082,32 +1046,13 @@ func validateConnectionAuth(name string, connection Connection, spec ConnectionS
 
 func ResolveConnectionAuth(connection Connection) (ConnectionAuth, error) {
 	if len(connection.Auth) > 0 {
-		return connection.Auth, nil
+		resolved := make(ConnectionAuth, len(connection.Auth))
+		for key, value := range connection.Auth {
+			resolved[key] = value
+		}
+		return resolved, nil
 	}
-	if connection.Credentials.Provider == "" || connection.Credentials.Provider == "none" {
-		return nil, nil
-	}
-	switch connection.Credentials.Provider {
-	case "env":
-		value, ok := os.LookupEnv(connection.Credentials.Secret)
-		if !ok {
-			return nil, fmt.Errorf("env credential %q is not set", connection.Credentials.Secret)
-		}
-		var object map[string]any
-		if err := json.Unmarshal([]byte(value), &object); err == nil {
-			return ConnectionAuth(object), nil
-		}
-		spec, ok := LookupConnection(connection.Kind)
-		if !ok {
-			return nil, fmt.Errorf("unsupported connection kind %q", connection.Kind)
-		}
-		for _, key := range []string{"connection_string", "token"} {
-			if connectionAllowsAuthKey(spec, key) {
-				return ConnectionAuth{key: value}, nil
-			}
-		}
-		return nil, fmt.Errorf("env credential %q must be a JSON object for connection kind %q", connection.Credentials.Secret, connection.Kind)
-	case "ambient":
+	if connection.Credentials.Provider == "ambient" {
 		auth := ConnectionAuth{}
 		if connection.Credentials.Region != "" {
 			auth["region"] = connection.Credentials.Region
@@ -1119,9 +1064,8 @@ func ResolveConnectionAuth(connection Connection) (ConnectionAuth, error) {
 			auth["account_name"] = connection.Credentials.AccountName
 		}
 		return auth, nil
-	default:
-		return nil, fmt.Errorf("unsupported credentials provider %q", connection.Credentials.Provider)
 	}
+	return nil, nil
 }
 
 func ConnectionCredentialsConfigured(connection Connection) bool {
@@ -1155,28 +1099,6 @@ func connectionHasRequiredAuth(auth ConnectionAuth, requiredSets [][]string) boo
 		}
 	}
 	return false
-}
-
-func resolveAuthValue(connectionName, key string, value any) (any, error) {
-	switch typed := value.(type) {
-	case string:
-		if matches := envReferencePattern.FindStringSubmatch(typed); matches != nil {
-			envName := matches[1]
-			resolved, ok := os.LookupEnv(envName)
-			if !ok || resolved == "" {
-				return nil, fmt.Errorf("connection %q auth key %q references missing environment variable %s", connectionName, key, envName)
-			}
-			return resolved, nil
-		}
-		if typed == "" {
-			return nil, fmt.Errorf("connection %q auth key %q cannot be empty", connectionName, key)
-		}
-		return typed, nil
-	case bool, int, int64, float64:
-		return typed, nil
-	default:
-		return nil, fmt.Errorf("connection %q auth key %q has unsupported value type %T", connectionName, key, value)
-	}
 }
 
 func duckLakeNeedsAuth(connection Connection) bool {

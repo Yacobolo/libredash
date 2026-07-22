@@ -41,6 +41,7 @@ func (s *Server) reconcileStorageRetention(ctx context.Context, dryRun bool) err
 		protected = provider.LeasedSnapshots()
 	}
 	_, err := storagemaintenance.Run(ctx, repo, storagemaintenance.Options{
+		DuckDBEnvironment:            s.duckDBEnvironment,
 		Environment:                  servingstate.Environment(s.defaultEnvironment),
 		RootDir:                      rootDir,
 		CatalogPath:                  catalogPath,

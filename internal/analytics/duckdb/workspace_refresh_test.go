@@ -19,10 +19,7 @@ func TestWorkspaceRefreshMaterializerResolvesCandidateManagedDataAndReleasesLife
 		Lifetime: lifetime,
 	}}
 	materializer := WorkspaceRefreshMaterializer{
-		DuckDBDir:       t.TempDir(),
-		DuckLakeCatalog: t.TempDir() + "/catalog.sqlite",
-		DuckLakeData:    t.TempDir(),
-		ManagedData:     resolver,
+		ManagedData: resolver,
 	}
 	_, _ = materializer.Materialize(t.Context(), refresh.MaterializeInput{
 		Definition:  &workspace.Definition{Models: map[string]*semanticmodel.Model{}},

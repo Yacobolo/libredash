@@ -2,7 +2,6 @@ package materialize_test
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"math/big"
@@ -14,12 +13,14 @@ import (
 	"time"
 
 	analyticsduckdb "github.com/Yacobolo/leapview/internal/analytics/duckdb"
+	analyticsducklake "github.com/Yacobolo/leapview/internal/analytics/ducklake"
 	analyticsmaterialize "github.com/Yacobolo/leapview/internal/analytics/materialize"
 	analyticsmaterializesqlite "github.com/Yacobolo/leapview/internal/analytics/materialize/sqlite"
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	semanticquery "github.com/Yacobolo/leapview/internal/analytics/query"
 	"github.com/Yacobolo/leapview/internal/platform"
 	"github.com/Yacobolo/leapview/internal/refreshpipeline"
+	"github.com/Yacobolo/leapview/internal/workload"
 	"github.com/Yacobolo/leapview/internal/workspace"
 	workspacesqlite "github.com/Yacobolo/leapview/internal/workspace/sqlite"
 	_ "github.com/duckdb/duckdb-go/v2"
@@ -57,8 +58,8 @@ func TestModelTableExecutesPlannedSQL(t *testing.T) {
 	if _, err := analyticsmaterialize.Refresh(context.Background(), executor, sources, model); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(sources.ops, []string{"prepare", "plan:orders"}) {
-		t.Fatalf("source ops = %#v, want prepare/plan", sources.ops)
+	if !reflect.DeepEqual(sources.ops, []string{"plan:orders"}) {
+		t.Fatalf("source ops = %#v, want plan", sources.ops)
 	}
 	if !reflect.DeepEqual(executor.statements, []string{"CREATE SCHEMA IF NOT EXISTS model", "CREATE OR REPLACE TABLE model.orders AS SELECT 1 AS order_id"}) {
 		t.Fatalf("statements = %#v, want planned SQL", executor.statements)
@@ -164,9 +165,8 @@ func TestModelTableExecutionErrorReturnsMaterializationError(t *testing.T) {
 	if _, err := analyticsmaterialize.Refresh(context.Background(), failingExecutor{}, sources, model); err == nil {
 		t.Fatal("refresh unexpectedly succeeded")
 	}
-	want := []string{"prepare"}
-	if !reflect.DeepEqual(sources.ops, want) {
-		t.Fatalf("source ops = %#v, want %#v", sources.ops, want)
+	if len(sources.ops) != 0 {
+		t.Fatalf("source ops = %#v, want none", sources.ops)
 	}
 }
 
@@ -281,7 +281,8 @@ func TestMovieLensModelTableOrderMaterializesDimensionsBeforeFacts(t *testing.T)
 }
 
 func TestWorkspaceRuntimeCommitsModelTablesInOneDuckLakeSnapshot(t *testing.T) {
-	ctx := context.Background()
+	ctx, releaseAdmission := admittedRefreshTestContext(t)
+	defer releaseAdmission()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "orders.csv"), []byte("order_id,status,revenue\no1,paid,10\no2,paid,15\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -321,9 +322,10 @@ func TestWorkspaceRuntimeCommitsModelTablesInOneDuckLakeSnapshot(t *testing.T) {
 	}
 	bindManagedTestRoot(model, dir)
 
+	node := openDuckLakeTestNode(t, ctx, dir, "", "", 3)
 	runtime, err := analyticsduckdb.OpenWorkspaceMaterializeRuntime(ctx, analyticsduckdb.WorkspaceRuntimeConfig{
-		Models: map[string]*semanticmodel.Model{"sales": model},
-		DBDir:  dir,
+		Models:   map[string]*semanticmodel.Model{"sales": model},
+		Database: node,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -333,27 +335,13 @@ func TestWorkspaceRuntimeCommitsModelTablesInOneDuckLakeSnapshot(t *testing.T) {
 		t.Fatalf("DuckLakeSnapshotID = %d, want committed snapshot", runtime.DuckLakeSnapshotID())
 	}
 
-	db, err := sql.Open("duckdb", ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	for _, stmt := range []string{
-		"LOAD sqlite",
-		"LOAD ducklake",
-		"ATTACH 'ducklake:sqlite:" + strings.ReplaceAll(filepath.Join(dir, "catalog.sqlite"), "'", "''") + "' AS lake",
-	} {
-		if _, err := db.ExecContext(ctx, stmt); err != nil {
-			t.Fatal(err)
-		}
-	}
 	var matchingSnapshots int
-	if err := db.QueryRowContext(ctx, `
+	if err := scanDuckLakeTestRow(ctx, node, `
 SELECT count(*)
 FROM lake.snapshots()
 WHERE snapshot_id = ?
   AND CAST(changes AS VARCHAR) LIKE '%model.orders%'
-  AND CAST(changes AS VARCHAR) LIKE '%model.order_summary%'`, runtime.DuckLakeSnapshotID()).Scan(&matchingSnapshots); err != nil {
+	  AND CAST(changes AS VARCHAR) LIKE '%model.order_summary%'`, []any{runtime.DuckLakeSnapshotID()}, &matchingSnapshots); err != nil {
 		t.Fatal(err)
 	}
 	if matchingSnapshots != 1 {
@@ -361,8 +349,9 @@ WHERE snapshot_id = ?
 	}
 }
 
-func TestWorkspaceRuntimeUsesPlatformDBAsDuckLakeCatalog(t *testing.T) {
-	ctx := context.Background()
+func TestWorkspaceRuntimeKeepsControlPlaneAndDuckLakeCatalogSeparate(t *testing.T) {
+	ctx, releaseAdmission := admittedRefreshTestContext(t)
+	defer releaseAdmission()
 	dir := t.TempDir()
 	dataDir := filepath.Join(dir, "data")
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
@@ -407,11 +396,10 @@ func TestWorkspaceRuntimeUsesPlatformDBAsDuckLakeCatalog(t *testing.T) {
 	bindManagedTestRoot(model, dataDir)
 	duckRoot := filepath.Join(dir, "duckdb", "dev")
 	duckLakeDataPath := filepath.Join(dir, ".leapview", "data")
+	node := openDuckLakeTestNode(t, ctx, duckRoot, "", duckLakeDataPath, 2)
 	runtime, err := analyticsduckdb.OpenWorkspaceMaterializeRuntime(ctx, analyticsduckdb.WorkspaceRuntimeConfig{
-		Models:           map[string]*semanticmodel.Model{"sales": model},
-		DBDir:            duckRoot,
-		CatalogPath:      catalogPath,
-		DuckLakeDataPath: duckLakeDataPath,
+		Models:   map[string]*semanticmodel.Model{"sales": model},
+		Database: node,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -420,29 +408,15 @@ func TestWorkspaceRuntimeUsesPlatformDBAsDuckLakeCatalog(t *testing.T) {
 	if runtime.DuckLakeSnapshotID() <= 0 {
 		t.Fatalf("DuckLakeSnapshotID = %d, want committed snapshot", runtime.DuckLakeSnapshotID())
 	}
-	if _, err := os.Stat(filepath.Join(duckRoot, "catalog.sqlite")); !os.IsNotExist(err) {
-		t.Fatalf("workspace-local catalog exists or stat failed: %v", err)
+	if _, err := os.Stat(filepath.Join(duckRoot, "catalog.duckdb")); err != nil {
+		t.Fatalf("DuckDB-backed analytical catalog missing: %v", err)
 	}
 	if _, err := store.SQLDB().ExecContext(ctx, "SELECT 1 FROM workspaces WHERE id = 'sales'"); err != nil {
 		t.Fatalf("platform control-plane table unavailable after materialization: %v", err)
 	}
 
-	db, err := sql.Open("duckdb", ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	for _, stmt := range []string{
-		"LOAD sqlite",
-		"LOAD ducklake",
-		"ATTACH 'ducklake:sqlite:" + strings.ReplaceAll(catalogPath, "'", "''") + "' AS lake (DATA_PATH '" + strings.ReplaceAll(duckLakeDataPath, "'", "''") + "')",
-	} {
-		if _, err := db.ExecContext(ctx, stmt); err != nil {
-			t.Fatal(err)
-		}
-	}
 	var physicalTables int
-	if err := db.QueryRowContext(ctx, "SELECT count(*) FROM ducklake_table_info('lake') WHERE table_name = 'orders'").Scan(&physicalTables); err != nil {
+	if err := scanDuckLakeTestRow(ctx, node, "SELECT count(*) FROM ducklake_table_info('lake') WHERE table_name = 'orders'", nil, &physicalTables); err != nil {
 		t.Fatal(err)
 	}
 	if physicalTables != 1 {
@@ -451,7 +425,8 @@ func TestWorkspaceRuntimeUsesPlatformDBAsDuckLakeCatalog(t *testing.T) {
 }
 
 func TestWorkspaceRuntimeQueriesPinnedDuckLakeSnapshots(t *testing.T) {
-	ctx := context.Background()
+	ctx, releaseAdmission := admittedRefreshTestContext(t)
+	defer releaseAdmission()
 	dir := t.TempDir()
 	dataDir := filepath.Join(dir, "data")
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
@@ -465,11 +440,10 @@ func TestWorkspaceRuntimeQueriesPinnedDuckLakeSnapshots(t *testing.T) {
 	defer store.Close()
 	model := simpleOrdersModel(t, dataDir)
 	duckRoot := filepath.Join(dir, "duckdb", "dev")
+	node := openDuckLakeTestNode(t, ctx, duckRoot, "", filepath.Join(dir, ".leapview", "data"), 3)
 	config := analyticsduckdb.WorkspaceRuntimeConfig{
-		Models:           map[string]*semanticmodel.Model{"sales": model},
-		DBDir:            duckRoot,
-		CatalogPath:      catalogPath,
-		DuckLakeDataPath: filepath.Join(dir, ".leapview", "data"),
+		Models:   map[string]*semanticmodel.Model{"sales": model},
+		Database: node,
 	}
 
 	writeOrdersCSV(t, dataDir, 10, 15)
@@ -491,14 +465,13 @@ func TestWorkspaceRuntimeQueriesPinnedDuckLakeSnapshots(t *testing.T) {
 	}
 
 	config.SnapshotID = snapshot1
-	config.MaxReaders = 2
 	first, err := analyticsduckdb.OpenWorkspaceMaterializeRuntime(ctx, config)
 	if err != nil {
 		t.Fatalf("open first snapshot: %v", err)
 	}
 	defer first.Close()
-	if got := first.ReadConcurrency(); got != 2 {
-		t.Fatalf("first snapshot read concurrency = %d, want 2", got)
+	if got := first.ReadConcurrency(); got != 3 {
+		t.Fatalf("first snapshot read concurrency = %d, want 3", got)
 	}
 	if got := queryRevenue(t, ctx, first); got != 25 {
 		t.Fatalf("first snapshot revenue = %v, want 25", got)
@@ -516,7 +489,8 @@ func TestWorkspaceRuntimeQueriesPinnedDuckLakeSnapshots(t *testing.T) {
 }
 
 func TestWorkspaceRuntimeCanCommitWhilePinnedSnapshotIsOpen(t *testing.T) {
-	ctx := context.Background()
+	ctx, releaseAdmission := admittedRefreshTestContext(t)
+	defer releaseAdmission()
 	dir := t.TempDir()
 	dataDir := filepath.Join(dir, "data")
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
@@ -528,11 +502,10 @@ func TestWorkspaceRuntimeCanCommitWhilePinnedSnapshotIsOpen(t *testing.T) {
 		t.Fatalf("open platform store: %v", err)
 	}
 	defer store.Close()
+	node := openDuckLakeTestNode(t, ctx, filepath.Join(dir, "duckdb", "dev"), "", filepath.Join(dir, ".leapview", "data"), 3)
 	config := analyticsduckdb.WorkspaceRuntimeConfig{
-		Models:           map[string]*semanticmodel.Model{"sales": simpleOrdersModel(t, dataDir)},
-		DBDir:            filepath.Join(dir, "duckdb", "dev"),
-		CatalogPath:      catalogPath,
-		DuckLakeDataPath: filepath.Join(dir, ".leapview", "data"),
+		Models:   map[string]*semanticmodel.Model{"sales": simpleOrdersModel(t, dataDir)},
+		Database: node,
 	}
 
 	writeOrdersCSV(t, dataDir, 10, 15)
@@ -568,7 +541,8 @@ func TestWorkspaceRuntimeCanCommitWhilePinnedSnapshotIsOpen(t *testing.T) {
 }
 
 func TestWorkspaceRuntimeWritesDuckLakeDataUnderConfiguredInstanceStore(t *testing.T) {
-	ctx := context.Background()
+	ctx, releaseAdmission := admittedRefreshTestContext(t)
+	defer releaseAdmission()
 	dir := t.TempDir()
 	dataDir := filepath.Join(dir, "source")
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
@@ -578,12 +552,11 @@ func TestWorkspaceRuntimeWritesDuckLakeDataUnderConfiguredInstanceStore(t *testi
 	catalogPath := filepath.Join(dir, ".leapview", "leapview.db")
 	dataPath := filepath.Join(dir, ".leapview", "data")
 	oldEnvironmentDataPath := filepath.Join(dir, ".leapview", "duckdb", "dev", "data")
+	node := openDuckLakeTestNode(t, ctx, filepath.Join(dir, ".leapview", "duckdb"), catalogPath, dataPath, 2)
 
 	runtime, err := analyticsduckdb.OpenWorkspaceMaterializeRuntime(ctx, analyticsduckdb.WorkspaceRuntimeConfig{
-		Models:           map[string]*semanticmodel.Model{"sales": simpleOrdersModel(t, dataDir)},
-		DBDir:            filepath.Join(dir, ".leapview", "duckdb", "dev"),
-		CatalogPath:      catalogPath,
-		DuckLakeDataPath: dataPath,
+		Models:   map[string]*semanticmodel.Model{"sales": simpleOrdersModel(t, dataDir)},
+		Database: node,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -602,7 +575,8 @@ func TestWorkspaceRuntimeWritesDuckLakeDataUnderConfiguredInstanceStore(t *testi
 }
 
 func TestWorkspaceRuntimeWritesDuckLakeCommitMetadata(t *testing.T) {
-	ctx := context.Background()
+	ctx, releaseAdmission := admittedRefreshTestContext(t)
+	defer releaseAdmission()
 	dir := t.TempDir()
 	dataDir := filepath.Join(dir, "source")
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
@@ -611,12 +585,11 @@ func TestWorkspaceRuntimeWritesDuckLakeCommitMetadata(t *testing.T) {
 	writeOrdersCSV(t, dataDir, 10, 15)
 	catalogPath := filepath.Join(dir, ".leapview", "leapview.db")
 	dataPath := filepath.Join(dir, ".leapview", "data")
+	node := openDuckLakeTestNode(t, ctx, filepath.Join(dir, ".leapview", "duckdb"), catalogPath, dataPath, 2)
 
 	runtime, err := analyticsduckdb.OpenWorkspaceMaterializeRuntime(ctx, analyticsduckdb.WorkspaceRuntimeConfig{
 		Models:           map[string]*semanticmodel.Model{"sales": simpleOrdersModel(t, dataDir)},
-		DBDir:            filepath.Join(dir, ".leapview", "duckdb", "dev"),
-		CatalogPath:      catalogPath,
-		DuckLakeDataPath: dataPath,
+		Database:         node,
 		ServingStateID:   "dep_123",
 		WorkspaceID:      "sales",
 		Environment:      "prod",
@@ -630,7 +603,7 @@ func TestWorkspaceRuntimeWritesDuckLakeCommitMetadata(t *testing.T) {
 	snapshotID := runtime.DuckLakeSnapshotID()
 	defer runtime.Close()
 
-	extra := duckLakeSnapshotExtraInfo(t, ctx, catalogPath, dataPath, snapshotID)
+	extra := duckLakeSnapshotExtraInfo(t, ctx, node, snapshotID)
 	for _, want := range []string{
 		`"servingStateId":"dep_123"`,
 		`"workspaceId":"sales"`,
@@ -645,27 +618,62 @@ func TestWorkspaceRuntimeWritesDuckLakeCommitMetadata(t *testing.T) {
 	}
 }
 
-func duckLakeSnapshotExtraInfo(t *testing.T, ctx context.Context, catalogPath, dataPath string, snapshotID int64) string {
+func duckLakeSnapshotExtraInfo(t *testing.T, ctx context.Context, node *analyticsducklake.Environment, snapshotID int64) string {
 	t.Helper()
-	db, err := sql.Open("duckdb", ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	for _, stmt := range []string{
-		"LOAD sqlite",
-		"LOAD ducklake",
-		"ATTACH 'ducklake:sqlite:" + strings.ReplaceAll(catalogPath, "'", "''") + "' AS lake (DATA_PATH '" + strings.ReplaceAll(dataPath, "'", "''") + "')",
-	} {
-		if _, err := db.ExecContext(ctx, stmt); err != nil {
-			t.Fatal(err)
-		}
-	}
 	var extra string
-	if err := db.QueryRowContext(ctx, "SELECT CAST(commit_extra_info AS VARCHAR) FROM lake.snapshots() WHERE snapshot_id = ?", snapshotID).Scan(&extra); err != nil {
+	if err := scanDuckLakeTestRow(ctx, node, "SELECT CAST(commit_extra_info AS VARCHAR) FROM lake.snapshots() WHERE snapshot_id = ?", []any{snapshotID}, &extra); err != nil {
 		t.Fatal(err)
 	}
 	return extra
+}
+
+func scanDuckLakeTestRow(ctx context.Context, node *analyticsducklake.Environment, query string, args []any, destinations ...any) error {
+	lease, err := node.Acquire(ctx)
+	if err != nil {
+		return err
+	}
+	defer lease.Release()
+	session, err := node.Session(lease.Context())
+	if err != nil {
+		return err
+	}
+	return session.QueryRowContext(lease.Context(), query, args...).Scan(destinations...)
+}
+
+func openDuckLakeTestNode(t *testing.T, ctx context.Context, root, catalogPath, dataPath string, maxConnections int) *analyticsducklake.Environment {
+	t.Helper()
+	node, err := analyticsducklake.Open(ctx, analyticsducklake.Config{
+		RootDir:        root,
+		CatalogPath:    catalogPath,
+		DataPath:       dataPath,
+		MaxConnections: maxConnections,
+	})
+	if err != nil {
+		t.Fatalf("open DuckDB test node: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := node.Close(); err != nil {
+			t.Errorf("close DuckDB test node: %v", err)
+		}
+	})
+	return node
+}
+
+func admittedRefreshTestContext(t *testing.T) (context.Context, func()) {
+	t.Helper()
+	controller, err := workload.New(workload.DefaultConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	lease, err := controller.Acquire(context.Background(), workload.Request{Class: workload.Refresh, WorkspaceID: "test", Operation: "materialize-test"})
+	if err != nil {
+		controller.Close()
+		t.Fatal(err)
+	}
+	return lease.Context(), func() {
+		lease.Release()
+		controller.Close()
+	}
 }
 
 func simpleOrdersModel(t *testing.T, root string) *semanticmodel.Model {
@@ -798,7 +806,7 @@ func TestModelTablesNamedMaterializesOnlyRequestedOrder(t *testing.T) {
 	if _, err := analyticsmaterialize.RefreshModelTables(context.Background(), executor, sources, model, []string{"orders", "order_summary"}); err != nil {
 		t.Fatalf("refresh model tables: %v", err)
 	}
-	if !reflect.DeepEqual(sources.ops, []string{"prepare", "plan:orders", "plan:order_summary"}) {
+	if !reflect.DeepEqual(sources.ops, []string{"plan:orders", "plan:order_summary"}) {
 		t.Fatalf("source ops = %#v, want selected tables only", sources.ops)
 	}
 	if len(executor.statements) != 3 || strings.Contains(strings.Join(executor.statements, "\n"), "customers") {
@@ -806,81 +814,10 @@ func TestModelTablesNamedMaterializesOnlyRequestedOrder(t *testing.T) {
 	}
 }
 
-func TestRegistersCSVSourcesAndMaterializesModelTables(t *testing.T) {
-	dir := t.TempDir()
-	writeFixture(t, dir, "orders.csv", "order_id,revenue\no1,10.50\no2,20.25\n")
-	db, err := analyticsduckdb.Open(context.Background(), filepath.Join(dir, "test.duckdb"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
-	model := &semanticmodel.Model{
-		Name:              "test",
-		DefaultConnection: "local_files",
-		Connections: map[string]semanticmodel.Connection{
-			"local_files": {
-				Kind:     "managed",
-				Defaults: semanticmodel.ConnectionDefaults{Options: map[string]any{"header": true}},
-			},
-		},
-		Sources: map[string]semanticmodel.Source{
-			"orders": {Path: "orders.csv", Connection: "local_files"},
-		},
-		Tables: map[string]semanticmodel.Table{
-			"orders": {
-				Sources: []string{"orders"},
-				Transform: semanticmodel.Transform{SQL: `
-					SELECT order_id, try_cast(revenue AS DOUBLE) AS revenue
-					FROM source.orders
-				`},
-				PrimaryKey: "order_id",
-				Grain:      "order_id",
-				Dimensions: map[string]semanticmodel.MetricDimension{"order_id": {Expr: "order_id"}, "revenue": {Expr: "revenue", Type: "number"}},
-			},
-		},
-		Measures: map[string]semanticmodel.MetricMeasure{"revenue": {Fact: "orders", Label: "Revenue", Aggregation: "sum", Input: semanticmodel.MeasureInput{Field: "orders.revenue"}, Empty: "zero"}},
-	}
-	if err := model.Validate(); err != nil {
-		t.Fatalf("validate model: %v", err)
-	}
-	bindManagedTestRoot(model, dir)
-	if _, err := analyticsmaterialize.Refresh(context.Background(), db, analyticsduckdb.NewSourceRuntime(db), model); err != nil {
-		t.Fatalf("refresh materializations: %v", err)
-	}
-
-	var total float64
-	if err := db.SQLDB().QueryRowContext(context.Background(), "SELECT SUM(revenue) FROM model.orders").Scan(&total); err != nil {
-		t.Fatal(err)
-	}
-	if total != 30.75 {
-		t.Fatalf("total revenue = %v, want 30.75", total)
-	}
-	var rawObjects int
-	if err := db.SQLDB().QueryRowContext(context.Background(), "SELECT count(*) FROM duckdb_tables() WHERE schema_name = 'raw'").Scan(&rawObjects); err != nil {
-		t.Fatal(err)
-	}
-	if rawObjects != 0 {
-		t.Fatalf("raw schema object count = %d, want 0", rawObjects)
-	}
-	var sourceObjects int
-	if err := db.SQLDB().QueryRowContext(context.Background(), "SELECT count(*) FROM duckdb_views() WHERE schema_name = 'source'").Scan(&sourceObjects); err != nil {
-		t.Fatal(err)
-	}
-	if sourceObjects != 0 {
-		t.Fatalf("source schema view count = %d, want 0", sourceObjects)
-	}
-}
-
 type recordingSourceRegistrar struct {
 	plan    analyticsmaterialize.ModelTablePlan
 	planErr error
 	ops     []string
-}
-
-func (r *recordingSourceRegistrar) PrepareSourceRuntime(_ context.Context, _ *semanticmodel.Model) error {
-	r.ops = append(r.ops, "prepare")
-	return nil
 }
 
 func (r *recordingSourceRegistrar) PlanModelTable(_ context.Context, _ *semanticmodel.Model, tableName string, _ semanticmodel.Table) (analyticsmaterialize.ModelTablePlan, error) {
@@ -913,64 +850,6 @@ type recordingStatementsExecutor struct {
 func (r *recordingStatementsExecutor) Exec(_ context.Context, statement string) error {
 	r.statements = append(r.statements, statement)
 	return nil
-}
-
-func TestRegistersDatabaseSourceTwice(t *testing.T) {
-	dir := t.TempDir()
-	sourcePath := filepath.Join(dir, "source.sqlite")
-	db, err := analyticsduckdb.Open(context.Background(), filepath.Join(dir, "test.duckdb"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	if _, err := db.SQLDB().ExecContext(context.Background(), "INSTALL sqlite"); err != nil {
-		t.Skipf("sqlite extension unavailable: %v", err)
-	}
-	if _, err := db.SQLDB().ExecContext(context.Background(), "LOAD sqlite"); err != nil {
-		t.Skipf("sqlite extension unavailable: %v", err)
-	}
-	if _, err := db.SQLDB().ExecContext(context.Background(), "ATTACH '"+analyticsduckdb.SQLString(sourcePath)+"' AS seed (TYPE sqlite)"); err != nil {
-		t.Fatalf("attach seed sqlite: %v", err)
-	}
-	if _, err := db.SQLDB().ExecContext(context.Background(), "CREATE TABLE seed.accounts (id INTEGER, name VARCHAR)"); err != nil {
-		t.Fatalf("create seed table: %v", err)
-	}
-	if _, err := db.SQLDB().ExecContext(context.Background(), "INSERT INTO seed.accounts VALUES (1, 'Acme')"); err != nil {
-		t.Fatalf("insert seed table: %v", err)
-	}
-	if _, err := db.SQLDB().ExecContext(context.Background(), "DETACH seed"); err != nil {
-		t.Fatalf("detach seed sqlite: %v", err)
-	}
-
-	model := &semanticmodel.Model{
-		Name: "test",
-		Connections: map[string]semanticmodel.Connection{
-			"crm": {Kind: "sqlite", Options: map[string]any{"path": sourcePath}},
-		},
-		Sources: map[string]semanticmodel.Source{
-			"accounts": {Connection: "crm", Object: "accounts"},
-		},
-		Tables: map[string]semanticmodel.Table{
-			"accounts": {
-				Source: "accounts", PrimaryKey: "id", Grain: "id",
-				Dimensions: map[string]semanticmodel.MetricDimension{"id": {Expr: "id"}, "name": {Expr: "name"}},
-			},
-		},
-	}
-	sources := analyticsduckdb.NewSourceRuntime(db)
-	for i := 0; i < 2; i++ {
-		if _, err := analyticsmaterialize.Refresh(context.Background(), db, sources, model); err != nil {
-			t.Fatalf("refresh pass %d: %v", i+1, err)
-		}
-	}
-
-	var name string
-	if err := db.SQLDB().QueryRowContext(context.Background(), "SELECT name FROM model.accounts WHERE id = 1").Scan(&name); err != nil {
-		t.Fatal(err)
-	}
-	if name != "Acme" {
-		t.Fatalf("name = %q, want Acme", name)
-	}
 }
 
 func TestValidateFilesIgnoresRemoteSources(t *testing.T) {

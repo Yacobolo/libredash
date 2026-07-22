@@ -6,6 +6,7 @@ import (
 	"math"
 
 	semanticquery "github.com/Yacobolo/leapview/internal/analytics/query"
+	"github.com/Yacobolo/leapview/internal/analytics/resultcache"
 	"github.com/Yacobolo/leapview/internal/dataquery"
 )
 
@@ -112,6 +113,7 @@ func (r *Runtime) executeProjectionBundle(ctx context.Context, branches []dataqu
 			groupedResult.Rows = groupedResult.Rows[:grouped.Query.Limit]
 		}
 		groupedResult.RowsReturned = len(groupedResult.Rows)
+		groupedResult.BytesEstimate = resultcache.EstimateResultBytes(groupedResult)
 		result.Results[grouped.ID] = groupedResult
 	}
 
@@ -143,6 +145,14 @@ func (r *Runtime) executeProjectionBundle(ctx context.Context, branches []dataqu
 			return dataquery.BundleResult{}, true, &dataquery.BundleIncompatibleError{Err: fmt.Errorf("scalar branch %q is not safely projectable", branch.ID)}
 		}
 		projectedRows := dataQueryRows(rows)
+		if budget, ok := dataquery.ResultBudgetFromContext(ctx); ok {
+			if err := budget.ConsumeRows(projectedRows); err != nil {
+				for _, grouped := range physicalGrouped {
+					r.queryCache.remove(grouped.Query)
+				}
+				return dataquery.BundleResult{}, true, err
+			}
+		}
 		outputAlias := branch.Query.Measures[0].Alias
 		if outputAlias == "" {
 			outputAlias = branch.Query.Measures[0].Field
@@ -156,6 +166,7 @@ func (r *Runtime) executeProjectionBundle(ctx context.Context, branches []dataqu
 			RowsReturned:   len(projectedRows),
 			CacheOutcome:   groupedResult.CacheOutcome,
 		}
+		branchResult.BytesEstimate = resultcache.EstimateResultBytes(branchResult)
 		result.Results[branch.ID] = branchResult
 	}
 	for _, branch := range branches {

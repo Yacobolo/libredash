@@ -2,7 +2,7 @@ root = "."
 tmp_dir = ".tmp/air"
 
 [build]
-cmd = "go build -o ./.tmp/air/leapview ./cmd/leapview"
+cmd = "go build -tags=duckdb_arrow -o ./.tmp/air/leapview ./cmd/leapview"
 entrypoint = ["./.tmp/air/leapview"]
 delay = 250
 exclude_dir = [".data", ".git", ".tmp", "bin", "node_modules", "output", "static"]

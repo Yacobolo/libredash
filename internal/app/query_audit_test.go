@@ -19,12 +19,12 @@ func TestAuditedQueryMetricsRecordsSuccessWithoutRows(t *testing.T) {
 	defer store.Close()
 
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, DefaultWorkspaceID: "test"})
-	request := dataquery.SourceRows("test", "olist.orders", []string{"order_id", "status"}, nil, 0, 2, false)
+	request := dataquery.ModelTableRows("test", "orders", []string{"order_id", "status"}, nil, 0, 2, false)
 	request.WorkspaceID = "test"
 	request.Surface = dataquery.SurfaceDataExplorer
 	request.Operation = dataquery.OperationPreviewWindow
-	request.ObjectType = "source"
-	request.ObjectID = "test:source:test.olist.orders"
+	request.ObjectType = "model_table"
+	request.ObjectID = "test:model_table:test.orders"
 	ctx = context.WithValue(ctx, principalContextKey{}, Principal{ID: "principal_admin@example.test"})
 
 	if _, err := server.metrics.ExecuteDataQuery(ctx, request); err != nil {

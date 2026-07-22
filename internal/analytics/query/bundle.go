@@ -124,7 +124,7 @@ func (p *Planner) PlanBundle(requests []BundleRequest) (BundlePlan, error) {
 	if err != nil {
 		return BundlePlan{}, err
 	}
-	from, err := joinPathSQL(p.Model, aliases)
+	from, err := joinPathSQL(p, aliases)
 	if err != nil {
 		return BundlePlan{}, err
 	}

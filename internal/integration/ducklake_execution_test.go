@@ -18,6 +18,7 @@ import (
 
 	accesssqlite "github.com/Yacobolo/leapview/internal/access/sqlite"
 	analyticsduckdb "github.com/Yacobolo/leapview/internal/analytics/duckdb"
+	analyticsducklake "github.com/Yacobolo/leapview/internal/analytics/ducklake"
 	analyticsmaterialize "github.com/Yacobolo/leapview/internal/analytics/materialize"
 	analyticsmaterializesqlite "github.com/Yacobolo/leapview/internal/analytics/materialize/sqlite"
 	"github.com/Yacobolo/leapview/internal/api"
@@ -53,6 +54,7 @@ type duckLakeHarness struct {
 	deployments *servingstatesqlite.Repository
 	registry    *runtimehost.Registry
 	appServer   *app.Server
+	database    *analyticsducklake.Environment
 }
 
 func newDuckLakeHarness(t *testing.T, opts ...func(*app.Options)) *duckLakeHarness {
@@ -65,7 +67,7 @@ func newDuckLakeHarness(t *testing.T, opts ...func(*app.Options)) *duckLakeHarne
 	runtimeDir := filepath.Join(homeDir, ".leapview", "runtime")
 	dataPath := filepath.Join(homeDir, ".leapview", "data")
 	platformDBPath := filepath.Join(homeDir, ".leapview", "leapview.db")
-	catalogPath := filepath.Join(homeDir, ".leapview", "ducklake", "catalog.sqlite")
+	catalogPath := filepath.Join(homeDir, ".leapview", "ducklake", "catalog.duckdb")
 	for _, dir := range []string{dataDir, artifactDir, duckDBDir, runtimeDir, dataPath, filepath.Dir(platformDBPath), filepath.Dir(catalogPath)} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatalf("create harness dir %s: %v", dir, err)
@@ -77,6 +79,13 @@ func newDuckLakeHarness(t *testing.T, opts ...func(*app.Options)) *duckLakeHarne
 		t.Fatalf("open platform store: %v", err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
+	duckDBEnvironment, err := analyticsducklake.Open(ctx, analyticsducklake.Config{
+		RootDir: filepath.Dir(catalogPath), CatalogPath: catalogPath, DataPath: dataPath, MaxConnections: workload.DefaultConfig().MaxRunning,
+	})
+	if err != nil {
+		t.Fatalf("open DuckDB environment: %v", err)
+	}
+	t.Cleanup(func() { _ = duckDBEnvironment.Close() })
 	workspaceID := "sales"
 	workspaceRepo := workspacesqlite.NewRepository(store.SQLDB())
 	if err := workspaceRepo.Ensure(ctx, workspace.EnsureInput{ID: workspace.WorkspaceID(workspaceID), Title: "Sales Workspace"}); err != nil {
@@ -97,6 +106,7 @@ func newDuckLakeHarness(t *testing.T, opts ...func(*app.Options)) *duckLakeHarne
 		Environment:  servingstate.DefaultEnvironment,
 		OnDrained: func(servingstate.ID, int64) {
 			_, _ = storagemaintenance.Run(context.Background(), deploymentRepo, storagemaintenance.Options{
+				DuckDBEnvironment:            duckDBEnvironment,
 				Environment:                  servingstate.DefaultEnvironment,
 				RootDir:                      homeDir,
 				CatalogPath:                  catalogPath,
@@ -106,6 +116,7 @@ func newDuckLakeHarness(t *testing.T, opts ...func(*app.Options)) *duckLakeHarne
 			})
 		},
 		Factory: duckLakeIntegrationRuntimeFactory{
+			database:         duckDBEnvironment,
 			managedRoot:      dataDir,
 			duckDBDir:        duckDBDir,
 			runtimeDir:       runtimeDir,
@@ -113,8 +124,20 @@ func newDuckLakeHarness(t *testing.T, opts ...func(*app.Options)) *duckLakeHarne
 			duckLakeDataPath: dataPath,
 		},
 	})
-	if err := registry.Reload(ctx); err != nil {
-		t.Fatalf("reload registry for %s: %v", initial.ID, err)
+	reloadController, err := workload.New(workload.DefaultConfig())
+	if err != nil {
+		t.Fatalf("create reload workload controller: %v", err)
+	}
+	reloadLease, err := reloadController.Acquire(ctx, workload.Request{Class: workload.Refresh, WorkspaceID: workspaceID, Operation: "integration-reload"})
+	if err != nil {
+		reloadController.Close()
+		t.Fatalf("admit registry reload: %v", err)
+	}
+	reloadErr := registry.Reload(reloadLease.Context())
+	reloadLease.Release()
+	reloadController.Close()
+	if reloadErr != nil {
+		t.Fatalf("reload registry for %s: %v", initial.ID, reloadErr)
 	}
 	t.Cleanup(func() { _ = registry.Close() })
 	runtimeMetrics := app.NewDynamicRuntimeMetrics("", func(workspaceID string) runtimehost.Provider {
@@ -133,6 +156,7 @@ func newDuckLakeHarness(t *testing.T, opts ...func(*app.Options)) *duckLakeHarne
 		DuckDBDir:           duckDBDir,
 		DuckLakeCatalogPath: catalogPath,
 		DuckLakeDataPath:    dataPath,
+		DuckDBEnvironment:   duckDBEnvironment,
 		ManagedDataResolver: staticIntegrationManagedDataResolver{root: dataDir},
 		DefaultWorkspaceID:  workspaceID,
 		DefaultEnvironment:  string(servingstate.DefaultEnvironment),
@@ -166,6 +190,7 @@ func newDuckLakeHarness(t *testing.T, opts ...func(*app.Options)) *duckLakeHarne
 		deployments: deploymentRepo,
 		registry:    registry,
 		appServer:   server,
+		database:    duckDBEnvironment,
 	}
 	h.server = httptest.NewServer(h.handler)
 	t.Cleanup(h.server.Close)
@@ -278,6 +303,7 @@ func createAndActivateProjectDeployment(t *testing.T, ctx context.Context, repo 
 }
 
 type duckLakeIntegrationRuntimeFactory struct {
+	database         *analyticsducklake.Environment
 	managedRoot      string
 	duckDBDir        string
 	runtimeDir       string
@@ -285,7 +311,7 @@ type duckLakeIntegrationRuntimeFactory struct {
 	duckLakeDataPath string
 }
 
-func (f duckLakeIntegrationRuntimeFactory) Prepare(_ context.Context, input runtimehost.RuntimeInput) (runtimehost.Runtime, error) {
+func (f duckLakeIntegrationRuntimeFactory) Prepare(ctx context.Context, input runtimehost.RuntimeInput) (runtimehost.Runtime, error) {
 	targetDir := filepath.Join(f.runtimeDir, string(input.State.ID))
 	if err := os.RemoveAll(targetDir); err != nil {
 		return nil, err
@@ -303,7 +329,8 @@ func (f duckLakeIntegrationRuntimeFactory) Prepare(_ context.Context, input runt
 	if err := bindManagedConnectionRoots(compiled.Definition, f.managedRoot); err != nil {
 		return nil, err
 	}
-	service, err := dashboardruntime.NewFromDefinition(filepath.Join(f.duckDBDir, string(servingstate.NormalizeEnvironment(input.State.Environment))), duckLakeIntegrationDataRuntimeFactory{
+	service, err := dashboardruntime.NewFromDefinition(ctx, filepath.Join(f.duckDBDir, string(servingstate.NormalizeEnvironment(input.State.Environment))), duckLakeIntegrationDataRuntimeFactory{
+		database:         f.database,
 		snapshotID:       input.State.DuckLakeSnapshotID,
 		catalogPath:      f.catalogPath,
 		duckLakeDataPath: f.duckLakeDataPath,
@@ -322,7 +349,8 @@ func (f duckLakeIntegrationRuntimeFactory) Prepare(_ context.Context, input runt
 			if err := service.Close(); err != nil {
 				return nil, err
 			}
-			service, err = dashboardruntime.NewFromDefinition(filepath.Join(f.duckDBDir, string(servingstate.NormalizeEnvironment(input.State.Environment))), duckLakeIntegrationDataRuntimeFactory{
+			service, err = dashboardruntime.NewFromDefinition(ctx, filepath.Join(f.duckDBDir, string(servingstate.NormalizeEnvironment(input.State.Environment))), duckLakeIntegrationDataRuntimeFactory{
+				database:         f.database,
 				snapshotID:       snapshotID,
 				catalogPath:      f.catalogPath,
 				duckLakeDataPath: f.duckLakeDataPath,
@@ -341,6 +369,7 @@ func (f duckLakeIntegrationRuntimeFactory) Prepare(_ context.Context, input runt
 }
 
 type duckLakeIntegrationDataRuntimeFactory struct {
+	database         *analyticsducklake.Environment
 	snapshotID       int64
 	catalogPath      string
 	duckLakeDataPath string
@@ -353,16 +382,14 @@ type duckLakeIntegrationDataRuntimeFactory struct {
 
 func (f duckLakeIntegrationDataRuntimeFactory) OpenDashboardWorkspaceDataRuntimes(ctx context.Context, config dashboardruntime.WorkspaceDataRuntimeConfig) (map[string]dashboardruntime.DataRuntime, error) {
 	runtime, err := analyticsduckdb.OpenWorkspaceMaterializeRuntime(ctx, analyticsduckdb.WorkspaceRuntimeConfig{
-		Models:           config.Definition.Models,
-		DBDir:            config.DBDir,
-		CatalogPath:      f.catalogPath,
-		DuckLakeDataPath: f.duckLakeDataPath,
-		SnapshotID:       f.snapshotID,
-		ServingStateID:   f.deploymentID,
-		WorkspaceID:      f.workspaceID,
-		Environment:      f.environment,
-		SemanticDigest:   f.semanticDigest,
-		ArtifactDigest:   f.artifactDigest,
+		Models:         config.Definition.Models,
+		Database:       f.database,
+		SnapshotID:     f.snapshotID,
+		ServingStateID: f.deploymentID,
+		WorkspaceID:    f.workspaceID,
+		Environment:    f.environment,
+		SemanticDigest: f.semanticDigest,
+		ArtifactDigest: f.artifactDigest,
 	})
 	if err != nil {
 		return nil, err
@@ -383,10 +410,6 @@ func (f duckLakeIntegrationDataRuntimeFactory) OpenDashboardWorkspaceDataRuntime
 		}
 	}
 	return runtimes, nil
-}
-
-func (duckLakeIntegrationDataRuntimeFactory) OpenDashboardDataRuntime(context.Context, dashboardruntime.DataRuntimeConfig) (dashboardruntime.DataRuntime, error) {
-	return nil, fmt.Errorf("integration requires workspace data runtime")
 }
 
 type sharedDuckLakeRuntimeCloser struct {
@@ -777,6 +800,7 @@ func (h *duckLakeHarness) startReplacementRegistry(t *testing.T) {
 		WorkspaceIDs: []servingstate.WorkspaceID{"sales"},
 		Environment:  servingstate.DefaultEnvironment,
 		Factory: duckLakeIntegrationRuntimeFactory{
+			database:         h.database,
 			managedRoot:      h.dataDir,
 			duckDBDir:        h.duckDBDir,
 			runtimeDir:       h.runtimeDir,
@@ -801,6 +825,7 @@ func (h *duckLakeHarness) startReplacementRegistry(t *testing.T) {
 		DuckDBDir:           h.duckDBDir,
 		DuckLakeCatalogPath: h.catalogPath,
 		DuckLakeDataPath:    h.dataPath,
+		DuckDBEnvironment:   h.database,
 		DefaultWorkspaceID:  "sales",
 		DefaultEnvironment:  string(servingstate.DefaultEnvironment),
 	})
@@ -1072,18 +1097,18 @@ func (h *duckLakeHarness) duckLakeCatalogSummary(t *testing.T) (int64, int64, in
 	db := h.openDuckLakeMetadata(t)
 	defer db.Close()
 	var dataPath string
-	if err := db.QueryRow(`SELECT value FROM meta.ducklake_metadata WHERE "key" = 'data_path' AND scope IS NULL LIMIT 1`).Scan(&dataPath); err != nil {
+	if err := db.QueryRow(`SELECT value FROM __ducklake_metadata_lake.ducklake_metadata WHERE "key" = 'data_path' AND scope IS NULL LIMIT 1`).Scan(&dataPath); err != nil {
 		t.Fatalf("query DuckLake data path metadata: %v", err)
 	}
 	var files, bytes int64
-	if err := db.QueryRow(`SELECT count(*), coalesce(sum(file_size_bytes), 0) FROM meta.ducklake_data_file WHERE end_snapshot IS NULL`).Scan(&files, &bytes); err != nil {
+	if err := db.QueryRow(`SELECT count(*), coalesce(sum(file_size_bytes), 0) FROM __ducklake_metadata_lake.ducklake_data_file WHERE end_snapshot IS NULL`).Scan(&files, &bytes); err != nil {
 		t.Fatalf("query DuckLake data files: %v", err)
 	}
 	var tables, snapshots int64
-	if err := db.QueryRow(`SELECT count(*) FROM meta.ducklake_table WHERE end_snapshot IS NULL`).Scan(&tables); err != nil {
+	if err := db.QueryRow(`SELECT count(*) FROM __ducklake_metadata_lake.ducklake_table WHERE end_snapshot IS NULL`).Scan(&tables); err != nil {
 		t.Fatalf("query DuckLake tables: %v", err)
 	}
-	if err := db.QueryRow(`SELECT count(*) FROM meta.ducklake_snapshot`).Scan(&snapshots); err != nil {
+	if err := db.QueryRow(`SELECT count(*) FROM __ducklake_metadata_lake.ducklake_snapshot`).Scan(&snapshots); err != nil {
 		t.Fatalf("query DuckLake snapshots: %v", err)
 	}
 	return files, bytes, tables, snapshots, dataPath
@@ -1093,7 +1118,7 @@ func (h *duckLakeHarness) duckLakeSnapshotIDs(t *testing.T) []int64 {
 	t.Helper()
 	db := h.openDuckLakeMetadata(t)
 	defer db.Close()
-	rows, err := db.Query(`SELECT snapshot_id FROM meta.ducklake_snapshot ORDER BY snapshot_id`)
+	rows, err := db.Query(`SELECT snapshot_id FROM __ducklake_metadata_lake.ducklake_snapshot ORDER BY snapshot_id`)
 	if err != nil {
 		t.Fatalf("query DuckLake snapshots: %v", err)
 	}
@@ -1119,10 +1144,8 @@ func (h *duckLakeHarness) openDuckLakeMetadata(t *testing.T) *sql.DB {
 		t.Fatalf("open DuckDB metadata connection: %v", err)
 	}
 	for _, stmt := range []string{
-		"LOAD sqlite",
 		"LOAD ducklake",
-		fmt.Sprintf("ATTACH 'ducklake:sqlite:%s' AS lake (DATA_PATH '%s')", integrationSQLString(h.catalogPath), integrationSQLString(h.dataPath)),
-		fmt.Sprintf("ATTACH '%s' AS meta (TYPE sqlite)", integrationSQLString(h.catalogPath)),
+		fmt.Sprintf("ATTACH 'ducklake:%s' AS lake (DATA_PATH '%s')", integrationSQLString(h.catalogPath), integrationSQLString(h.dataPath)),
 	} {
 		if _, err := db.ExecContext(context.Background(), stmt); err != nil {
 			_ = db.Close()

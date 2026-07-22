@@ -28,7 +28,7 @@ For a local managed-data backend, the coordinated instance backup includes the l
 
 With an S3-style managed-data backend, the instance archive does not replace bucket-native protection of authoritative objects. Enable versioning and an independent backup or replication policy. Recovery requires both LeapView metadata and the corresponding object versions.
 
-The same principle applies to a remote DuckLake catalog or analytical data store: use the native backup mechanism required by that backend and capture a mutually consistent recovery point.
+Analytical catalog and Parquet backups must form a mutually consistent recovery point with the node's control-plane backup.
 
 ## Validate backups
 

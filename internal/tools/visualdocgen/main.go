@@ -17,11 +17,13 @@ import (
 	"strings"
 
 	dashboardadapter "github.com/Yacobolo/leapview/internal/analytics/duckdb/dashboardadapter"
+	analyticsducklake "github.com/Yacobolo/leapview/internal/analytics/ducklake"
 	"github.com/Yacobolo/leapview/internal/configschema"
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 	dashboardruntime "github.com/Yacobolo/leapview/internal/dashboard/runtime"
 	"github.com/Yacobolo/leapview/internal/visualdocs"
+	"github.com/Yacobolo/leapview/internal/workload"
 	"github.com/Yacobolo/leapview/internal/workspace"
 	workspacecompiler "github.com/Yacobolo/leapview/internal/workspace/compiler"
 	"gopkg.in/yaml.v3"
@@ -148,7 +150,22 @@ func generateVisualExamples(docsDir, projectPath, dataRoot string) (visualExampl
 		return visualExamplesArtifact{}, err
 	}
 	defer os.RemoveAll(runtimeDir)
-	service, err := dashboardruntime.NewFromDefinition(runtimeDir, dashboardadapter.NewFactory(dashboardadapter.Options{}), definition)
+	database, err := analyticsducklake.Open(context.Background(), analyticsducklake.Config{RootDir: filepath.Join(runtimeDir, "ducklake"), MaxConnections: 1})
+	if err != nil {
+		return visualExamplesArtifact{}, fmt.Errorf("open fixture DuckDB: %w", err)
+	}
+	defer database.Close()
+	controller, err := workload.New(workload.DefaultConfig())
+	if err != nil {
+		return visualExamplesArtifact{}, err
+	}
+	defer controller.Close()
+	refreshLease, err := controller.Acquire(context.Background(), workload.Request{Class: workload.Refresh, WorkspaceID: "visual_examples", Operation: "visual-docs.refresh"})
+	if err != nil {
+		return visualExamplesArtifact{}, err
+	}
+	service, err := dashboardruntime.NewFromDefinition(refreshLease.Context(), runtimeDir, dashboardadapter.NewFactory(dashboardadapter.Options{Database: database}), definition)
+	refreshLease.Release()
 	if err != nil {
 		return visualExamplesArtifact{}, fmt.Errorf("open fixture runtime: %w", err)
 	}
@@ -156,7 +173,12 @@ func generateVisualExamples(docsDir, projectPath, dataRoot string) (visualExampl
 
 	artifact := visualExamplesArtifact{Version: visualdocs.ArtifactVersion, Documents: map[string][]visualdocs.Payload{}, References: map[string]visualDocumentReference{}, Showcase: make([]visualdocs.Payload, 0, len(catalog.Documents))}
 	for _, document := range catalog.Documents {
-		patch, err := service.QueryDashboardPage(context.Background(), report.ID, document.Source, dashboard.Filters{})
+		queryLease, err := controller.Acquire(context.Background(), workload.Request{Class: workload.Interactive, WorkspaceID: "visual_examples", Operation: "visual-docs.query"})
+		if err != nil {
+			return visualExamplesArtifact{}, err
+		}
+		patch, err := service.QueryDashboardPage(queryLease.Context(), report.ID, document.Source, dashboard.Filters{})
+		queryLease.Release()
 		if err != nil {
 			return visualExamplesArtifact{}, fmt.Errorf("query %s examples: %w", document.Source, err)
 		}
@@ -177,7 +199,12 @@ func generateVisualExamples(docsDir, projectPath, dataRoot string) (visualExampl
 				payloads = append(payloads, visualdocs.ChartPayload(payload))
 				continue
 			}
-			table, err := service.QueryTablePage(context.Background(), report.ID, document.Source, dashboard.Filters{}, dashboard.TableRequest{Table: example.ID, Block: "a", Start: 0, Count: dashboard.TableMaxRequestCount})
+			tableLease, err := controller.Acquire(context.Background(), workload.Request{Class: workload.Interactive, WorkspaceID: "visual_examples", Operation: "visual-docs.table"})
+			if err != nil {
+				return visualExamplesArtifact{}, err
+			}
+			table, err := service.QueryTablePage(tableLease.Context(), report.ID, document.Source, dashboard.Filters{}, dashboard.TableRequest{Table: example.ID, Block: "a", Start: 0, Count: dashboard.TableMaxRequestCount})
+			tableLease.Release()
 			if err != nil {
 				return visualExamplesArtifact{}, fmt.Errorf("query %s visual %q: %w", document.Source, example.ID, err)
 			}

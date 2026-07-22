@@ -66,7 +66,7 @@ func (c Config) DuckLakeCatalogPath() string {
 	if c.DuckLakeCatalog != "" {
 		return c.DuckLakeCatalog
 	}
-	return filepath.Join(c.HomeDir, "ducklake", "catalog.sqlite")
+	return filepath.Join(c.HomeDir, "ducklake", "catalog.duckdb")
 }
 
 func (c Config) DuckDBDirPath() string {
@@ -181,7 +181,45 @@ func (c Config) Validate(profile Profile) error {
 	if err := c.WorkloadConfig().Validate(); err != nil {
 		return fmt.Errorf("invalid workload configuration: %w", err)
 	}
+	if err := c.validateAnalyticalResources(); err != nil {
+		return fmt.Errorf("invalid analytical resource configuration: %w", err)
+	}
 	return nil
+}
+
+func (c Config) validateAnalyticalResources() error {
+	positive := map[string]int64{
+		"LEAPVIEW_DUCKDB_NODE_MEMORY_MAX_BYTES":      c.DuckDBNodeMemoryMaxBytes,
+		"LEAPVIEW_DUCKDB_NODE_TEMP_MAX_BYTES":        c.DuckDBNodeTempMaxBytes,
+		"LEAPVIEW_DUCKDB_NODE_MAX_THREADS":           int64(c.DuckDBNodeMaxThreads),
+		"LEAPVIEW_QUERY_RESULT_MAX_ROWS":             int64(c.QueryResultMaxRows),
+		"LEAPVIEW_QUERY_RESULT_MAX_BYTES":            c.QueryResultMaxBytes,
+		"LEAPVIEW_QUERY_CACHE_RUNTIME_MAX_ENTRIES":   int64(c.QueryCacheRuntimeMaxEntries),
+		"LEAPVIEW_QUERY_CACHE_RUNTIME_MAX_BYTES":     c.QueryCacheRuntimeMaxBytes,
+		"LEAPVIEW_QUERY_CACHE_WORKSPACE_MAX_ENTRIES": int64(c.QueryCacheWorkspaceMaxEntries),
+		"LEAPVIEW_QUERY_CACHE_WORKSPACE_MAX_BYTES":   c.QueryCacheWorkspaceMaxBytes,
+		"LEAPVIEW_QUERY_CACHE_NODE_MAX_ENTRIES":      int64(c.QueryCacheNodeMaxEntries),
+		"LEAPVIEW_QUERY_CACHE_NODE_MAX_BYTES":        c.QueryCacheNodeMaxBytes,
+	}
+	for name, value := range positive {
+		if value <= 0 {
+			return fmt.Errorf("%s must be positive", name)
+		}
+	}
+	if c.QueryCacheRuntimeMaxEntries > c.QueryCacheWorkspaceMaxEntries || c.QueryCacheWorkspaceMaxEntries > c.QueryCacheNodeMaxEntries {
+		return fmt.Errorf("query cache entry limits must satisfy runtime <= workspace <= node")
+	}
+	if c.QueryCacheRuntimeMaxBytes > c.QueryCacheWorkspaceMaxBytes || c.QueryCacheWorkspaceMaxBytes > c.QueryCacheNodeMaxBytes {
+		return fmt.Errorf("query cache byte limits must satisfy runtime <= workspace <= node")
+	}
+	return nil
+}
+
+func (c Config) DuckDBTempDirPath() string {
+	if value := strings.TrimSpace(c.DuckDBTempDir); value != "" {
+		return value
+	}
+	return filepath.Join(c.HomeDir, "tmp", "duckdb")
 }
 
 func (c Config) ValidateProductionAuth() error {

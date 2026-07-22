@@ -3,77 +3,354 @@ package duckdb
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"reflect"
-	"strconv"
+	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/Yacobolo/leapview/internal/analytics/arrowquery"
+	"github.com/Yacobolo/leapview/internal/analytics/connectors"
 	analyticsducklake "github.com/Yacobolo/leapview/internal/analytics/ducklake"
 	analyticsmaterialize "github.com/Yacobolo/leapview/internal/analytics/materialize"
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	semanticquery "github.com/Yacobolo/leapview/internal/analytics/query"
-	"github.com/Yacobolo/leapview/internal/configspec"
+	analyticsresource "github.com/Yacobolo/leapview/internal/analytics/resource"
+	"github.com/Yacobolo/leapview/internal/analytics/resultcache"
 	"github.com/Yacobolo/leapview/internal/dataquery"
 )
 
 type SourceRuntime struct {
-	db                  sqlDBProvider
-	attachedConnections map[string]struct{}
+	db       analyticsresource.SessionProvider
+	resolver CredentialResolver
 }
 
-func NewSourceRuntime(db sqlDBProvider) *SourceRuntime {
-	return &SourceRuntime{
-		db:                  db,
-		attachedConnections: map[string]struct{}{},
+type extensionProvider interface {
+	EnsureExtension(context.Context, string) error
+}
+
+type fatalReporter interface {
+	MarkFatal(error)
+}
+
+type refreshTelemetry interface {
+	ObserveSourceAcquisition(connector, outcome string)
+	ObserveSecretScopeContention(connector string)
+	ObserveRefreshCleanup(success bool)
+}
+
+func NewSourceRuntime(db analyticsresource.SessionProvider) *SourceRuntime {
+	return &SourceRuntime{db: db, resolver: EnvironmentCredentialResolver{}}
+}
+
+func NewSourceRuntimeWithCredentials(db analyticsresource.SessionProvider, resolver CredentialResolver) *SourceRuntime {
+	if resolver == nil {
+		resolver = EnvironmentCredentialResolver{}
+	}
+	return &SourceRuntime{db: db, resolver: resolver}
+}
+
+var sourceStageSequence atomic.Uint64
+var refreshSessionSequence atomic.Uint64
+var sourceScopeLocks sync.Map
+
+type PreparedSources struct {
+	model     *semanticmodel.Model
+	session   analyticsresource.Session
+	relations map[string]string
+	tables    []string
+	once      sync.Once
+	closeErr  error
+	reporter  fatalReporter
+	telemetry refreshTelemetry
+}
+
+func (r *SourceRuntime) Prepare(ctx context.Context, model *semanticmodel.Model) (analyticsmaterialize.PreparedSources, error) {
+	if r == nil || r.db == nil {
+		return nil, fmt.Errorf("source preparer is not initialized")
+	}
+	if model == nil {
+		return nil, fmt.Errorf("semantic model is required")
+	}
+	session, err := r.db.Session(ctx)
+	if err != nil {
+		return nil, err
+	}
+	resolved, err := r.resolveCredentials(ctx, model)
+	if err != nil {
+		return nil, err
+	}
+	telemetry, _ := r.db.(refreshTelemetry)
+	if extensions, ok := r.db.(extensionProvider); ok {
+		for _, extension := range RequiredExtensions(resolved) {
+			if err := extensions.EnsureExtension(ctx, extension); err != nil {
+				return nil, err
+			}
+		}
+	}
+	releaseScopes := lockSourceScopes(resolved, telemetry)
+	defer releaseScopes()
+	prepared := &PreparedSources{model: resolved, session: session, relations: map[string]string{}, telemetry: telemetry}
+	prepared.reporter, _ = r.db.(fatalReporter)
+	for _, sourceName := range sortedKeys(resolved.Sources) {
+		source := resolved.Sources[sourceName]
+		connection := resolved.Connections[source.Connection]
+		if connection.Kind == "managed" {
+			relation, err := SourceRelation(resolved, source)
+			if err != nil {
+				_ = prepared.Close()
+				return nil, safeSourceError(sourceName, err)
+			}
+			columns, err := describeRelationSchema(ctx, session, "("+relation+")")
+			if err != nil {
+				_ = prepared.Close()
+				return nil, safeSourceError(sourceName, err)
+			}
+			source.Schema = semanticmodel.TableSchema{Columns: columns}
+			resolved.Sources[sourceName] = source
+			original := model.Sources[sourceName]
+			original.Schema = source.Schema
+			model.Sources[sourceName] = original
+			continue
+		}
+		sourceModel := refreshSourceModel(resolved, sourceName, source)
+		attached := map[string]struct{}{}
+		if err := prepareRefreshSourceAccess(ctx, session, sourceModel, attached); err != nil {
+			observeSource(telemetry, connection.Kind, "failed")
+			cleanupErr := cleanupSourceAccess(session, sourceModel, attached)
+			reportCleanup(r.db, telemetry, cleanupErr)
+			return nil, fmt.Errorf("preparing refresh source %q failed", sourceName)
+		}
+		relation, err := SourceRelation(sourceModel, source)
+		if err != nil {
+			observeSource(telemetry, connection.Kind, "failed")
+			_ = prepared.Close()
+			cleanupErr := cleanupSourceAccess(session, sourceModel, attached)
+			reportCleanup(r.db, telemetry, cleanupErr)
+			return nil, safeSourceError(sourceName, err)
+		}
+		table := fmt.Sprintf("leapview_stage_%d_%s", sourceStageSequence.Add(1), sourceName)
+		if err := validateIdentifier(table); err != nil {
+			observeSource(telemetry, connection.Kind, "failed")
+			_ = prepared.Close()
+			cleanupErr := cleanupSourceAccess(session, sourceModel, attached)
+			reportCleanup(r.db, telemetry, cleanupErr)
+			return nil, err
+		}
+		if _, err := session.ExecContext(ctx, "CREATE TEMP TABLE "+quoteIdentifier(table)+" AS SELECT * FROM ("+relation+")"); err != nil {
+			observeSource(telemetry, connection.Kind, "failed")
+			_ = prepared.Close()
+			cleanupErr := cleanupSourceAccess(session, sourceModel, attached)
+			reportCleanup(r.db, telemetry, cleanupErr)
+			return nil, safeSourceError(sourceName, err)
+		}
+		prepared.tables = append(prepared.tables, table)
+		prepared.relations[sourceName] = quoteIdentifier(table)
+		columns, err := describeRelationSchema(ctx, session, quoteIdentifier(table))
+		if err != nil {
+			observeSource(telemetry, connection.Kind, "failed")
+			_ = prepared.Close()
+			cleanupErr := cleanupSourceAccess(session, sourceModel, attached)
+			reportCleanup(r.db, telemetry, cleanupErr)
+			return nil, safeSourceError(sourceName, err)
+		}
+		source.Schema = semanticmodel.TableSchema{Columns: columns}
+		resolved.Sources[sourceName] = source
+		original := model.Sources[sourceName]
+		original.Schema = source.Schema
+		model.Sources[sourceName] = original
+		if err := cleanupSourceAccess(session, sourceModel, attached); err != nil {
+			reportCleanup(r.db, telemetry, err)
+			_ = prepared.Close()
+			return nil, fmt.Errorf("cleaning refresh source %q access failed", sourceName)
+		}
+		reportCleanup(r.db, telemetry, nil)
+		observeSource(telemetry, connection.Kind, "succeeded")
+	}
+	if err := resolved.ValidateDiscoveredSourceSchemas(); err != nil {
+		_ = prepared.Close()
+		return nil, fmt.Errorf("validating staged source schemas: %w", err)
+	}
+	return prepared, nil
+}
+
+func refreshSourceModel(model *semanticmodel.Model, sourceName string, source semanticmodel.Source) *semanticmodel.Model {
+	connection := model.Connections[source.Connection]
+	return &semanticmodel.Model{
+		Name: model.Name, DefaultConnection: source.Connection,
+		Connections: map[string]semanticmodel.Connection{source.Connection: connection},
+		Sources:     map[string]semanticmodel.Source{sourceName: source},
 	}
 }
 
-func (r *SourceRuntime) PrepareSourceRuntime(ctx context.Context, model *semanticmodel.Model) error {
-	return PrepareSourceRuntime(ctx, r.db.SQLDB(), model, r.attachedConnections)
+func lockSourceScopes(model *semanticmodel.Model, telemetry refreshTelemetry) func() {
+	keys := map[string]struct{}{}
+	for _, source := range model.Sources {
+		connection := model.Connections[source.Connection]
+		if connection.Kind == "managed" {
+			continue
+		}
+		scope := firstNonEmpty(connection.Scope, connection.Path, connection.Host, source.Connection)
+		keys[connection.Kind+"\x00"+scope] = struct{}{}
+	}
+	ordered := sortedKeys(keys)
+	locks := make([]*sync.Mutex, 0, len(ordered))
+	for _, key := range ordered {
+		value, _ := sourceScopeLocks.LoadOrStore(key, &sync.Mutex{})
+		lock := value.(*sync.Mutex)
+		if !lock.TryLock() {
+			connector, _, _ := strings.Cut(key, "\x00")
+			if telemetry != nil {
+				telemetry.ObserveSecretScopeContention(connector)
+			}
+			lock.Lock()
+		}
+		locks = append(locks, lock)
+	}
+	return func() {
+		for index := len(locks) - 1; index >= 0; index-- {
+			locks[index].Unlock()
+		}
+	}
 }
 
-func (r *SourceRuntime) SourceRelation(model *semanticmodel.Model, source semanticmodel.Source) (string, error) {
-	return SourceRelation(model, source)
+func observeSource(telemetry refreshTelemetry, connector, outcome string) {
+	if telemetry != nil {
+		telemetry.ObserveSourceAcquisition(connector, outcome)
+	}
+}
+
+func observeCleanup(telemetry refreshTelemetry, err error) {
+	if telemetry != nil {
+		telemetry.ObserveRefreshCleanup(err == nil)
+	}
+}
+
+func reportCleanup(provider analyticsresource.SessionProvider, telemetry refreshTelemetry, err error) {
+	observeCleanup(telemetry, err)
+	if err != nil {
+		if reporter, ok := provider.(fatalReporter); ok {
+			reporter.MarkFatal(err)
+		}
+	}
 }
 
 func (r *SourceRuntime) PlanModelTable(ctx context.Context, model *semanticmodel.Model, tableName string, table semanticmodel.Table) (analyticsmaterialize.ModelTablePlan, error) {
-	return PlanModelTable(ctx, r.db.SQLDB(), model, tableName, table)
+	session, err := r.db.Session(ctx)
+	if err != nil {
+		return analyticsmaterialize.ModelTablePlan{}, err
+	}
+	return PlanModelTable(ctx, session, model, tableName, table)
 }
 
 func (r *SourceRuntime) ResolveSourcePath(model *semanticmodel.Model, source semanticmodel.Source) (string, error) {
 	return ResolveSourcePath(model, source)
 }
 
-func OpenMaterializeRuntime(ctx context.Context, config analyticsmaterialize.RuntimeConfig) (*analyticsmaterialize.Runtime, error) {
-	dbPath := analyticsmaterialize.DatabasePath(config.DBDir, config.ModelID)
-	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
-		return nil, err
+func (r *SourceRuntime) resolveCredentials(ctx context.Context, model *semanticmodel.Model) (*semanticmodel.Model, error) {
+	resolved := *model
+	suffix := fmt.Sprintf("_r%d", refreshSessionSequence.Add(1))
+	resolved.Connections = make(map[string]semanticmodel.Connection, len(model.Connections))
+	connectionNames := make(map[string]string, len(model.Connections))
+	for name, connection := range model.Connections {
+		auth, err := r.resolver.Resolve(ctx, name, connection)
+		if err != nil {
+			return nil, err
+		}
+		connection.Auth = auth
+		resolvedName := name + suffix
+		connectionNames[name] = resolvedName
+		resolved.Connections[resolvedName] = connection
 	}
-	db, err := Open(ctx, dbPath)
-	if err != nil {
-		return nil, err
+	if remapped := connectionNames[model.DefaultConnection]; remapped != "" {
+		resolved.DefaultConnection = remapped
 	}
-	sources := NewSourceRuntime(db)
-	config.Database = db
-	config.Sources = sources
-	config.Resolver = sources
-	runtime, err := analyticsmaterialize.OpenRuntime(ctx, config)
-	if err != nil {
-		db.Close()
-		return nil, err
+	resolved.Sources = make(map[string]semanticmodel.Source, len(model.Sources))
+	for name, source := range model.Sources {
+		if remapped := connectionNames[source.Connection]; remapped != "" {
+			source.Connection = remapped
+		}
+		resolved.Sources[name] = source
 	}
-	return runtime, nil
+	return &resolved, nil
+}
+
+func (p *PreparedSources) PlanModelTable(ctx context.Context, _ *semanticmodel.Model, tableName string, table semanticmodel.Table) (analyticsmaterialize.ModelTablePlan, error) {
+	return planModelTable(ctx, p.session, p.model, tableName, table, p.relations)
+}
+
+func (p *PreparedSources) Close() error {
+	if p == nil {
+		return nil
+	}
+	p.once.Do(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		for index := len(p.tables) - 1; index >= 0; index-- {
+			if _, err := p.session.ExecContext(cleanupCtx, "DROP TABLE IF EXISTS "+quoteIdentifier(p.tables[index])); err != nil {
+				p.closeErr = errors.Join(p.closeErr, err)
+			}
+		}
+		if p.closeErr != nil && p.reporter != nil {
+			p.reporter.MarkFatal(p.closeErr)
+		}
+		observeCleanup(p.telemetry, p.closeErr)
+	})
+	return p.closeErr
+}
+
+func cleanupSourceAccess(session analyticsresource.Session, model *semanticmodel.Model, attached map[string]struct{}) error {
+	cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var result error
+	connections := make([]string, 0, len(attached))
+	for name := range attached {
+		connections = append(connections, name)
+	}
+	sort.Sort(sort.Reverse(sort.StringSlice(connections)))
+	for _, name := range connections {
+		alias, err := databaseAlias(name)
+		if err == nil {
+			_, err = session.ExecContext(cleanupCtx, "DETACH "+alias)
+		}
+		result = errors.Join(result, err)
+	}
+	secrets := map[string]struct{}{}
+	for name, connection := range model.Connections {
+		spec, ok := connectors.LookupConnection(connection.Kind)
+		if ok && spec.SecretType != "" && spec.AttachKind != connectors.AttachDatabase {
+			if secret, err := connectionSecretName(name); err == nil {
+				secrets[secret] = struct{}{}
+			}
+		}
+	}
+	for _, source := range model.Sources {
+		format, ok := connectors.LookupFormat(source.Format)
+		if !ok || format.SourceSecretType == "" {
+			continue
+		}
+		if secret, err := connectionSecretName(source.Connection + "_" + format.SourceSecretType); err == nil {
+			secrets[secret] = struct{}{}
+		}
+	}
+	for _, secret := range sortedKeys(secrets) {
+		_, err := session.ExecContext(cleanupCtx, "DROP SECRET IF EXISTS "+secret)
+		result = errors.Join(result, err)
+	}
+	return result
+}
+
+func safeSourceError(source string, _ error) error {
+	return fmt.Errorf("acquiring source %q failed", source)
 }
 
 type WorkspaceRuntimeConfig struct {
 	Models             map[string]*semanticmodel.Model
-	DBDir              string
-	CatalogPath        string
-	DuckLakeDataPath   string
+	Database           *analyticsducklake.Environment
+	CredentialResolver CredentialResolver
 	SnapshotID         int64
 	ServingStateID     string
 	WorkspaceID        string
@@ -84,13 +361,14 @@ type WorkspaceRuntimeConfig struct {
 	ArtifactDigest     string
 	SourceDataDigest   string
 	SkipInitialRefresh bool
-	MaxReaders         int
+	QueryCache         *resultcache.Scope
+	ResultLimits       dataquery.ResultLimits
 }
 
 type WorkspaceRuntime struct {
 	mu                   sync.Mutex
 	db                   analyticsmaterialize.Database
-	sqlDB                sqlDBProvider
+	sessions             analyticsresource.SessionProvider
 	committer            duckLakeCommitter
 	sources              *SourceRuntime
 	models               map[string]*semanticmodel.Model
@@ -100,6 +378,7 @@ type WorkspaceRuntime struct {
 	lastRefresh          time.Time
 	lastSnapshotID       int64
 	commitMetadata       map[string]string
+	cacheScope           *resultcache.Scope
 }
 
 type duckLakeCommitter interface {
@@ -110,41 +389,28 @@ func OpenWorkspaceMaterializeRuntime(ctx context.Context, config WorkspaceRuntim
 	if len(config.Models) == 0 {
 		return nil, fmt.Errorf("workspace semantic models are required")
 	}
-	layout := analyticsducklake.NewLayout(config.DBDir)
-	if config.CatalogPath != "" {
-		layout.CatalogPath = config.CatalogPath
+	db := config.Database
+	if db == nil {
+		return nil, fmt.Errorf("process DuckDB environment is required")
 	}
-	if config.DuckLakeDataPath != "" {
-		layout.DataPath = config.DuckLakeDataPath
-	}
-	if err := os.MkdirAll(layout.RootDir, 0o755); err != nil {
-		return nil, err
-	}
-	var db *analyticsducklake.Environment
-	var err error
 	if config.SnapshotID > 0 {
-		db, err = analyticsducklake.OpenSnapshot(ctx, analyticsducklake.Config{RootDir: config.DBDir, CatalogPath: layout.CatalogPath, DataPath: layout.DataPath, SnapshotID: config.SnapshotID, MaxReaders: workspaceReaderCount(config.MaxReaders)})
-	} else {
-		db, err = analyticsducklake.Open(ctx, analyticsducklake.Config{RootDir: config.DBDir, CatalogPath: layout.CatalogPath, DataPath: layout.DataPath})
+		if err := db.ValidateSnapshot(ctx, config.SnapshotID); err != nil {
+			return nil, err
+		}
 	}
-	if err != nil {
-		return nil, err
-	}
-	sources := NewSourceRuntime(db)
+	sources := NewSourceRuntimeWithCredentials(db, config.CredentialResolver)
 	materializationModel, err := physicalWorkspaceModel(config.Models)
 	if err != nil {
-		db.Close()
 		return nil, err
 	}
 	for modelID, model := range config.Models {
 		if err := analyticsmaterialize.ValidateFilesWithResolver(model, sources); err != nil {
-			db.Close()
 			return nil, fmt.Errorf("semantic model %q: %w", modelID, err)
 		}
 	}
 	runtime := &WorkspaceRuntime{
 		db:                   db,
-		sqlDB:                db,
+		sessions:             db,
 		committer:            db,
 		sources:              sources,
 		models:               config.Models,
@@ -152,8 +418,15 @@ func OpenWorkspaceMaterializeRuntime(ctx context.Context, config WorkspaceRuntim
 		queries:              map[string]*semanticquery.Service{},
 		views:                map[string]*analyticsmaterialize.Runtime{},
 		commitMetadata:       workspaceCommitMetadata(config),
+		cacheScope:           config.QueryCache,
 	}
 	for modelID, model := range config.Models {
+		var tableRelation semanticquery.TableRelation
+		if config.SnapshotID > 0 {
+			tableRelation = func(table string) (string, error) {
+				return analyticsducklake.QualifiedSnapshotRelation(config.SnapshotID, table)
+			}
+		}
 		view, err := analyticsmaterialize.NewRuntimeView(ctx, analyticsmaterialize.RuntimeConfig{
 			ModelID:             modelID,
 			Model:               model,
@@ -161,9 +434,11 @@ func OpenWorkspaceMaterializeRuntime(ctx context.Context, config WorkspaceRuntim
 			Database:            db,
 			Sources:             sources,
 			Resolver:            sources,
+			TableRelation:       tableRelation,
+			QueryCache:          config.QueryCache,
+			ResultLimits:        config.ResultLimits,
 		})
 		if err != nil {
-			db.Close()
 			return nil, fmt.Errorf("compile semantic model %q runtime: %w", modelID, err)
 		}
 		runtime.views[modelID] = view
@@ -173,7 +448,6 @@ func OpenWorkspaceMaterializeRuntime(ctx context.Context, config WorkspaceRuntim
 		runtime.lastSnapshotID = config.SnapshotID
 	} else if !config.SkipInitialRefresh {
 		if err := runtime.Refresh(ctx); err != nil {
-			db.Close()
 			return nil, err
 		}
 	}
@@ -191,16 +465,6 @@ func workspaceQueryCacheNamespace(config WorkspaceRuntimeConfig) string {
 		config.ArtifactDigest,
 		config.SourceDataDigest,
 	)
-}
-
-func workspaceReaderCount(configured int) int {
-	if configured > 0 {
-		return configured
-	}
-	if value, err := strconv.Atoi(strings.TrimSpace(os.Getenv(configspec.EnvLEAPVIEW_WORKLOAD_INTERACTIVE_MAX_RUNNING))); err == nil && value > 0 {
-		return value
-	}
-	return 4
 }
 
 func (r *WorkspaceRuntime) Queries(modelID string) (*semanticquery.Service, error) {
@@ -236,6 +500,27 @@ func (r *WorkspaceRuntime) ExecuteDataQuery(ctx context.Context, request dataque
 	return view.ExecuteDataQuery(ctx, request)
 }
 
+func (r *WorkspaceRuntime) ExecuteDataQueryArrow(ctx context.Context, request dataquery.Query, sink arrowquery.Sink) (dataquery.Result, error) {
+	if r == nil || r.db == nil {
+		return dataquery.Result{}, fmt.Errorf("workspace runtime is not initialized")
+	}
+	modelID := strings.TrimSpace(request.ModelID)
+	if modelID == "" && len(r.models) == 1 {
+		for id := range r.models {
+			modelID = id
+		}
+	}
+	if _, ok := r.models[modelID]; !ok {
+		return dataquery.Result{}, fmt.Errorf("unknown semantic model %q", modelID)
+	}
+	request.ModelID = modelID
+	view := r.views[modelID]
+	if view == nil {
+		return dataquery.Result{}, fmt.Errorf("semantic model %q runtime is not compiled", modelID)
+	}
+	return view.ExecuteDataQueryArrow(ctx, request, sink)
+}
+
 func (r *WorkspaceRuntime) ExecuteDataQueryBundle(ctx context.Context, requests []dataquery.BundleRequest) (dataquery.BundleResult, error) {
 	if len(requests) == 0 {
 		return dataquery.BundleResult{}, &dataquery.BundleIncompatibleError{Err: fmt.Errorf("bundle is empty")}
@@ -267,6 +552,11 @@ func (r *WorkspaceRuntime) Refresh(ctx context.Context) error {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	ctx, release, err := r.acquireOperation(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
 
 	lastRefresh, snapshotID, err := r.refreshModel(ctx, r.materializationModel, nil)
 	if err != nil {
@@ -274,7 +564,7 @@ func (r *WorkspaceRuntime) Refresh(ctx context.Context) error {
 	}
 	r.clearQueryCaches()
 	for modelID, model := range r.models {
-		if err := discoverSchemas(ctx, r.sqlDB, model); err != nil {
+		if err := discoverSchemas(ctx, r.sessions, model); err != nil {
 			return fmt.Errorf("discovering semantic model %q schemas: %w", modelID, err)
 		}
 	}
@@ -294,6 +584,11 @@ func (r *WorkspaceRuntime) RefreshModelTables(ctx context.Context, modelID strin
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	ctx, release, err := r.acquireOperation(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
 
 	lastRefresh, snapshotID, err := r.refreshModel(ctx, model, tableNames)
 	if err != nil {
@@ -301,7 +596,7 @@ func (r *WorkspaceRuntime) RefreshModelTables(ctx context.Context, modelID strin
 	}
 	r.clearQueryCaches()
 	for discoverModelID, discoverModel := range r.models {
-		if err := discoverSchemas(ctx, r.sqlDB, discoverModel); err != nil {
+		if err := discoverSchemas(ctx, r.sessions, discoverModel); err != nil {
 			return fmt.Errorf("discovering semantic model %q schemas: %w", discoverModelID, err)
 		}
 	}
@@ -320,6 +615,11 @@ func (r *WorkspaceRuntime) RefreshWorkspaceTables(ctx context.Context, tableName
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	ctx, release, err := r.acquireOperation(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
 
 	lastRefresh, snapshotID, err := r.refreshModel(ctx, r.materializationModel, tableNames)
 	if err != nil {
@@ -327,7 +627,7 @@ func (r *WorkspaceRuntime) RefreshWorkspaceTables(ctx context.Context, tableName
 	}
 	r.clearQueryCaches()
 	for discoverModelID, discoverModel := range r.models {
-		if err := discoverSchemas(ctx, r.sqlDB, discoverModel); err != nil {
+		if err := discoverSchemas(ctx, r.sessions, discoverModel); err != nil {
 			return fmt.Errorf("discovering semantic model %q schemas: %w", discoverModelID, err)
 		}
 	}
@@ -351,16 +651,17 @@ func WorkspaceModelTableDependencyOrder(models map[string]*semanticmodel.Model, 
 }
 
 func (r *WorkspaceRuntime) refreshModel(ctx context.Context, model *semanticmodel.Model, tableNames []string) (time.Time, int64, error) {
+	prepared, err := r.sources.Prepare(ctx, model)
+	if err != nil {
+		return time.Time{}, 0, err
+	}
 	if r.committer == nil {
 		if len(tableNames) > 0 {
-			lastRefresh, err := analyticsmaterialize.RefreshModelTables(ctx, r.db, r.sources, model, tableNames)
-			return lastRefresh, 0, err
+			lastRefresh, err := analyticsmaterialize.RefreshModelTables(ctx, r.db, prepared, model, tableNames)
+			return lastRefresh, 0, errors.Join(err, prepared.Close())
 		}
-		lastRefresh, err := analyticsmaterialize.Refresh(ctx, r.db, r.sources, model)
-		return lastRefresh, 0, err
-	}
-	if err := r.sources.PrepareSourceRuntime(ctx, model); err != nil {
-		return time.Time{}, 0, err
+		lastRefresh, err := analyticsmaterialize.Refresh(ctx, r.db, prepared, model)
+		return lastRefresh, 0, errors.Join(err, prepared.Close())
 	}
 	metadata := map[string]string{"workspace": model.Name}
 	for key, value := range r.commitMetadata {
@@ -369,16 +670,32 @@ func (r *WorkspaceRuntime) refreshModel(ctx context.Context, model *semanticmode
 	servingStateID := firstNonEmpty(r.commitMetadata["servingStateId"], "workspace-refresh")
 	snapshotID, err := r.committer.Commit(ctx, servingStateID, metadata, func(tx *sql.Tx) error {
 		executor := txExecutor{tx: tx}
-		sources := txSourceRuntime{SourceRuntime: r.sources, tx: tx}
+		sources := txPreparedSources{PreparedSources: prepared.(*PreparedSources), tx: tx}
 		if len(tableNames) > 0 {
 			return analyticsmaterialize.ModelTablesNamed(ctx, executor, sources, model, tableNames)
 		}
 		return analyticsmaterialize.ModelTables(ctx, executor, sources, model)
 	})
 	if err != nil {
+		_ = prepared.Close()
 		return time.Time{}, 0, err
 	}
+	if err := prepared.Close(); err != nil {
+		return time.Time{}, 0, fmt.Errorf("cleaning refresh staging: %w", err)
+	}
 	return time.Now(), snapshotID, nil
+}
+
+func (r *WorkspaceRuntime) acquireOperation(ctx context.Context) (context.Context, func(), error) {
+	provider, ok := r.db.(analyticsresource.Provider)
+	if !ok {
+		return ctx, func() {}, nil
+	}
+	lease, err := provider.Acquire(ctx)
+	if err != nil {
+		return ctx, func() {}, err
+	}
+	return lease.Context(), lease.Release, nil
 }
 
 func workspaceCommitMetadata(config WorkspaceRuntimeConfig) map[string]string {
@@ -414,7 +731,18 @@ func (r *WorkspaceRuntime) Close() error {
 	if r == nil {
 		return nil
 	}
-	return r.db.Close()
+	var errs []error
+	for _, view := range r.views {
+		if err := view.CloseView(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if r.cacheScope != nil {
+		if err := r.cacheScope.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }
 
 func (r *WorkspaceRuntime) LastRefresh() time.Time {
@@ -467,13 +795,13 @@ func (e txExecutor) Exec(ctx context.Context, statement string) error {
 	return err
 }
 
-type txSourceRuntime struct {
-	*SourceRuntime
+type txPreparedSources struct {
+	*PreparedSources
 	tx *sql.Tx
 }
 
-func (r txSourceRuntime) PlanModelTable(ctx context.Context, model *semanticmodel.Model, tableName string, table semanticmodel.Table) (analyticsmaterialize.ModelTablePlan, error) {
-	return PlanModelTable(ctx, r.tx, model, tableName, table)
+func (r txPreparedSources) PlanModelTable(ctx context.Context, _ *semanticmodel.Model, tableName string, table semanticmodel.Table) (analyticsmaterialize.ModelTablePlan, error) {
+	return planModelTable(ctx, r.tx, r.model, tableName, table, r.relations)
 }
 
 func physicalWorkspaceModel(models map[string]*semanticmodel.Model) (*semanticmodel.Model, error) {

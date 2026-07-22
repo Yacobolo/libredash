@@ -32,6 +32,7 @@ type foreignSnapshotProtectionRepository interface {
 }
 
 type Options struct {
+	DuckDBEnvironment            *analyticsducklake.Environment
 	RootDir                      string
 	CatalogPath                  string
 	DataPath                     string
@@ -71,11 +72,15 @@ func Run(ctx context.Context, repo ServingStateRepository, options Options) (Rep
 	if err != nil {
 		return Report{}, err
 	}
-	env, err := analyticsducklake.Open(ctx, analyticsducklake.Config{RootDir: options.RootDir, CatalogPath: options.CatalogPath, DataPath: options.DataPath})
-	if err != nil {
-		return Report{}, err
+	env := options.DuckDBEnvironment
+	if env == nil {
+		var err error
+		env, err = analyticsducklake.Open(ctx, analyticsducklake.Config{RootDir: options.RootDir, CatalogPath: options.CatalogPath, DataPath: options.DataPath})
+		if err != nil {
+			return Report{}, err
+		}
+		defer env.Close()
 	}
-	defer env.Close()
 	snapshots, err := env.Snapshots(ctx)
 	if err != nil {
 		return Report{}, err

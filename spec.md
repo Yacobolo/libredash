@@ -10,14 +10,14 @@ LeapView optimizes for local correctness and operational independence:
 
 - One process owns the HTTP server, background work, runtime generations, and lifecycle coordination for one node.
 - One SQLite database owns node-local control-plane state.
-- One DuckLake catalog owns node-local analytical metadata and snapshots.
-- DuckDB executes governed analytical work against immutable runtime generations.
+- One process-owned DuckDB instance owns node-local analytical execution and the DuckDB-backed DuckLake catalog.
+- Runtime generations pin DuckLake snapshots, compiled plans, and cache scopes; they do not own DuckDB instances.
 - Authored YAML in Git is the source of truth for product assets.
 - Capability boundaries are explicit even though capabilities share one process and deployment.
 - Vertical scaling is the primary scaling mechanism within a node.
-- Product scale-out uses multiple independent LeapView deployments, partitioned by tenant, data domain, or operational boundary.
+- Product scale-out uses independent deployments partitioned by tenant, data domain, or operational boundary.
 
-LeapView is not a distributed database, clustered application, or cross-node query engine. Independent deployments do not share control-plane transactions, runtime state, DuckLake snapshots, page streams, or refresh coordination.
+LeapView is not a distributed database, clustered application, or cross-node query engine. Independent deployments do not share control-plane transactions, runtime state, analytical catalogs, page streams, or refresh coordination.
 
 ## Core Rules
 
@@ -87,7 +87,7 @@ LeapView node
 
   state
     SQLite control-plane database
-    DuckLake catalog
+    DuckDB-backed DuckLake catalog
     Parquet analytical data
     immutable artifacts
     ephemeral runtime files
@@ -97,7 +97,8 @@ Node invariants:
 
 - A node can build, deploy, refresh, govern, query, back up, restore, and serve its assets without another LeapView service.
 - A node serves exactly one configured environment; environment isolation is achieved with separate deployments, not shared runtime state inside one node.
-- SQLite and the local DuckLake catalog are never mounted as writable shared state across hosts.
+- SQLite and DuckDB catalog files are never mounted as writable shared state across hosts or opened by independent DuckDB instances.
+- One process-owned DuckDB instance serves bounded read and refresh connections against the node catalog.
 - Process-local brokers, runtime registries, caches, and locks coordinate only the node that owns them.
 - Node-local operations never require a cross-node transaction.
 - A node continues serving known routes and active assets without a global control plane.
@@ -108,7 +109,7 @@ Vertical scaling rules:
 - Query, refresh, stream, cache, and control-plane resources have explicit node-wide limits.
 - Workload admission provides bulkheads by workload class and workspace.
 - Interactive reads, exports and agent work, refresh writes, and maintenance work have separate limits.
-- A workspace cannot consume the entire node queue, memory budget, or refresh capacity.
+- A workspace may borrow idle analytical capacity but cannot monopolize queued work, retained cache, logical result budgets, or refresh capacity when other workspaces demand service.
 - Capacity limits are measurable and validated with load tests at the maximum supported node size.
 - Overload is rejected or shed before unbounded work reaches DuckDB, SQLite, page streams, or external connectors.
 
@@ -390,7 +391,11 @@ Ownership:
 Activation invariants:
 
 - Every candidate runtime is fully prepared before durable activation begins.
+- A refresh first commits an immutable candidate DuckLake snapshot. That snapshot is not serving state until activation records its exact snapshot identity.
 - Durable activation changes all targeted workspace pointers in one SQLite transaction.
+- SQLite activation and DuckLake snapshot creation do not require one cross-store transaction. A committed candidate that is not referenced by an active pointer is a recoverable orphan, never an implicitly active version.
+- Candidate creation and activation are idempotent. Ownership and fencing prevent a duplicated, superseded, or stale worker from publishing.
+- Restart reconciliation classifies every candidate as active, retained for a protected generation, retryable, or eligible for cleanup; it never infers activation from catalog recency.
 - Runtime publication cannot fail after durable activation commits.
 - Runtime publication installs all target pointers while request acquisition is excluded from the cutover.
 - Closing retired runtimes, releasing leases, deleting files, and other cleanup happen after publication and cannot change a successful activation into a failed activation.
@@ -427,15 +432,23 @@ Connector execution rules:
 - Source access is constrained to declared path or object scope.
 - Connector calls honor context cancellation, timeouts, and bounded retries.
 - Errors returned to users are safe projections that do not leak credentials or infrastructure internals.
+- Maintained DuckDB connectors and temporary secrets may acquire declared sources only inside an admitted refresh session. Serving, dashboard, API, agent, and Data Explorer queries never resolve source credentials or attach remote systems.
+- Each refresh pins one DuckDB connection, stages non-managed sources into connection-local temporary tables, validates their schema, and removes attachments and secrets before DuckLake materialization. Existing node memory, temporary-storage, thread, workload, and refresh-deadline limits bound this work; no second staging store exists.
+- The node installs and loads only LeapView's fixed official signed extension allowlist. Automatic installation, automatic loading, unsigned extensions, authored extension names, and custom repositories remain disabled.
+- Managed data remains an immutable verified input beneath its approved runtime root. Source exploration exposes metadata only; row exploration begins at materialized model tables and semantic models.
+- Source acquisition may overlap when credential scopes do not conflict. The short DuckLake transaction and commit phase is deliberately single-writer, retries only transient catalog conflicts from the already-staged data, and identifies its result through unique commit metadata.
+- Infrastructure adapters resolve credential references only after refresh admission. Resolved values are never compiled, persisted, cached, logged, or returned to users. A cleanup failure that could leave credentials or attachments resident makes the analytical environment unhealthy and prevents candidate activation.
 
 ## Storage Ownership
 
-SQLite is the node-local control-plane store. DuckLake and Parquet form the node-local analytical data plane.
+SQLite is the node-local control-plane store. A DuckDB-backed DuckLake catalog and Parquet form the node-local analytical data plane.
 
 - SQLite stores workspaces, releases, deployments, serving states, immutable asset graph projections, principals, roles, sessions, managed-data metadata, refresh jobs, agent conversations, idempotency records, leases, and audit data.
 - DuckLake stores analytical table metadata, snapshots, statistics, schema evolution, and physical-file ownership.
 - Parquet stores materialized analytical data.
-- DuckDB executes analytical queries and materialization against the selected DuckLake snapshot.
+- One process-owned DuckDB instance is the node's only analytical engine and the sole client of its DuckDB-backed DuckLake catalog. Bounded connections execute serving queries and refresh transactions.
+- One logical analytical operation holds one physical DuckDB connection. Nested work reuses that connection; conflicting or unadmitted acquisition fails without creating another queue.
+- Every serving query qualifies all physical relations with its runtime generation's DuckLake snapshot. Old and new generations may execute concurrently while snapshot leases protect their files.
 - Runtime caches are disposable projections and never authoritative state.
 - Asset tables are indexed read models of compiled code assets, not authoring storage.
 - Message brokers, streams, and key-value transports are never authoritative node-local product storage. They may deliver notifications or external integration messages; SQLite remains the durable coordinator.
@@ -616,6 +629,8 @@ Interactive, background, and refresh work require a fairness identity. It is the
 
 Nested work reuses a permit only for the same controller, class, and workspace. Conflicting nested admission fails explicitly. Durable queues remain the source of truth: workers inspect at most one head per workspace, obtain admission, then atomically claim the exact durable ID. Losing that claim or admission never marks work failed.
 
+Admission provides scheduling fairness and a node-wide concurrency bound, not hard per-workspace CPU or DuckDB intermediate-memory partitions. A workspace may consume idle capacity, and one admitted query may use much of the configured DuckDB memory envelope. Result and cache retention remain workspace-bounded. Workloads requiring hard CPU, memory, or failure isolation run in separate LeapView deployments or OS/container resource domains.
+
 ## Analytics Runtime
 
 `analytics` owns:
@@ -630,20 +645,25 @@ Nested work reuses a permit only for the same controller, class, and workspace. 
 - materialization behavior
 - query result normalization
 
-DuckDB runtime construction belongs in analytics adapters. Workspace, dashboard, serving state, API, CLI, and agent code use typed analytics ports rather than constructing DuckDB runtimes directly.
+DuckDB runtime construction belongs in analytics adapters and process composition. Workspace, dashboard, serving state, API, CLI, and agent code use typed analytics ports rather than constructing DuckDB runtimes directly.
+
+The node owns one DuckDB `DatabaseInstance` with multiple bounded client connections. Serving and refresh share its scheduler, buffer manager, catalog visibility, extension set, access policy, memory limit, temporary-storage limit, and thread limit. Runtime generations own compiled plans, snapshot IDs, and cache scopes—not engines or connections.
 
 Execution rules:
 
 - Every query has queue and execution deadlines.
 - Request cancellation interrupts queued and running work.
 - Result row, byte, and cardinality limits are enforced before serialization.
-- DuckDB memory, temporary storage, threads, and external access are explicitly bounded.
+- Arrow API responses use the versioned `native-v1` contract: governed DuckDB record batches stream directly from the pinned connection with physical Arrow scalar types and true nulls. They never detour through `database/sql` row scans, Go maps, all-string projections, or whole-response buffering. JSON responses retain their independent JSON contract.
+- Node-wide limits bound DuckDB memory, temporary storage, threads, connection concurrency, result size, and retained cache data. Container or cgroup limits provide the hard process envelope.
 - Physical queries are admitted after governance and before DuckDB execution; one logical bundle or nested physical call holds one permit.
+- A logical analytical operation acquires one connection after workload admission and retains it through its complete query bundle or refresh transaction. Nested execution reuses that connection. The connection pool has no queue or independent admission policy; valid workload sizing guarantees an admitted operation can acquire its required connection.
 - Dashboard, REST, CLI, and data-explorer reads are interactive; agent and nested agent-tool queries are background.
 - Query caches have per-runtime, per-workspace, and node-wide memory budgets.
 - Cache keys include every security, policy, serving-generation, source-revision, and query input that affects results.
+- Request cancellation interrupts its DuckDB connection. Resource or query failure must not invalidate unrelated connections. A fatal instance failure stops new admission, fails readiness, deterministically drains or cancels in-flight work, and terminates the process for external-supervisor restart; the instance is never hot-replaced underneath active generations.
 
-DuckLake writes may run concurrently only when their changesets cannot violate product invariants. Coordination is keyed by workspace and affected table set; transaction conflict handling is bounded and observable. There is no unconditional node-global writer mutex.
+DuckLake writes may run concurrently only when their changesets cannot violate product invariants. Coordination is node-local and keyed by workspace and affected table set; transaction conflict handling is bounded and observable. There is no unconditional node-global writer mutex.
 
 ## Refresh Runtime
 
@@ -685,6 +705,8 @@ Boundary rules:
 - Runtime host never plans semantic queries or constructs dashboard patches.
 - Runtime host never calls sqlc or raw SQL.
 - Persistent snapshot leases are repository ports supplied by serving state.
+- Retention expires snapshots and deletes their files only after proving that no serving generation lease protects them.
+- Runtime generations never own or close the process DuckDB instance or its connections. Retirement releases snapshot protection and generation-scoped cache state.
 - Losing a required persistent lease makes the affected runtime unavailable for new work until protection is re-established.
 - Cleanup errors are retryable maintenance failures, not activation rollback signals.
 
@@ -773,30 +795,49 @@ Background workers:
 - recover abandoned work after process restart
 - expose queue depth, age, attempts, lease state, and terminal outcome
 
-## Independent Deployments And External Federation
+## Independent Deployments
 
-Multiple LeapView deployments are independent data-product nodes. Each node owns its workspaces, authorization, asset catalog, serving state, and analytical data.
+Multiple LeapView deployments are independent data-product nodes. Each owns its workspaces, authorization, asset catalog, serving state, and analytical data.
 
 LeapView provides stable seams for external integrations:
 
-- durable node identity
-- stable workspace and asset identifiers within the node
+- durable, globally unique node identity
+- stable workspace and asset identifiers within the node, globally addressed as opaque node-and-object identities
 - versioned asset graph projections
 - versioned, paginated catalog APIs
 - artifact and serving-generation digests
 - explicit ownership and lineage metadata
 
-A cross-node catalog is a separate future product, not a LeapView subsystem. It may discover and index published metadata from independent LeapView nodes, but LeapView does not depend on it for local operation.
+## Possible Future Products — Not Current Architecture
+
+The products below are possible future directions, not part of the current target architecture or roadmap. No current package, abstraction, protocol, remote lease, or cross-node coordination mechanism is required solely to support them. Adoption requires an explicit product decision, an architecture decision record, and a revision of this specification.
+
+### Possible Future: Federated Discovery Catalog
+
+A federated discovery catalog could index published metadata from independent nodes, but LeapView would not depend on it for local operation.
 
 The external federation boundary obeys these rules:
 
 - A federated catalog is discovery metadata, never the authoring source for node assets.
 - Node-local authorization remains authoritative.
 - A federated catalog does not own node serving pointers, query leases, refresh state, dashboard sessions, or analytical files.
-- Catalog unavailability does not stop a node from serving known workspaces and assets.
+- Discovery-catalog unavailability does not stop a node from serving known workspaces and assets.
 - Cross-node publication is asynchronous and cannot participate in local deployment activation.
 - Cross-node analytical queries and transactions are outside LeapView's product boundary.
-- Nodes never share writable SQLite files, DuckLake catalogs, runtime directories, or in-memory coordination.
+- Independent nodes never share writable SQLite files, DuckLake catalogs, runtime directories, or in-memory coordination.
+
+### Possible Future: Shared Analytical Catalog
+
+A shared analytical catalog could centralize DuckLake metadata and analytical files while preserving node-local DuckDB compute and application state. Quack is the leading candidate, not a selected production dependency. The current architecture preserves immutable snapshot identities and coarse capability boundaries but does not prebuild a generic remote-catalog abstraction.
+
+If this product is pursued, its design must prove:
+
+- One catalog service exclusively owns its catalog database file; clients never mount or open it directly.
+- Opaque namespaces and least-privilege credentials isolate nodes, workspaces, and object-storage paths.
+- Catalog-enforced write fencing and snapshot protection prevent stale publication and premature retention across clients.
+- Remote commits create immutable candidates; node-local SQLite activation selects an exact snapshot, and unreferenced commits remain recoverable orphans rather than becoming implicitly active.
+- The shared catalog and analytical files form an explicit consistency, availability, security, backup, upgrade, and recovery domain. Initial operation may use one vertically scaled catalog server without HA.
+- The production protocol passes failure-injection tests for atomic commit and rollback, fencing, disconnect recovery, restart convergence, snapshot ordering and protection, bounded retry, authorization, backup and restore, and client/server compatibility.
 
 ## Package Splitting Rules
 
@@ -914,9 +955,11 @@ Guardrails include:
 - SQL query generation is capability-private even though migrations are globally ordered.
 - Compiled artifact types are immutable by construction.
 - Runtime access is always lease-backed.
+- Exactly one process-owned DuckDB instance is constructed through composition and analytical adapters; product capabilities never construct or replace it.
+- Every physical relation in a serving plan is qualified by the runtime's exact snapshot identity, including relations reached through joins, subqueries, views, and generated plans.
 - Activation tests inject cleanup failures and prove durable and in-memory state remain consistent.
 - Restart tests prove abandoned jobs recover safely and stale workers cannot publish.
-- Capacity tests prove workload isolation at the maximum supported node size.
+- Capacity tests prove the node resource envelope and workload fairness at the maximum supported node size; they do not claim hard per-workspace DuckDB memory isolation.
 
 String matching for known function names is not a sufficient architecture boundary. Import classification, capability dependency matrices, Go visibility, contract tests, and failure-injection tests enforce structural and behavioral invariants.
 
@@ -928,8 +971,8 @@ The architecture succeeds when:
 - A capability's business behavior is reusable from HTTP, CLI, UI, and agent interfaces without duplication.
 - A deployment either becomes durably and visibly active for every target or remains inactive.
 - Every request executes against one immutable serving generation and protected analytical snapshot.
-- One workspace cannot starve other workspaces or exhaust unbounded node resources.
+- One workspace cannot starve queued work from other workspaces, and aggregate analytical work remains inside the documented node envelope.
 - A node reaches a documented, load-tested capacity envelope and fails predictably beyond it.
 - Independent LeapView deployments operate without shared runtime or transactional state.
-- External federation can consume versioned node metadata without becoming a dependency of local serving.
+- Published node metadata remains versioned and independently consumable without becoming a dependency of local serving.
 - External transports and providers can change behind adapters without changing domain behavior; node-local capability collaboration remains direct.

@@ -28,7 +28,7 @@ cleanup() {
 trap cleanup EXIT
 
 BIN="$TMP_DIR/leapview"
-go build -o "$BIN" ./cmd/leapview
+go build -tags=duckdb_arrow -o "$BIN" ./cmd/leapview
 
 PORT="$(python3 - <<'PY'
 import socket

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/Yacobolo/leapview/internal/analytics/arrowquery"
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
@@ -104,6 +105,17 @@ func (m multiWorkspaceMetrics) ExecuteDataQuery(ctx context.Context, request dat
 		return metrics.ExecuteDataQuery(ctx, request)
 	}
 	return dataquery.Result{}, fmt.Errorf("workspace metrics are not configured")
+}
+
+func (m multiWorkspaceMetrics) ExecuteDataQueryArrow(ctx context.Context, request dataquery.Query, sink arrowquery.Sink) (dataquery.Result, error) {
+	metrics := m.defaultMetrics()
+	if request.WorkspaceID != "" {
+		metrics = m.workspaces[request.WorkspaceID]
+	}
+	if executor, ok := metrics.(arrowquery.Executor); ok {
+		return executor.ExecuteDataQueryArrow(ctx, request, sink)
+	}
+	return dataquery.Result{}, fmt.Errorf("workspace metrics do not support native Arrow execution")
 }
 
 func (m multiWorkspaceMetrics) PreviewSemantic(ctx context.Context, modelID string, request reportdef.RowQuery) (reportdef.QueryRows, error) {
@@ -228,6 +240,22 @@ func (m *dynamicRuntimeMetrics) ExecuteDataQuery(ctx context.Context, request da
 		return metrics.ExecuteDataQuery(ctx, request)
 	}
 	return dataquery.Result{}, fmt.Errorf("workspace metrics are not configured")
+}
+
+func (m *dynamicRuntimeMetrics) ExecuteDataQueryArrow(ctx context.Context, request dataquery.Query, sink arrowquery.Sink) (dataquery.Result, error) {
+	workspaceID := request.WorkspaceID
+	if workspaceID == "" {
+		workspaceID = m.defaultID
+	}
+	if metrics, ok := m.MetricsForWorkspace(workspaceID); ok {
+		if request.WorkspaceID == "" {
+			request.WorkspaceID = workspaceID
+		}
+		if executor, ok := metrics.(arrowquery.Executor); ok {
+			return executor.ExecuteDataQueryArrow(ctx, request, sink)
+		}
+	}
+	return dataquery.Result{}, fmt.Errorf("workspace metrics do not support native Arrow execution")
 }
 
 func (m *dynamicRuntimeMetrics) PreviewSemantic(ctx context.Context, modelID string, request reportdef.RowQuery) (reportdef.QueryRows, error) {

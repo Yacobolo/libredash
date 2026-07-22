@@ -13,7 +13,9 @@ import (
 	accesssqlite "github.com/Yacobolo/leapview/internal/access/sqlite"
 	"github.com/Yacobolo/leapview/internal/agent"
 	agentopenai "github.com/Yacobolo/leapview/internal/agent/openai"
+	analyticsducklake "github.com/Yacobolo/leapview/internal/analytics/ducklake"
 	queryauthz "github.com/Yacobolo/leapview/internal/analytics/query/authz"
+	"github.com/Yacobolo/leapview/internal/analytics/resultcache"
 	apiidempotencysqlite "github.com/Yacobolo/leapview/internal/apiidempotency/sqlite"
 	"github.com/Yacobolo/leapview/internal/asyncjob"
 	asyncjobsqlite "github.com/Yacobolo/leapview/internal/asyncjob/sqlite"
@@ -101,6 +103,8 @@ type Server struct {
 	duckDBDir                       string
 	duckLakeCatalogPath             string
 	duckLakeDataPath                string
+	duckDBEnvironment               *analyticsducklake.Environment
+	queryResultCache                *resultcache.Pool
 	defaultWorkspaceID              string
 	defaultEnvironment              string
 	scimBearerToken                 string
@@ -176,6 +180,8 @@ type Options struct {
 	DuckDBDir                 string
 	DuckLakeCatalogPath       string
 	DuckLakeDataPath          string
+	DuckDBEnvironment         *analyticsducklake.Environment
+	QueryResultCache          *resultcache.Pool
 	DefaultWorkspaceID        string
 	DefaultEnvironment        string
 	SCIMBearerToken           string
@@ -202,8 +208,31 @@ type MCPOAuthConfig struct {
 	IssuerURL string
 }
 
+func (s *Server) AnalyticalFatal() <-chan struct{} {
+	if s == nil || s.duckDBEnvironment == nil {
+		return nil
+	}
+	return s.duckDBEnvironment.Fatal()
+}
+
+func (s *Server) AnalyticalHealth() error {
+	if s == nil || s.duckDBEnvironment == nil {
+		return nil
+	}
+	return s.duckDBEnvironment.Healthy()
+}
+
+func (s *Server) StopWorkloadAdmission() {
+	if s != nil && s.workloads != nil {
+		s.workloads.Close()
+	}
+}
+
 func NewWithOptions(metrics QueryMetrics, options Options) *Server {
 	telemetry := newHTTPTelemetry()
+	if options.DuckDBEnvironment != nil || options.QueryResultCache != nil {
+		telemetry.registry.MustRegister(newAnalyticalCollector(options.DuckDBEnvironment, options.QueryResultCache))
+	}
 	controller := options.Workload
 	if controller == nil {
 		controller, _ = workload.New(workload.DefaultConfig(), workload.WithObserver(telemetry))
@@ -294,6 +323,8 @@ func NewWithOptions(metrics QueryMetrics, options Options) *Server {
 	server.duckDBDir = options.DuckDBDir
 	server.duckLakeCatalogPath = options.DuckLakeCatalogPath
 	server.duckLakeDataPath = options.DuckLakeDataPath
+	server.duckDBEnvironment = options.DuckDBEnvironment
+	server.queryResultCache = options.QueryResultCache
 	server.defaultWorkspaceID = options.DefaultWorkspaceID
 	server.defaultEnvironment = string(servingstate.NormalizeEnvironment(servingstate.Environment(options.DefaultEnvironment)))
 	server.scimBearerToken = options.SCIMBearerToken
@@ -610,6 +641,9 @@ func (s *Server) dashboardHTTP() dashboardhttp.Handler {
 	}
 	return dashboardhttp.Handler{
 		Metrics: metrics,
+		AnalyticalContext: func(ctx context.Context) context.Context {
+			return workload.WithAdmitter(ctx, s.workloadController())
+		},
 		MetricsForWorkspace: func(workspaceID string) (dashboardhttp.Metrics, bool) {
 			selected, ok := s.metricsForWorkspace(workspaceID)
 			if !ok {

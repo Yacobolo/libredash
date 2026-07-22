@@ -17,7 +17,7 @@ All resources use the `apiVersion`, `kind`, `metadata`, and `spec` envelope. JSO
 
 ## Data access and lifecycle
 
-Connection kinds include managed data and supported object, HTTP, database, DuckLake, and Quack-compatible inputs as listed by the Connection schema. Source formats include the formats listed by the Source schema.
+Connection kinds include managed data and supported object, HTTP, database, and DuckLake inputs as listed by the Connection schema. Source formats include the formats listed by the Source schema.
 
 Managed data supports local planning, immutable content-addressed revisions, resumable local-backend upload, direct multipart object-storage upload, staged revision inspection, and atomic activation with a project deployment.
 

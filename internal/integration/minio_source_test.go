@@ -3,6 +3,7 @@ package integration
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,12 +11,14 @@ import (
 	"testing"
 
 	analyticsduckdb "github.com/Yacobolo/leapview/internal/analytics/duckdb"
-	analyticsmaterialize "github.com/Yacobolo/leapview/internal/analytics/materialize"
+	analyticsducklake "github.com/Yacobolo/leapview/internal/analytics/ducklake"
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	"github.com/Yacobolo/leapview/internal/workload"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
+	_ "github.com/duckdb/duckdb-go/v2"
 )
 
 func TestMinIOParquetSourceRefreshContract(t *testing.T) {
@@ -50,35 +53,58 @@ func TestMinIOParquetSourceRefreshContract(t *testing.T) {
 		t.Fatalf("path escape validation error = %v", err)
 	}
 
-	db, err := analyticsduckdb.Open(ctx, filepath.Join(t.TempDir(), "materialized.duckdb"))
+	db, err := analyticsducklake.Open(ctx, analyticsducklake.Config{RootDir: filepath.Join(t.TempDir(), "ducklake"), MaxConnections: 2})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	sources := analyticsduckdb.NewSourceRuntime(db)
-	if _, err := analyticsmaterialize.Refresh(ctx, db, sources, model); err != nil {
+	controller, err := workload.New(workload.DefaultConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer controller.Close()
+	refreshLease, err := controller.Acquire(ctx, workload.Request{Class: workload.Refresh, WorkspaceID: "commerce", Operation: "minio.refresh"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime, err := analyticsduckdb.OpenWorkspaceMaterializeRuntime(refreshLease.Context(), analyticsduckdb.WorkspaceRuntimeConfig{Models: map[string]*semanticmodel.Model{"commerce": model}, Database: db})
+	refreshLease.Release()
+	if err != nil {
 		t.Fatalf("initial MinIO refresh: %v", err)
 	}
-	if got := materializedRevenue(t, ctx, db); got != 30 {
+	defer runtime.Close()
+	if got := materializedRevenue(t, ctx, controller, db); got != 30 {
 		t.Fatalf("initial materialized revenue = %v, want 30", got)
 	}
 
 	putMinIOObject(t, ctx, client, bucket, "commerce/"+key, parquetFixture(t, 40, 50))
-	if got := materializedRevenue(t, ctx, db); got != 30 {
+	if got := materializedRevenue(t, ctx, controller, db); got != 30 {
 		t.Fatalf("external replacement changed served data before refresh: %v", got)
 	}
-	if _, err := analyticsmaterialize.Refresh(ctx, db, sources, model); err != nil {
+	refreshLease, err = controller.Acquire(ctx, workload.Request{Class: workload.Refresh, WorkspaceID: "commerce", Operation: "minio.refresh"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = runtime.Refresh(refreshLease.Context())
+	refreshLease.Release()
+	if err != nil {
 		t.Fatalf("replacement MinIO refresh: %v", err)
 	}
-	if got := materializedRevenue(t, ctx, db); got != 90 {
+	if got := materializedRevenue(t, ctx, controller, db); got != 90 {
 		t.Fatalf("refreshed materialized revenue = %v, want 90", got)
 	}
 
 	putMinIOObject(t, ctx, client, bucket, "commerce/"+key, []byte("not parquet"))
-	if _, err := analyticsmaterialize.Refresh(ctx, db, sources, model); err == nil {
+	refreshLease, err = controller.Acquire(ctx, workload.Request{Class: workload.Refresh, WorkspaceID: "commerce", Operation: "minio.refresh"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = runtime.Refresh(refreshLease.Context())
+	refreshLease.Release()
+	if err == nil {
 		t.Fatal("broken external object refresh succeeded")
 	}
-	if got := materializedRevenue(t, ctx, db); got != 90 {
+	if got := materializedRevenue(t, ctx, controller, db); got != 90 {
 		t.Fatalf("failed refresh replaced prior materialization: %v", got)
 	}
 }
@@ -108,7 +134,7 @@ func putMinIOObject(t *testing.T, ctx context.Context, client *awss3.Client, buc
 func parquetFixture(t *testing.T, revenues ...int) []byte {
 	t.Helper()
 	dir := t.TempDir()
-	db, err := analyticsduckdb.Open(context.Background(), filepath.Join(dir, "fixture.duckdb"))
+	db, err := sql.Open("duckdb", ":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +143,7 @@ func parquetFixture(t *testing.T, revenues ...int) []byte {
 		values = append(values, fmt.Sprintf("('o%d', %d)", index+1, revenue))
 	}
 	path := filepath.Join(dir, "orders.parquet")
-	_, err = db.SQLDB().Exec(`CREATE TABLE orders(order_id VARCHAR, revenue DOUBLE); INSERT INTO orders VALUES ` + strings.Join(values, ",") + `; COPY orders TO '` + analyticsduckdb.SQLString(path) + `' (FORMAT PARQUET)`)
+	_, err = db.Exec(`CREATE TABLE orders(order_id VARCHAR, revenue DOUBLE); INSERT INTO orders VALUES ` + strings.Join(values, ",") + `; COPY orders TO '` + analyticsduckdb.SQLString(path) + `' (FORMAT PARQUET)`)
 	closeErr := db.Close()
 	if err != nil {
 		t.Fatal(err)
@@ -155,10 +181,24 @@ func minIOModel(bucket, key string) *semanticmodel.Model {
 	}
 }
 
-func materializedRevenue(t *testing.T, ctx context.Context, db *analyticsduckdb.Database) float64 {
+func materializedRevenue(t *testing.T, ctx context.Context, controller *workload.Controller, db *analyticsducklake.Environment) float64 {
 	t.Helper()
+	workloadLease, err := controller.Acquire(ctx, workload.Request{Class: workload.Interactive, WorkspaceID: "commerce", Operation: "minio.query"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer workloadLease.Release()
+	lease, err := db.Acquire(workloadLease.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lease.Release()
+	session, err := db.Session(lease.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
 	var total float64
-	if err := db.SQLDB().QueryRowContext(ctx, `SELECT SUM(revenue) FROM model.orders`).Scan(&total); err != nil {
+	if err := session.QueryRowContext(lease.Context(), `SELECT SUM(revenue) FROM model.orders`).Scan(&total); err != nil {
 		t.Fatal(err)
 	}
 	return total

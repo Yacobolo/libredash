@@ -403,6 +403,9 @@ func (h Handler) dataPreview(ctx context.Context, metrics Metrics, object uisign
 		TotalRowLabel: object.RowCountLabel,
 		Sort:          command.Sort,
 	}
+	if object.Layer == "source" {
+		return preview
+	}
 	if totals, ok := reusableDataPreviewTotals(current, object, command); ok {
 		preview.TotalRows = totals.TotalRows
 		preview.AvailableRows = totals.AvailableRows
@@ -526,7 +529,7 @@ func dataPreviewCanceled(preview uisignals.DataPreviewSignal) bool {
 
 func (h Handler) countDataPreview(ctx context.Context, metrics Metrics, object uisignals.DataExplorerObjectSignal) (string, error) {
 	switch object.Layer {
-	case "source", "model_table":
+	case "model_table":
 		result, err := metrics.ExecuteDataQuery(ctx, dataPreviewQuery(object, uisignals.DataExplorerCommand{}, 0, 1, true))
 		if err != nil {
 			return "Unknown", err
@@ -574,8 +577,6 @@ func dataPreviewQuery(object uisignals.DataExplorerObjectSignal, command uisigna
 		return query.WithMetadata(metadata)
 	}
 	switch object.Layer {
-	case "source":
-		return withMetadata(dataquery.SourceRows(uisignals.ValueOrZero(object.ModelID), uisignals.ValueOrZero(object.Source), columns, sortSpec, start, count, includeTotal))
 	case "model_table":
 		return withMetadata(dataquery.ModelTableRows(uisignals.ValueOrZero(object.ModelID), uisignals.ValueOrZero(object.Table), columns, sortSpec, start, count, includeTotal))
 	case "semantic_view":

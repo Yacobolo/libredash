@@ -2,15 +2,17 @@ package duckdb
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
-	analyticsmaterialize "github.com/Yacobolo/leapview/internal/analytics/materialize"
+	analyticsducklake "github.com/Yacobolo/leapview/internal/analytics/ducklake"
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	"github.com/Yacobolo/leapview/internal/workload"
 	_ "github.com/duckdb/duckdb-go/v2"
 )
 
@@ -20,11 +22,6 @@ func TestDiscoverSchemasCapturesSourceAndModelColumns(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "orders.csv"), []byte("order_id,revenue\n1,10.5\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	db, err := Open(ctx, filepath.Join(dir, "test.duckdb"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
 	model := &semanticmodel.Model{
 		Name:              "olist",
 		DefaultConnection: "local",
@@ -56,12 +53,7 @@ func TestDiscoverSchemasCapturesSourceAndModelColumns(t *testing.T) {
 		t.Fatal(err)
 	}
 	bindTestManagedRoot(model, "local", dir)
-	if _, err := analyticsmaterialize.Refresh(ctx, db, NewSourceRuntime(db), model); err != nil {
-		t.Fatal(err)
-	}
-	if err := DiscoverSchemas(ctx, db, model); err != nil {
-		t.Fatal(err)
-	}
+	_, _, _ = openSchemaTestRuntime(t, ctx, dir, model)
 	if got := model.Sources["orders"].Schema.Columns; len(got) != 2 || got[0].Name != "order_id" || got[0].Ordinal != 1 {
 		t.Fatalf("source schema = %#v, want ordered source columns", got)
 	}
@@ -86,11 +78,6 @@ func TestDiscoverSchemasIgnoresAttachedDatabaseSchemas(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "orders.csv"), []byte("order_id,revenue\n1,10.5\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	db, err := Open(ctx, filepath.Join(dir, "test.duckdb"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
 	model := &semanticmodel.Model{
 		Name:              "olist",
 		DefaultConnection: "local",
@@ -116,10 +103,12 @@ func TestDiscoverSchemasIgnoresAttachedDatabaseSchemas(t *testing.T) {
 		t.Fatal(err)
 	}
 	bindTestManagedRoot(model, "local", dir)
-	if _, err := analyticsmaterialize.Refresh(ctx, db, NewSourceRuntime(db), model); err != nil {
+	leaseCtx, db, _ := openSchemaTestRuntime(t, ctx, dir, model)
+	session, err := db.Session(leaseCtx)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.SQLDB().ExecContext(ctx, `
+	if _, err := session.ExecContext(leaseCtx, `
 ATTACH ':memory:' AS attached_catalog;
 CREATE SCHEMA attached_catalog.source;
 CREATE TABLE attached_catalog.source.orders (attached_only INTEGER);
@@ -127,7 +116,7 @@ CREATE SCHEMA attached_catalog.model;
 CREATE TABLE attached_catalog.model.orders (attached_only INTEGER);`); err != nil {
 		t.Fatal(err)
 	}
-	if err := DiscoverSchemas(ctx, db, model); err != nil {
+	if err := discoverSchemas(leaseCtx, db, model); err != nil {
 		t.Fatal(err)
 	}
 	sourceColumns := model.Sources["orders"].Schema.Columns
@@ -150,11 +139,6 @@ func TestDiscoverSchemasRejectsMissingDocumentedSourceField(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "orders.csv"), []byte("order_id,revenue\n1,10.5\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	db, err := Open(ctx, filepath.Join(dir, "test.duckdb"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
 	model := &semanticmodel.Model{
 		Name:              "olist",
 		DefaultConnection: "local",
@@ -186,13 +170,65 @@ func TestDiscoverSchemasRejectsMissingDocumentedSourceField(t *testing.T) {
 		t.Fatal(err)
 	}
 	bindTestManagedRoot(model, "local", dir)
-	if _, err := analyticsmaterialize.Refresh(ctx, db, NewSourceRuntime(db), model); err != nil {
-		t.Fatal(err)
-	}
-	err = DiscoverSchemas(ctx, db, model)
+	_, err := openSchemaTestRuntimeExpectError(t, ctx, dir, model)
 	if err == nil || !strings.Contains(err.Error(), `source "orders" field "missing" is not in discovered schema`) {
 		t.Fatalf("DiscoverSchemas() error = %v, want missing source field validation", err)
 	}
+}
+
+func openSchemaTestRuntime(t *testing.T, ctx context.Context, dir string, model *semanticmodel.Model) (context.Context, *analyticsducklake.Environment, *WorkspaceRuntime) {
+	t.Helper()
+	environment, err := analyticsducklake.Open(ctx, analyticsducklake.Config{RootDir: filepath.Join(dir, "ducklake"), MaxConnections: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	controller, err := workload.New(workload.DefaultConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	lease, err := controller.Acquire(ctx, workload.Request{Class: workload.Refresh, WorkspaceID: "test", Operation: "schema-test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime, err := OpenWorkspaceMaterializeRuntime(lease.Context(), WorkspaceRuntimeConfig{Models: map[string]*semanticmodel.Model{"test": model}, Database: environment})
+	if err != nil {
+		lease.Release()
+		controller.Close()
+		_ = environment.Close()
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = runtime.Close()
+		lease.Release()
+		controller.Close()
+		_ = environment.Close()
+	})
+	analyticalLease, err := environment.Acquire(lease.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(analyticalLease.Release)
+	return analyticalLease.Context(), environment, runtime
+}
+
+func openSchemaTestRuntimeExpectError(t *testing.T, ctx context.Context, dir string, model *semanticmodel.Model) (*WorkspaceRuntime, error) {
+	t.Helper()
+	environment, err := analyticsducklake.Open(ctx, analyticsducklake.Config{RootDir: filepath.Join(dir, "ducklake"), MaxConnections: 2})
+	if err != nil {
+		return nil, err
+	}
+	defer environment.Close()
+	controller, err := workload.New(workload.DefaultConfig())
+	if err != nil {
+		return nil, err
+	}
+	defer controller.Close()
+	lease, err := controller.Acquire(ctx, workload.Request{Class: workload.Refresh, WorkspaceID: "test", Operation: "schema-test"})
+	if err != nil {
+		return nil, err
+	}
+	defer lease.Release()
+	return OpenWorkspaceMaterializeRuntime(lease.Context(), WorkspaceRuntimeConfig{Models: map[string]*semanticmodel.Model{"test": model}, Database: environment})
 }
 
 func TestCompileSourceRelation(t *testing.T) {
@@ -267,85 +303,6 @@ func TestCompileSourceRelation(t *testing.T) {
 	}
 
 	relation, err = compileSourceRelation(sourcePlan{
-		kind:       "object",
-		connection: "remote_quack",
-		connectionConfig: semanticmodel.Connection{
-			Path:    "quack:quack.example.com:443",
-			Options: map[string]any{"disable_ssl": true},
-		},
-		connectionSpec: semanticmodel.ConnectionSpec{ObjectRelation: semanticmodel.ObjectRelationQuackQuery},
-		object:         "information_schema.schemata",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := "SELECT * FROM quack_query('quack:quack.example.com:443', 'SELECT * FROM information_schema.schemata', disable_ssl => true)"
-	if relation != want {
-		t.Fatalf("quack relation = %q, want %q", relation, want)
-	}
-	if strings.Contains(relation, "secret-token") {
-		t.Fatalf("quack relation contains token: %q", relation)
-	}
-	relation, err = compileSourceRelation(sourcePlan{
-		kind:       "object",
-		connection: "remote_quack",
-		connectionConfig: semanticmodel.Connection{
-			Path: "quack:quack.example.com:443",
-		},
-		connectionSpec: semanticmodel.ConnectionSpec{ObjectRelation: semanticmodel.ObjectRelationQuackQuery},
-		object:         "information_schema.schemata",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	want = "SELECT * FROM quack_query('quack:quack.example.com:443', 'SELECT * FROM information_schema.schemata')"
-	if relation != want {
-		t.Fatalf("quack relation without options = %q, want %q", relation, want)
-	}
-
-	relation, err = compileSourceRelation(sourcePlan{
-		kind:       "object",
-		connection: "remote_quack",
-		connectionConfig: semanticmodel.Connection{
-			Path: "quack:quack.example.com:443",
-			Auth: semanticmodel.ConnectionAuth{"token": "secret-token"},
-		},
-		connectionSpec: semanticmodel.ConnectionSpec{ObjectRelation: semanticmodel.ObjectRelationQuackQuery},
-		object:         "oeducklake.oe_aravind.fact_general_ledger_line",
-		fields:         []string{"gl_line_fact_key", "amount_dkk", "transaction_date"},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	want = "SELECT * FROM quack_query('quack:quack.example.com:443', 'SELECT gl_line_fact_key, amount_dkk, transaction_date FROM oeducklake.oe_aravind.fact_general_ledger_line')"
-	if relation != want {
-		t.Fatalf("quack projected relation = %q, want %q", relation, want)
-	}
-	if strings.Contains(relation, "CAST(") || strings.Contains(relation, "VARCHAR") {
-		t.Fatalf("quack projected relation should preserve native types: %q", relation)
-	}
-	if strings.Contains(relation, "secret-token") {
-		t.Fatalf("quack projected relation contains token: %q", relation)
-	}
-	relation, err = compileSourceRelation(sourcePlan{
-		kind:       "object",
-		connection: "remote_quack",
-		connectionConfig: semanticmodel.Connection{
-			Path: "quack:quack.example.com:443",
-		},
-		connectionSpec:  semanticmodel.ConnectionSpec{ObjectRelation: semanticmodel.ObjectRelationQuackQuery},
-		object:          "oeducklake.oe_aravind.fact_general_ledger_line",
-		rowPresenceOnly: true,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	want = "SELECT * FROM quack_query('quack:quack.example.com:443', 'SELECT 1 AS __leapview_row_present FROM oeducklake.oe_aravind.fact_general_ledger_line')"
-	if relation != want {
-		t.Fatalf("quack row-presence relation = %q, want %q", relation, want)
-	}
-
-	relation, err = compileSourceRelation(sourcePlan{
 		kind:   "path",
 		format: "csv",
 		path:   "/data/orders.csv",
@@ -357,7 +314,7 @@ func TestCompileSourceRelation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want = "SELECT raw_order_id AS order_id, gross_revenue AS revenue FROM read_csv('/data/orders.csv')"
+	want := "SELECT raw_order_id AS order_id, gross_revenue AS revenue FROM read_csv('/data/orders.csv')"
 	if relation != want {
 		t.Fatalf("projected column relation = %q, want %q", relation, want)
 	}
@@ -373,42 +330,68 @@ func TestCompileSourceRelation(t *testing.T) {
 	}
 }
 
-func TestQuackMetadataColumnsSQLUsesInformationSchema(t *testing.T) {
-	sqlText, err := quackMetadataColumnsSQL(
-		"quack:quack.example.com:443",
-		"oeducklake.oe_aravind.fact_general_ledger_line",
-		map[string]any{"disable_ssl": true},
-	)
+func TestRefreshCredentialResolutionUsesUniqueEphemeralConnectionNames(t *testing.T) {
+	model := &semanticmodel.Model{
+		DefaultConnection: "crm",
+		Connections:       map[string]semanticmodel.Connection{"crm": {Kind: "postgres", Credentials: semanticmodel.ConnectionCredentials{Provider: "env", Secret: "CRM"}}},
+		Sources:           map[string]semanticmodel.Source{"accounts": {Connection: "crm", Object: "accounts"}},
+	}
+	runtime := NewSourceRuntimeWithCredentials(nil, staticCredentialResolver{auth: semanticmodel.ConnectionAuth{"password": "secret"}})
+	first, err := runtime.resolveCredentials(context.Background(), model)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(sqlText, "information_schema.columns") {
-		t.Fatalf("metadata SQL = %q, want information_schema.columns", sqlText)
+	second, err := runtime.resolveCredentials(context.Background(), model)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if strings.Contains(sqlText, "SELECT * FROM oeducklake.oe_aravind.fact_general_ledger_line") {
-		t.Fatalf("metadata SQL scans source object: %q", sqlText)
+	if first.DefaultConnection == second.DefaultConnection || first.Sources["accounts"].Connection == second.Sources["accounts"].Connection {
+		t.Fatalf("refresh connection names were reused: %q %q", first.DefaultConnection, second.DefaultConnection)
 	}
-	if strings.Contains(sqlText, "secret-token") {
-		t.Fatalf("metadata SQL contains token: %q", sqlText)
+	if len(model.Connections["crm"].Auth) != 0 {
+		t.Fatal("resolved credentials leaked into the compiled model")
 	}
 }
 
-func TestQuackLimitZeroSchemaRelationAvoidsFactScan(t *testing.T) {
-	relation, err := quackLimitZeroSchemaRelation(
-		"quack:quack.example.com:443",
-		"information_schema.columns",
-		map[string]any{"disable_ssl": true},
-	)
-	if err != nil {
-		t.Fatal(err)
+func TestSecretScopeLockReportsOnlySameScopeContention(t *testing.T) {
+	model := &semanticmodel.Model{
+		Connections: map[string]semanticmodel.Connection{"source": {Kind: "s3", Scope: "s3://bucket/prefix/"}},
+		Sources:     map[string]semanticmodel.Source{"orders": {Connection: "source"}},
 	}
-	if !strings.Contains(relation, "SELECT * FROM information_schema.columns LIMIT 0") {
-		t.Fatalf("limit-zero schema relation = %q, want zero-row remote read", relation)
+	observer := &recordingRefreshTelemetry{}
+	releaseFirst := lockSourceScopes(model, observer)
+	acquired := make(chan func(), 1)
+	go func() { acquired <- lockSourceScopes(model, observer) }()
+	deadline := time.After(time.Second)
+	for observer.contentions.Load() == 0 {
+		select {
+		case <-deadline:
+			t.Fatal("same-scope waiter did not report contention")
+		default:
+			time.Sleep(time.Millisecond)
+		}
 	}
-	if strings.Contains(relation, "secret-token") {
-		t.Fatalf("schema relation contains token: %q", relation)
+	releaseFirst()
+	releaseSecond := <-acquired
+	releaseSecond()
+	if observer.contentions.Load() != 1 {
+		t.Fatalf("contention observations = %d, want 1", observer.contentions.Load())
 	}
 }
+
+type staticCredentialResolver struct{ auth semanticmodel.ConnectionAuth }
+
+func (r staticCredentialResolver) Resolve(context.Context, string, semanticmodel.Connection) (semanticmodel.ConnectionAuth, error) {
+	return r.auth, nil
+}
+
+type recordingRefreshTelemetry struct{ contentions atomic.Uint64 }
+
+func (*recordingRefreshTelemetry) ObserveSourceAcquisition(string, string) {}
+func (r *recordingRefreshTelemetry) ObserveSecretScopeContention(string) {
+	r.contentions.Add(1)
+}
+func (*recordingRefreshTelemetry) ObserveRefreshCleanup(bool) {}
 
 func TestCompileConnectionSecret(t *testing.T) {
 	stmt, ok, err := compileConnectionSecret("prod_lake", semanticmodel.Connection{
@@ -426,7 +409,7 @@ func TestCompileConnectionSecret(t *testing.T) {
 	if !ok {
 		t.Fatal("secret ok = false, want true")
 	}
-	want := "CREATE OR REPLACE SECRET leapview_prod_lake (TYPE s3, PROVIDER config, KEY_ID 'key', REGION 'us-east-1', SECRET 'secret', SCOPE 's3://analytics-prod/')"
+	want := "CREATE OR REPLACE TEMPORARY SECRET leapview_prod_lake (TYPE s3, PROVIDER config, KEY_ID 'key', REGION 'us-east-1', SECRET 'secret', SCOPE 's3://analytics-prod/')"
 	if stmt != want {
 		t.Fatalf("s3 secret = %q, want %q", stmt, want)
 	}
@@ -438,20 +421,25 @@ func TestCompileConnectionSecret(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want = "CREATE OR REPLACE SECRET leapview_azure_lake (TYPE azure, PROVIDER config, CONNECTION_STRING 'DefaultEndpointsProtocol=https;AccountName=mystorageaccount')"
+	want = "CREATE OR REPLACE TEMPORARY SECRET leapview_azure_lake (TYPE azure, PROVIDER config, CONNECTION_STRING 'DefaultEndpointsProtocol=https;AccountName=mystorageaccount')"
 	if !ok || stmt != want {
 		t.Fatalf("azure secret = %q ok=%v, want %q ok=true", stmt, ok, want)
 	}
 
 	t.Setenv("LEAPVIEW_TEST_AZURE_CREDENTIALS", `{"connection_string":"DefaultEndpointsProtocol=https;AccountName=envstorage"}`)
-	stmt, ok, err = compileConnectionSecret("azure_lake", semanticmodel.Connection{
+	azureConnection := semanticmodel.Connection{
 		Kind:        "azure_blob",
 		Credentials: semanticmodel.ConnectionCredentials{Provider: "env", Secret: "LEAPVIEW_TEST_AZURE_CREDENTIALS"},
-	})
+	}
+	azureConnection.Auth, err = (EnvironmentCredentialResolver{}).Resolve(context.Background(), "azure_lake", azureConnection)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want = "CREATE OR REPLACE SECRET leapview_azure_lake (TYPE azure, PROVIDER config, CONNECTION_STRING 'DefaultEndpointsProtocol=https;AccountName=envstorage')"
+	stmt, ok, err = compileConnectionSecret("azure_lake", azureConnection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want = "CREATE OR REPLACE TEMPORARY SECRET leapview_azure_lake (TYPE azure, PROVIDER config, CONNECTION_STRING 'DefaultEndpointsProtocol=https;AccountName=envstorage')"
 	if !ok || stmt != want {
 		t.Fatalf("azure env credential secret = %q ok=%v, want %q ok=true", stmt, ok, want)
 	}
@@ -468,7 +456,7 @@ func TestCompileConnectionSecret(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want = "CREATE OR REPLACE SECRET leapview_azure_lake (TYPE azure, PROVIDER service_principal, ACCOUNT_NAME 'mystorageaccount', CLIENT_ID 'client', CLIENT_SECRET 'secret', TENANT_ID 'tenant')"
+	want = "CREATE OR REPLACE TEMPORARY SECRET leapview_azure_lake (TYPE azure, PROVIDER service_principal, ACCOUNT_NAME 'mystorageaccount', CLIENT_ID 'client', CLIENT_SECRET 'secret', TENANT_ID 'tenant')"
 	if !ok || stmt != want {
 		t.Fatalf("azure service principal secret = %q ok=%v, want %q ok=true", stmt, ok, want)
 	}
@@ -497,23 +485,11 @@ func TestCompileConnectionSecret(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want = "CREATE OR REPLACE SECRET leapview_lakehouse (TYPE ducklake, PROVIDER config, KEY_ID 'key', REGION 'us-east-1', SECRET 'secret', SCOPE 's3://analytics-prod/ducklake/')"
+	want = "CREATE OR REPLACE TEMPORARY SECRET leapview_lakehouse (TYPE ducklake, PROVIDER config, KEY_ID 'key', REGION 'us-east-1', SECRET 'secret', SCOPE 's3://analytics-prod/ducklake/')"
 	if !ok || stmt != want {
 		t.Fatalf("ducklake secret = %q ok=%v, want %q ok=true", stmt, ok, want)
 	}
 
-	stmt, ok, err = compileConnectionSecret("remote_quack", semanticmodel.Connection{
-		Kind: "quack",
-		Path: "quack:quack.example.com:443",
-		Auth: semanticmodel.ConnectionAuth{"token": "secret-token"},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	want = "CREATE OR REPLACE SECRET leapview_remote_quack (TYPE quack, TOKEN 'secret-token', SCOPE 'quack:quack.example.com:443')"
-	if !ok || stmt != want {
-		t.Fatalf("quack secret = %q ok=%v, want %q ok=true", stmt, ok, want)
-	}
 }
 
 func TestCompileAmbientConnectionSecrets(t *testing.T) {
@@ -523,7 +499,7 @@ func TestCompileAmbientConnectionSecrets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "CREATE OR REPLACE SECRET leapview_lake (TYPE s3, PROVIDER credential_chain, ENDPOINT 's3.eu-west-1.amazonaws.com', REGION 'eu-west-1', SCOPE 's3://analytics/')"
+	want := "CREATE OR REPLACE TEMPORARY SECRET leapview_lake (TYPE s3, PROVIDER credential_chain, ENDPOINT 's3.eu-west-1.amazonaws.com', REGION 'eu-west-1', SCOPE 's3://analytics/')"
 	if !ok || stmt != want {
 		t.Fatalf("ambient s3 secret = %q ok=%v, want %q", stmt, ok, want)
 	}
@@ -533,7 +509,7 @@ func TestCompileAmbientConnectionSecrets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want = "CREATE OR REPLACE SECRET leapview_azure (TYPE azure, PROVIDER credential_chain, ACCOUNT_NAME 'analytics', SCOPE 'az://container/')"
+	want = "CREATE OR REPLACE TEMPORARY SECRET leapview_azure (TYPE azure, PROVIDER credential_chain, ACCOUNT_NAME 'analytics', SCOPE 'az://container/')"
 	if !ok || stmt != want {
 		t.Fatalf("ambient azure secret = %q ok=%v, want %q", stmt, ok, want)
 	}
@@ -568,7 +544,7 @@ func TestCompileSourceSecretStatements(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"CREATE OR REPLACE SECRET leapview_prod_lake_lance (TYPE lance, PROVIDER config, KEY_ID 'key', SECRET 'secret', SCOPE 's3://analytics-prod/')"}
+	want := []string{"CREATE OR REPLACE TEMPORARY SECRET leapview_prod_lake_lance (TYPE lance, PROVIDER config, KEY_ID 'key', SECRET 'secret', SCOPE 's3://analytics-prod/')"}
 	if fmt.Sprint(statements) != fmt.Sprint(want) {
 		t.Fatalf("lance secrets = %#v, want %#v", statements, want)
 	}
@@ -649,11 +625,6 @@ func TestRequiredExtensions(t *testing.T) {
 			"azure": {Kind: "azure_blob"},
 			"crm":   {Kind: "postgres"},
 			"duck":  {Kind: "ducklake", Path: "metadata.ducklake"},
-			"remote_quack": {
-				Kind: "quack",
-				Path: "quack:quack.example.com:443",
-				Auth: semanticmodel.ConnectionAuth{"token": "secret-token"},
-			},
 		},
 		Sources: map[string]semanticmodel.Source{
 			"events":   {Format: "parquet", Path: "s3://bucket/events/*.parquet", Connection: "lake"},
@@ -663,11 +634,10 @@ func TestRequiredExtensions(t *testing.T) {
 			"vectors":  {Format: "lance", Path: "vectors/products.lance", Connection: "lake"},
 			"accounts": {Connection: "crm", Object: "public.accounts"},
 			"lake_tbl": {Connection: "duck", Object: "main.orders"},
-			"schemata": {Connection: "remote_quack", Object: "information_schema.schemata"},
 		},
 	}
-	if got := strings.Join(RequiredExtensions(model), ","); got != "azure,delta,ducklake,excel,httpfs,lance,postgres,quack,vortex" {
-		t.Fatalf("required extensions = %q, want azure,delta,ducklake,excel,httpfs,lance,postgres,quack,vortex", got)
+	if got := strings.Join(RequiredExtensions(model), ","); got != "azure,delta,ducklake,excel,httpfs,lance,postgres,vortex" {
+		t.Fatalf("required extensions = %q, want azure,delta,ducklake,excel,httpfs,lance,postgres,vortex", got)
 	}
 }
 
@@ -686,19 +656,12 @@ func TestSourceRelationResolvesSourcePlans(t *testing.T) {
 			"prod_lake": {Kind: "s3", Scope: "s3://analytics-prod/", Auth: semanticmodel.ConnectionAuth{"access_key_id": "key", "secret_access_key": "secret"}},
 			"azure":     {Kind: "azure_blob", Scope: "az://warehouse/", Auth: semanticmodel.ConnectionAuth{"connection_string": "DefaultEndpointsProtocol=https;AccountName=warehouse"}},
 			"vectors":   {Kind: "s3", Scope: "s3://analytics-prod/", Auth: semanticmodel.ConnectionAuth{"access_key_id": "key", "secret_access_key": "secret"}},
-			"remote_quack": {
-				Kind:    "quack",
-				Path:    "quack:quack.example.com:443",
-				Auth:    semanticmodel.ConnectionAuth{"token": "secret-token"},
-				Options: map[string]any{"disable_ssl": false},
-			},
 		},
 		Sources: map[string]semanticmodel.Source{
 			"orders":     {Path: "orders.csv"},
 			"events":     {Connection: "prod_lake", Path: "events/*", Format: "parquet"},
 			"delta":      {Connection: "azure", Path: "tables/orders", Format: "delta"},
 			"embeddings": {Connection: "vectors", Path: "vectors/products.lance"},
-			"schemata":   {Connection: "remote_quack", Object: "information_schema.schemata"},
 		},
 		Tables: map[string]semanticmodel.Table{
 			"orders": {
@@ -745,14 +708,6 @@ func TestSourceRelationResolvesSourcePlans(t *testing.T) {
 		t.Fatalf("lance relation = %q, want %q", relation, want)
 	}
 
-	relation, err = SourceRelation(model, model.Sources["schemata"])
-	if err != nil {
-		t.Fatal(err)
-	}
-	if want := "SELECT * FROM quack_query('quack:quack.example.com:443', 'SELECT * FROM information_schema.schemata', disable_ssl => false)"; relation != want {
-		t.Fatalf("quack relation = %q, want %q", relation, want)
-	}
-
 	bad := model.Sources["events"]
 	bad.Path = "s3://other-bucket/events/*"
 	_, err = SourceRelation(model, bad)
@@ -785,51 +740,4 @@ func bindTestManagedRoot(model *semanticmodel.Model, connectionName, root string
 	connection := model.Connections[connectionName]
 	connection.Root = root
 	model.Connections[connectionName] = connection
-}
-
-func TestDuckDBQuackSmoke(t *testing.T) {
-	uri := os.Getenv("LEAPVIEW_QUACK_TEST_URI")
-	token := os.Getenv("LEAPVIEW_QUACK_TEST_TOKEN")
-	if uri == "" || token == "" {
-		t.Skip("set LEAPVIEW_QUACK_TEST_URI and LEAPVIEW_QUACK_TEST_TOKEN to run Quack smoke test")
-	}
-
-	db, err := sql.Open("duckdb", filepath.Join(t.TempDir(), "quack-smoke.duckdb"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
-	var version string
-	if err := db.QueryRowContext(context.Background(), "SELECT version()").Scan(&version); err != nil {
-		t.Fatalf("query DuckDB version: %v", err)
-	}
-	t.Logf("DuckDB version: %s", version)
-
-	if _, err := db.ExecContext(context.Background(), "INSTALL quack"); err != nil {
-		t.Fatalf("install quack: %v", err)
-	}
-	if _, err := db.ExecContext(context.Background(), "LOAD quack"); err != nil {
-		t.Fatalf("load quack: %v", err)
-	}
-	stmt := fmt.Sprintf(
-		"CREATE OR REPLACE SECRET leapview_quack_smoke (TYPE quack, TOKEN '%s', SCOPE '%s')",
-		SQLString(token),
-		SQLString(uri),
-	)
-	if _, err := db.ExecContext(context.Background(), stmt); err != nil {
-		t.Fatalf("create quack secret: %v", err)
-	}
-
-	query := fmt.Sprintf(
-		"SELECT COUNT(*) FROM quack_query('%s', 'select * from information_schema.schemata')",
-		SQLString(uri),
-	)
-	var count int
-	if err := db.QueryRowContext(context.Background(), query).Scan(&count); err != nil {
-		t.Fatalf("query quack schemata: %v", err)
-	}
-	if count == 0 {
-		t.Fatal("quack schemata query returned zero rows")
-	}
 }

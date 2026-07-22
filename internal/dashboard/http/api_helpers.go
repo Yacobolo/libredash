@@ -12,7 +12,9 @@ import (
 	"strings"
 	"time"
 
+	analyticsresource "github.com/Yacobolo/leapview/internal/analytics/resource"
 	"github.com/Yacobolo/leapview/internal/cursorsigning"
+	"github.com/Yacobolo/leapview/internal/dataquery"
 )
 
 type pageResponse struct {
@@ -232,6 +234,17 @@ func writeJSONError(w nethttp.ResponseWriter, err error, status int) {
 			w.Header().Set("Retry-After", "1")
 			details["problemCode"] = "WORKLOAD_OVERLOADED"
 		}
+	} else if reason, ok := dataquery.ResultLimitReasonOf(err); ok {
+		status = nethttp.StatusUnprocessableEntity
+		if reason == dataquery.ResultRows {
+			details["problemCode"] = "QUERY_RESULT_ROW_LIMIT"
+		} else {
+			details["problemCode"] = "QUERY_RESULT_BYTE_LIMIT"
+		}
+	} else if _, ok := analyticsresource.ResourceExhaustedReasonOf(err); ok {
+		status = nethttp.StatusServiceUnavailable
+		w.Header().Set("Retry-After", "1")
+		details["problemCode"] = "ANALYTICS_RESOURCE_EXHAUSTED"
 	} else if errors.Is(err, context.DeadlineExceeded) {
 		status = nethttp.StatusGatewayTimeout
 		details["problemCode"] = "WORKLOAD_EXECUTION_TIMEOUT"

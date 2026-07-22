@@ -2,6 +2,7 @@ package http
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -9,11 +10,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Yacobolo/leapview/internal/analytics/arrowquery"
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
+	analyticsresource "github.com/Yacobolo/leapview/internal/analytics/resource"
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	"github.com/Yacobolo/leapview/internal/dataquery"
 	"github.com/Yacobolo/leapview/internal/workload"
+	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/apache/arrow-go/v18/arrow/array"
 	"github.com/apache/arrow-go/v18/arrow/ipc"
+	"github.com/apache/arrow-go/v18/arrow/memory"
 )
 
 func TestWorkloadRejectionsMapToStableOverloadProblems(t *testing.T) {
@@ -39,6 +45,31 @@ func TestWorkloadRejectionsMapToStableOverloadProblems(t *testing.T) {
 		details := response["details"].(map[string]any)
 		if details["problemCode"] != test.code {
 			t.Fatalf("reason %s details=%#v", test.reason, details)
+		}
+	}
+}
+
+func TestAnalyticalLimitsMapToStableProblems(t *testing.T) {
+	for _, test := range []struct {
+		err         error
+		status      int
+		code, retry string
+	}{
+		{err: &dataquery.ResultLimitError{Reason: dataquery.ResultRows, Limit: 10, Observed: 11}, status: http.StatusUnprocessableEntity, code: "QUERY_RESULT_ROW_LIMIT"},
+		{err: &dataquery.ResultLimitError{Reason: dataquery.ResultBytes, Limit: 10, Observed: 11}, status: http.StatusUnprocessableEntity, code: "QUERY_RESULT_BYTE_LIMIT"},
+		{err: &analyticsresource.ResourceExhaustedError{Reason: analyticsresource.ResourceMemory, Err: errors.New("oom")}, status: http.StatusServiceUnavailable, code: "ANALYTICS_RESOURCE_EXHAUSTED", retry: "1"},
+	} {
+		recorder := httptest.NewRecorder()
+		writeJSONError(recorder, test.err, http.StatusInternalServerError)
+		if recorder.Code != test.status || recorder.Header().Get("Retry-After") != test.retry {
+			t.Fatalf("error=%T status=%d retry=%q", test.err, recorder.Code, recorder.Header().Get("Retry-After"))
+		}
+		var response map[string]any
+		if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+			t.Fatal(err)
+		}
+		if got := response["details"].(map[string]any)["problemCode"]; got != test.code {
+			t.Fatalf("code=%v", got)
 		}
 	}
 }
@@ -94,13 +125,38 @@ func TestRequestCursorScopeIgnoresPageTokenButBindsNormalizedRequest(t *testing.
 	}
 }
 
-func TestSemanticArrowMatchesJSONRowsAndCarriesMetadata(t *testing.T) {
-	response := semanticQueryResponse([]string{"id", "amount"}, reportdef.QueryRows{{"id": int64(9007199254740993), "amount": 12.5}}, 100, 0, "query-a", "state-a")
-	encoded, err := encodeSemanticArrow(response)
-	if err != nil {
-		t.Fatalf("encode Arrow: %v", err)
+func TestSemanticArrowSinkPreservesNativeTypesNullsAndMetadata(t *testing.T) {
+	allocator := memory.NewCheckedAllocator(memory.DefaultAllocator)
+	defer allocator.AssertSize(t, 0)
+	ids := array.NewInt64Builder(allocator)
+	amounts := array.NewFloat64Builder(allocator)
+	ids.AppendValues([]int64{9007199254740993, 2}, nil)
+	amounts.Append(12.5)
+	amounts.AppendNull()
+	idArray, amountArray := ids.NewArray(), amounts.NewArray()
+	ids.Release()
+	amounts.Release()
+	defer idArray.Release()
+	defer amountArray.Release()
+	schema := arrow.NewSchema([]arrow.Field{
+		{Name: "id", Type: arrow.PrimitiveTypes.Int64},
+		{Name: "amount", Type: arrow.PrimitiveTypes.Float64, Nullable: true},
+	}, nil)
+	record := array.NewRecord(schema, []arrow.Array{idArray, amountArray}, 2)
+	defer record.Release()
+
+	recorder := httptest.NewRecorder()
+	sink := newSemanticArrowSink(recorder, "query-a", "state-a", 10)
+	if err := sink.WriteSchema(schema); err != nil {
+		t.Fatalf("WriteSchema: %v", err)
 	}
-	reader, err := ipc.NewReader(bytes.NewReader(encoded))
+	if err := sink.WriteRecord(record); err != nil {
+		t.Fatalf("WriteRecord: %v", err)
+	}
+	if err := sink.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	reader, err := ipc.NewReader(bytes.NewReader(recorder.Body.Bytes()))
 	if err != nil {
 		t.Fatalf("open Arrow: %v", err)
 	}
@@ -109,16 +165,90 @@ func TestSemanticArrowMatchesJSONRowsAndCarriesMetadata(t *testing.T) {
 	if value, ok := metadata.GetValue("leapview.query_id"); !ok || value != "query-a" {
 		t.Fatalf("query metadata = %q, %v", value, ok)
 	}
+	if value, ok := metadata.GetValue("leapview.arrow_contract"); !ok || value != "native-v1" {
+		t.Fatalf("contract metadata = %q, %v", value, ok)
+	}
 	if !reader.Next() {
 		t.Fatalf("read Arrow record: %v", reader.Err())
 	}
-	record := reader.Record()
-	if record.NumRows() != 1 || record.NumCols() != 2 {
-		t.Fatalf("record shape = %dx%d", record.NumRows(), record.NumCols())
+	got := reader.Record()
+	if got.NumRows() != 2 || got.NumCols() != 2 {
+		t.Fatalf("record shape = %dx%d", got.NumRows(), got.NumCols())
 	}
-	if got := record.Column(0).(*array.String).Value(0); got != response.Rows[0][0] {
-		t.Fatalf("Arrow id = %q, JSON = %q", got, response.Rows[0][0])
+	if got.Schema().Field(0).Type.ID() != arrow.INT64 || got.Schema().Field(1).Type.ID() != arrow.FLOAT64 {
+		t.Fatalf("physical types = %s, %s", got.Schema().Field(0).Type, got.Schema().Field(1).Type)
 	}
+	if got.Column(0).(*array.Int64).Value(0) != int64(9007199254740993) || !got.Column(1).IsNull(1) {
+		t.Fatal("native value/null were not preserved")
+	}
+}
+
+func TestWriteSemanticArrowResponseUsesNativeExecutorAndStreamsPaginationProbe(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/query", nil)
+	metrics := nativeArrowTestMetrics{t: t}
+	writeSemanticArrowResponse(
+		recorder,
+		request,
+		metrics,
+		dataquery.Query{WorkspaceID: "sales", ModelID: "sales", Kind: dataquery.KindSemanticAggregate, Limit: 3},
+		2,
+		0,
+		"query-a",
+		"snapshot-a",
+		"scope-a",
+	)
+	response := recorder.Result()
+	defer response.Body.Close()
+	if response.Header.Get("X-LeapView-Arrow-Contract") != "native-v1" {
+		t.Fatalf("contract header = %q", response.Header.Get("X-LeapView-Arrow-Contract"))
+	}
+	reader, err := ipc.NewReader(response.Body)
+	if err != nil {
+		t.Fatalf("open streamed Arrow: %v", err)
+	}
+	defer reader.Release()
+	var rows int64
+	for reader.Next() {
+		rows += reader.Record().NumRows()
+	}
+	if err := reader.Err(); err != nil {
+		t.Fatalf("read stream: %v", err)
+	}
+	if rows != 2 {
+		t.Fatalf("streamed rows = %d, want page limit 2", rows)
+	}
+	if response.Trailer.Get("X-Next-Cursor") == "" {
+		t.Fatal("pagination probe did not produce next-cursor trailer")
+	}
+}
+
+type nativeArrowTestMetrics struct {
+	Metrics
+	t *testing.T
+}
+
+func (m nativeArrowTestMetrics) ExecuteDataQueryArrow(_ context.Context, request dataquery.Query, sink arrowquery.Sink) (dataquery.Result, error) {
+	m.t.Helper()
+	if request.Limit != 3 {
+		m.t.Fatalf("physical limit = %d, want page limit plus probe", request.Limit)
+	}
+	allocator := memory.NewGoAllocator()
+	builder := array.NewInt64Builder(allocator)
+	builder.AppendValues([]int64{1, 2, 3}, nil)
+	values := builder.NewArray()
+	builder.Release()
+	defer values.Release()
+	schema := arrow.NewSchema([]arrow.Field{{Name: "id", Type: arrow.PrimitiveTypes.Int64}}, nil)
+	record := array.NewRecord(schema, []arrow.Array{values}, 3)
+	defer record.Release()
+	if err := sink.WriteSchema(schema); err != nil {
+		return dataquery.Result{}, err
+	}
+	if err := sink.WriteRecord(record); err != nil {
+		return dataquery.Result{}, err
+	}
+	return dataquery.Result{RowsReturned: 3}, nil
 }
 
 func TestSemanticRelationshipDTOParsesTypedEndpoints(t *testing.T) {

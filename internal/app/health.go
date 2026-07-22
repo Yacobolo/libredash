@@ -35,6 +35,14 @@ func (s *Server) readyz(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	checks["platformStore"] = "ok"
+	if s.duckDBEnvironment != nil {
+		if err := s.duckDBEnvironment.Healthy(); err != nil {
+			checks["analytics"] = err.Error()
+			writeJSON(w, http.StatusServiceUnavailable, healthResponse{Status: "not_ready", Checks: checks})
+			return
+		}
+		checks["analytics"] = "ok"
+	}
 	if !s.runtimeReady(ctx, checks) {
 		writeJSON(w, http.StatusServiceUnavailable, healthResponse{Status: "not_ready", Checks: checks})
 		return

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/Yacobolo/leapview/internal/analytics/arrowquery"
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 	"github.com/Yacobolo/leapview/internal/dataquery"
@@ -87,6 +88,58 @@ func (m workloadMetrics) ExecuteDataQuery(ctx context.Context, request dataquery
 	defer lease.Release()
 	started := time.Now()
 	result, err := m.QueryMetrics.ExecuteDataQuery(lease.Context(), request)
+	if result.QueueWaitMS == 0 {
+		result.QueueWaitMS = lease.QueueWait().Milliseconds()
+	}
+	if result.ExecutionMS == 0 {
+		result.ExecutionMS = elapsedMillis(time.Since(started))
+	}
+	if result.ExecutionState == "" {
+		if err == nil {
+			result.ExecutionState = dataquery.ExecutionSucceeded
+		} else {
+			result.ExecutionState = executionStateForWorkloadError(lease.Context(), err)
+		}
+	}
+	return result, err
+}
+
+func (m workloadMetrics) ExecuteDataQueryArrow(ctx context.Context, request dataquery.Query, sink arrowquery.Sink) (dataquery.Result, error) {
+	ctx = m.readContext(ctx)
+	executor, ok := m.QueryMetrics.(arrowquery.Executor)
+	if !ok {
+		return dataquery.Result{}, errors.New("query metrics do not support native Arrow execution")
+	}
+	if m.admitter == nil {
+		return executor.ExecuteDataQueryArrow(ctx, request, sink)
+	}
+	workspaceID := request.WorkspaceID
+	if workspaceID == "" {
+		workspaceID = m.defaultWorkspaceID
+	}
+	class := workload.Interactive
+	if request.Surface == dataquery.SurfaceAgent {
+		class = workload.Background
+		if activeClass, activeWorkspace, admitted := workload.Current(ctx); admitted && activeClass == workload.Background {
+			workspaceID = activeWorkspace
+		}
+	}
+	operation := request.Operation
+	if operation == "" {
+		operation = string(request.Kind)
+	}
+	lease, err := m.admitter.Acquire(ctx, workload.Request{Class: class, WorkspaceID: workspaceID, Operation: operation})
+	if err != nil {
+		result := dataquery.Result{ExecutionState: executionStateForWorkloadError(ctx, err)}
+		var rejection *workload.Rejection
+		if errors.As(err, &rejection) {
+			result.QueueWaitMS = rejection.QueueWait.Milliseconds()
+		}
+		return result, err
+	}
+	defer lease.Release()
+	started := time.Now()
+	result, err := executor.ExecuteDataQueryArrow(lease.Context(), request, sink)
 	if result.QueueWaitMS == 0 {
 		result.QueueWaitMS = lease.QueueWait().Milliseconds()
 	}

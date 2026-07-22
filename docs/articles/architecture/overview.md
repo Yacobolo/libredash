@@ -20,7 +20,7 @@ Project deployment compiles validated candidates into immutable artifacts and se
 
 The platform SQLite database owns application state: identities, grants, environments, deployments, jobs, audit history, and active serving pointers.
 
-One global DuckLake catalog owns analytical table metadata, snapshots, schema evolution, statistics, and physical-file manifests. Parquet holds analytical data. DuckDB attaches the resolved snapshot and executes materialization and governed BI queries.
+One process-owned DuckDB instance is the sole client of a DuckDB-backed DuckLake catalog. DuckLake owns analytical table metadata, snapshots, schema evolution, statistics, and physical-file manifests; Parquet holds analytical data. Runtime generations produce snapshot-qualified plans and share bounded DuckDB connections for materialization and governed BI queries.
 
 The active pointer is a LeapView concern; snapshot and file ownership are DuckLake concerns. Cleanup reconciles both before expiring metadata or deleting physical files.
 
@@ -28,7 +28,7 @@ The active pointer is a LeapView concern; snapshot and file ownership are DuckLa
 
 Dashboard and headless handlers resolve a workspace, active deployment, semantic model, principal, data policies, filters, selections, sorting, and limits. The semantic query layer turns governed field/measure requests into bounded DuckDB work.
 
-Execution separates interactive reads from refresh writes with independent concurrency, queues, and timeouts. Query cancellation and refresh generations prevent obsolete work from replacing newer state.
+Hierarchical workload admission separates interactive reads from refresh writes with bounded, workspace-fair queues and deadlines. Node-wide DuckDB, logical-result, and cache limits keep aggregate analytical work within the supported process envelope. Query cancellation and refresh generations prevent obsolete work from replacing newer state.
 
 ## Browser architecture
 

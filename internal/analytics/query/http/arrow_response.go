@@ -1,40 +1,22 @@
 package http
 
 import (
-	"bytes"
-	"fmt"
+	"errors"
 	stdhttp "net/http"
 	"strings"
 
+	"github.com/Yacobolo/leapview/internal/analytics/arrowquery"
 	"github.com/Yacobolo/leapview/internal/api"
+	"github.com/Yacobolo/leapview/internal/dataquery"
 	"github.com/apache/arrow-go/v18/arrow"
-	"github.com/apache/arrow-go/v18/arrow/array"
 	"github.com/apache/arrow-go/v18/arrow/ipc"
-	"github.com/apache/arrow-go/v18/arrow/memory"
 )
 
 const arrowStreamMediaType = "application/vnd.apache.arrow.stream"
 
 func writeSemanticQueryResponse(w stdhttp.ResponseWriter, r *stdhttp.Request, response api.SemanticQueryResponse) {
-	if !acceptsMediaType(r.Header.Get("Accept"), arrowStreamMediaType) {
-		w.Header().Set("Cache-Control", "no-store")
-		writeJSON(w, stdhttp.StatusOK, response)
-		return
-	}
-	encoded, err := encodeSemanticArrow(response)
-	if err != nil {
-		writeJSONError(w, fmt.Errorf("encode Arrow response: %w", err), stdhttp.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", arrowStreamMediaType)
 	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("X-Query-ID", response.QueryID)
-	w.Header().Set("X-Serving-Snapshot", response.ServingSnapshot)
-	if response.Page.NextCursor != "" {
-		w.Header().Set("X-Next-Cursor", response.Page.NextCursor)
-	}
-	w.WriteHeader(stdhttp.StatusOK)
-	_, _ = w.Write(encoded)
+	writeJSON(w, stdhttp.StatusOK, response)
 }
 
 func acceptsMediaType(header, mediaType string) bool {
@@ -47,45 +29,137 @@ func acceptsMediaType(header, mediaType string) bool {
 	return false
 }
 
-func encodeSemanticArrow(response api.SemanticQueryResponse) ([]byte, error) {
-	metadata := arrow.NewMetadata(
-		[]string{"leapview.query_id", "leapview.serving_snapshot", "leapview.next_cursor"},
-		[]string{response.QueryID, response.ServingSnapshot, response.Page.NextCursor},
+type semanticArrowSink struct {
+	w        stdhttp.ResponseWriter
+	queryID  string
+	snapshot string
+	limit    int64
+	written  int64
+	seen     int64
+	schema   *arrow.Schema
+	writer   *ipc.Writer
+	err      error
+}
+
+func newSemanticArrowSink(w stdhttp.ResponseWriter, queryID, snapshot string, limit int) *semanticArrowSink {
+	return &semanticArrowSink{w: w, queryID: queryID, snapshot: snapshot, limit: int64(limit)}
+}
+
+func (s *semanticArrowSink) WriteSchema(schema *arrow.Schema) error {
+	if s == nil || s.w == nil {
+		return errors.New("Arrow response sink is not initialized")
+	}
+	if schema == nil {
+		return errors.New("Arrow response schema is required")
+	}
+	if s.schema != nil {
+		return errors.New("Arrow response schema was already written")
+	}
+	metadata := schema.Metadata()
+	metadata = arrow.NewMetadata(
+		append(metadata.Keys(), "leapview.arrow_contract", "leapview.query_id", "leapview.serving_snapshot"),
+		append(metadata.Values(), "native-v1", s.queryID, s.snapshot),
 	)
-	fields := make([]arrow.Field, len(response.Columns))
-	for index, column := range response.Columns {
-		fields[index] = arrow.Field{Name: column.Name, Type: arrow.BinaryTypes.String, Nullable: column.Nullable, Metadata: arrow.NewMetadata([]string{"leapview.logical_type"}, []string{column.Type})}
+	outputSchema := arrow.NewSchema(schema.Fields(), &metadata)
+	s.schema = outputSchema
+	return nil
+}
+
+func (s *semanticArrowSink) start() error {
+	if s.writer != nil {
+		return nil
 	}
-	schema := arrow.NewSchema(fields, &metadata)
-	allocator := memory.NewGoAllocator()
-	arrays := make([]arrow.Array, len(fields))
-	for columnIndex := range fields {
-		builder := array.NewStringBuilder(allocator)
-		for _, row := range response.Rows {
-			value := ""
-			if columnIndex < len(row) {
-				value = row[columnIndex]
-			}
-			builder.Append(value)
+	if s.schema == nil {
+		return errors.New("Arrow response schema must be written before records")
+	}
+	s.w.Header().Set("Content-Type", arrowStreamMediaType)
+	s.w.Header().Set("Cache-Control", "no-store")
+	s.w.Header().Set("X-Query-ID", s.queryID)
+	s.w.Header().Set("X-Serving-Snapshot", s.snapshot)
+	s.w.Header().Set("X-LeapView-Arrow-Contract", "native-v1")
+	s.w.Header().Add("Trailer", "X-Next-Cursor")
+	s.writer = ipc.NewWriter(s.w, ipc.WithSchema(s.schema))
+	return nil
+}
+
+func (s *semanticArrowSink) WriteRecord(record arrow.RecordBatch) error {
+	if s == nil {
+		return errors.New("Arrow response sink is not initialized")
+	}
+	if record == nil {
+		return nil
+	}
+	s.seen += record.NumRows()
+	remaining := s.limit - s.written
+	if remaining <= 0 {
+		return nil
+	}
+	if err := s.start(); err != nil {
+		return err
+	}
+	write := record
+	if record.NumRows() > remaining {
+		write = record.NewSlice(0, remaining)
+		defer write.Release()
+	}
+	if err := s.writer.Write(write); err != nil {
+		s.err = err
+		return err
+	}
+	s.written += write.NumRows()
+	return nil
+}
+
+func (s *semanticArrowSink) HasMore() bool { return s != nil && s.seen > s.limit }
+func (s *semanticArrowSink) RowsWritten() int {
+	if s == nil {
+		return 0
+	}
+	return int(s.written)
+}
+
+func (s *semanticArrowSink) Close() error {
+	if s == nil {
+		return nil
+	}
+	if s.writer == nil {
+		if err := s.start(); err != nil {
+			s.err = errors.Join(s.err, err)
+			return s.err
 		}
-		arrays[columnIndex] = builder.NewArray()
-		builder.Release()
 	}
-	defer func() {
-		for _, values := range arrays {
-			values.Release()
+	err := s.writer.Close()
+	s.writer = nil
+	s.err = errors.Join(s.err, err)
+	return s.err
+}
+
+var _ arrowquery.Sink = (*semanticArrowSink)(nil)
+
+func writeSemanticArrowResponse(
+	w stdhttp.ResponseWriter,
+	r *stdhttp.Request,
+	metrics Metrics,
+	request dataquery.Query,
+	limit, offset int,
+	queryID, snapshot, cursorScope string,
+) {
+	executor, ok := metrics.(arrowquery.Executor)
+	if !ok {
+		writeJSONError(w, errors.New("native Arrow execution is unavailable"), stdhttp.StatusInternalServerError)
+		return
+	}
+	sink := newSemanticArrowSink(w, queryID, snapshot, limit)
+	_, err := executor.ExecuteDataQueryArrow(r.Context(), request, sink)
+	if err != nil {
+		if sink.writer == nil {
+			writeJSONError(w, err, statusForDataExecutionError(err))
 		}
-	}()
-	record := array.NewRecord(schema, arrays, int64(len(response.Rows)))
-	defer record.Release()
-	var output bytes.Buffer
-	writer := ipc.NewWriter(&output, ipc.WithSchema(schema))
-	if err := writer.Write(record); err != nil {
-		_ = writer.Close()
-		return nil, err
+		return
 	}
-	if err := writer.Close(); err != nil {
-		return nil, err
+	if sink.HasMore() {
+		next := encodeIndexCursor(offset+limit, cursorScope, snapshot)
+		w.Header().Set("X-Next-Cursor", next)
 	}
-	return output.Bytes(), nil
+	_ = sink.Close()
 }

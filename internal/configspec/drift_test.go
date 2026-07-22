@@ -69,7 +69,7 @@ func TestOperationalEnvironmentReferencesAreCataloged(t *testing.T) {
 				return
 			}
 			for _, name := range pattern.FindAllString(string(body), -1) {
-				if strings.HasPrefix(name, "LEAPVIEW_TEST_") || strings.HasPrefix(name, "LEAPVIEW_QUACK_TEST_") {
+				if strings.HasPrefix(name, "LEAPVIEW_TEST_") {
 					continue
 				}
 				if _, ok := known[name]; !ok {

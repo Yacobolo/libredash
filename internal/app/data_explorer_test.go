@@ -17,7 +17,6 @@ import (
 	"testing"
 	"time"
 
-	analyticsmaterialize "github.com/Yacobolo/leapview/internal/analytics/materialize"
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	"github.com/Yacobolo/leapview/internal/dataquery"
@@ -118,8 +117,6 @@ func (m dataExplorerFixtureMetrics) ExecuteDataQuery(ctx context.Context, reques
 			return dataquery.Result{}, nil
 		}
 		return dataquery.Result{Columns: dataquery.ColumnsFromNames([]string{"order_id", "status"}), Rows: []dataquery.Row{{"order_id": "o1", "status": "delivered"}}, SQL: "semantic rows: " + request.ModelID + "." + request.Target}, nil
-	case dataquery.KindSourceRows:
-		return dataquery.Result{Columns: dataquery.ColumnsFromNames([]string{"order_id", "status"}), Rows: []dataquery.Row{{"order_id": "o1", "status": "delivered"}}, TotalRows: 1, TotalRowsKnown: request.IncludeTotal, SQL: "source rows: " + request.Target}, nil
 	case dataquery.KindModelTableRows:
 		if strings.TrimSpace(m.duckDBDir) == "" {
 			return dataquery.Result{Columns: dataquery.ColumnsFromNames([]string{"order_id", "status"}), Rows: []dataquery.Row{{"order_id": "o2", "status": "shipped"}}, TotalRows: 1, TotalRowsKnown: request.IncludeTotal, SQL: "model rows: " + request.Target}, nil
@@ -205,7 +202,7 @@ func (m dataExplorerFixtureMetrics) openModelTableDB(ctx context.Context, modelI
 	if strings.TrimSpace(m.duckDBDir) == "" {
 		return nil, fmt.Errorf("fixture DuckDB directory is not configured")
 	}
-	return openTestDuckDBForInspection(ctx, analyticsmaterialize.DatabasePath(m.duckDBDir, modelID))
+	return openTestDuckDBForInspection(ctx, dataExplorerTestDatabasePath(m.duckDBDir, modelID))
 }
 
 func openTestDuckDBForInspection(ctx context.Context, path string) (*sql.DB, error) {
@@ -349,13 +346,14 @@ func TestDataExplorerPreviewsSourceModelTableAndSemanticRows(t *testing.T) {
 	server := NewWithOptions(metrics, Options{Store: store, DefaultWorkspaceID: "test", DuckDBDir: duckDBDir})
 
 	cases := []struct {
-		name   string
-		object string
-		want   string
+		name     string
+		object   string
+		want     string
+		wantRows bool
 	}{
-		{name: "source", object: "source:source:olist.orders", want: "delivered"},
-		{name: "model table", object: "model_table:model_table:olist.orders", want: "shipped"},
-		{name: "semantic", object: "semantic_view:olist.orders", want: "Order ID"},
+		{name: "source metadata", object: "source:source:olist.orders", want: "order_id", wantRows: false},
+		{name: "model table", object: "model_table:model_table:olist.orders", want: "shipped", wantRows: true},
+		{name: "semantic", object: "semantic_view:olist.orders", want: "Order ID", wantRows: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -370,8 +368,11 @@ func TestDataExplorerPreviewsSourceModelTableAndSemanticRows(t *testing.T) {
 			if explorer.Preview.ChunkSize != dataExplorerDefaultLimit || explorer.Preview.RowHeight != dataExplorerRowHeight {
 				t.Fatalf("preview window defaults = chunk %d rowHeight %d", explorer.Preview.ChunkSize, explorer.Preview.RowHeight)
 			}
-			if len(explorer.Preview.Blocks) == 0 || len(explorer.Preview.Blocks["a"].Rows) == 0 {
-				t.Fatalf("preview did not seed initial block rows:\n%#v", explorer.Preview)
+			if len(explorer.Preview.Blocks) == 0 || tc.wantRows && len(explorer.Preview.Blocks["a"].Rows) == 0 {
+				t.Fatalf("preview row state does not match source policy:\n%#v", explorer.Preview)
+			}
+			if !tc.wantRows && len(explorer.Preview.Blocks["a"].Rows) != 0 {
+				t.Fatalf("source metadata preview exposed raw rows:\n%#v", explorer.Preview)
 			}
 			rendered := fmtSprint(explorer)
 			if !strings.Contains(rendered, tc.want) {
@@ -414,12 +415,8 @@ func TestDataExplorerSourceUsesOwningWorkspaceModelForImportedSourceKeys(t *test
 	if uisignals.ValueOrZero(explorer.Preview.Error) != "" {
 		t.Fatalf("preview error = %q", uisignals.ValueOrZero(explorer.Preview.Error))
 	}
-	if len(explorer.Preview.Blocks["a"].Rows) == 0 || fmt.Sprint(explorer.Preview.Blocks["a"].Rows[0]["status"]) != "delivered" {
-		t.Fatalf("source preview rows missing delivered row: %#v", explorer.Preview.Blocks)
-	}
-	rendered := fmtSprint(explorer)
-	if strings.Contains(rendered, `semantic model "olist" was not found`) {
-		t.Fatalf("source preview still used imported source namespace as model id:\n%#v", explorer)
+	if len(explorer.Preview.Blocks["a"].Rows) != 0 {
+		t.Fatalf("refresh-only source exposed serving rows: %#v", explorer.Preview.Blocks)
 	}
 }
 
@@ -446,10 +443,10 @@ func TestDataExplorerModelTablePreviewUsesRuntimeBackedModelTable(t *testing.T) 
 	if len(explorer.Preview.Blocks["a"].Rows) == 0 || fmt.Sprint(explorer.Preview.Blocks["a"].Rows[0]["status"]) != "delivered" {
 		t.Fatalf("model table preview rows missing delivered row: %#v", explorer.Preview.Blocks)
 	}
-	if _, err := os.Stat(analyticsmaterialize.DatabasePath(appDuckDBDir, "sales")); !errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(dataExplorerTestDatabasePath(appDuckDBDir, "sales")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("data explorer should not create/open app-level model DB, stat err = %v", err)
 	}
-	if _, err := os.Stat(analyticsmaterialize.DatabasePath(runtimeDuckDBDir, "sales")); err != nil {
+	if _, err := os.Stat(dataExplorerTestDatabasePath(runtimeDuckDBDir, "sales")); err != nil {
 		t.Fatalf("runtime fixture DB missing: %v", err)
 	}
 }
@@ -819,7 +816,7 @@ func seedDataExplorerDuckDB(t *testing.T) string {
 func seedDataExplorerDuckDBForModel(t *testing.T, modelID string) string {
 	t.Helper()
 	dir := t.TempDir()
-	db, err := sql.Open("duckdb", analyticsmaterialize.DatabasePath(dir, modelID))
+	db, err := sql.Open("duckdb", dataExplorerTestDatabasePath(dir, modelID))
 	if err != nil {
 		t.Fatalf("open duckdb: %v", err)
 	}
@@ -834,6 +831,10 @@ func seedDataExplorerDuckDBForModel(t *testing.T, modelID string) string {
 		t.Fatalf("insert rows: %v", err)
 	}
 	return dir
+}
+
+func dataExplorerTestDatabasePath(dir, modelID string) string {
+	return filepath.Join(dir, "leapview-"+modelID+".duckdb")
 }
 
 func fmtSprint(value any) string {

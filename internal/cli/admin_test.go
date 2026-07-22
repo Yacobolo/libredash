@@ -107,7 +107,7 @@ func TestAdminBackupRejectsExternalDuckLakeCatalog(t *testing.T) {
 	ctx := context.Background()
 	home := t.TempDir()
 	setAdminStorageEnv(t, home)
-	t.Setenv("LEAPVIEW_DUCKLAKE_CATALOG_PATH", filepath.Join(t.TempDir(), "catalog.sqlite"))
+	t.Setenv("LEAPVIEW_DUCKLAKE_CATALOG_PATH", filepath.Join(t.TempDir(), "catalog.duckdb"))
 	store, err := platform.Open(ctx, filepath.Join(home, "leapview.db"))
 	if err != nil {
 		t.Fatalf("open platform store: %v", err)
@@ -170,7 +170,7 @@ func TestAdminRestoreRejectsExternalDuckLakeCatalog(t *testing.T) {
 
 	home := t.TempDir()
 	setAdminStorageEnv(t, home)
-	t.Setenv("LEAPVIEW_DUCKLAKE_CATALOG_PATH", filepath.Join(t.TempDir(), "catalog.sqlite"))
+	t.Setenv("LEAPVIEW_DUCKLAKE_CATALOG_PATH", filepath.Join(t.TempDir(), "catalog.duckdb"))
 	opts := &rootOptions{}
 	cmd := adminCommand(ctx, opts)
 	cmd.SetArgs([]string{"restore", "--from", backupPath, "--current-out", filepath.Join(t.TempDir(), "before.tar.gz"), "--confirm"})
@@ -740,7 +740,7 @@ func adminSQLiteTime(value time.Time) string {
 }
 
 func adminDuckLakeCatalogPath(home string) string {
-	return filepath.Join(home, "ducklake", "catalog.sqlite")
+	return filepath.Join(home, "ducklake", "catalog.duckdb")
 }
 
 func seedAdminDuckLakeSnapshots(t *testing.T, ctx context.Context, home, root string) (int64, int64) {

@@ -35,11 +35,19 @@ func (s *Server) adminHTTPHandler() adminhttp.Handler {
 }
 
 func (s *Server) storageReadModel() adminstorage.Service {
-	return adminstorage.Service{
+	service := adminstorage.Service{
 		CatalogPath: s.duckLakeCatalogPath,
 		DataPath:    s.duckLakeDataPath,
 		Environment: s.defaultEnvironment,
 	}
+	if s.store != nil {
+		service.ControlPlane = s.store
+	}
+	if s.duckDBEnvironment != nil {
+		service.Analytics = s.duckDBEnvironment
+	}
+	service.Admitter = s.workloadController()
+	return service
 }
 
 func (s *Server) adminAgentDetails(ctx context.Context) (api.AdminAgentResponse, error) {

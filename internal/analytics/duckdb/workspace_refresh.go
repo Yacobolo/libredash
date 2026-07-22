@@ -3,9 +3,8 @@ package duckdb
 import (
 	"context"
 	"fmt"
-	"path/filepath"
-	"strings"
 
+	analyticsducklake "github.com/Yacobolo/leapview/internal/analytics/ducklake"
 	manageddataruntimebinding "github.com/Yacobolo/leapview/internal/manageddata/runtimebinding"
 	"github.com/Yacobolo/leapview/internal/runtimehost"
 	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
@@ -13,10 +12,9 @@ import (
 )
 
 type WorkspaceRefreshMaterializer struct {
-	DuckDBDir       string
-	DuckLakeCatalog string
-	DuckLakeData    string
-	ManagedData     runtimehost.ManagedDataResolver
+	Environment *analyticsducklake.Environment
+	ManagedData runtimehost.ManagedDataResolver
+	Credentials CredentialResolver
 }
 
 func (m WorkspaceRefreshMaterializer) Materialize(ctx context.Context, input refresh.MaterializeInput) (snapshotID int64, err error) {
@@ -37,16 +35,10 @@ func (m WorkspaceRefreshMaterializer) Materialize(ctx context.Context, input ref
 			return 0, bindErr
 		}
 	}
-	dbDir := m.DuckDBDir
-	if strings.TrimSpace(dbDir) == "" {
-		dbDir = filepath.Join(".leapview", "duckdb")
-	}
-	dbDir = filepath.Join(dbDir, string(servingstate.NormalizeEnvironment(input.Environment)))
 	runtime, err := OpenWorkspaceMaterializeRuntime(ctx, WorkspaceRuntimeConfig{
 		Models:             input.Definition.Models,
-		DBDir:              dbDir,
-		CatalogPath:        m.DuckLakeCatalog,
-		DuckLakeDataPath:   m.DuckLakeData,
+		Database:           m.Environment,
+		CredentialResolver: m.Credentials,
 		ServingStateID:     string(input.Candidate.ID),
 		WorkspaceID:        string(input.Candidate.WorkspaceID),
 		Environment:        string(servingstate.NormalizeEnvironment(input.Environment)),

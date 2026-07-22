@@ -2,176 +2,83 @@
 
 ## Summary
 
-LeapView storage uses DuckLake as the analytical table catalog and DuckDB as the execution engine.
+One LeapView deployment owns one control-plane SQLite database and one process-owned DuckDB `DatabaseInstance`. That DuckDB instance is the sole client of one DuckDB-backed DuckLake catalog and executes bounded serving reads and refresh transactions over DuckLake-managed Parquet files.
 
-One control-plane SQLite database stores LeapView application state. One global DuckLake catalog stores analytical metadata for the whole LeapView instance. Parquet files hold analytical data. DuckDB attaches DuckLake, plans queries, and executes against local files.
+Runtime generations do not own DuckDB engines or catalog attachments. They own immutable compiled plans, an exact DuckLake snapshot id, a cache scope, and snapshot protection.
 
-Refreshes replace the served data atomically. DuckLake snapshots provide internal consistency and cleanup boundaries; they are not a customer-facing data-versioning model in v1.
-
-## Goals
-
-- Use DuckLake for materialized model tables, snapshots, schema history, statistics, commit metadata, and physical data-file ownership.
-- Use the control-plane database for LeapView state: workspaces, environments, active serving pointers, permissions, and application job state.
-- Use one global DuckLake catalog for analytical metadata across all workspaces in the instance's single environment.
-- Store analytical data as DuckLake-managed Parquet files in the LeapView data store.
-- Execute BI queries through DuckDB attached to the active DuckLake snapshot.
-- Activate refreshed data by flipping a metadata pointer, not by moving files.
-- Keep failed refreshes non-destructive by serving the previous active snapshot until the new snapshot is committed and validated.
-- Support deterministic cleanup of superseded physical data.
-
-## Non-Goals
-
-- Do not expose DuckDB files, internal serving states, or historical snapshots as the normal BI user abstraction.
-- Do not require one DuckDB file per semantic model.
-- Do not require one DuckDB file per serving state as the long-term architecture.
-- Do not create per-workspace DuckLake catalogs.
-- Do not use filesystem layout as the serving isolation mechanism.
-- Do not duplicate DuckLake catalog semantics inside LeapView metadata.
-- Do not make rollback, time travel, or last-N data-version retention a v1 default.
-
-## Architecture
-
-Each LeapView instance has one server process, one configured environment, one control-plane database, one global DuckLake catalog, and one analytical data store:
+## Storage ownership
 
 ```text
 .leapview/
-  leapview.db              # LeapView control-plane tables
-  ducklake/catalog.sqlite   # global DuckLake analytical metadata catalog
+  leapview.db               # node-local control-plane state
+  ducklake/catalog.duckdb   # DuckDB-backed DuckLake metadata catalog
   data/                     # DuckLake-managed Parquet files
-  artifacts/                # workspace bundles
-  runtime/                  # ephemeral extracted/runtime files
+  artifacts/                # immutable workspace bundles
+  runtime/                  # ephemeral extracted artifacts
+  tmp/duckdb/               # bounded DuckDB temporary storage
 ```
 
-Local and production use the same storage topology. Development mode changes application behavior such as auth bypass, inspectors, logging, and bootstrapping; it does not change catalog or data-store isolation. The local default uses DuckLake's SQLite catalog backend because it supports multiple local clients better than a DuckDB-backed DuckLake catalog. The same architecture can use PostgreSQL for the DuckLake catalog when LeapView needs a multi-user analytical metadata backend.
+SQLite owns workspaces, releases, deployments, active serving pointers, authorization, durable jobs, idempotency, leases, and audit records.
 
-LeapView owns application metadata that DuckLake cannot own:
+DuckLake owns analytical schemas, snapshots, changesets, statistics, schema evolution, and physical-file manifests. Parquet owns materialized analytical data. Disposable query caches are never authoritative.
 
-- Workspaces and environments.
-- Active serving pointer: workspace/environment -> DuckLake snapshot id.
-- Refresh intent, run history, and serving-state lifecycle.
-- Semantic model, dashboard, and permission metadata.
-- Refresh job state for work not yet committed to DuckLake.
-- Audit records for application actions.
+The catalog file is process-private writable state. Independent DuckDB instances, LeapView nodes, or hosts never open or mount it concurrently. A future shared catalog requires a separate product decision and protocol; it is not part of this architecture.
 
-LeapView must not mirror DuckLake table schemas, row counts, file lists, schema versions, or cleanup queues.
+## Process-owned execution
 
-DuckLake owns analytical metadata:
+The node constructs DuckDB exactly once during process composition. Its bounded connection pool shares one scheduler, buffer manager, catalog view, extension set, access policy, memory limit, temporary-storage limit, and thread limit.
 
-- Schemas and tables used by LeapView workspaces.
-- Snapshots, changesets, authors, commit messages, and commit extra info.
-- Table schema versions and schema evolution.
-- Data-file manifests and file-level ownership.
-- Table and file statistics exposed by DuckLake metadata functions.
-- Table layout settings such as compression, row-group size, target file size, partitioning, and sort order.
-- Snapshot expiration, files scheduled for deletion, orphan-file detection, and cleanup settings.
+Workload admission bounds and fairly schedules logical operations before they acquire a DuckDB connection. An admitted operation retains one connection for its complete query bundle or refresh transaction. The connection pool has no second admission queue.
 
-Parquet stores physical table data:
+Runtime retirement closes generation-scoped cache state and releases snapshot protection. It never closes or replaces the process DuckDB instance. A fatal instance failure fails readiness and terminates the process for supervisor restart.
 
-- Columnar storage for materialized model tables.
-- Local file-store layout managed by DuckLake.
-- Data files that DuckLake can compact, expire, copy, or inspect independently of application metadata.
+## Serving snapshots
 
-DuckDB owns execution:
+Every active serving state points to one exact DuckLake snapshot. Every physical relation in a serving plan—including facts, joins, subqueries, and generated bundle plans—is snapshot-qualified:
 
-- Attaching DuckLake catalogs.
-- Running model-table replacement SQL.
-- Running dashboard, export, API, and agent queries.
-- Reading DuckLake-managed Parquet files through the DuckLake catalog.
-
-A committed DuckLake snapshot is immutable. Later writes create new snapshots. LeapView maps a workspace/environment to the currently served DuckLake snapshot id. Environment is a serving dimension, not a physical catalog boundary. That snapshot is the consistent analytical state for the current served data.
-
-```text
-Control-plane SQLite:
-  workspace=sales
-  environment=dev
-  active_serving_state=state_94b8...
-  state_94b8... -> ducklake snapshot 42
-
-DuckLake:
-  snapshot 42:
-    model.orders -> data/model/orders/*.parquet
-    model.customers -> data/model/customers/*.parquet
-
-DuckDB:
-  ATTACH 'ducklake:sqlite:.leapview/ducklake/catalog.sqlite' AS lake
-    (DATA_PATH '.leapview/data', SNAPSHOT_VERSION 42)
-  SELECT ... FROM lake.model.orders
+```sql
+SELECT ...
+FROM (FROM lake.model.orders AT (VERSION => 42)) orders
+LEFT JOIN (FROM lake.model.customers AT (VERSION => 42)) customers
+  ON orders.customer_id = customers.id
 ```
 
-Human-readable BI semantics and application ownership come from LeapView metadata. Analytical table state and file ownership come from DuckLake.
+A request resolves one runtime generation once and holds its lease until the logical operation finishes. Old and new generations may query different snapshots concurrently through the same DuckDB instance.
 
-## Serving Model
+## Refresh and activation
 
-LeapView is a BI serving layer. Assets define what can be queried. Refreshes replace the served data atomically.
+A refresh:
 
-- Each active serving state points to one DuckLake snapshot id.
-- Refresh commits all planned table changes in one DuckLake transaction against the global catalog.
-- The DuckLake commit message or extra info records workspace id, environment, target asset, semantic digest, artifact digest, source data digest when available, and internal serving-state id.
-- After commit and schema validation, LeapView records the committed DuckLake snapshot id and flips the active serving pointer.
-- Failed or incomplete refreshes are never active and never serve queries.
-- Refresh history is job history, not retained data-version history.
-- Old snapshots are retained only while active query/runtime leases still reference them unless a future policy explicitly enables rollback/time travel.
+1. Resolves and validates bounded, finalized source artifacts.
+2. Runs its planned table changes in one DuckLake transaction.
+3. Commits an immutable candidate snapshot with ownership and fencing metadata.
+4. Validates the candidate without making it serving state.
+5. Activates the candidate's exact snapshot id in the control-plane transaction.
+6. Publishes the prepared runtime atomically after durable activation.
 
-Serving states are explicit:
+DuckLake commit and SQLite activation are deliberately not one cross-store transaction. If activation fails after the DuckLake commit, the candidate is an orphan: it is never implicitly active and is safe to retry or reclaim. Restart reconciliation classifies candidates from durable ownership, fencing, and active-pointer state rather than catalog recency.
 
-```text
-staging -> validated -> active -> draining -> delete_scheduled -> deleted
-                  \-> failed
-```
+A failed refresh leaves the previous active snapshot unchanged.
 
-DuckLake snapshots that are not active and not protected by an in-process query lease are retention candidates.
+## Resource and access boundaries
 
-Snapshot ids are scoped to the global DuckLake catalog. Because workspaces and environments share the catalog, cleanup must protect every active serving reference in the control-plane database plus every in-process query lease, not only references for the environment currently being served or inspected.
+Node-wide configuration bounds DuckDB memory, temporary storage, threads, connection concurrency, retained query results, and cache data. Workload admission provides fairness across classes and workspaces; it is not a hard per-workspace CPU or intermediate-memory partition. Workloads requiring hard isolation use separate deployments or OS/container resource domains.
 
-## Query Resolution
+Maintained DuckDB connectors acquire declared external sources only inside admitted refresh sessions. Each refresh pins one connection, stages remote data into connection-local temporary tables, validates the schema, and removes attachments and temporary secrets before the single-writer DuckLake commit. Serving and Data Explorer paths are snapshot-only and never resolve source credentials. DuckDB permits only LeapView's fixed official signed extension allowlist; automatic loading, unsigned extensions, authored extension names, and custom repositories remain disabled.
 
-Runtime queries never hard-code serving-state-specific physical files or table names.
+## Retention and recovery
 
-Resolution invariants:
+Retention protects every snapshot referenced by an active or leased runtime generation. Only unprotected snapshots may expire; physical cleanup follows DuckLake metadata and remains distinct from snapshot expiration.
 
-- Runtime resolves the active serving pointer once per request.
-- DuckDB attaches DuckLake at that snapshot version for the request.
-- Each request holds a runtime lease until the query completes, so refresh cutover cannot close or expire the snapshot being read.
-- Logical table refs are resolved through the semantic model to stable DuckLake schema/table names.
-- All DuckDB reads within one dashboard/page refresh, API request, export, or agent query use one resolved DuckLake snapshot.
-- Active pointer changes made during a request do not affect that request.
-- DuckDB connections attach DuckLake read-only for query serving when possible.
+Backup and restore cover SQLite, the DuckDB-backed DuckLake catalog, Parquet data, artifacts, and required configuration together. Recovery validates every active pointer against an existing protected snapshot before the node becomes ready.
 
-Transform SQL that references `model.<table>` uses the same resolver during materialization.
+## Acceptance criteria
 
-## Cleanup
-
-Cleanup is metadata-driven.
-
-- Default retention protects the active snapshot and any snapshot currently held by a query/runtime lease.
-- Superseded serving states move to `draining` with `superseded_at`; live query leases, not timestamps, determine cleanup protection.
-- Draining states move to `delete_scheduled`/`deleted` once retention reconciliation runs without an active lease protecting their snapshot.
-- Server startup treats existing draining states as cleanup-eligible because no in-process query leases survive restart.
-- DuckLake snapshots not referenced by the active serving state or an in-process lease are candidates for expiration.
-- DuckLake cleanup functions identify files scheduled for deletion and orphaned Parquet files.
-- Cleanup supports dry-run inspection before destructive action.
-- Cleanup reconciles all LeapView serving references in the control-plane database against DuckLake snapshots before expiration.
-
-Snapshot expiration and physical file cleanup remain separate operations.
-
-## Design Defaults
-
-- Use one global DuckLake catalog per LeapView instance.
-- Use SQLite as the local DuckLake catalog backend and PostgreSQL as the server/multi-user DuckLake catalog backend.
-- Use DuckLake schemas for workspace/table namespaces and metadata columns for environment-specific serving pointers.
-- Use immutable DuckLake snapshots for atomic refresh isolation.
-- Use local Parquet as the analytical data format.
-- Use DuckLake DDL and scoped options for table layout; LeapView should not own physical file-layout policy.
-- Use metadata transactions for active pointer flips.
-- Treat DuckDB as a stateless execution engine over DuckLake, not as the durable serving container.
-- Use LeapView control-plane tables as the authority for application ownership, lifecycle state, permissions, and active serving pointers.
-- Use DuckLake as the authority for analytical table state, schema versions, snapshot history, statistics, and physical data-file ownership.
-
-## Acceptance Criteria
-
-- LeapView active serving pointers can be reconciled with DuckLake snapshots.
-- Failed refresh cannot alter active query results.
-- Cleanup can report and remove expired snapshots and orphaned physical data through DuckLake.
-- Tests prove query routing changes when only the active serving pointer changes.
-- Tests prove one request attaches exactly one DuckLake snapshot version.
-- Tests prove DuckDB query serving does not depend on per-serving-state DuckDB database files.
+- The serving process constructs exactly one DuckDB instance.
+- A held snapshot-pinned read does not prevent a refresh commit through another connection in that instance.
+- Separate runtime generations can concurrently observe their exact old and new snapshots.
+- No serving plan contains an unqualified physical relation.
+- Runtime retirement cannot close the node DuckDB instance.
+- Aggregate analytical work remains within the configured node envelope.
+- Failed activation never makes an orphan candidate visible.
+- Retention never deletes a snapshot protected by an active runtime lease.

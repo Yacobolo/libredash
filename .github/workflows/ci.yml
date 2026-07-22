@@ -10,6 +10,9 @@ on:
 permissions:
   contents: read
 
+env:
+  GOFLAGS: -tags=duckdb_arrow
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true

@@ -75,10 +75,9 @@ func (s *Server) workspaceRefreshService(runRepo refresh.RunRepository) (refresh
 		Runs:          runRepo,
 		Artifacts:     appRefreshArtifactLoader{},
 		Materializer: analyticsduckdb.WorkspaceRefreshMaterializer{
-			DuckDBDir:       s.duckDBDir,
-			DuckLakeCatalog: s.duckLakeCatalogPath,
-			DuckLakeData:    s.duckLakeDataPath,
-			ManagedData:     s.managedDataResolver,
+			Environment: s.duckDBEnvironment,
+			ManagedData: s.managedDataResolver,
+			Credentials: analyticsduckdb.EnvironmentCredentialResolver{},
 		},
 		Runtime:                  appRefreshRuntimeHost{reloader: s.reloader},
 		Publisher:                appRefreshPublisher{server: s},
