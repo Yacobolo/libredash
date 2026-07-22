@@ -19,6 +19,7 @@ import (
 	"github.com/Yacobolo/leapview/internal/dataquery"
 	"github.com/Yacobolo/leapview/internal/ui"
 	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 	"github.com/Yacobolo/leapview/pkg/pagestream"
 	"github.com/go-chi/chi/v5"
 )
@@ -45,10 +46,10 @@ type Metrics interface {
 	DefaultDashboardID() string
 	DefaultFilters(dashboardID string) dashboard.Filters
 	ModelIDForDashboard(dashboardID string) string
-	NormalizeTableRequest(dashboardID string, request dashboard.TableRequest) dashboard.TableRequest
+	NormalizeVisualizationWindow(dashboardID string, request dashboard.TableRequest) dashboard.TableRequest
 	Pages(dashboardID string) []dashboard.Page
 	QueryDashboardPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters) (dashboard.Patch, error)
-	QueryTablePage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error)
+	QueryVisualizationWindow(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request visualizationir.VisualizationWindowRequest) (visualizationir.VisualizationEnvelope, error)
 	Report(dashboardID string) (dashboarddefinition.Definition, *semanticmodel.Model, bool)
 	VisualizationDefinition(dashboardID, visualID string) (visualizationdefinition.Definition, bool)
 }

@@ -267,7 +267,7 @@ func consumerKindPriority(kind Kind) int {
 		return 0
 	case KindFilterOptions:
 		return 1
-	case KindTable:
+	case KindWindow:
 		return 2
 	default:
 		return 3

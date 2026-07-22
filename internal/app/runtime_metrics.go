@@ -15,6 +15,7 @@ import (
 	"github.com/Yacobolo/leapview/internal/dataquery"
 	"github.com/Yacobolo/leapview/internal/runtimehost"
 	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 	"github.com/Yacobolo/leapview/internal/workspace"
 )
 
@@ -59,9 +60,11 @@ type dashboardRuntime interface {
 	QueryDashboardPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters) (dashboard.Patch, error)
 }
 
-type tableRuntime interface {
-	NormalizeTableRequest(dashboardID string, request dashboard.TableRequest) dashboard.TableRequest
-	QueryTablePage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error)
+type visualizationRuntime interface {
+	NormalizeVisualizationWindow(dashboardID string, request dashboard.TableRequest) dashboard.TableRequest
+	QueryVisualization(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualID string) (visualizationir.VisualizationEnvelope, error)
+	QueryVisualizationWindow(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request visualizationir.VisualizationWindowRequest) (visualizationir.VisualizationEnvelope, error)
+	QueryVisualizationSpatialWindow(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request visualizationir.VisualizationSpatialWindowRequest) (visualizationir.VisualizationEnvelope, error)
 }
 
 type semanticQueryRuntime interface {
@@ -212,17 +215,17 @@ func (m runtimeMetrics) DefaultFilters(dashboardID string) dashboard.Filters {
 	return port.DefaultFilters(dashboardID)
 }
 
-func (m runtimeMetrics) NormalizeTableRequest(dashboardID string, request dashboard.TableRequest) dashboard.TableRequest {
+func (m runtimeMetrics) NormalizeVisualizationWindow(dashboardID string, request dashboard.TableRequest) dashboard.TableRequest {
 	runtime, release, err := m.active(context.Background())
 	if err != nil {
 		return request.WithDefaults()
 	}
 	defer release()
-	port, ok := runtime.(tableRuntime)
+	port, ok := runtime.(visualizationRuntime)
 	if !ok {
 		return request.WithDefaults()
 	}
-	return port.NormalizeTableRequest(dashboardID, request)
+	return port.NormalizeVisualizationWindow(dashboardID, request)
 }
 
 func (m runtimeMetrics) QueryDashboard(ctx context.Context, dashboardID string, filters dashboard.Filters) (dashboard.Patch, error) {
@@ -243,21 +246,47 @@ func (m runtimeMetrics) QueryDashboardPage(ctx context.Context, dashboardID, pag
 	return port.QueryDashboardPage(ctx, dashboardID, pageID, filters)
 }
 
-func (m runtimeMetrics) QueryTable(ctx context.Context, dashboardID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
-	return m.QueryTablePage(ctx, dashboardID, "", filters, request)
+func (m runtimeMetrics) QueryDashboardVisualizations(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters) (dashboard.Patch, error) {
+	return m.QueryDashboardPage(ctx, dashboardID, pageID, filters)
 }
 
-func (m runtimeMetrics) QueryTablePage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
+func (m runtimeMetrics) QueryVisualization(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualID string) (visualizationir.VisualizationEnvelope, error) {
 	runtime, release, err := m.activeForDashboardRefresh(ctx)
 	if err != nil {
-		return dashboard.EmptyTable(request.WithDefaults(), err), nil
+		return visualizationir.VisualizationEnvelope{}, err
 	}
 	defer release()
-	port, ok := runtime.(tableRuntime)
+	port, ok := runtime.(visualizationRuntime)
 	if !ok {
-		return dashboard.EmptyTable(request.WithDefaults(), fmt.Errorf("active runtime does not provide table data")), nil
+		return visualizationir.VisualizationEnvelope{}, fmt.Errorf("active runtime does not provide visualization data")
 	}
-	return port.QueryTablePage(ctx, dashboardID, pageID, filters, request)
+	return port.QueryVisualization(ctx, dashboardID, pageID, filters, visualID)
+}
+
+func (m runtimeMetrics) QueryVisualizationWindow(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request visualizationir.VisualizationWindowRequest) (visualizationir.VisualizationEnvelope, error) {
+	runtime, release, err := m.activeForDashboardRefresh(ctx)
+	if err != nil {
+		return visualizationir.VisualizationEnvelope{}, err
+	}
+	defer release()
+	port, ok := runtime.(visualizationRuntime)
+	if !ok {
+		return visualizationir.VisualizationEnvelope{}, fmt.Errorf("active runtime does not provide visualization data")
+	}
+	return port.QueryVisualizationWindow(ctx, dashboardID, pageID, filters, request)
+}
+
+func (m runtimeMetrics) QueryVisualizationSpatialWindow(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request visualizationir.VisualizationSpatialWindowRequest) (visualizationir.VisualizationEnvelope, error) {
+	runtime, release, err := m.activeForDashboardRefresh(ctx)
+	if err != nil {
+		return visualizationir.VisualizationEnvelope{}, err
+	}
+	defer release()
+	port, ok := runtime.(visualizationRuntime)
+	if !ok {
+		return visualizationir.VisualizationEnvelope{}, fmt.Errorf("active runtime does not provide visualization data")
+	}
+	return port.QueryVisualizationSpatialWindow(ctx, dashboardID, pageID, filters, request)
 }
 
 func (m runtimeMetrics) WithDashboardRefreshLease(ctx context.Context, run func(context.Context) error) error {

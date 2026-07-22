@@ -15,10 +15,6 @@ type unifiedConsumerMetrics struct {
 
 func (*unifiedConsumerMetrics) DataDir() string { return "" }
 
-func (*unifiedConsumerMetrics) QueryTablePage(context.Context, string, string, dashboard.Filters, dashboard.TableRequest) (dashboard.Table, error) {
-	return dashboard.Table{}, nil
-}
-
 func (m *unifiedConsumerMetrics) ExecuteConsumersPage(_ context.Context, request consumer.Request, publish consumer.Publisher) error {
 	m.called = true
 	for _, target := range request.Targets {

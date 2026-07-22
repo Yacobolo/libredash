@@ -24,7 +24,6 @@ import (
 	dashboardruntime "github.com/Yacobolo/leapview/internal/dashboard/runtime"
 	"github.com/Yacobolo/leapview/internal/visualdocs"
 	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
-	visualizationruntime "github.com/Yacobolo/leapview/internal/visualization/runtime"
 	"github.com/Yacobolo/leapview/internal/workspace"
 	workspacecompiler "github.com/Yacobolo/leapview/internal/workspace/compiler"
 	"gopkg.in/yaml.v3"
@@ -177,34 +176,15 @@ func generateVisualExamples(docsDir, projectPath, dataRoot string) (visualExampl
 		}
 		payloads := make([]visualdocs.Payload, 0, len(examplesByPage[document.Source]))
 		for _, example := range examplesByPage[document.Source] {
-			if example.Chart != nil {
-				envelope, ok := patch.Visuals[example.ID]
-				if !ok || len(envelopeRows(envelope)) == 0 {
-					return visualExamplesArtifact{}, fmt.Errorf("query %s did not return visual %q data", document.Source, example.ID)
-				}
-				if err := validateVisualEnvelope(example, envelope); err != nil {
-					return visualExamplesArtifact{}, err
-				}
-				canonicalizeEnvelopeData(&envelope)
-				normalizeEnvelopeRevision(&envelope, 1, 1)
-				payloads = append(payloads, envelope)
-				continue
+			envelope, ok := patch.Visuals[example.ID]
+			if !ok || len(envelopeRows(envelope)) == 0 {
+				return visualExamplesArtifact{}, fmt.Errorf("query %s did not return visual %q data", document.Source, example.ID)
 			}
-			table, err := service.QueryTablePage(context.Background(), report.ID, document.Source, dashboard.Filters{}, dashboard.TableRequest{Table: example.ID, Block: "a", Start: 0, Count: dashboard.TableMaxRequestCount})
-			if err != nil {
-				return visualExamplesArtifact{}, fmt.Errorf("query %s visual %q: %w", document.Source, example.ID, err)
+			if err := validateVisualEnvelope(example, envelope); err != nil {
+				return visualExamplesArtifact{}, err
 			}
-			if len(table.Blocks["a"].Rows) == 0 {
-				return visualExamplesArtifact{}, fmt.Errorf("visual example %q returned no rows", example.ID)
-			}
-			compiledVisualization, ok := visualizations[example.ID]
-			if !ok {
-				return visualExamplesArtifact{}, fmt.Errorf("visual example %q has no compiled definition", example.ID)
-			}
-			envelope, err := visualizationruntime.TableEnvelopeFromDefinition(compiledVisualization, table, 1, 1)
-			if err != nil {
-				return visualExamplesArtifact{}, fmt.Errorf("visual example %q envelope: %w", example.ID, err)
-			}
+			canonicalizeEnvelopeData(&envelope)
+			normalizeEnvelopeRevision(&envelope, 1, 1)
 			payloads = append(payloads, envelope)
 		}
 		slug := "visuals/" + document.Source
@@ -248,7 +228,7 @@ func validateVisualData(example visualExample, payload []dashboard.Datum) error 
 	if finiteNumbers == 0 {
 		return fmt.Errorf("visual example %q has no finite numeric values", example.ID)
 	}
-	if example.Chart.ResultShape() != "geo" {
+	if example.Chart == nil || example.Chart.ResultShape() != "geo" {
 		return nil
 	}
 	for _, layer := range example.Chart.Geo.Layers {
@@ -277,22 +257,58 @@ func validateVisualData(example visualExample, payload []dashboard.Datum) error 
 }
 
 func envelopeRows(envelope visualizationir.VisualizationEnvelope) []dashboard.Datum {
-	state, ok := envelope.DataState.Value.(*visualizationir.InlineVisualizationDataState)
-	if !ok || len(state.Datasets) != 1 {
-		return nil
-	}
-	dataset := state.Datasets[0]
-	rows := make([]dashboard.Datum, len(dataset.Rows))
-	for rowIndex, values := range dataset.Rows {
-		if len(values) != len(dataset.Columns) {
+	switch state := envelope.DataState.Value.(type) {
+	case *visualizationir.InlineVisualizationDataState:
+		if len(state.Datasets) != 1 {
 			return nil
 		}
-		rows[rowIndex] = make(dashboard.Datum, len(values))
-		for columnIndex, column := range dataset.Columns {
-			rows[rowIndex][column] = values[columnIndex]
+		return envelopeDatums(state.Datasets[0].Columns, state.Datasets[0].Rows)
+	case *visualizationir.WindowedVisualizationDataState:
+		columns := make([]string, len(state.Schema.Fields))
+		for index, field := range state.Schema.Fields {
+			columns[index] = field.ID
+		}
+		blocks := make([]visualizationir.VisualizationWindowBlock, 0, len(state.Blocks))
+		for _, block := range state.Blocks {
+			blocks = append(blocks, block)
+		}
+		sort.Slice(blocks, func(left, right int) bool {
+			if blocks[left].Start != blocks[right].Start {
+				return blocks[left].Start < blocks[right].Start
+			}
+			return blocks[left].ID < blocks[right].ID
+		})
+		rows := [][]any{}
+		for _, block := range blocks {
+			rows = append(rows, block.Rows...)
+		}
+		return envelopeDatums(columns, rows)
+	case *visualizationir.SpatialWindowedVisualizationDataState:
+		if state.Window == nil {
+			return nil
+		}
+		columns := make([]string, len(state.Schema.Fields))
+		for index, field := range state.Schema.Fields {
+			columns[index] = field.ID
+		}
+		return envelopeDatums(columns, state.Window.Rows)
+	default:
+		return nil
+	}
+}
+
+func envelopeDatums(columns []string, rows [][]any) []dashboard.Datum {
+	out := make([]dashboard.Datum, len(rows))
+	for rowIndex, values := range rows {
+		if len(values) != len(columns) {
+			return nil
+		}
+		out[rowIndex] = make(dashboard.Datum, len(values))
+		for columnIndex, column := range columns {
+			out[rowIndex][column] = values[columnIndex]
 		}
 	}
-	return rows
+	return out
 }
 
 func normalizeEnvelopeRevision(envelope *visualizationir.VisualizationEnvelope, dataRevision, generation int64) {
@@ -303,11 +319,16 @@ func normalizeEnvelopeRevision(envelope *visualizationir.VisualizationEnvelope, 
 	for index := range envelope.Selection {
 		envelope.Selection[index].Datum.DataRevision = dataRevision
 	}
-	if state, ok := envelope.DataState.Value.(*visualizationir.InlineVisualizationDataState); ok {
+	switch state := envelope.DataState.Value.(type) {
+	case *visualizationir.InlineVisualizationDataState:
 		state.DataRevision, state.Generation = dataRevision, generation
 		for index := range state.Datasets {
 			state.Datasets[index].DataRevision, state.Datasets[index].Generation = dataRevision, generation
 		}
+	case *visualizationir.WindowedVisualizationDataState:
+		state.DataRevision, state.Generation = dataRevision, generation
+	case *visualizationir.SpatialWindowedVisualizationDataState:
+		state.DataRevision, state.Generation = dataRevision, generation
 	}
 }
 

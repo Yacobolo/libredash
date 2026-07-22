@@ -1,8 +1,6 @@
 package report
 
 import (
-	"context"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -15,7 +13,6 @@ import (
 
 type fakeMetrics struct {
 	report Dashboard
-	tables []dashboard.TableRequest
 }
 
 func (m *fakeMetrics) DefaultFilters(string) dashboard.Filters {
@@ -43,11 +40,6 @@ func (m *fakeMetrics) Report(string) (dashboarddefinition.Definition, *semanticm
 		visualizations[id] = visualizationdefinition.Definition{ID: id, Query: visualizationdefinition.QueryBinding{Kind: visualizationdefinition.QueryDetail, ResultShape: visualizationdefinition.ResultDetailWindow, Detail: &visualizationdefinition.DetailQueryBinding{Fields: fields, DefaultSort: []visualizationdefinition.Sort{{FieldID: table.DefaultSort.Key, Direction: table.DefaultSort.Direction}}, Limit: 100}}}
 	}
 	return dashboarddefinition.Definition{ID: m.report.ID, Title: m.report.Title, SemanticModel: "model", Filters: filters, Pages: m.report.Pages, Visualizations: visualizations}, model, true
-}
-
-func (m *fakeMetrics) QueryTablePage(_ context.Context, _, _ string, _ dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
-	m.tables = append(m.tables, request)
-	return dashboard.Table{Title: request.Table, Sort: request.Sort}, nil
 }
 
 func TestActivePageResolution(t *testing.T) {
@@ -96,30 +88,5 @@ func TestNormalizeFiltersUsesActivePageDefinitions(t *testing.T) {
 	}
 	if _, ok := filters.Controls["category"]; ok {
 		t.Fatalf("off-page category filter kept: %#v", filters.Controls)
-	}
-}
-
-func TestTablesBuildsPageScopedRequests(t *testing.T) {
-	metrics := &fakeMetrics{report: Dashboard{
-		Visuals: TabularVisualizations("table", map[string]TableVisual{
-			"orders": {DefaultSort: dashboard.TableSort{Key: "purchase_date", Direction: "desc"}},
-			"states": {DefaultSort: dashboard.TableSort{Key: "state", Direction: "asc"}},
-		}),
-		Pages: []dashboard.Page{{ID: "overview", Visuals: []dashboard.PageVisual{
-			{Kind: "table", Visual: "orders"},
-			{Kind: "table", Visual: "orders"},
-			{Kind: "table", Visual: "states"},
-		}}},
-	}}
-
-	tables := Tables(context.Background(), metrics, "dash", "overview", dashboard.Filters{}, dashboard.TableRequest{Start: 200, Count: 10})
-	if !reflect.DeepEqual(PageTableNames(metrics.report.Pages, "overview"), []string{"orders", "states"}) {
-		t.Fatalf("table names = %#v", PageTableNames(metrics.report.Pages, "overview"))
-	}
-	if len(tables) != 2 || len(metrics.tables) != 2 {
-		t.Fatalf("tables = %#v, requests = %#v", tables, metrics.tables)
-	}
-	if got := metrics.tables[0]; got.Table != "orders" || got.Start != 0 || got.Count != dashboard.TableChunkSize || got.Sort.Key != "purchase_date" {
-		t.Fatalf("orders request = %#v", got)
 	}
 }

@@ -17,16 +17,14 @@ import (
 type RefreshEventType string
 
 const (
-	RefreshEventStart         RefreshEventType = "start"
-	RefreshEventFilterOptions RefreshEventType = "filter_options"
-	RefreshEventVisual        RefreshEventType = "visual"
-	RefreshEventTable         RefreshEventType = "table"
-	RefreshEventTableMetadata RefreshEventType = "table_metadata"
-	RefreshEventTableCountErr RefreshEventType = "table_count_error"
-	RefreshEventTargetError   RefreshEventType = "target_error"
-	RefreshEventCacheOutcome  RefreshEventType = "cache_outcome"
-	RefreshEventProgress      RefreshEventType = "progress"
-	RefreshEventComplete      RefreshEventType = "complete"
+	RefreshEventStart          RefreshEventType = "start"
+	RefreshEventFilterOptions  RefreshEventType = "filter_options"
+	RefreshEventVisual         RefreshEventType = "visual"
+	RefreshEventVisualMetadata RefreshEventType = "visual_metadata"
+	RefreshEventTargetError    RefreshEventType = "target_error"
+	RefreshEventCacheOutcome   RefreshEventType = "cache_outcome"
+	RefreshEventProgress       RefreshEventType = "progress"
+	RefreshEventComplete       RefreshEventType = "complete"
 )
 
 type RefreshEvent struct {
@@ -385,7 +383,7 @@ func (c *Coordinator) emitCurrent(refresh Refresh, event RefreshEvent) bool {
 			}
 		}
 		switch event.Type {
-		case RefreshEventFilterOptions, RefreshEventVisual, RefreshEventTable:
+		case RefreshEventFilterOptions, RefreshEventVisual:
 			c.active.targetSuccesses++
 		case RefreshEventTargetError:
 			if event.Target == "refresh" {
@@ -416,7 +414,7 @@ func (c *Coordinator) emitCurrent(refresh Refresh, event RefreshEvent) bool {
 
 func carriesVisualizationData(eventType RefreshEventType) bool {
 	switch eventType {
-	case RefreshEventVisual, RefreshEventTable, RefreshEventTableMetadata:
+	case RefreshEventVisual, RefreshEventVisualMetadata:
 		return true
 	default:
 		return false

@@ -130,11 +130,11 @@ func executeConsumers(ctx context.Context, executor consumer.Executor, request W
 		case consumer.KindVisual, consumer.KindSpatial:
 			event.Type = RefreshEventVisual
 			event.Value = result.Envelope
-		case consumer.KindTable:
-			if result.TableMetadata {
-				event.Type = RefreshEventTableMetadata
+		case consumer.KindWindow:
+			if result.Metadata {
+				event.Type = RefreshEventVisualMetadata
 			} else {
-				event.Type = RefreshEventTable
+				event.Type = RefreshEventVisual
 			}
 			event.Value = result.Envelope
 		default:

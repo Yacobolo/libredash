@@ -30,18 +30,24 @@ func testVisualDefinition(t *testing.T, id string) visualizationdefinition.Defin
 
 func testTableDefinition(t *testing.T, id string, table dashboard.Table) visualizationdefinition.Definition {
 	t.Helper()
-	envelope, err := visualizationruntime.TableEnvelope(id, table, 0, 0)
-	if err != nil {
-		t.Fatal(err)
+	if len(table.Columns) == 0 {
+		table.Columns = []dashboard.TableColumn{{Key: "value", Label: "Value"}}
 	}
-	definition, err := visualizationdefinition.New(id, envelope.Spec, visualizationdefinition.QueryBinding{
-		Kind: visualizationdefinition.QueryDetail, ResultShape: visualizationdefinition.ResultDetailWindow, ModelID: "model", DatasetID: "primary",
-		Detail: &visualizationdefinition.DetailQueryBinding{TableID: "table", Fields: []visualizationdefinition.FieldBinding{{FieldID: "id", Alias: "id"}}, Limit: 1},
+	fields := make([]string, len(table.Columns))
+	for index, column := range table.Columns {
+		fields[index] = column.Key
+	}
+	definitions, err := workspacecompiler.CompileVisualizationDefinitions(&reportdef.Dashboard{
+		ID: "test", SemanticModel: "model",
+		Visuals: reportdef.TabularVisualizations("table", map[string]reportdef.TableVisual{id: {
+			Title: table.Title, Columns: table.Columns, DefaultSort: table.Sort, Style: table.Style,
+			Query: reportdef.TableQuery{Table: "table", Fields: fields},
+		}}),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	return definition
+	return definitions[id]
 }
 
 func testVisualEnvelope(t *testing.T, id string, dataRevision, generation int64) visualizationir.VisualizationEnvelope {
@@ -55,7 +61,7 @@ func testVisualEnvelope(t *testing.T, id string, dataRevision, generation int64)
 
 func testTableEnvelope(t *testing.T, id string, table dashboard.Table, dataRevision, generation int64) visualizationir.VisualizationEnvelope {
 	t.Helper()
-	envelope, err := visualizationruntime.TableEnvelopeFromDefinition(testTableDefinition(t, id, table), table, dataRevision, generation)
+	envelope, err := visualizationruntime.WindowEnvelopeFromDefinition(testTableDefinition(t, id, table), table, dataRevision, generation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,10 +185,10 @@ func TestRefreshEventEnvelopeCarriesExplicitDeliveryMetadata(t *testing.T) {
 	}
 }
 
-func TestTableMetadataUpdatesDataWithoutChangingComponentStatus(t *testing.T) {
+func TestVisualMetadataUpdatesDataWithoutChangingComponentStatus(t *testing.T) {
 	table := dashboard.Table{Title: "Orders", Cardinality: dashboard.ExactCardinality(42)}
 	patch := RefreshEventPatch(dashboardstream.RefreshEvent{
-		Type: dashboardstream.RefreshEventTableMetadata, Target: "orders", Value: testTableEnvelope(t, "orders", table, 1, 1),
+		Type: dashboardstream.RefreshEventVisualMetadata, Target: "orders", Value: testTableEnvelope(t, "orders", table, 1, 1),
 	})
 	visuals, ok := patch["visuals"].(map[string]uisignals.DashboardVisualizationSignal)
 	var dataState visualizationir.VisualizationDataState

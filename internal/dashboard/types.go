@@ -18,40 +18,11 @@ type Signals struct {
 	SpatialInteractionCommand  SpatialSelectionCommand    `json:"spatialInteractionCommand"`
 }
 
-// VisualizationWindowRequest is the renderer-independent window command sent
-// by every grid visualization. TableRequest remains an internal query-runtime
-// shape and must not leak back across the browser boundary.
-type VisualizationWindowRequest struct {
-	VisualID     string                              `json:"visualID"`
-	SpecRevision string                              `json:"specRevision"`
-	DataRevision int64                               `json:"dataRevision"`
-	RequestSeq   int64                               `json:"requestSeq"`
-	ResetVersion int64                               `json:"resetVersion"`
-	Start        int64                               `json:"start"`
-	Limit        int64                               `json:"limit"`
-	Sort         []visualizationir.VisualizationSort `json:"sort"`
-	BlockID      string                              `json:"blockID"`
-}
-
-type SpatialBounds struct {
-	West  float64 `json:"west"`
-	South float64 `json:"south"`
-	East  float64 `json:"east"`
-	North float64 `json:"north"`
-}
-
-type SpatialWindowRequest struct {
-	VisualID     string        `json:"visualID"`
-	SpecRevision string        `json:"specRevision"`
-	DataRevision int64         `json:"dataRevision"`
-	RequestSeq   int64         `json:"requestSeq"`
-	ResetVersion int64         `json:"resetVersion"`
-	Bounds       SpatialBounds `json:"bounds"`
-	Zoom         float64       `json:"zoom"`
-	Width        int           `json:"width"`
-	Height       int           `json:"height"`
-	WindowID     string        `json:"windowID"`
-}
+// Browser command contracts are owned by the visualization IR. These aliases
+// keep dashboard orchestration readable without creating a second wire model.
+type VisualizationWindowRequest = visualizationir.VisualizationWindowRequest
+type SpatialBounds = visualizationir.VisualizationSpatialBounds
+type SpatialWindowRequest = visualizationir.VisualizationSpatialWindowRequest
 
 type Catalog struct {
 	Workspace  CatalogWorkspace   `json:"workspace"`

@@ -554,10 +554,32 @@ func (p VisualProvider) queryAgentTable(ctx context.Context, workspaceID string,
 	if len(input.Sort) > 0 {
 		sortSpec = dashboard.TableSort{Key: agentFieldAlias(input.Sort[0].Field), Direction: normalizedSortDirection(input.Sort[0].Direction)}
 	}
-	internalType := map[string]string{"table": "data_table", "matrix": "matrix_table", "pivot": "pivot_table"}[input.Type]
+	authored := reportdef.TableVisual{Title: title, DefaultSort: sortSpec, Style: dashboard.TableStyle{}.WithDefaults(), Columns: columns, Query: reportdef.TableQuery{Table: input.Dataset}}
+	for _, field := range fields {
+		authored.DataColumns = append(authored.DataColumns, reportdef.FieldRef{Field: field.Field, Alias: agentFieldAliasForRef(field)})
+	}
+	if input.Type == "table" {
+		for _, field := range fields {
+			authored.Query.Fields = append(authored.Query.Fields, field.Field)
+		}
+	} else {
+		for _, field := range dimensions {
+			authored.Query.Rows = append(authored.Query.Rows, reportdef.FieldRef{Field: field.Field, Alias: field.Alias})
+		}
+		for _, field := range measures {
+			authored.Query.Measures = append(authored.Query.Measures, reportdef.FieldRef{Field: field.Field, Alias: field.Alias})
+		}
+	}
+	definitions, err := workspacecompiler.CompileVisualizationDefinitions(&reportdef.Dashboard{
+		ID: "agent", SemanticModel: input.Model,
+		Visuals: reportdef.TabularVisualizations(input.Type, map[string]reportdef.TableVisual{id: authored}),
+	}, model)
+	if err != nil {
+		return agentVisualResult{}, err
+	}
 	table := dashboard.Table{
 		Version:       2,
-		Kind:          internalType,
+		Kind:          map[string]string{"table": "data_table", "matrix": "matrix_table", "pivot": "pivot_table"}[input.Type],
 		Title:         title,
 		Style:         dashboard.TableStyle{}.WithDefaults(),
 		Interaction:   dashboard.InteractionConfig{},
@@ -577,7 +599,7 @@ func (p VisualProvider) queryAgentTable(ctx context.Context, workspaceID string,
 		LoadingBlock: "",
 		Error:        "",
 	}
-	envelope, err := visualizationruntime.TableEnvelope(id, table, 1, 1)
+	envelope, err := visualizationruntime.WindowEnvelopeFromDefinition(definitions[id], table, 1, 1)
 	if err != nil {
 		return agentVisualResult{}, err
 	}

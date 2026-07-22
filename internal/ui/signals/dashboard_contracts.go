@@ -128,16 +128,11 @@ func DashboardVisualWindowRequestFromDashboard(value dashboard.TableRequest) vis
 }
 
 func DashboardVisualSpatialWindowRequestFromDashboard(value dashboard.SpatialWindowRequest) visualizationir.VisualizationSpatialWindowRequest {
-	return visualizationir.VisualizationSpatialWindowRequest{
-		VisualID: value.VisualID, SpecRevision: value.SpecRevision, DataRevision: value.DataRevision,
-		RequestSeq: value.RequestSeq, ResetVersion: value.ResetVersion,
-		Bounds: visualizationir.VisualizationSpatialBounds{West: value.Bounds.West, South: value.Bounds.South, East: value.Bounds.East, North: value.Bounds.North},
-		Zoom:   value.Zoom, Width: int32(value.Width), Height: int32(value.Height), WindowID: value.WindowID,
-	}
+	return value
 }
 
 func DashboardTabularVisualFromDefinitionAtRevision(definition visualizationdefinition.Definition, value dashboard.Table, dataRevision, generation int64) visualizationir.VisualizationEnvelope {
-	envelope, err := visualizationruntime.TableEnvelopeFromDefinition(definition, value, dataRevision, generation)
+	envelope, err := visualizationruntime.WindowEnvelopeFromDefinition(definition, value, dataRevision, generation)
 	if err != nil {
 		panic(fmt.Sprintf("compiled tabular visualization %q reached the signal boundary with invalid data: %v", definition.ID, err))
 	}

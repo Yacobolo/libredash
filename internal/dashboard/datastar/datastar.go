@@ -112,12 +112,7 @@ func RefreshEventPatch(event dashboardstream.RefreshEvent) pagestream.SignalPatc
 		return pagestream.SignalPatch{
 			"visuals": map[string]uisignals.DashboardVisualizationSignal{event.Target: envelope},
 		}
-	case dashboardstream.RefreshEventTable:
-		envelope := visualizationEnvelopeSignal(event)
-		return pagestream.SignalPatch{
-			"visuals": map[string]uisignals.DashboardVisualizationSignal{event.Target: envelope},
-		}
-	case dashboardstream.RefreshEventTableMetadata:
+	case dashboardstream.RefreshEventVisualMetadata:
 		envelope := visualizationEnvelopeSignal(event)
 		return pagestream.SignalPatch{"visuals": map[string]uisignals.DashboardVisualizationSignal{event.Target: envelope}}
 	case dashboardstream.RefreshEventTargetError:

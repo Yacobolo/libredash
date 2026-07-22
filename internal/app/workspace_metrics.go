@@ -10,6 +10,7 @@ import (
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 	"github.com/Yacobolo/leapview/internal/dataquery"
 	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 	"github.com/Yacobolo/leapview/internal/workspace"
 )
 
@@ -62,9 +63,9 @@ func (m multiWorkspaceMetrics) DefaultFilters(dashboardID string) dashboard.Filt
 	return dashboard.Filters{}.WithDefaults()
 }
 
-func (m multiWorkspaceMetrics) NormalizeTableRequest(dashboardID string, request dashboard.TableRequest) dashboard.TableRequest {
+func (m multiWorkspaceMetrics) NormalizeVisualizationWindow(dashboardID string, request dashboard.TableRequest) dashboard.TableRequest {
 	if metrics := m.defaultMetrics(); metrics != nil {
-		return metrics.NormalizeTableRequest(dashboardID, request)
+		return metrics.NormalizeVisualizationWindow(dashboardID, request)
 	}
 	return request.WithDefaults()
 }
@@ -83,18 +84,32 @@ func (m multiWorkspaceMetrics) QueryDashboardPage(ctx context.Context, dashboard
 	return dashboard.EmptyPatch(filters.WithDefaults(), fmt.Errorf("workspace metrics are not configured")), nil
 }
 
-func (m multiWorkspaceMetrics) QueryTable(ctx context.Context, dashboardID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
+func (m multiWorkspaceMetrics) QueryDashboardVisualizations(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters) (dashboard.Patch, error) {
 	if metrics := m.defaultMetrics(); metrics != nil {
-		return metrics.QueryTable(ctx, dashboardID, filters, request)
+		return metrics.QueryDashboardVisualizations(ctx, dashboardID, pageID, filters)
 	}
-	return dashboard.EmptyTable(request.WithDefaults(), fmt.Errorf("workspace metrics are not configured")), nil
+	return dashboard.EmptyPatch(filters.WithDefaults(), fmt.Errorf("workspace metrics are not configured")), nil
 }
 
-func (m multiWorkspaceMetrics) QueryTablePage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
+func (m multiWorkspaceMetrics) QueryVisualization(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualID string) (visualizationir.VisualizationEnvelope, error) {
 	if metrics := m.defaultMetrics(); metrics != nil {
-		return metrics.QueryTablePage(ctx, dashboardID, pageID, filters, request)
+		return metrics.QueryVisualization(ctx, dashboardID, pageID, filters, visualID)
 	}
-	return dashboard.EmptyTable(request.WithDefaults(), fmt.Errorf("workspace metrics are not configured")), nil
+	return visualizationir.VisualizationEnvelope{}, fmt.Errorf("workspace metrics are not configured")
+}
+
+func (m multiWorkspaceMetrics) QueryVisualizationWindow(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request visualizationir.VisualizationWindowRequest) (visualizationir.VisualizationEnvelope, error) {
+	if metrics := m.defaultMetrics(); metrics != nil {
+		return metrics.QueryVisualizationWindow(ctx, dashboardID, pageID, filters, request)
+	}
+	return visualizationir.VisualizationEnvelope{}, fmt.Errorf("workspace metrics are not configured")
+}
+
+func (m multiWorkspaceMetrics) QueryVisualizationSpatialWindow(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request visualizationir.VisualizationSpatialWindowRequest) (visualizationir.VisualizationEnvelope, error) {
+	if metrics := m.defaultMetrics(); metrics != nil {
+		return metrics.QueryVisualizationSpatialWindow(ctx, dashboardID, pageID, filters, request)
+	}
+	return visualizationir.VisualizationEnvelope{}, fmt.Errorf("workspace metrics are not configured")
 }
 
 func (m multiWorkspaceMetrics) QuerySemantic(ctx context.Context, modelID string, request reportdef.AggregateQuery) (reportdef.QueryRows, error) {
@@ -190,9 +205,9 @@ func (m *dynamicRuntimeMetrics) DefaultFilters(dashboardID string) dashboard.Fil
 	return dashboard.Filters{}.WithDefaults()
 }
 
-func (m *dynamicRuntimeMetrics) NormalizeTableRequest(dashboardID string, request dashboard.TableRequest) dashboard.TableRequest {
+func (m *dynamicRuntimeMetrics) NormalizeVisualizationWindow(dashboardID string, request dashboard.TableRequest) dashboard.TableRequest {
 	if metrics := m.defaultMetrics(); metrics != nil {
-		return metrics.NormalizeTableRequest(dashboardID, request)
+		return metrics.NormalizeVisualizationWindow(dashboardID, request)
 	}
 	return request.WithDefaults()
 }
@@ -211,18 +226,32 @@ func (m *dynamicRuntimeMetrics) QueryDashboardPage(ctx context.Context, dashboar
 	return dashboard.EmptyPatch(filters.WithDefaults(), fmt.Errorf("workspace metrics are not configured")), nil
 }
 
-func (m *dynamicRuntimeMetrics) QueryTable(ctx context.Context, dashboardID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
+func (m *dynamicRuntimeMetrics) QueryDashboardVisualizations(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters) (dashboard.Patch, error) {
 	if metrics := m.defaultMetrics(); metrics != nil {
-		return metrics.QueryTable(ctx, dashboardID, filters, request)
+		return metrics.QueryDashboardVisualizations(ctx, dashboardID, pageID, filters)
 	}
-	return dashboard.EmptyTable(request.WithDefaults(), fmt.Errorf("workspace metrics are not configured")), nil
+	return dashboard.EmptyPatch(filters.WithDefaults(), fmt.Errorf("workspace metrics are not configured")), nil
 }
 
-func (m *dynamicRuntimeMetrics) QueryTablePage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
+func (m *dynamicRuntimeMetrics) QueryVisualization(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualID string) (visualizationir.VisualizationEnvelope, error) {
 	if metrics := m.defaultMetrics(); metrics != nil {
-		return metrics.QueryTablePage(ctx, dashboardID, pageID, filters, request)
+		return metrics.QueryVisualization(ctx, dashboardID, pageID, filters, visualID)
 	}
-	return dashboard.EmptyTable(request.WithDefaults(), fmt.Errorf("workspace metrics are not configured")), nil
+	return visualizationir.VisualizationEnvelope{}, fmt.Errorf("workspace metrics are not configured")
+}
+
+func (m *dynamicRuntimeMetrics) QueryVisualizationWindow(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request visualizationir.VisualizationWindowRequest) (visualizationir.VisualizationEnvelope, error) {
+	if metrics := m.defaultMetrics(); metrics != nil {
+		return metrics.QueryVisualizationWindow(ctx, dashboardID, pageID, filters, request)
+	}
+	return visualizationir.VisualizationEnvelope{}, fmt.Errorf("workspace metrics are not configured")
+}
+
+func (m *dynamicRuntimeMetrics) QueryVisualizationSpatialWindow(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request visualizationir.VisualizationSpatialWindowRequest) (visualizationir.VisualizationEnvelope, error) {
+	if metrics := m.defaultMetrics(); metrics != nil {
+		return metrics.QueryVisualizationSpatialWindow(ctx, dashboardID, pageID, filters, request)
+	}
+	return visualizationir.VisualizationEnvelope{}, fmt.Errorf("workspace metrics are not configured")
 }
 
 func (m *dynamicRuntimeMetrics) QuerySemantic(ctx context.Context, modelID string, request reportdef.AggregateQuery) (reportdef.QueryRows, error) {

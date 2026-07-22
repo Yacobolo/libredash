@@ -465,12 +465,12 @@ func (m auditedDashboardMetrics) QueryDashboardPage(ctx context.Context, dashboa
 		return dashboard.Patch{}, err
 	}
 	request := dashboard.TableRequest{Table: "order_rows", Block: "a", Count: dashboard.TableChunkSize}.WithDefaults()
-	table, err := m.QueryTablePage(ctx, dashboardID, pageID, filters, request)
+	table, err := m.queryWindow(ctx, dashboardID, pageID, filters, request)
 	if err != nil {
 		return dashboard.Patch{}, err
 	}
 	definition, _ := m.VisualizationDefinition(dashboardID, "order_rows")
-	envelope, err := visualizationruntime.TableEnvelopeFromDefinition(definition, table, 0, 0)
+	envelope, err := visualizationruntime.WindowEnvelopeFromDefinition(definition, table, 0, 0)
 	if err != nil {
 		return dashboard.Patch{}, err
 	}
@@ -478,7 +478,7 @@ func (m auditedDashboardMetrics) QueryDashboardPage(ctx context.Context, dashboa
 	return patch, nil
 }
 
-func (m auditedDashboardMetrics) QueryTablePage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
+func (m auditedDashboardMetrics) queryWindow(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
 	_, err := m.ExecuteDataQuery(ctx, dataquery.Query{
 		Surface:   dataquery.SurfaceDashboard,
 		Operation: dataquery.OperationDashboardRows,
@@ -491,14 +491,18 @@ func (m auditedDashboardMetrics) QueryTablePage(ctx context.Context, dashboardID
 	if err != nil {
 		return dashboard.Table{}, err
 	}
-	return m.fakeMetrics.QueryTablePage(ctx, dashboardID, pageID, filters, request)
+	return m.fakeMetrics.queryWindow(ctx, dashboardID, pageID, filters, request)
+}
+
+func (m auditedDashboardMetrics) QueryVisualizationWindow(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request visualizationir.VisualizationWindowRequest) (visualizationir.VisualizationEnvelope, error) {
+	return fakeVisualizationWindow(ctx, m, dashboardID, pageID, filters, request)
 }
 
 func (m auditedDashboardMetrics) ExecuteDataQuery(ctx context.Context, request dataquery.Query) (dataquery.Result, error) {
 	return dataquery.ExecuteAudited(ctx, request, m.fakeMetrics.ExecuteDataQuery)
 }
 
-func (manyRowsMetrics) QueryTablePage(_ context.Context, _ string, _ string, _ dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
+func (manyRowsMetrics) queryWindow(_ context.Context, _ string, _ string, _ dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
 	rows := make([]map[string]any, 0, request.Count)
 	for i := 0; i < request.Count; i++ {
 		rows = append(rows, map[string]any{"order_id": fmt.Sprintf("order-%d", i)})
@@ -513,4 +517,8 @@ func (manyRowsMetrics) QueryTablePage(_ context.Context, _ string, _ string, _ d
 		Sort:          dashboard.TableSort{Key: "order_id", Direction: "desc"},
 		Blocks:        map[string]dashboard.TableBlock{"a": {Rows: rows}},
 	}, nil
+}
+
+func (m manyRowsMetrics) QueryVisualizationWindow(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request visualizationir.VisualizationWindowRequest) (visualizationir.VisualizationEnvelope, error) {
+	return fakeVisualizationWindow(ctx, m, dashboardID, pageID, filters, request)
 }

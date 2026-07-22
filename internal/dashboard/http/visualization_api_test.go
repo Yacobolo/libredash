@@ -41,11 +41,16 @@ func TestDashboardVisualizationDescriptionContainsOnlyCompiledContract(t *testin
 }
 
 func TestDashboardGridJSONUsesVisualizationEnvelope(t *testing.T) {
-	envelope, err := visualizationruntime.TableEnvelope("orders", dashboard.Table{
+	table := dashboard.Table{
 		Title: "Orders", Columns: []dashboard.TableColumn{{Key: "order_id", Label: "Order ID"}},
 		Cardinality: dashboard.ExactCardinality(1), AvailableRows: 1,
 		Blocks: map[string]dashboard.TableBlock{"a": {Rows: []map[string]any{{"order_id": "A-1"}}}},
-	}, 7, 3)
+	}
+	definitions, err := workspacecompiler.CompileVisualizationDefinitions(&reportdef.Dashboard{ID: "sales", SemanticModel: "sales", Visuals: reportdef.TabularVisualizations("table", map[string]reportdef.TableVisual{"orders": {Title: "Orders", Columns: table.Columns, Query: reportdef.TableQuery{Table: "orders", Fields: []string{"order_id"}}}})})
+	if err != nil {
+		t.Fatalf("compile table definition: %v", err)
+	}
+	envelope, err := visualizationruntime.WindowEnvelopeFromDefinition(definitions["orders"], table, 7, 3)
 	if err != nil {
 		t.Fatalf("build table envelope: %v", err)
 	}

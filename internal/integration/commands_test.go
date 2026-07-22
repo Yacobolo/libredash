@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/leapview/internal/dashboard"
 	"github.com/Yacobolo/leapview/internal/dashboard/consumer"
 	dashboardruntime "github.com/Yacobolo/leapview/internal/dashboard/runtime"
 )
@@ -206,14 +205,6 @@ func (m canceledVisualWindowMetrics) ExecuteConsumersPage(ctx context.Context, r
 		publish(consumer.Result{Target: target, Err: context.Canceled})
 	}
 	return nil
-}
-
-func (m canceledVisualWindowMetrics) QueryTable(_ context.Context, dashboardID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
-	return m.QueryTablePage(context.Background(), dashboardID, "", filters, request)
-}
-
-func (m canceledVisualWindowMetrics) QueryTablePage(_ context.Context, _ string, _ string, _ dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
-	return dashboard.EmptyTable(request.WithDefaults(), context.Canceled), nil
 }
 
 func drainInitialSnapshot(t *testing.T, stream *streamClient) []map[string]any {

@@ -92,7 +92,7 @@ func (s *VisualizationDataService) spatialEnvelope(ctx context.Context, runtime 
 			Sort: reportSortToDataSort(aliasedVisualSorts(visual)),
 			Spatial: &dataquery.SpatialWindow{
 				Latitude: dataquery.Field{Field: spatial.Viewport.Latitude.FieldID, Alias: spatial.Viewport.Latitude.Alias}, Longitude: dataquery.Field{Field: spatial.Viewport.Longitude.FieldID, Alias: spatial.Viewport.Longitude.Alias},
-				West: request.Bounds.West, South: request.Bounds.South, East: request.Bounds.East, North: request.Bounds.North, Width: request.Width, Height: request.Height, FeatureCap: int(spatial.Viewport.FeatureCap), Precision: next,
+				West: request.Bounds.West, South: request.Bounds.South, East: request.Bounds.East, North: request.Bounds.North, Width: int(request.Width), Height: int(request.Height), FeatureCap: int(spatial.Viewport.FeatureCap), Precision: next,
 			},
 		}
 		if spatial.Time != nil {

@@ -35,12 +35,20 @@ func (m *Service) QueryDashboardPage(ctx context.Context, dashboardID, pageID st
 	return m.queries.QueryDashboardPage(ctx, dashboardID, pageID, filters)
 }
 
-func (m *Service) QueryTable(ctx context.Context, dashboardID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
-	return m.queries.QueryTable(ctx, dashboardID, filters, request)
+func (m *Service) QueryDashboardVisualizations(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters) (dashboard.Patch, error) {
+	return m.queries.QueryDashboardVisualizations(ctx, dashboardID, pageID, filters)
 }
 
-func (m *Service) QueryTablePage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
-	return m.queries.QueryTablePage(ctx, dashboardID, pageID, filters, request)
+func (m *Service) QueryVisualization(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualID string) (visualizationir.VisualizationEnvelope, error) {
+	return m.queries.QueryVisualization(ctx, dashboardID, pageID, filters, visualID)
+}
+
+func (m *Service) QueryVisualizationWindow(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request visualizationir.VisualizationWindowRequest) (visualizationir.VisualizationEnvelope, error) {
+	return m.queries.QueryVisualizationWindow(ctx, dashboardID, pageID, filters, request)
+}
+
+func (m *Service) QueryVisualizationSpatialWindow(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request visualizationir.VisualizationSpatialWindowRequest) (visualizationir.VisualizationEnvelope, error) {
+	return m.queries.QueryVisualizationSpatialWindow(ctx, dashboardID, pageID, filters, request)
 }
 
 func (s *QueryService) QueryDashboard(ctx context.Context, dashboardID string, filters dashboard.Filters) (dashboard.Patch, error) {
@@ -51,12 +59,20 @@ func (s *QueryService) QueryDashboardPage(ctx context.Context, dashboardID, page
 	return s.snapshots.QueryDashboardPage(ctx, dashboardID, pageID, filters)
 }
 
-func (s *QueryService) QueryTable(ctx context.Context, dashboardID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
-	return s.visualizations.QueryTable(ctx, dashboardID, filters, request)
+func (s *QueryService) QueryDashboardVisualizations(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters) (dashboard.Patch, error) {
+	return s.snapshots.QueryDashboardPage(ctx, dashboardID, pageID, filters)
 }
 
-func (s *QueryService) QueryTablePage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
-	return s.visualizations.QueryTablePage(ctx, dashboardID, pageID, filters, request)
+func (s *QueryService) QueryVisualization(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualID string) (visualizationir.VisualizationEnvelope, error) {
+	return s.snapshots.queryVisualizationPage(ctx, dashboardID, pageID, filters, visualID)
+}
+
+func (s *QueryService) QueryVisualizationWindow(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request visualizationir.VisualizationWindowRequest) (visualizationir.VisualizationEnvelope, error) {
+	return s.visualizations.queryVisualizationWindowPage(ctx, dashboardID, pageID, filters, request, true)
+}
+
+func (s *QueryService) QueryVisualizationSpatialWindow(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request visualizationir.VisualizationSpatialWindowRequest) (visualizationir.VisualizationEnvelope, error) {
+	return s.snapshots.querySpatialVisualPage(ctx, dashboardID, pageID, filters, request)
 }
 
 func (s *SnapshotService) QueryDashboard(ctx context.Context, dashboardID string, filters dashboard.Filters) (dashboard.Patch, error) {
@@ -98,11 +114,25 @@ func (s *SnapshotService) QueryDashboardPage(ctx context.Context, dashboardID, p
 	}
 	patch.FilterOptions = options
 
-	visuals, err := s.visualizations.visuals(ctx, runtime, report, filters, pageVisualIDs(page))
+	allIDs := pageVisualizationIDs(page)
+	inlineIDs := make([]string, 0, len(allIDs))
+	windowIDs := make([]string, 0, len(allIDs))
+	for _, visualID := range allIDs {
+		definition, ok := report.Visualizations[visualID]
+		if !ok {
+			return dashboard.EmptyPatch(filters, fmt.Errorf("compiled visualization %q not found", visualID)), nil
+		}
+		if isWindowedResult(definition.Query.ResultShape) {
+			windowIDs = append(windowIDs, visualID)
+		} else {
+			inlineIDs = append(inlineIDs, visualID)
+		}
+	}
+	visuals, err := s.visualizations.visuals(ctx, runtime, report, filters, inlineIDs)
 	if err != nil {
 		return dashboard.EmptyPatch(filters, err), nil
 	}
-	for _, visualID := range pageTableIDs(page) {
+	for _, visualID := range windowIDs {
 		request := dashboard.TableRequest{Table: visualID, Block: "a", Count: dashboard.TableChunkSize}.WithDefaults()
 		table, queryErr := s.visualizations.queryTablePage(ctx, dashboardID, page.ID, filters, request, true)
 		if queryErr != nil {
@@ -112,7 +142,7 @@ func (s *SnapshotService) QueryDashboardPage(ctx context.Context, dashboardID, p
 		if !ok {
 			return dashboard.EmptyPatch(filters, fmt.Errorf("compiled visualization %q not found", visualID)), nil
 		}
-		envelope, envelopeErr := visualizationruntime.TableEnvelopeFromDefinition(definition, table, 0, 0)
+		envelope, envelopeErr := visualizationruntime.WindowEnvelopeFromDefinition(definition, table, 0, 0)
 		if envelopeErr != nil {
 			return dashboard.EmptyPatch(filters, envelopeErr), nil
 		}
@@ -123,7 +153,18 @@ func (s *SnapshotService) QueryDashboardPage(ctx context.Context, dashboardID, p
 	return patch, nil
 }
 
-func (s *SnapshotService) queryVisualPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualID string) (visualizationir.VisualizationEnvelope, error) {
+func (s *SnapshotService) queryVisualizationPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualID string) (visualizationir.VisualizationEnvelope, error) {
+	report, _, err := s.reports.reportRuntime(dashboardID, s.runtimes)
+	if err != nil {
+		return visualizationir.VisualizationEnvelope{}, err
+	}
+	definition, ok := report.Visualizations[visualID]
+	if !ok {
+		return visualizationir.VisualizationEnvelope{}, fmt.Errorf("unknown visualization %q", visualID)
+	}
+	if isWindowedResult(definition.Query.ResultShape) {
+		return s.visualizations.queryVisualizationWindowPage(ctx, dashboardID, pageID, filters, visualizationir.VisualizationWindowRequest{VisualID: visualID, SpecRevision: definition.SpecRevision, BlockID: "a", Limit: dashboard.TableChunkSize}, true)
+	}
 	visuals, err := s.queryVisualsPage(ctx, dashboardID, pageID, filters, []string{visualID})
 	if err != nil {
 		return visualizationir.VisualizationEnvelope{}, err
@@ -141,7 +182,7 @@ func (s *SnapshotService) querySpatialVisualPage(ctx context.Context, dashboardI
 	}
 	page := dashboardPage(report, pageID)
 	filters = report.NormalizeFiltersForPage(page.ID, filters)
-	if !contains(pageVisualIDs(page), request.VisualID) {
+	if !contains(pageVisualizationIDs(page), request.VisualID) {
 		return visualizationir.VisualizationEnvelope{}, fmt.Errorf("visual %q is not on page %q", request.VisualID, page.ID)
 	}
 	s.mu.RLock()
@@ -159,7 +200,7 @@ func (s *SnapshotService) queryVisualsPage(ctx context.Context, dashboardID, pag
 	}
 	page := dashboardPage(report, pageID)
 	filters = report.NormalizeFiltersForPage(page.ID, filters)
-	pageIDs := pageVisualIDs(page)
+	pageIDs := pageVisualizationIDs(page)
 	for _, visualID := range visualIDs {
 		if !contains(pageIDs, visualID) {
 			return nil, fmt.Errorf("visual %q is not on page %q", visualID, page.ID)
@@ -180,7 +221,7 @@ func (s *SnapshotService) queryVisualBundlePage(ctx context.Context, dashboardID
 	}
 	page := dashboardPage(report, pageID)
 	filters = report.NormalizeFiltersForPage(page.ID, filters)
-	pageIDs := pageVisualIDs(page)
+	pageIDs := pageVisualizationIDs(page)
 	for _, visualID := range visualIDs {
 		if !contains(pageIDs, visualID) {
 			return nil, fmt.Errorf("visual %q is not on page %q", visualID, page.ID)
@@ -232,11 +273,11 @@ func dashboardPage(report *dashboarddefinition.Definition, pageID string) dashbo
 	return report.Pages[0].WithDefaults()
 }
 
-func pageVisualIDs(page dashboard.Page) []string {
+func pageVisualizationIDs(page dashboard.Page) []string {
 	seen := map[string]struct{}{}
 	ids := []string{}
 	for _, item := range page.Visuals {
-		if item.Kind == "table" || item.Visual == "" {
+		if item.Visual == "" {
 			continue
 		}
 		if _, ok := seen[item.Visual]; ok {
@@ -249,29 +290,60 @@ func pageVisualIDs(page dashboard.Page) []string {
 	return ids
 }
 
-func pageTableIDs(page dashboard.Page) []string {
-	seen := map[string]struct{}{}
-	ids := []string{}
-	for _, item := range page.Visuals {
-		if item.Kind != "table" || item.Visual == "" {
-			continue
-		}
-		if _, ok := seen[item.Visual]; ok {
-			continue
-		}
-		seen[item.Visual] = struct{}{}
-		ids = append(ids, item.Visual)
+func isWindowedResult(shape visualizationdefinition.ResultShape) bool {
+	return shape == visualizationdefinition.ResultDetailWindow || shape == visualizationdefinition.ResultMatrixWindow || shape == visualizationdefinition.ResultPivotWindow
+}
+
+func (s *VisualizationDataService) queryVisualizationWindowPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, window visualizationir.VisualizationWindowRequest, includeTotal bool) (visualizationir.VisualizationEnvelope, error) {
+	request, err := visualizationTableRequest(window)
+	if err != nil {
+		return visualizationir.VisualizationEnvelope{}, err
 	}
-	sort.Strings(ids)
-	return ids
+	report, _, err := s.reports.reportRuntime(dashboardID, s.runtimes)
+	if err != nil {
+		return visualizationir.VisualizationEnvelope{}, err
+	}
+	page := dashboardPage(report, pageID)
+	if !contains(pageVisualizationIDs(page), window.VisualID) {
+		return visualizationir.VisualizationEnvelope{}, fmt.Errorf("visual %q is not on page %q", window.VisualID, page.ID)
+	}
+	definition, ok := report.Visualizations[window.VisualID]
+	if !ok || !isWindowedResult(definition.Query.ResultShape) {
+		return visualizationir.VisualizationEnvelope{}, fmt.Errorf("visual %q is not windowed", window.VisualID)
+	}
+	if window.SpecRevision != "" && window.SpecRevision != definition.SpecRevision {
+		return visualizationir.VisualizationEnvelope{}, fmt.Errorf("visual %q specification revision is stale", window.VisualID)
+	}
+	table, err := s.queryTablePage(ctx, dashboardID, pageID, filters, request, includeTotal)
+	if err != nil {
+		return visualizationir.VisualizationEnvelope{}, err
+	}
+	return visualizationruntime.WindowEnvelopeFromDefinition(definition, table, window.DataRevision, 0)
 }
 
-func (s *VisualizationDataService) QueryTable(ctx context.Context, dashboardID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
-	return s.QueryTablePage(ctx, dashboardID, "", filters, request)
-}
-
-func (s *VisualizationDataService) QueryTablePage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
-	return s.queryTablePage(ctx, dashboardID, pageID, filters, request, true)
+func visualizationTableRequest(window visualizationir.VisualizationWindowRequest) (dashboard.TableRequest, error) {
+	if window.VisualID == "" {
+		return dashboard.TableRequest{}, fmt.Errorf("visual window requires a visual ID")
+	}
+	if window.Start < 0 || window.Limit < 0 || window.Start > int64(^uint(0)>>1) || window.Limit > int64(^uint(0)>>1) {
+		return dashboard.TableRequest{}, fmt.Errorf("invalid visual window coordinates")
+	}
+	if len(window.Sort) > 1 {
+		return dashboard.TableRequest{}, fmt.Errorf("visual window supports exactly one active sort")
+	}
+	request := dashboard.TableRequest{Table: window.VisualID, Block: window.BlockID, Start: int(window.Start), Count: int(window.Limit), RequestSeq: int(window.RequestSeq), ResetVersion: int(window.ResetVersion)}
+	if len(window.Sort) == 1 {
+		request.Sort.Key = window.Sort[0].Field.Field
+		switch window.Sort[0].Direction {
+		case visualizationir.VisualizationSortDirectionAscending:
+			request.Sort.Direction = "asc"
+		case visualizationir.VisualizationSortDirectionDescending:
+			request.Sort.Direction = "desc"
+		default:
+			return dashboard.TableRequest{}, fmt.Errorf("unsupported visual window sort direction %q", window.Sort[0].Direction)
+		}
+	}
+	return request, nil
 }
 
 // queryTableRowsPage returns the requested table window without making an
@@ -291,7 +363,7 @@ func (s *VisualizationDataService) queryTableCountPage(ctx context.Context, dash
 	} else {
 		filters = filters.WithDefaults()
 	}
-	request = s.reports.NormalizeTableRequest(dashboardID, request)
+	request = s.reports.NormalizeVisualizationWindow(dashboardID, request)
 	if err != nil {
 		return 0, err
 	}
@@ -320,7 +392,7 @@ func (s *VisualizationDataService) queryTablePage(ctx context.Context, dashboard
 	} else {
 		filters = filters.WithDefaults()
 	}
-	request = s.reports.NormalizeTableRequest(dashboardID, request)
+	request = s.reports.NormalizeVisualizationWindow(dashboardID, request)
 	if err != nil {
 		return dashboard.EmptyTable(request, err), nil
 	}

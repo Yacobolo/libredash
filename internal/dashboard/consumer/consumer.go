@@ -13,14 +13,14 @@ type Kind string
 const (
 	KindFilterOptions Kind = "filter_options"
 	KindVisual        Kind = "visual"
-	KindTable         Kind = "table"
+	KindWindow        Kind = "visual_window"
 	KindSpatial       Kind = "spatial"
 )
 
 type Target struct {
 	Kind           Kind
 	ID             string
-	TableRequest   dashboard.TableRequest
+	WindowRequest  dashboard.TableRequest
 	SpatialRequest dashboard.SpatialWindowRequest
 	// ExactCardinality is resolved from the authored table contract. The
 	// default bounded mode never schedules a separate COUNT(*) query.
@@ -30,7 +30,7 @@ type Target struct {
 // Key is the renderer-neutral identity used by status, audit, and
 // observability surfaces. Kind remains internal execution metadata.
 func (t Target) Key() string {
-	if t.Kind == KindVisual || t.Kind == KindTable || t.Kind == KindSpatial {
+	if t.Kind == KindVisual || t.Kind == KindWindow || t.Kind == KindSpatial {
 		return "visual:" + t.ID
 	}
 	return string(t.Kind) + ":" + t.ID
@@ -60,7 +60,7 @@ type Result struct {
 	Target         Target
 	Envelope       visualizationir.VisualizationEnvelope
 	FilterOptions  map[string][]dashboard.FilterOption
-	TableMetadata  bool
+	Metadata       bool
 	Err            error
 	Duration       time.Duration
 	Queries        int

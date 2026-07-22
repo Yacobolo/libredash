@@ -370,22 +370,22 @@ func specSupportsResultShape(spec ir.VisualizationSpec, shape ResultShape) bool 
 
 func ownership(spec ir.VisualizationSpec) (string, QueryKind, error) {
 	switch spec.Value.(type) {
-	case *ir.CartesianVisualizationSpec, ir.CartesianVisualizationSpec,
-		*ir.ProportionalVisualizationSpec, ir.ProportionalVisualizationSpec,
-		*ir.HierarchyVisualizationSpec, ir.HierarchyVisualizationSpec,
-		*ir.PolarVisualizationSpec, ir.PolarVisualizationSpec:
+	case *ir.CartesianVisualizationSpec,
+		*ir.ProportionalVisualizationSpec,
+		*ir.HierarchyVisualizationSpec,
+		*ir.PolarVisualizationSpec:
 		return RendererECharts, QueryAggregate, nil
-	case *ir.TableVisualizationSpec, ir.TableVisualizationSpec:
+	case *ir.TableVisualizationSpec:
 		return RendererTanStack, QueryDetail, nil
-	case *ir.MatrixVisualizationSpec, ir.MatrixVisualizationSpec:
+	case *ir.MatrixVisualizationSpec:
 		return RendererTanStack, QueryMatrix, nil
-	case *ir.PivotVisualizationSpec, ir.PivotVisualizationSpec:
+	case *ir.PivotVisualizationSpec:
 		return RendererTanStack, QueryPivot, nil
-	case *ir.KPIVisualizationSpec, ir.KPIVisualizationSpec:
+	case *ir.KPIVisualizationSpec:
 		return RendererHTML, QueryAggregate, nil
-	case *ir.GeographicVisualizationSpec, ir.GeographicVisualizationSpec:
+	case *ir.GeographicVisualizationSpec:
 		return RendererMapLibre, QuerySpatial, nil
-	case *ir.CustomVisualizationSpec, ir.CustomVisualizationSpec:
+	case *ir.CustomVisualizationSpec:
 		return RendererVegaLite, QueryCustom, nil
 	default:
 		return "", "", fmt.Errorf("unsupported visualization specification %T", spec.Value)

@@ -51,10 +51,10 @@ func (fakeMetrics) ExecuteConsumersPage(ctx context.Context, request consumer.Re
 		case consumer.KindFilterOptions:
 			options, err := fakeMetrics{}.QueryFilterOptionsPage(ctx, request.DashboardID, request.PageID, []string{target.ID})
 			publish(consumer.Result{Target: target, FilterOptions: options, Err: err})
-		case consumer.KindTable:
-			table, err := fakeMetrics{}.QueryTablePage(ctx, request.DashboardID, request.PageID, request.Filters, target.TableRequest)
+		case consumer.KindWindow:
+			table, err := fakeMetrics{}.queryWindow(ctx, request.DashboardID, request.PageID, request.Filters, target.WindowRequest)
 			definition, _ := fakeMetrics{}.VisualizationDefinition(request.DashboardID, target.ID)
-			envelope, envelopeErr := visualizationruntime.TableEnvelopeFromDefinition(definition, table, 0, 0)
+			envelope, envelopeErr := visualizationruntime.WindowEnvelopeFromDefinition(definition, table, 0, 0)
 			publish(consumer.Result{Target: target, Envelope: envelope, Err: errors.Join(err, envelopeErr)})
 		}
 	}
@@ -68,6 +68,49 @@ type canceledTableMetrics struct {
 type recordingMetrics struct {
 	fakeMetrics
 	pageIDs chan string
+}
+
+func (fakeMetrics) QueryDashboardVisualizations(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters) (dashboard.Patch, error) {
+	return fakeMetrics{}.QueryDashboardPage(ctx, dashboardID, pageID, filters)
+}
+
+func (fakeMetrics) QueryVisualization(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualID string) (visualizationir.VisualizationEnvelope, error) {
+	patch, err := fakeMetrics{}.QueryDashboardPage(ctx, dashboardID, pageID, filters)
+	if err != nil {
+		return visualizationir.VisualizationEnvelope{}, err
+	}
+	return patch.Visuals[visualID], nil
+}
+
+func (fakeMetrics) QueryVisualizationWindow(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request visualizationir.VisualizationWindowRequest) (visualizationir.VisualizationEnvelope, error) {
+	return fakeVisualizationWindow(ctx, fakeMetrics{}, dashboardID, pageID, filters, request)
+}
+
+func (fakeMetrics) QueryVisualizationSpatialWindow(context.Context, string, string, dashboard.Filters, visualizationir.VisualizationSpatialWindowRequest) (visualizationir.VisualizationEnvelope, error) {
+	return visualizationir.VisualizationEnvelope{}, nil
+}
+
+type fakeWindowSource interface {
+	queryWindow(context.Context, string, string, dashboard.Filters, dashboard.TableRequest) (dashboard.Table, error)
+	VisualizationDefinition(string, string) (visualizationdefinition.Definition, bool)
+}
+
+func fakeVisualizationWindow(ctx context.Context, source fakeWindowSource, dashboardID, pageID string, filters dashboard.Filters, request visualizationir.VisualizationWindowRequest) (visualizationir.VisualizationEnvelope, error) {
+	tableRequest := dashboard.TableRequest{Table: request.VisualID, Block: request.BlockID, Start: int(request.Start), Count: int(request.Limit), RequestSeq: int(request.RequestSeq), ResetVersion: int(request.ResetVersion)}
+	if len(request.Sort) > 0 {
+		tableRequest.Sort.Key = request.Sort[0].Field.Field
+		if request.Sort[0].Direction == visualizationir.VisualizationSortDirectionDescending {
+			tableRequest.Sort.Direction = "desc"
+		} else {
+			tableRequest.Sort.Direction = "asc"
+		}
+	}
+	table, err := source.queryWindow(ctx, dashboardID, pageID, filters, tableRequest)
+	if err != nil {
+		return visualizationir.VisualizationEnvelope{}, err
+	}
+	definition, _ := source.VisualizationDefinition(dashboardID, request.VisualID)
+	return visualizationruntime.WindowEnvelopeFromDefinition(definition, table, request.DataRevision, 0)
 }
 
 func (m *recordingMetrics) ExecuteConsumersPage(ctx context.Context, request consumer.Request, publish consumer.Publisher) error {
@@ -325,7 +368,7 @@ func pointInteraction(field, fact string, targets ...string) reportdef.Interacti
 	}
 }
 
-func (fakeMetrics) NormalizeTableRequest(_ string, request dashboard.TableRequest) dashboard.TableRequest {
+func (fakeMetrics) NormalizeVisualizationWindow(_ string, request dashboard.TableRequest) dashboard.TableRequest {
 	if request.Sort.Key == "" {
 		request.Sort = dashboard.TableSort{Key: "order_id", Direction: "desc"}
 	}
@@ -388,11 +431,11 @@ func (fakeMetrics) QueryDashboardPage(_ context.Context, _ string, pageID string
 	visuals := map[string]visualizationir.VisualizationEnvelope{chartID: envelope}
 	if pageID == "" || pageID == "overview" {
 		definition, _ := fakeMetrics{}.VisualizationDefinition("executive-sales", "order_rows")
-		table, tableErr := fakeMetrics{}.QueryTablePage(context.Background(), "executive-sales", "overview", filters, dashboard.TableRequest{Table: "order_rows", Block: "a", Count: dashboard.TableChunkSize}.WithDefaults())
+		table, tableErr := fakeMetrics{}.queryWindow(context.Background(), "executive-sales", "overview", filters, dashboard.TableRequest{Table: "order_rows", Block: "a", Count: dashboard.TableChunkSize}.WithDefaults())
 		if tableErr != nil {
 			return dashboard.Patch{}, tableErr
 		}
-		tableEnvelope, tableEnvelopeErr := visualizationruntime.TableEnvelopeFromDefinition(definition, table, 0, 0)
+		tableEnvelope, tableEnvelopeErr := visualizationruntime.WindowEnvelopeFromDefinition(definition, table, 0, 0)
 		if tableEnvelopeErr != nil {
 			return dashboard.Patch{}, tableEnvelopeErr
 		}
@@ -967,11 +1010,7 @@ func TestLegacyRoutesReturnNotFound(t *testing.T) {
 	}
 }
 
-func (fakeMetrics) QueryTable(_ context.Context, _ string, _ dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
-	return fakeMetrics{}.QueryTablePage(context.Background(), "executive-sales", "", dashboard.Filters{}, request)
-}
-
-func (fakeMetrics) QueryTablePage(_ context.Context, _ string, _ string, _ dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
+func (fakeMetrics) queryWindow(_ context.Context, _ string, _ string, _ dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
 	request = request.WithDefaults()
 	return dashboard.Table{
 		Version: 2,
@@ -1000,13 +1039,13 @@ func (fakeMetrics) QueryTablePage(_ context.Context, _ string, _ string, _ dashb
 	}, nil
 }
 
-func (canceledTableMetrics) QueryTable(_ context.Context, _ string, _ dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
-	return canceledTableMetrics{}.QueryTablePage(context.Background(), "executive-sales", "", dashboard.Filters{}, request)
-}
-
-func (canceledTableMetrics) QueryTablePage(_ context.Context, _ string, _ string, _ dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
+func (canceledTableMetrics) queryWindow(_ context.Context, _ string, _ string, _ dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
 	request = request.WithDefaults()
 	return dashboard.EmptyTable(request, context.Canceled), nil
+}
+
+func (m canceledTableMetrics) QueryVisualizationWindow(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request visualizationir.VisualizationWindowRequest) (visualizationir.VisualizationEnvelope, error) {
+	return fakeVisualizationWindow(ctx, m, dashboardID, pageID, filters, request)
 }
 
 func (canceledTableMetrics) ExecuteConsumersPage(_ context.Context, request consumer.Request, publish consumer.Publisher) error {

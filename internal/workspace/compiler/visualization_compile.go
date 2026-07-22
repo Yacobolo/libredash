@@ -16,8 +16,35 @@ import (
 	visualizationgeometry "github.com/Yacobolo/leapview/internal/visualization/geometry"
 	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 	visualizationmapasset "github.com/Yacobolo/leapview/internal/visualization/mapasset"
-	visualizationruntime "github.com/Yacobolo/leapview/internal/visualization/runtime"
 )
+
+// compileContext is immutable per authored visualization. It keeps semantic
+// resolution, renderer capabilities, dataset identity, and diagnostics at the
+// compilation boundary instead of letting focused compilers rediscover them.
+type compileContext struct {
+	visualID    string
+	modelID     string
+	datasetID   string
+	fields      semanticFieldResolver
+	capability  reportdef.VisualizationCapability
+	diagnostics []string
+}
+
+type semanticFieldResolver struct {
+	model *semanticmodel.Model
+}
+
+func newCompileContext(visualID, modelID, visualType string, model *semanticmodel.Model) (compileContext, error) {
+	capability, ok := reportdef.VisualizationCapabilityForType(visualType)
+	if !ok {
+		return compileContext{}, fmt.Errorf("unsupported visualization type %q", visualType)
+	}
+	return compileContext{
+		visualID: visualID, modelID: modelID, datasetID: "primary",
+		fields: semanticFieldResolver{model: model}, capability: capability,
+		diagnostics: []string{},
+	}, nil
+}
 
 func CompileDashboardDefinition(authored *reportdef.Dashboard, visualizations map[string]visualizationdefinition.Definition) (dashboarddefinition.Definition, error) {
 	filters := make(map[string]dashboarddefinition.FilterDefinition, len(authored.Filters))
@@ -52,76 +79,11 @@ func compileVisualizationDefinitions(report *reportdef.Dashboard, models ...*sem
 	out := make(map[string]visualizationdefinition.Definition, len(report.Visuals))
 	for _, id := range sortedMapKeys(report.Visuals) {
 		authoring := report.Visuals[id]
-		if authoring.Tabular != nil {
-			authored := *authoring.Tabular
-			style := authored.Style.WithDefaults()
-			columns := compiledDashboardTableColumns(authoring.Type, authored, model)
-			table := dashboard.Table{
-				Kind: compiledTableKind(authoring.Type), Title: firstNonEmpty(authored.Title, id), Style: style,
-				Interaction: compiledInteraction("row_selection", authored.Interaction.RowSelection), Columns: columns,
-				Cardinality: dashboard.TableCardinality{Kind: dashboard.CardinalityUnknown}, RowCap: dashboard.TableInteractiveRowCap,
-				ChunkSize: dashboard.TableChunkSize, RowHeight: style.RowHeight(), Sort: authored.DefaultSort,
-				Blocks: map[string]dashboard.TableBlock{},
-			}
-			envelope, err := visualizationruntime.TableEnvelope(id, table, 0, 0)
-			if err != nil {
-				return nil, fmt.Errorf("visual %q: %w", id, err)
-			}
-			binding := compiledTableBinding(report.SemanticModel, authoring.Type, authored)
-			applyCompiledGridContract(&envelope.Spec, binding, authored.MeasureFormatting)
-			definition, err := visualizationdefinition.New(id, envelope.Spec, binding)
-			if err != nil {
-				return nil, fmt.Errorf("visual %q: %w", id, err)
-			}
-			out[id] = definition
-			continue
+		ctx, err := newCompileContext(id, report.SemanticModel, authoring.Type, model)
+		if err != nil {
+			return nil, fmt.Errorf("visual %q: %w", id, err)
 		}
-		if authoring.Chart == nil {
-			return nil, fmt.Errorf("visual %q has no authoring variant", id)
-		}
-		authored := *authoring.Chart
-		var spec visualizationir.VisualizationSpec
-		if authored.Type == "custom" {
-			var err error
-			spec, err = compileCustomVisualizationSpec(authored)
-			if err != nil {
-				return nil, fmt.Errorf("visual %q: %w", id, err)
-			}
-		} else if authored.Type == "map" {
-			var err error
-			spec, err = compileGeographicVisualizationSpec(authored)
-			if err != nil {
-				return nil, fmt.Errorf("visual %q: %w", id, err)
-			}
-		} else {
-			var err error
-			spec, err = compileBuiltInVisualizationSpec(id, authored, model)
-			if err != nil {
-				return nil, fmt.Errorf("visual %q: %w", id, err)
-			}
-		}
-		limit := compiledVisualLimit(authored)
-		binding := visualizationdefinition.QueryBinding{
-			Kind: visualizationdefinition.QueryAggregate, ResultShape: compiledVisualResultShape(authored), ModelID: report.SemanticModel, DatasetID: "primary",
-			Identity: interactionIdentity(authored.Interaction.PointSelection),
-			Aggregate: &visualizationdefinition.AggregateQueryBinding{
-				TableID: authored.Query.Table, Dimensions: compiledFields(authored.Query.Dimensions), Measures: compiledFields(authored.Query.Measures),
-				Series: compiledOptionalField(authored.Query.Series), Time: compiledTime(authored.Query.Time), Sort: compiledSort(authored.Query.Sort), Limit: limit,
-			},
-		}
-		if authored.Type == "map" {
-			var err error
-			binding, err = compiledSpatialBinding(report.SemanticModel, authored, model)
-			if err != nil {
-				return nil, fmt.Errorf("visual %q: %w", id, err)
-			}
-		} else if authored.Type == "custom" {
-			binding.Kind = visualizationdefinition.QueryCustom
-			binding.ResultShape = visualizationdefinition.ResultCustomRows
-			binding.Aggregate = nil
-			binding.Custom = &visualizationdefinition.CustomQueryBinding{TableID: authored.Query.Table, Fields: compiledVisualFields(authored.Query), Sort: compiledSort(authored.Query.Sort), Limit: limit}
-		}
-		definition, err := visualizationdefinition.New(id, spec, binding)
+		definition, err := compileAuthoringVisualization(ctx, authoring)
 		if err != nil {
 			return nil, fmt.Errorf("visual %q: %w", id, err)
 		}
@@ -130,15 +92,225 @@ func compileVisualizationDefinitions(report *reportdef.Dashboard, models ...*sem
 	return out, nil
 }
 
-func compiledTableKind(visualType string) string {
+func compileAuthoringVisualization(ctx compileContext, authoring reportdef.AuthoringVisualization) (visualizationdefinition.Definition, error) {
+	if authoring.Tabular != nil {
+		authored := *authoring.Tabular
+		columns := compiledDashboardTableColumns(authoring.Type, authored, ctx.fields.model)
+		binding := compiledTableBinding(ctx.modelID, authoring.Type, authored)
+		spec, err := compileTabularVisualizationSpec(ctx.visualID, authoring.Type, authored, columns, binding)
+		if err != nil {
+			return visualizationdefinition.Definition{}, err
+		}
+		return visualizationdefinition.New(ctx.visualID, spec, binding)
+	}
+	if authoring.Chart == nil {
+		return visualizationdefinition.Definition{}, fmt.Errorf("visualization has no authoring variant")
+	}
+	authored := *authoring.Chart
+	var (
+		spec visualizationir.VisualizationSpec
+		err  error
+	)
+	switch ctx.capability.Renderer {
+	case visualizationdefinition.RendererVegaLite:
+		spec, err = compileCustomVisualizationSpec(authored)
+	case visualizationdefinition.RendererMapLibre:
+		spec, err = compileGeographicVisualizationSpec(authored)
+	default:
+		spec, err = compileBuiltInVisualizationSpec(ctx.visualID, authored, ctx.fields.model)
+	}
+	if err != nil {
+		return visualizationdefinition.Definition{}, err
+	}
+	binding, err := compileVisualizationQueryBinding(ctx, authored)
+	if err != nil {
+		return visualizationdefinition.Definition{}, err
+	}
+	return visualizationdefinition.New(ctx.visualID, spec, binding)
+}
+
+func compileVisualizationQueryBinding(ctx compileContext, authored reportdef.Visual) (visualizationdefinition.QueryBinding, error) {
+	limit := compiledVisualLimit(authored)
+	binding := visualizationdefinition.QueryBinding{
+		Kind: visualizationdefinition.QueryAggregate, ResultShape: compiledVisualResultShape(authored), ModelID: ctx.modelID, DatasetID: ctx.datasetID,
+		Identity: interactionIdentity(authored.Interaction.PointSelection),
+		Aggregate: &visualizationdefinition.AggregateQueryBinding{
+			TableID: authored.Query.Table, Dimensions: compiledFields(authored.Query.Dimensions), Measures: compiledFields(authored.Query.Measures),
+			Series: compiledOptionalField(authored.Query.Series), Time: compiledTime(authored.Query.Time), Sort: compiledSort(authored.Query.Sort), Limit: limit,
+		},
+	}
+	switch ctx.capability.Renderer {
+	case visualizationdefinition.RendererMapLibre:
+		return compiledSpatialBinding(ctx.modelID, authored, ctx.fields.model)
+	case visualizationdefinition.RendererVegaLite:
+		binding.Kind = visualizationdefinition.QueryCustom
+		binding.ResultShape = visualizationdefinition.ResultCustomRows
+		binding.Aggregate = nil
+		binding.Custom = &visualizationdefinition.CustomQueryBinding{TableID: authored.Query.Table, Fields: compiledVisualFields(authored.Query), Sort: compiledSort(authored.Query.Sort), Limit: limit}
+	}
+	return binding, nil
+}
+
+func compileTabularVisualizationSpec(id, visualType string, authored reportdef.TableVisual, columns []dashboard.TableColumn, binding visualizationdefinition.QueryBinding) (visualizationir.VisualizationSpec, error) {
+	if len(columns) == 0 {
+		return visualizationir.VisualizationSpec{}, fmt.Errorf("tabular visualization requires at least one compiled column")
+	}
+	style := authored.Style.WithDefaults()
+	title := firstNonEmpty(authored.Title, id)
+	identityAliases := map[string]struct{}{}
+	for _, mapping := range authored.Interaction.RowSelection.Mappings {
+		identityAliases[mapping.Value] = struct{}{}
+	}
+	sourceByAlias := map[string]string{}
+	for _, field := range queryBindingFields(binding) {
+		sourceByAlias[field.Alias] = field.FieldID
+	}
+	fields := make([]visualizationir.VisualizationField, len(columns))
+	tableColumns := make([]visualizationir.TableVisualizationColumn, len(columns))
+	for index, column := range columns {
+		role := visualizationir.VisualizationFieldRoleDimension
+		if _, ok := identityAliases[column.Key]; ok {
+			role = visualizationir.VisualizationFieldRoleIdentity
+		} else if column.Role == "measure" || column.Align == "right" {
+			role = visualizationir.VisualizationFieldRoleMeasure
+		}
+		fields[index] = visualizationir.VisualizationField{
+			ID: column.Key, Role: role, DataType: compiledGridDataType(column), Nullable: true,
+			Label: firstNonEmpty(column.Label, column.Key), SourceRef: optionalString(sourceByAlias[column.Key]), Format: compiledGridFormat(column),
+			Grid: &visualizationir.VisualizationGridFieldMetadata{Group: optionalString(column.Group), Measure: optionalString(column.Measure), ColumnValue: optionalString(column.ColumnValue), Formatting: compiledGridFormatting(column.Formatting)},
+		}
+		tableColumns[index] = visualizationir.TableVisualizationColumn{
+			Field: visualizationir.VisualizationFieldRef{Dataset: "primary", Field: column.Key}, Label: firstNonEmpty(column.Label, column.Key),
+			Group: optionalString(column.Group), Measure: optionalString(column.Measure), ColumnValue: optionalString(column.ColumnValue),
+			Formatting: compiledGridFormatting(column.Formatting),
+		}
+		if column.Width > 0 {
+			width := int64(column.Width)
+			tableColumns[index].Width = &width
+		}
+	}
+	base := visualizationir.VisualizationSpecBase{
+		Kind: visualType, Title: title,
+		Datasets:      []visualizationir.VisualizationDatasetSchema{{ID: "primary", Fields: fields}},
+		DataBudget:    visualizationir.VisualizationDataBudget{MaxRows: dashboard.TableInteractiveRowCap, RequiredCompleteness: visualizationir.VisualizationCompletenessPartial},
+		Accessibility: visualizationir.VisualizationAccessibility{Title: title, Description: firstNonEmpty(authored.Description, title)},
+		Interactions:  compiledSelectionInteractions("row_selection", authored.Interaction.RowSelection),
+	}
+	presentation := visualizationir.GridVisualizationPresentation{RowHeight: int64(style.RowHeight()), Striped: style.Zebra == nil || *style.Zebra, ShowHeader: true}
+	refs := func(values []visualizationdefinition.FieldBinding) []visualizationir.VisualizationFieldRef {
+		out := make([]visualizationir.VisualizationFieldRef, len(values))
+		for index, field := range values {
+			out[index] = visualizationir.VisualizationFieldRef{Dataset: "primary", Field: field.Alias}
+		}
+		return out
+	}
+	formatting := map[string][]visualizationir.TableVisualizationFormattingRule{}
+	for field, rules := range authored.MeasureFormatting {
+		formatting[fieldAlias(field)] = compiledGridFormatting(rules)
+	}
 	switch visualType {
 	case "matrix":
-		return "matrix_table"
+		base.Kind = "matrix"
+		return visualizationir.VisualizationSpec{Value: &visualizationir.MatrixVisualizationSpec{VisualizationSpecBase: base, Kind: "matrix", Rows: refs(binding.Matrix.Rows), Columns: refs(binding.Matrix.Columns), Measures: refs(binding.Matrix.Measures), MeasureFormatting: formatting, Presentation: presentation}}, nil
 	case "pivot":
-		return "pivot_table"
+		base.Kind = "pivot"
+		return visualizationir.VisualizationSpec{Value: &visualizationir.PivotVisualizationSpec{VisualizationSpecBase: base, Kind: "pivot", Rows: refs(binding.Pivot.Rows), Columns: refs(binding.Pivot.Columns), Measures: refs(binding.Pivot.Measures), MeasureFormatting: formatting, Presentation: presentation}}, nil
 	default:
-		return "data_table"
+		sortKey := authored.DefaultSort.Key
+		if sortKey == "" {
+			sortKey = columns[0].Key
+		}
+		sort := []visualizationir.VisualizationSort{{Field: visualizationir.VisualizationFieldRef{Dataset: "primary", Field: sortKey}, Direction: compiledGridSortDirection(authored.DefaultSort.Direction)}}
+		return visualizationir.VisualizationSpec{Value: &visualizationir.TableVisualizationSpec{VisualizationSpecBase: base, Kind: "table", Columns: tableColumns, DefaultSort: &sort, Presentation: presentation}}, nil
 	}
+}
+
+func queryBindingFields(binding visualizationdefinition.QueryBinding) []visualizationdefinition.FieldBinding {
+	switch binding.Kind {
+	case visualizationdefinition.QueryDetail:
+		return append([]visualizationdefinition.FieldBinding(nil), binding.Detail.Fields...)
+	case visualizationdefinition.QueryMatrix:
+		fields := append([]visualizationdefinition.FieldBinding(nil), binding.Matrix.Rows...)
+		fields = append(fields, binding.Matrix.Columns...)
+		return append(fields, binding.Matrix.Measures...)
+	case visualizationdefinition.QueryPivot:
+		fields := append([]visualizationdefinition.FieldBinding(nil), binding.Pivot.Rows...)
+		fields = append(fields, binding.Pivot.Columns...)
+		return append(fields, binding.Pivot.Measures...)
+	default:
+		return nil
+	}
+}
+
+func compiledGridDataType(column dashboard.TableColumn) visualizationir.VisualizationDataType {
+	switch column.Format {
+	case "integer", "days":
+		return visualizationir.VisualizationDataTypeInteger
+	case "decimal", "currency":
+		return visualizationir.VisualizationDataTypeDecimal
+	case "boolean":
+		return visualizationir.VisualizationDataTypeBoolean
+	case "date":
+		return visualizationir.VisualizationDataTypeDate
+	case "timestamp":
+		return visualizationir.VisualizationDataTypeTemporal
+	default:
+		return visualizationir.VisualizationDataTypeString
+	}
+}
+
+func compiledGridFormat(column dashboard.TableColumn) *visualizationir.VisualizationFormat {
+	var format visualizationir.VisualizationFormat
+	switch column.Format {
+	case "integer", "decimal":
+		format.Value = &visualizationir.NumberVisualizationFormat{Kind: "number"}
+	case "currency":
+		format.Value = &visualizationir.CurrencyVisualizationFormat{Kind: "currency", Currency: "BRL"}
+	case "days":
+		format.Value = &visualizationir.DurationVisualizationFormat{Kind: "duration", Unit: "days"}
+	case "date", "timestamp":
+		format.Value = &visualizationir.TemporalVisualizationFormat{Kind: "temporal"}
+	default:
+		return nil
+	}
+	return &format
+}
+
+func compiledGridFormatting(rules []dashboard.TableFormattingRule) []visualizationir.TableVisualizationFormattingRule {
+	out := make([]visualizationir.TableVisualizationFormattingRule, 0, len(rules))
+	for _, rule := range rules {
+		switch rule.Kind {
+		case "badge":
+			out = append(out, visualizationir.TableVisualizationFormattingRule{Value: &visualizationir.TableBadgeFormattingRule{Kind: rule.Kind, Values: cloneStringMap(rule.Values)}})
+		case "text_color":
+			values := cloneStringMap(rule.Values)
+			var mappedValues *map[string]string
+			if len(values) > 0 {
+				mappedValues = &values
+			}
+			out = append(out, visualizationir.TableVisualizationFormattingRule{Value: &visualizationir.TableTextColorFormattingRule{Kind: rule.Kind, Color: rule.Color, Values: mappedValues, Minimum: rule.Min, Maximum: rule.Max}})
+		case "background_scale":
+			out = append(out, visualizationir.TableVisualizationFormattingRule{Value: &visualizationir.TableBackgroundScaleFormattingRule{Kind: rule.Kind, Minimum: rule.Min, Maximum: rule.Max, LowColor: optionalString(rule.LowColor), HighColor: optionalString(rule.HighColor)}})
+		case "data_bar":
+			out = append(out, visualizationir.TableVisualizationFormattingRule{Value: &visualizationir.TableDataBarFormattingRule{Kind: rule.Kind, Minimum: rule.Min, Maximum: rule.Max, Color: rule.Color, Background: optionalString(rule.Background)}})
+		}
+	}
+	return out
+}
+
+func cloneStringMap(values map[string]string) map[string]string {
+	out := make(map[string]string, len(values))
+	for key, value := range values {
+		out[key] = value
+	}
+	return out
+}
+
+func compiledGridSortDirection(value string) visualizationir.VisualizationSortDirection {
+	if value == "desc" {
+		return visualizationir.VisualizationSortDirectionDescending
+	}
+	return visualizationir.VisualizationSortDirectionAscending
 }
 
 func compiledVisualResultShape(authored reportdef.Visual) visualizationdefinition.ResultShape {
@@ -377,28 +549,6 @@ func compiledMeasureFormat(value string) string {
 		return value
 	default:
 		return "decimal"
-	}
-}
-
-func applyCompiledGridContract(spec *visualizationir.VisualizationSpec, binding visualizationdefinition.QueryBinding, formatting map[string][]dashboard.TableFormattingRule) {
-	refs := func(fields []visualizationdefinition.FieldBinding) []visualizationir.VisualizationFieldRef {
-		out := make([]visualizationir.VisualizationFieldRef, len(fields))
-		for index, field := range fields {
-			out[index] = visualizationir.VisualizationFieldRef{Dataset: "primary", Field: field.Alias}
-		}
-		return out
-	}
-	compiledFormatting := map[string][]visualizationir.TableVisualizationFormattingRule{}
-	for field, rules := range formatting {
-		compiledFormatting[fieldAlias(field)] = visualizationruntime.TableFormatting(rules)
-	}
-	switch value := spec.Value.(type) {
-	case *visualizationir.MatrixVisualizationSpec:
-		value.Rows, value.Columns, value.Measures = refs(binding.Matrix.Rows), refs(binding.Matrix.Columns), refs(binding.Matrix.Measures)
-		value.MeasureFormatting = compiledFormatting
-	case *visualizationir.PivotVisualizationSpec:
-		value.Rows, value.Columns, value.Measures = refs(binding.Pivot.Rows), refs(binding.Pivot.Columns), refs(binding.Pivot.Measures)
-		value.MeasureFormatting = compiledFormatting
 	}
 }
 
@@ -1331,6 +1481,10 @@ func customVisualizationFields(query reportdef.VisualQuery, selection reportdef.
 }
 
 func customVisualizationInteractions(selection reportdef.SelectionInteraction) []visualizationir.VisualizationInteraction {
+	return compiledSelectionInteractions("point_selection", selection)
+}
+
+func compiledSelectionInteractions(id string, selection reportdef.SelectionInteraction) []visualizationir.VisualizationInteraction {
 	if selection.IsZero() {
 		return []visualizationir.VisualizationInteraction{}
 	}
@@ -1354,7 +1508,7 @@ func customVisualizationInteractions(selection reportdef.SelectionInteraction) [
 	if selection.Toggle {
 		mode = visualizationir.VisualizationSelectionModeMultiple
 	}
-	return []visualizationir.VisualizationInteraction{{ID: "point_selection", Kind: visualizationir.VisualizationInteractionKindSelect, Mappings: mappings, Targets: append([]string{}, selection.Targets...), Mode: mode, RequiresStableIdentity: true}}
+	return []visualizationir.VisualizationInteraction{{ID: id, Kind: visualizationir.VisualizationInteractionKindSelect, Mappings: mappings, Targets: append([]string{}, selection.Targets...), Mode: mode, RequiresStableIdentity: true}}
 }
 
 func validateCustomProgram(value any, fields map[string]struct{}, path string) error {
@@ -1548,14 +1702,6 @@ func compiledTableFields(table reportdef.TableVisual) []visualizationdefinition.
 func fieldAlias(field string) string {
 	parts := strings.Split(field, ".")
 	return parts[len(parts)-1]
-}
-
-func compiledInteraction(kind string, selection reportdef.SelectionInteraction) dashboard.InteractionConfig {
-	mappings := make([]dashboard.InteractionConfigMapping, len(selection.Mappings))
-	for index, mapping := range selection.Mappings {
-		mappings[index] = dashboard.InteractionConfigMapping{Field: mapping.Field, Fact: mapping.Fact, Grain: mapping.Grain, Value: mapping.Value, Label: mapping.Label}
-	}
-	return dashboard.InteractionConfig{Kind: kind, Toggle: selection.Toggle, Mappings: mappings, Targets: append([]string(nil), selection.Targets...)}
 }
 
 func visualQueryFields(query reportdef.VisualQuery) []string {

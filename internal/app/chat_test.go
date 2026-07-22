@@ -33,11 +33,27 @@ func TestTypedChatArtifactsPreserveTabularTypeAcrossJSON(t *testing.T) {
 	for _, visualType := range []string{"table", "matrix", "pivot"} {
 		t.Run(visualType, func(t *testing.T) {
 			kind := map[string]string{"table": "data_table", "matrix": "matrix_table", "pivot": "pivot_table"}[visualType]
-			envelope, err := visualizationruntime.TableEnvelope("orders", dashboard.Table{
+			table := dashboard.Table{
 				Kind: kind, Title: "Orders", Style: dashboard.TableStyle{}.WithDefaults(),
 				Interaction: dashboard.InteractionConfig{}, Selection: []dashboard.InteractionSelectionEntry{},
-				Columns: []dashboard.TableColumn{}, Cardinality: dashboard.ExactCardinality(0), Blocks: map[string]dashboard.TableBlock{},
-			}, 1, 1)
+				Columns: []dashboard.TableColumn{{Key: "value", Label: "Value", Role: "measure"}}, Cardinality: dashboard.ExactCardinality(0), Blocks: map[string]dashboard.TableBlock{},
+			}
+			authored := reportdef.TableVisual{Title: "Orders", Columns: table.Columns, Query: reportdef.TableQuery{Table: "table", Fields: []string{"value"}}}
+			if visualType != "table" {
+				authored.Query.Fields = nil
+				authored.Query.Rows = []reportdef.FieldRef{{Field: "label", Alias: "label"}}
+				authored.Query.Measures = []reportdef.FieldRef{{Field: "value", Alias: "value"}}
+				table.Columns = []dashboard.TableColumn{{Key: "label", Label: "Label"}, {Key: "value", Label: "Value", Role: "measure"}}
+				authored.Columns = table.Columns
+			}
+			definitions, err := workspacecompiler.CompileVisualizationDefinitions(&reportdef.Dashboard{
+				ID: "test", SemanticModel: "model",
+				Visuals: reportdef.TabularVisualizations(visualType, map[string]reportdef.TableVisual{"orders": authored}),
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			envelope, err := visualizationruntime.WindowEnvelopeFromDefinition(definitions["orders"], table, 1, 1)
 			if err != nil {
 				t.Fatal(err)
 			}

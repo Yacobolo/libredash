@@ -975,7 +975,7 @@ func (fakeAgentMetrics) DefaultFilters(string) dashboard.Filters {
 	return dashboard.Filters{}.WithDefaults()
 }
 
-func (fakeAgentMetrics) NormalizeTableRequest(_ string, request dashboard.TableRequest) dashboard.TableRequest {
+func (fakeAgentMetrics) NormalizeVisualizationWindow(_ string, request dashboard.TableRequest) dashboard.TableRequest {
 	return request.WithDefaults()
 }
 
@@ -989,18 +989,6 @@ func (fakeAgentMetrics) QueryDashboardPage(_ context.Context, dashboardID, pageI
 	return dashboard.Patch{
 		Filters: filters.WithDefaults(),
 		Visuals: map[string]visualizationir.VisualizationEnvelope{"orders": envelope},
-	}, nil
-}
-
-func (fakeAgentMetrics) QueryTablePage(_ context.Context, dashboardID, pageID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
-	rows := make([]map[string]any, 0, request.Count)
-	for i := 0; i < request.Count; i++ {
-		rows = append(rows, map[string]any{"order_id": "order_" + string(rune('A'+i%26))})
-	}
-	return dashboard.Table{
-		Title:         "Orders",
-		AvailableRows: len(rows),
-		Blocks:        map[string]dashboard.TableBlock{"a": {Rows: rows}},
 	}, nil
 }
 

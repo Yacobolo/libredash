@@ -3,7 +3,6 @@ package app
 import (
 	"testing"
 
-	"github.com/Yacobolo/leapview/internal/dashboard"
 	dashboardstream "github.com/Yacobolo/leapview/internal/dashboard/stream"
 	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 )
@@ -15,8 +14,10 @@ func TestDashboardTelemetryObservesAcceptedProgressiveTargetEvents(t *testing.T)
 			Spec:      visualizationir.VisualizationSpec{Value: &visualizationir.KPIVisualizationSpec{}},
 			DataState: visualizationir.VisualizationDataState{Value: &visualizationir.InlineVisualizationDataState{Kind: "inline", Datasets: []visualizationir.VisualizationInlineDataset{{Rows: [][]any{{1}}}}}},
 		}},
-		{Type: dashboardstream.RefreshEventTable, Target: "orders", Value: dashboard.Table{AvailableRows: 1, Cardinality: dashboard.ExactCardinality(1), Blocks: map[string]dashboard.TableBlock{"a": {Rows: []map[string]any{{"order_id": "o1"}}}}}},
-		{Type: dashboardstream.RefreshEventTableCountErr, Target: "orders"},
+		{Type: dashboardstream.RefreshEventVisual, Target: "orders", Value: visualizationir.VisualizationEnvelope{
+			Spec:      visualizationir.VisualizationSpec{Value: &visualizationir.TableVisualizationSpec{Kind: "table"}},
+			DataState: visualizationir.VisualizationDataState{Value: &visualizationir.WindowedVisualizationDataState{Kind: "windowed", AvailableRows: 1, Cardinality: visualizationir.VisualizationCardinality{Kind: visualizationir.VisualizationCardinalityKindExact, Count: int64Pointer(1)}, Blocks: map[string]visualizationir.VisualizationWindowBlock{"a": {Rows: [][]any{{"o1"}}}}}},
+		}},
 		{Type: dashboardstream.RefreshEventFilterOptions, Target: "state"},
 		{Type: dashboardstream.RefreshEventTargetError, Target: "visual:broken"},
 		{Type: dashboardstream.RefreshEventTargetError, Target: "refresh"},
@@ -28,7 +29,6 @@ func TestDashboardTelemetryObservesAcceptedProgressiveTargetEvents(t *testing.T)
 	want := map[string]float64{
 		"filter_options:success": 1,
 		"refresh:error":          1,
-		"visual_count:error":     1,
 		"visual:error":           1,
 		"visual:success":         2,
 	}
@@ -47,6 +47,8 @@ func TestDashboardTelemetryObservesAcceptedProgressiveTargetEvents(t *testing.T)
 		}
 	}
 }
+
+func int64Pointer(value int64) *int64 { return &value }
 
 func histogramSampleCount(t *testing.T, telemetry *httpTelemetry, name string) uint64 {
 	t.Helper()

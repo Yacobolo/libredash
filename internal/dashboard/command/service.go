@@ -13,7 +13,7 @@ import (
 
 type Metrics interface {
 	report.Metrics
-	NormalizeTableRequest(dashboardID string, request dashboard.TableRequest) dashboard.TableRequest
+	NormalizeVisualizationWindow(dashboardID string, request dashboard.TableRequest) dashboard.TableRequest
 }
 
 func canonicalSpatialInteractionCommand(metrics Metrics, dashboardID string, command dashboard.SpatialSelectionCommand) (dashboard.SpatialSelectionCommand, error) {

@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Yacobolo/leapview/internal/dashboard"
 	dashboardstream "github.com/Yacobolo/leapview/internal/dashboard/stream"
 	"github.com/Yacobolo/leapview/internal/secret"
 	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
@@ -191,27 +190,9 @@ func (t *httpTelemetry) dashboardRefreshEventObserved(event dashboardstream.Refr
 		t.dashboardTargetObserved("filter_options", "success")
 	case dashboardstream.RefreshEventVisual:
 		t.dashboardTargetObserved("visual", "success")
-		if envelope, ok := event.Value.(visualizationir.VisualizationEnvelope); ok {
-			if state, ok := envelope.DataState.Value.(*visualizationir.InlineVisualizationDataState); ok && len(state.Datasets) == 1 {
-				rows := len(state.Datasets[0].Rows)
-				t.observeVisualizationFrame("inline", rows, rows, envelope)
-			}
-		}
-	case dashboardstream.RefreshEventTable:
-		t.dashboardTargetObserved("visual", "success")
-		if table, ok := event.Value.(dashboard.Table); ok {
-			rows := 0
-			for _, block := range table.Blocks {
-				rows += len(block.Rows)
-			}
-			cardinality := table.AvailableRows
-			if exact, ok := table.Cardinality.ExactValue(); ok {
-				cardinality = exact
-			}
-			t.observeVisualizationFrame("windowed", rows, cardinality, table)
-		}
-	case dashboardstream.RefreshEventTableCountErr:
-		t.dashboardTargetObserved("visual_count", "error")
+		t.observeVisualizationEnvelope(event.Value)
+	case dashboardstream.RefreshEventVisualMetadata:
+		t.observeVisualizationEnvelope(event.Value)
 	case dashboardstream.RefreshEventTargetError:
 		kind := event.Target
 		if prefix, _, ok := strings.Cut(kind, ":"); ok {
@@ -219,6 +200,40 @@ func (t *httpTelemetry) dashboardRefreshEventObserved(event dashboardstream.Refr
 		}
 		t.dashboardTargetObserved(kind, "error")
 	}
+}
+
+func (t *httpTelemetry) observeVisualizationEnvelope(value any) {
+	envelope, ok := value.(visualizationir.VisualizationEnvelope)
+	if !ok {
+		return
+	}
+	switch state := envelope.DataState.Value.(type) {
+	case *visualizationir.InlineVisualizationDataState:
+		rows := 0
+		for _, dataset := range state.Datasets {
+			rows += len(dataset.Rows)
+		}
+		t.observeVisualizationFrame("inline", rows, rows, envelope)
+	case *visualizationir.WindowedVisualizationDataState:
+		rows := 0
+		for _, block := range state.Blocks {
+			rows += len(block.Rows)
+		}
+		t.observeVisualizationFrame("windowed", rows, visualizationCardinality(state.Cardinality, state.AvailableRows), envelope)
+	case *visualizationir.SpatialWindowedVisualizationDataState:
+		rows := 0
+		if state.Window != nil {
+			rows = len(state.Window.Rows)
+		}
+		t.observeVisualizationFrame("spatial_windowed", rows, visualizationCardinality(state.Cardinality, int64(rows)), envelope)
+	}
+}
+
+func visualizationCardinality(cardinality visualizationir.VisualizationCardinality, fallback int64) int {
+	if cardinality.Count != nil {
+		return int(*cardinality.Count)
+	}
+	return int(fallback)
 }
 
 func (t *httpTelemetry) observeVisualizationFrame(kind string, rows, cardinality int, value any) {

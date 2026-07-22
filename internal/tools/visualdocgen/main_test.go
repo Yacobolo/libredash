@@ -428,3 +428,17 @@ func TestParseVisualExamplesRejectsBrokenContracts(t *testing.T) {
 		})
 	}
 }
+
+func TestEnvelopeRowsReadsWindowBlocksInDatasetOrder(t *testing.T) {
+	envelope := visualizationir.VisualizationEnvelope{DataState: visualizationir.VisualizationDataState{Value: &visualizationir.WindowedVisualizationDataState{
+		Schema: visualizationir.VisualizationDatasetSchema{Fields: []visualizationir.VisualizationField{{ID: "order_id"}, {ID: "revenue"}}},
+		Blocks: map[string]visualizationir.VisualizationWindowBlock{
+			"b": {ID: "b", Start: 1, Rows: [][]any{{"o2", 20}}},
+			"a": {ID: "a", Start: 0, Rows: [][]any{{"o1", 10}}},
+		},
+	}}}
+	rows := envelopeRows(envelope)
+	if len(rows) != 2 || rows[0]["order_id"] != "o1" || rows[1]["revenue"] != 20 {
+		t.Fatalf("window rows = %#v", rows)
+	}
+}

@@ -19,6 +19,7 @@ import (
 	"github.com/Yacobolo/leapview/internal/testutil/ssetest"
 	"github.com/Yacobolo/leapview/internal/ui"
 	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -40,7 +41,7 @@ func (fakeMetrics) DefaultFilters(string) dashboard.Filters {
 func (fakeMetrics) ModelIDForDashboard(string) string {
 	return "model"
 }
-func (fakeMetrics) NormalizeTableRequest(_ string, request dashboard.TableRequest) dashboard.TableRequest {
+func (fakeMetrics) NormalizeVisualizationWindow(_ string, request dashboard.TableRequest) dashboard.TableRequest {
 	return request.WithDefaults()
 }
 func (fakeMetrics) Pages(dashboardID string) []dashboard.Page {
@@ -69,8 +70,8 @@ func (fakeMetrics) VisualizationDefinition(string, string) (visualizationdefinit
 func (fakeMetrics) QueryDashboardPage(_ context.Context, _ string, _ string, filters dashboard.Filters) (dashboard.Patch, error) {
 	return dashboard.Patch{Filters: filters.WithDefaults()}, nil
 }
-func (fakeMetrics) QueryTablePage(_ context.Context, _ string, _ string, _ dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
-	return dashboard.Table{Title: request.Table}, nil
+func (fakeMetrics) QueryVisualizationWindow(_ context.Context, _, _ string, _ dashboard.Filters, _ visualizationir.VisualizationWindowRequest) (visualizationir.VisualizationEnvelope, error) {
+	return visualizationir.VisualizationEnvelope{}, nil
 }
 func TestDashboardRedirectsToFirstPage(t *testing.T) {
 	rec := httptest.NewRecorder()

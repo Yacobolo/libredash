@@ -1,7 +1,6 @@
 package command
 
 import (
-	"context"
 	"math"
 	"testing"
 
@@ -20,14 +19,11 @@ type fakeMetrics struct {
 func (fakeMetrics) DefaultFilters(string) dashboard.Filters {
 	return dashboard.Filters{Controls: map[string]dashboard.FilterControl{"state": {Type: "multi_select", Operator: "in"}}}
 }
-func (fakeMetrics) NormalizeTableRequest(_ string, request dashboard.TableRequest) dashboard.TableRequest {
+func (fakeMetrics) NormalizeVisualizationWindow(_ string, request dashboard.TableRequest) dashboard.TableRequest {
 	if request.Table == "" {
 		request.Table = "orders"
 	}
 	return request.WithDefaults()
-}
-func (fakeMetrics) QueryTablePage(context.Context, string, string, dashboard.Filters, dashboard.TableRequest) (dashboard.Table, error) {
-	return dashboard.Table{}, nil
 }
 func (m fakeMetrics) Report(string) (dashboarddefinition.Definition, *semanticmodel.Model, bool) {
 	authored := reportdef.Dashboard{
@@ -160,7 +156,7 @@ func TestPrepareVisualWindowValidatesTypedIdentityAndCoordinates(t *testing.T) {
 		t.Fatalf("targets = %#v", prepared.Plan.Targets)
 	}
 	target := prepared.Plan.Targets[0]
-	if target.Kind != TargetTable || target.ID != "orders" || target.TableRequest.Block != "b" || target.TableRequest.Start != 150 || target.TableRequest.Count != 50 || target.TableRequest.RequestSeq != 7 || target.TableRequest.Sort.Key != "state" || target.TableRequest.Sort.Direction != "desc" {
+	if target.Kind != TargetWindow || target.ID != "orders" || target.WindowRequest.Block != "b" || target.WindowRequest.Start != 150 || target.WindowRequest.Count != 50 || target.WindowRequest.RequestSeq != 7 || target.WindowRequest.Sort.Key != "state" || target.WindowRequest.Sort.Direction != "desc" {
 		t.Fatalf("target = %#v", target)
 	}
 
@@ -191,7 +187,7 @@ func TestPrepareSelectUsesAuthoritativeFiltersAndExplicitTargetsOnly(t *testing.
 	if got := prepared.Filters.Controls["state"].Values; len(got) != 1 || got[0] != "SP" {
 		t.Fatalf("authoritative controls = %#v", prepared.Filters.Controls)
 	}
-	if len(prepared.Plan.Targets) != 1 || prepared.Plan.Targets[0].Kind != TargetTable || prepared.Plan.Targets[0].ID != "orders" {
+	if len(prepared.Plan.Targets) != 1 || prepared.Plan.Targets[0].Kind != TargetWindow || prepared.Plan.Targets[0].ID != "orders" {
 		t.Fatalf("targets = %#v", prepared.Plan.Targets)
 	}
 }

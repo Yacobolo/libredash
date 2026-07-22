@@ -10,9 +10,9 @@ import (
 func TestVisualWindowRefreshUsesPerVisualRequestOrdering(t *testing.T) {
 	prepared := command.PreparedRefresh{
 		Plan: command.RefreshPlan{Command: "visual_window", Targets: []command.Target{{
-			Kind: command.TargetTable,
+			Kind: command.TargetWindow,
 			ID:   "orders",
-			TableRequest: dashboard.TableRequest{
+			WindowRequest: dashboard.TableRequest{
 				Table: "orders", Block: "b", Start: 500, Count: 50, RequestSeq: 12, ResetVersion: 4,
 			},
 		}}},

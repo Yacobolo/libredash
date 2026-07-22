@@ -4,8 +4,10 @@ import (
 	"testing"
 
 	"github.com/Yacobolo/leapview/internal/dashboard"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
 	"github.com/Yacobolo/leapview/internal/visualization/ir"
+	workspacecompiler "github.com/Yacobolo/leapview/internal/workspace/compiler"
 )
 
 func testCartesianDefinition(t *testing.T, id string, fields []ir.VisualizationField, interactions []ir.VisualizationInteraction) visualizationdefinition.Definition {
@@ -34,6 +36,35 @@ func testCartesianFields() []ir.VisualizationField {
 		{ID: "label", Role: ir.VisualizationFieldRoleDimension, DataType: ir.VisualizationDataTypeString, Nullable: true, Label: "Label"},
 		{ID: "value", Role: ir.VisualizationFieldRoleMeasure, DataType: ir.VisualizationDataTypeDecimal, Nullable: true, Label: "Value"},
 	}
+}
+
+func testGridDefinition(t *testing.T, id string, table dashboard.Table) visualizationdefinition.Definition {
+	t.Helper()
+	visualType := map[string]string{"matrix_table": "matrix", "pivot_table": "pivot"}[table.Kind]
+	if visualType == "" {
+		visualType = "table"
+	}
+	fields := make([]string, len(table.Columns))
+	for index, column := range table.Columns {
+		fields[index] = column.Key
+	}
+	authored := reportdef.TableVisual{Title: table.Title, Columns: table.Columns, DefaultSort: table.Sort, Style: table.Style, Query: reportdef.TableQuery{Table: "table", Fields: fields}}
+	if visualType != "table" {
+		authored.Query.Fields = nil
+		for _, column := range table.Columns {
+			field := reportdef.FieldRef{Field: column.Key, Alias: column.Key}
+			if column.Role == "measure" || column.Align == "right" {
+				authored.Query.Measures = append(authored.Query.Measures, field)
+			} else {
+				authored.Query.Rows = append(authored.Query.Rows, field)
+			}
+		}
+	}
+	definitions, err := workspacecompiler.CompileVisualizationDefinitions(&reportdef.Dashboard{ID: "test", SemanticModel: "model", Visuals: reportdef.TabularVisualizations(visualType, map[string]reportdef.TableVisual{id: authored})})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return definitions[id]
 }
 
 func TestEnvelopeFromFrameKeepsCompiledSpecAndStreamRevision(t *testing.T) {
@@ -106,7 +137,7 @@ func TestTableEnvelopePreservesWindowIdentity(t *testing.T) {
 	t.Parallel()
 	count := 1
 	table := dashboard.Table{Kind: "data_table", Title: "Orders", Columns: []dashboard.TableColumn{{Key: "order_id", Label: "Order", Role: "row_header"}}, Cardinality: dashboard.ExactCardinality(count), AvailableRows: count, RowCap: 100, ChunkSize: 50, RowHeight: 34, ResetVersion: 3, Sort: dashboard.TableSort{Key: "order_id", Direction: "asc"}, Blocks: map[string]dashboard.TableBlock{"a": {Start: 0, RequestSeq: 7, ResetVersion: 3, Sort: dashboard.TableSort{Key: "order_id", Direction: "asc"}, Rows: []map[string]any{{"order_id": "one"}}}}}
-	envelope, err := TableEnvelope("orders", table, 8, 5)
+	envelope, err := WindowEnvelopeFromDefinition(testGridDefinition(t, "orders", table), table, 8, 5)
 	if err != nil {
 		t.Fatalf("TableEnvelope: %v", err)
 	}
@@ -126,7 +157,7 @@ func TestTableEnvelopeOmitsUnknownCardinalityCount(t *testing.T) {
 		Cardinality: dashboard.TableCardinality{Kind: dashboard.CardinalityUnknown}, AvailableRows: 10000,
 		RowCap: 10000, ChunkSize: 50, RowHeight: 34, Sort: dashboard.TableSort{Key: "order_id", Direction: "asc"}, Blocks: map[string]dashboard.TableBlock{},
 	}
-	envelope, err := TableEnvelope("orders", table, 1, 1)
+	envelope, err := WindowEnvelopeFromDefinition(testGridDefinition(t, "orders", table), table, 1, 1)
 	if err != nil {
 		t.Fatalf("TableEnvelope: %v", err)
 	}

@@ -267,10 +267,11 @@ Target server packages:
 
 ```text
 internal/visualization/ir/          generated models, canonicalization, versions
-internal/visualization/compile/     semantic model and dashboard -> immutable spec
-internal/visualization/data/        query result -> validated inline or windowed state
+internal/visualization/definition/  immutable compiled definition and query-result contracts
+internal/workspace/compiler/        semantic model and dashboard -> immutable spec
+internal/visualization/runtime/     query result -> validated inline or windowed state
 internal/visualization/format/      format contract and Go implementation
-internal/visualization/interaction/ datum resolution and semantic commands
+internal/dashboard/command/         datum and spatial selection -> semantic commands
 ```
 
 Target browser packages:
@@ -302,7 +303,7 @@ The Lit visualization host owns:
 
 The host never constructs renderer-specific series, table definitions, or option objects. Page components always reference a visual ID; the specification discriminator selects the adapter while status, actions, selection, focus, and layout remain shared.
 
-The host defers mounting heavy renderers until the tile approaches the viewport. Query execution and state ownership remain independent of mounting. Screenshot and export modes can request eager deterministic rendering.
+The host lazy-loads renderer code through the registry. Query execution and state ownership remain independent of renderer mounting, while screenshot and export modes can request eager deterministic rendering.
 
 ## Renderer registry and lifecycle
 

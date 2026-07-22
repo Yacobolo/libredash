@@ -17,7 +17,7 @@ type TargetKind = consumer.Kind
 const (
 	TargetFilterOptions TargetKind = consumer.KindFilterOptions
 	TargetVisual        TargetKind = consumer.KindVisual
-	TargetTable         TargetKind = consumer.KindTable
+	TargetWindow        TargetKind = consumer.KindWindow
 	TargetSpatial       TargetKind = consumer.KindSpatial
 )
 
@@ -133,9 +133,9 @@ func (s Service) PrepareVisualWindow(request Request, authoritative dashboard.Fi
 	return PreparedRefresh{
 		Filters: filters,
 		Plan: RefreshPlan{Command: "visual_window", Targets: []Target{{
-			Kind:         TargetTable,
-			ID:           tableRequest.Table,
-			TableRequest: tableRequest,
+			Kind:          TargetWindow,
+			ID:            tableRequest.Table,
+			WindowRequest: tableRequest,
 		}}},
 	}, nil
 }
@@ -186,7 +186,7 @@ func (s Service) visualWindowTableRequest(dashboardID string, window dashboard.V
 			return dashboard.TableRequest{}, fmt.Errorf("unsupported visual window sort direction %q", sort.Direction)
 		}
 	}
-	return s.Metrics.NormalizeTableRequest(dashboardID, request), nil
+	return s.Metrics.NormalizeVisualizationWindow(dashboardID, request), nil
 }
 
 func internalTableRequest(window dashboard.VisualizationWindowRequest) dashboard.TableRequest {
@@ -252,7 +252,7 @@ func (s Service) fullPlan(request Request, commandName string) RefreshPlan {
 	if !ok {
 		return RefreshPlan{Command: commandName}
 	}
-	tableRequest := s.Metrics.NormalizeTableRequest(request.DashboardID, internalTableRequest(request.VisualWindowCommand)).Reset()
+	tableRequest := s.Metrics.NormalizeVisualizationWindow(request.DashboardID, internalTableRequest(request.VisualWindowCommand)).Reset()
 	targets := make([]Target, 0, len(page.Visuals))
 	seen := map[string]struct{}{}
 	for _, item := range page.Visuals {
@@ -267,7 +267,7 @@ func (s Service) fullPlan(request Request, commandName string) RefreshPlan {
 				} else if isGridVisualization(compiled) {
 					requestForTable := tableRequest
 					requestForTable.Table = item.Visual
-					target = Target{Kind: TargetTable, ID: item.Visual, TableRequest: requestForTable}
+					target = Target{Kind: TargetWindow, ID: item.Visual, WindowRequest: requestForTable}
 				} else {
 					target = Target{Kind: TargetVisual, ID: item.Visual}
 				}
@@ -319,7 +319,7 @@ func (s Service) selectionTargets(request Request, sourceKind, sourceID string) 
 	if err != nil {
 		return nil, err
 	}
-	tableRequest := s.Metrics.NormalizeTableRequest(request.DashboardID, internalTableRequest(request.VisualWindowCommand)).Reset()
+	tableRequest := s.Metrics.NormalizeVisualizationWindow(request.DashboardID, internalTableRequest(request.VisualWindowCommand)).Reset()
 	targets := make([]Target, 0, len(ids))
 	seen := map[string]struct{}{}
 	for _, id := range ids {
@@ -336,7 +336,7 @@ func (s Service) selectionTargets(request Request, sourceKind, sourceID string) 
 		} else if isGridVisualization(targetDefinition) {
 			requestForTable := tableRequest
 			requestForTable.Table = id
-			target = Target{Kind: TargetTable, ID: id, TableRequest: requestForTable}
+			target = Target{Kind: TargetWindow, ID: id, WindowRequest: requestForTable}
 		} else {
 			target = Target{Kind: TargetVisual, ID: id}
 		}
@@ -385,7 +385,7 @@ func (s Service) targetsForIDs(request Request, ids []string) ([]Target, error) 
 	if err != nil {
 		return nil, err
 	}
-	tableRequest := s.Metrics.NormalizeTableRequest(request.DashboardID, internalTableRequest(request.VisualWindowCommand)).Reset()
+	tableRequest := s.Metrics.NormalizeVisualizationWindow(request.DashboardID, internalTableRequest(request.VisualWindowCommand)).Reset()
 	targets := make([]Target, 0, len(ids))
 	seen := map[string]struct{}{}
 	for _, id := range ids {
@@ -402,7 +402,7 @@ func (s Service) targetsForIDs(request Request, ids []string) ([]Target, error) 
 		} else if isGridVisualization(targetDefinition) {
 			requestForTable := tableRequest
 			requestForTable.Table = id
-			target = Target{Kind: TargetTable, ID: id, TableRequest: requestForTable}
+			target = Target{Kind: TargetWindow, ID: id, WindowRequest: requestForTable}
 		} else {
 			target = Target{Kind: TargetVisual, ID: id}
 		}

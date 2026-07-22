@@ -13,7 +13,6 @@ import (
 	"github.com/Yacobolo/leapview/internal/dataquery"
 	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
 	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
-	visualizationruntime "github.com/Yacobolo/leapview/internal/visualization/runtime"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -260,28 +259,27 @@ func (h Handler) queryDashboardTabularVisual(w nethttp.ResponseWriter, r *nethtt
 		filters = metrics.DefaultFilters(dashboardID)
 	}
 	ctx := dataquery.WithMetadata(r.Context(), h.requestQueryMetadata(r, dataquery.SurfaceAPI, dataquery.OperationAPIQuery, "dashboard_visual", dashboardID+":"+visualID))
-	request := metrics.NormalizeTableRequest(dashboardID, dashboard.TableRequest{Table: visualID, Block: "a", Start: start, Count: limit})
-	request.Start, request.Count = start, limit
-	table, err := metrics.QueryTablePage(ctx, dashboardID, page.ID, filters, request)
-	if err != nil {
-		writeJSONError(w, err, nethttp.StatusBadRequest)
-		return
-	}
 	definition, exists := metrics.VisualizationDefinition(dashboardID, visualID)
 	if !exists {
 		writeJSONError(w, fmt.Errorf("compiled visualization %q not found", visualID), nethttp.StatusInternalServerError)
 		return
 	}
-	envelope, err := visualizationruntime.TableEnvelopeFromDefinition(definition, table, 1, 1)
+	request := visualizationir.VisualizationWindowRequest{VisualID: visualID, SpecRevision: definition.SpecRevision, DataRevision: 1, BlockID: "a", Start: int64(start), Limit: int64(limit)}
+	envelope, err := metrics.QueryVisualizationWindow(ctx, dashboardID, page.ID, filters, request)
 	if err != nil {
-		writeJSONError(w, err, nethttp.StatusInternalServerError)
+		writeJSONError(w, err, nethttp.StatusBadRequest)
 		return
 	}
 	if !acceptsDashboardMediaType(r.Header.Get("Accept"), dashboardArrowMediaType) {
 		writeJSON(w, nethttp.StatusOK, envelope)
 		return
 	}
-	writeDashboardTableRowset(w, r, dashboardTableRowset(visualID, table, request.Block, start, limit, scope, snapshot), envelope)
+	rowset, err := dashboardVisualizationRowset(envelope, request.BlockID, start, limit, scope, snapshot)
+	if err != nil {
+		writeJSONError(w, err, nethttp.StatusInternalServerError)
+		return
+	}
+	writeDashboardTableRowset(w, r, rowset, envelope)
 }
 
 func (h Handler) ListDashboardFilterOptions(w nethttp.ResponseWriter, r *nethttp.Request) {

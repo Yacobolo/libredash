@@ -10,8 +10,6 @@ import (
 	"github.com/Yacobolo/leapview/internal/visualization/ir"
 )
 
-const primaryDataset = "primary"
-
 // Frame is the renderer-independent result of a compiled visualization query.
 // Columns must use compiled field aliases; rows are ordered to those columns.
 type Frame struct {
@@ -132,8 +130,8 @@ func SpatialEnvelopeFromFrame(definition visualizationdefinition.Definition, fra
 	state := ir.SpatialWindowedVisualizationDataState{
 		VisualizationDataStateBase: ir.VisualizationDataStateBase{Kind: "spatial_windowed", SpecRevision: definition.SpecRevision, DataRevision: dataRevision, Generation: generation},
 		Kind:                       "spatial_windowed", Schema: schema, Cardinality: ir.VisualizationCardinality{Kind: ir.VisualizationCardinalityKindExact, Count: &cardinality},
-		Extent: spatialBounds(request.Bounds), RowCap: definition.Query.Spatial.Limit, FeatureCap: featureCap, ResetVersion: request.ResetVersion,
-		Window: &ir.VisualizationSpatialWindowBlock{ID: request.WindowID, Bounds: spatialBounds(request.Bounds), Zoom: request.Zoom, Width: int32(request.Width), Height: int32(request.Height), Precision: precision, Rows: frame.Rows, RequestSeq: request.RequestSeq, ResetVersion: request.ResetVersion},
+		Extent: request.Bounds, RowCap: definition.Query.Spatial.Limit, FeatureCap: featureCap, ResetVersion: request.ResetVersion,
+		Window: &ir.VisualizationSpatialWindowBlock{ID: request.WindowID, Bounds: request.Bounds, Zoom: request.Zoom, Width: request.Width, Height: request.Height, Precision: precision, Rows: frame.Rows, RequestSeq: request.RequestSeq, ResetVersion: request.ResetVersion},
 	}
 	status := ir.VisualizationStatusKindReady
 	if len(frame.Rows) == 0 {
@@ -155,10 +153,6 @@ func SpatialEnvelopeFromFrame(definition visualizationdefinition.Definition, fra
 	return envelope, nil
 }
 
-func spatialBounds(value dashboard.SpatialBounds) ir.VisualizationSpatialBounds {
-	return ir.VisualizationSpatialBounds{West: value.West, South: value.South, East: value.East, North: value.North}
-}
-
 func compiledDatasetSchema(base ir.VisualizationSpecBase, datasetID string) (ir.VisualizationDatasetSchema, error) {
 	for _, schema := range base.Datasets {
 		if schema.ID == datasetID {
@@ -168,9 +162,9 @@ func compiledDatasetSchema(base ir.VisualizationSpecBase, datasetID string) (ir.
 	return ir.VisualizationDatasetSchema{}, fmt.Errorf("query targets unknown dataset %q", datasetID)
 }
 
-// TableEnvelopeFromDefinition shapes a window while retaining the exact
+// WindowEnvelopeFromDefinition shapes a window while retaining the exact
 // immutable grid specification selected by the compiler.
-func TableEnvelopeFromDefinition(definition visualizationdefinition.Definition, table dashboard.Table, dataRevision, generation int64) (ir.VisualizationEnvelope, error) {
+func WindowEnvelopeFromDefinition(definition visualizationdefinition.Definition, table dashboard.Table, dataRevision, generation int64) (ir.VisualizationEnvelope, error) {
 	if err := definition.Validate(); err != nil {
 		return ir.VisualizationEnvelope{}, err
 	}
@@ -342,7 +336,11 @@ func emptyWindowSort(spec ir.VisualizationSpec, schema ir.VisualizationDatasetSc
 }
 
 func compiledSelections(spec ir.VisualizationSpec, entries []dashboard.InteractionSelectionEntry, dataRevision int64) ([]ir.VisualizationSelectionEntry, error) {
-	interactions := specInteractions(spec)
+	base, err := ir.SpecificationBase(spec)
+	if err != nil {
+		return nil, err
+	}
+	interactions := base.Interactions
 	if len(entries) == 0 || len(interactions) == 0 {
 		return []ir.VisualizationSelectionEntry{}, nil
 	}
@@ -382,204 +380,12 @@ func compiledSelections(spec ir.VisualizationSpec, entries []dashboard.Interacti
 	return out, nil
 }
 
-func specInteractions(spec ir.VisualizationSpec) []ir.VisualizationInteraction {
-	switch value := spec.Value.(type) {
-	case *ir.CartesianVisualizationSpec:
-		return value.Interactions
-	case *ir.ProportionalVisualizationSpec:
-		return value.Interactions
-	case *ir.HierarchyVisualizationSpec:
-		return value.Interactions
-	case *ir.PolarVisualizationSpec:
-		return value.Interactions
-	case *ir.TableVisualizationSpec:
-		return value.Interactions
-	case *ir.MatrixVisualizationSpec:
-		return value.Interactions
-	case *ir.PivotVisualizationSpec:
-		return value.Interactions
-	case *ir.KPIVisualizationSpec:
-		return value.Interactions
-	case *ir.GeographicVisualizationSpec:
-		return value.Interactions
-	case *ir.CustomVisualizationSpec:
-		return value.Interactions
-	default:
-		return nil
-	}
-}
-
-func TableEnvelope(id string, table dashboard.Table, dataRevision, generation int64) (ir.VisualizationEnvelope, error) {
-	if len(table.Columns) == 0 {
-		table.Columns = []dashboard.TableColumn{{Key: "value", Label: "Value"}}
-	}
-	fields := make([]ir.VisualizationField, len(table.Columns))
-	columns := make([]ir.TableVisualizationColumn, len(table.Columns))
-	for index, column := range table.Columns {
-		role := ir.VisualizationFieldRoleDimension
-		if column.Role == "row_header" && index == 0 {
-			role = ir.VisualizationFieldRoleIdentity
-		} else if column.Role == "measure" || column.Align == "right" {
-			role = ir.VisualizationFieldRoleMeasure
-		}
-		fields[index] = ir.VisualizationField{
-			ID: column.Key, Role: role, DataType: tableDataType(column, table), Nullable: true,
-			Label: defaultText(column.Label, column.Key), Format: tableFormat(column),
-			Grid: &ir.VisualizationGridFieldMetadata{Group: optional(column.Group), Measure: optional(column.Measure), ColumnValue: optional(column.ColumnValue), Formatting: tableFormatting(column.Formatting)},
-		}
-		width := int64(column.Width)
-		columns[index] = ir.TableVisualizationColumn{
-			Field: ref(column.Key), Label: defaultText(column.Label, column.Key),
-			Group: optional(column.Group), Measure: optional(column.Measure), ColumnValue: optional(column.ColumnValue),
-			Formatting: tableFormatting(column.Formatting),
-		}
-		if width > 0 {
-			columns[index].Width = &width
-		}
-	}
-	schema := ir.VisualizationDatasetSchema{ID: primaryDataset, Fields: fields}
-	markIdentityFields(&schema, table.Interaction)
-	maximumRows := int64(table.RowCap)
-	if maximumRows <= 0 {
-		maximumRows = dashboard.TableInteractiveRowCap
-	}
-	rowHeight := table.RowHeight
-	if rowHeight <= 0 {
-		rowHeight = dashboard.TableRowHeight
-	}
-	presentation := ir.GridVisualizationPresentation{RowHeight: int64(rowHeight), Striped: table.Style.Zebra == nil || *table.Style.Zebra, ShowHeader: true}
-	base := ir.VisualizationSpecBase{Kind: "table", Title: defaultText(table.Title, id), Datasets: []ir.VisualizationDatasetSchema{schema}, DataBudget: ir.VisualizationDataBudget{MaxRows: maximumRows, RequiredCompleteness: ir.VisualizationCompletenessPartial}, Accessibility: ir.VisualizationAccessibility{Title: defaultText(table.Title, id), Description: defaultText(table.Title, id)}, Interactions: runtimeInteractions(table.Interaction, schema)}
-	if table.Sort.Key == "" {
-		table.Sort.Key = table.Columns[0].Key
-	}
-	sortValue := ir.VisualizationSort{Field: ref(table.Sort.Key), Direction: sortDirection(table.Sort.Direction)}
-	typeName := map[string]string{"matrix_table": "matrix", "pivot_table": "pivot"}[table.Kind]
-	if typeName == "" {
-		typeName = "table"
-	}
-	var spec ir.VisualizationSpec
-	switch typeName {
-	case "matrix":
-		rows, cols, measures := gridRefs(fields)
-		base.Kind = "matrix"
-		spec = ir.VisualizationSpec{Value: &ir.MatrixVisualizationSpec{VisualizationSpecBase: base, Kind: "matrix", Rows: rows, Columns: cols, Measures: measures, MeasureFormatting: map[string][]ir.TableVisualizationFormattingRule{}, Presentation: presentation}}
-	case "pivot":
-		rows, cols, measures := gridRefs(fields)
-		base.Kind = "pivot"
-		spec = ir.VisualizationSpec{Value: &ir.PivotVisualizationSpec{VisualizationSpecBase: base, Kind: "pivot", Rows: rows, Columns: cols, Measures: measures, MeasureFormatting: map[string][]ir.TableVisualizationFormattingRule{}, Presentation: presentation}}
-	default:
-		spec = ir.VisualizationSpec{Value: &ir.TableVisualizationSpec{VisualizationSpecBase: base, Kind: "table", Columns: columns, DefaultSort: &[]ir.VisualizationSort{sortValue}, Presentation: presentation}}
-	}
-	revision, err := ir.ComputeSpecRevision(spec)
-	if err != nil {
-		return ir.VisualizationEnvelope{}, err
-	}
-	blocks := make(map[string]ir.VisualizationWindowBlock, len(table.Blocks))
-	fieldNames := make([]string, len(fields))
-	for index, field := range fields {
-		fieldNames[index] = field.ID
-	}
-	for key, block := range table.Blocks {
-		if len(block.Rows) == 0 || block.Start >= table.AvailableRows {
-			continue
-		}
-		if excess := block.Start + len(block.Rows) - table.AvailableRows; excess > 0 {
-			block.Rows = block.Rows[:len(block.Rows)-excess]
-		}
-		if block.Sort.Key == "" {
-			block.Sort = table.Sort
-		}
-		rows := make([][]any, len(block.Rows))
-		for index, value := range block.Rows {
-			rows[index] = row(fieldNames, value)
-		}
-		blocks[key] = ir.VisualizationWindowBlock{ID: key, Start: int64(block.Start), Rows: rows, RequestSeq: int64(block.RequestSeq), ResetVersion: int64(block.ResetVersion), Sort: []ir.VisualizationSort{{Field: ref(block.Sort.Key), Direction: sortDirection(block.Sort.Direction)}}}
-	}
-	cardinality := ir.VisualizationCardinality{Kind: cardinalityKind(table.Cardinality.Kind)}
-	if cardinality.Kind != ir.VisualizationCardinalityKindUnknown {
-		count := int64(table.Cardinality.Value)
-		cardinality.Count = &count
-	}
-	state := ir.WindowedVisualizationDataState{VisualizationDataStateBase: ir.VisualizationDataStateBase{Kind: "windowed", SpecRevision: revision.String(), DataRevision: dataRevision, Generation: generation}, Kind: "windowed", Schema: schema, Cardinality: cardinality, AvailableRows: int64(table.AvailableRows), RowCap: maximumRows, ChunkSize: int64(max(table.ChunkSize, dashboard.TableChunkSize)), ResetVersion: int64(table.ResetVersion), Sort: []ir.VisualizationSort{sortValue}, Blocks: blocks}
-	message := table.Error
-	status := statusKind(table.AvailableRows, message)
-	envelope := ir.VisualizationEnvelope{SchemaVersion: ir.CurrentSchemaVersion, VisualID: id, RendererID: "tanstack", SpecRevision: revision.String(), Spec: spec, DataRevision: dataRevision, DataState: ir.VisualizationDataState{Value: &state}, Selection: []ir.VisualizationSelectionEntry{}, Status: ir.VisualizationStatus{Kind: status, Message: optional(message)}, Diagnostics: []ir.VisualizationDiagnostic{}}
-	if err := ir.ValidateEnvelope(envelope); err != nil {
-		return ir.VisualizationEnvelope{}, fmt.Errorf("visualization %q: %w", id, err)
-	}
-	return envelope, nil
-}
-
-func runtimeInteractions(config dashboard.InteractionConfig, schema ir.VisualizationDatasetSchema) []ir.VisualizationInteraction {
-	mappings := make([]ir.VisualizationInteractionMapping, 0, len(config.Mappings))
-	for _, mapping := range config.Mappings {
-		if containsField(schema, mapping.Value) {
-			value := ir.VisualizationInteractionMapping{Source: ref(mapping.Value), TargetFieldID: mapping.Field, TargetFactID: optional(mapping.Fact), Grain: optional(mapping.Grain)}
-			if mapping.Label != "" && containsField(schema, mapping.Label) {
-				value.Label = optionalRef([]string{mapping.Label}, mapping.Label)
-			}
-			mappings = append(mappings, value)
-		}
-	}
-	if len(mappings) == 0 {
-		return []ir.VisualizationInteraction{}
-	}
-	mode := ir.VisualizationSelectionModeSingle
-	if config.Toggle {
-		mode = ir.VisualizationSelectionModeMultiple
-	}
-	interactionID := config.Kind
-	if interactionID == "" || interactionID == "select" {
-		interactionID = "point_selection"
-	}
-	return []ir.VisualizationInteraction{{ID: interactionID, Kind: ir.VisualizationInteractionKindSelect, Mappings: mappings, Targets: append([]string(nil), config.Targets...), Mode: mode, RequiresStableIdentity: true}}
-}
-func markIdentityFields(schema *ir.VisualizationDatasetSchema, config dashboard.InteractionConfig) {
-	wanted := make(map[string]struct{}, len(config.Mappings))
-	for _, mapping := range config.Mappings {
-		wanted[mapping.Value] = struct{}{}
-	}
-	for index := range schema.Fields {
-		if _, ok := wanted[schema.Fields[index].ID]; ok {
-			schema.Fields[index].Role = ir.VisualizationFieldRoleIdentity
-		}
-	}
-}
 func row(columns []string, values map[string]any) []any {
 	out := make([]any, len(columns))
 	for index, column := range columns {
 		out[index] = values[column]
 	}
 	return out
-}
-func ref(field string) ir.VisualizationFieldRef {
-	return ir.VisualizationFieldRef{Dataset: primaryDataset, Field: field}
-}
-func optionalRef(columns []string, field string) *ir.VisualizationFieldRef {
-	if !contains(columns, field) {
-		return nil
-	}
-	value := ref(field)
-	return &value
-}
-func optionalField(columns []string, field string) *ir.VisualizationFieldRef {
-	return optionalRef(columns, field)
-}
-func contains(values []string, target string) bool {
-	for _, value := range values {
-		if value == target {
-			return true
-		}
-	}
-	return false
-}
-func containsField(schema ir.VisualizationDatasetSchema, target string) bool {
-	for _, field := range schema.Fields {
-		if field.ID == target {
-			return true
-		}
-	}
-	return false
 }
 func completeness(rows [][]any) ir.VisualizationCompleteness {
 	if len(rows) == 0 {
@@ -677,11 +483,6 @@ func tableFormatting(rules []dashboard.TableFormattingRule) []ir.TableVisualizat
 	return out
 }
 
-// TableFormatting compiles authoring table rules into the closed IR union.
-func TableFormatting(rules []dashboard.TableFormattingRule) []ir.TableVisualizationFormattingRule {
-	return tableFormatting(rules)
-}
-
 func cloneStringMap(values map[string]string) map[string]string {
 	out := make(map[string]string, len(values))
 	for key, value := range values {
@@ -706,20 +507,4 @@ func cardinalityKind(value string) ir.VisualizationCardinalityKind {
 	default:
 		return ir.VisualizationCardinalityKindUnknown
 	}
-}
-func gridRefs(fields []ir.VisualizationField) ([]ir.VisualizationFieldRef, []ir.VisualizationFieldRef, []ir.VisualizationFieldRef) {
-	dimensions, measures := []ir.VisualizationFieldRef{}, []ir.VisualizationFieldRef{}
-	for _, field := range fields {
-		if field.Role == ir.VisualizationFieldRoleMeasure {
-			measures = append(measures, ref(field.ID))
-		} else {
-			dimensions = append(dimensions, ref(field.ID))
-		}
-	}
-	rows := dimensions
-	columns := []ir.VisualizationFieldRef{}
-	if len(dimensions) > 1 {
-		rows, columns = dimensions[:1], dimensions[1:]
-	}
-	return rows, columns, measures
 }

@@ -177,7 +177,7 @@ func streamPreparation(prepared command.PreparedRefresh) dashboardstream.Refresh
 		preparation.SequenceEpoch = request.ResetVersion
 	}
 	if prepared.Plan.Command == "visual_window" && len(prepared.Plan.Targets) == 1 {
-		request := prepared.Plan.Targets[0].TableRequest
+		request := prepared.Plan.Targets[0].WindowRequest
 		preparation.SequenceKey = "window:" + request.Table
 		preparation.Sequence = int64(request.RequestSeq)
 		preparation.SequenceEpoch = int64(request.ResetVersion)

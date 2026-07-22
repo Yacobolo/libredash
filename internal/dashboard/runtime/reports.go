@@ -64,8 +64,8 @@ func (m *Service) ExecuteDataQuery(ctx context.Context, request dataquery.Query)
 	})
 }
 
-func (m *Service) NormalizeTableRequest(dashboardID string, request dashboard.TableRequest) dashboard.TableRequest {
-	return m.reports.NormalizeTableRequest(dashboardID, request)
+func (m *Service) NormalizeVisualizationWindow(dashboardID string, request dashboard.TableRequest) dashboard.TableRequest {
+	return m.reports.NormalizeVisualizationWindow(dashboardID, request)
 }
 
 func (m *Service) DefaultFilters(dashboardID string) dashboard.Filters {
@@ -120,7 +120,7 @@ func (s *ReportService) SemanticModel(modelID string) (*semanticmodel.Model, boo
 	return model, ok
 }
 
-func (s *ReportService) NormalizeTableRequest(dashboardID string, request dashboard.TableRequest) dashboard.TableRequest {
+func (s *ReportService) NormalizeVisualizationWindow(dashboardID string, request dashboard.TableRequest) dashboard.TableRequest {
 	report, ok := s.compiledDashboard(dashboardID)
 	if !ok {
 		return request.WithDefaults()

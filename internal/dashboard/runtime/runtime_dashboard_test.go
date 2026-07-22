@@ -268,6 +268,11 @@ c2,20040,Rio de Janeiro,RJ
 	if len(envelopeRows(t, patch.Visuals["orders_by_status"])) == 0 {
 		t.Fatal("orders by status chart has no data")
 	}
+	visualPatch, err := metrics.QueryDashboardVisualizations(context.Background(), "fulfillment-operations", "overview", dashboard.Filters{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertVisualKeys(t, visualPatch, []string{"delivery_days", "delivery_speed", "orders_by_status", "review_by_status", "review_score", "total_orders"})
 }
 
 func TestDashboardPageQueriesFlowThroughAuditedDataQueryBoundary(t *testing.T) {
@@ -473,7 +478,7 @@ func TestServiceTableInteractiveCap(t *testing.T) {
 	recorder := &runtimeAuditRecorder{}
 	ctx := dataquery.WithAuditRecorder(context.Background(), recorder)
 	ctx = dataquery.WithMetadata(ctx, dataquery.Metadata{PrincipalID: "table_test"})
-	table, err := metrics.QueryTable(ctx, "executive-sales", dashboard.Filters{}, dashboard.TableRequest{Table: "orders_table", Block: "all", RequestSeq: 9})
+	table, err := metrics.queryTableForTest(ctx, "executive-sales", dashboard.Filters{}, dashboard.TableRequest{Table: "orders_table", Block: "all", RequestSeq: 9})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -516,7 +521,7 @@ func TestServiceTableInteractiveCap(t *testing.T) {
 
 	recorder.queries = nil
 	recorder.results = nil
-	next, err := metrics.QueryTable(ctx, "executive-sales", dashboard.Filters{}, dashboard.TableRequest{Table: "orders_table", Block: "b", Start: dashboard.TableChunkSize, Count: dashboard.TableChunkSize, RequestSeq: 10})
+	next, err := metrics.queryTableForTest(ctx, "executive-sales", dashboard.Filters{}, dashboard.TableRequest{Table: "orders_table", Block: "b", Start: dashboard.TableChunkSize, Count: dashboard.TableChunkSize, RequestSeq: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -531,6 +536,27 @@ func TestServiceTableInteractiveCap(t *testing.T) {
 	}
 	if len(recorder.queries) != 2 || recorder.queries[0].IncludeTotal || !recorder.queries[1].IncludeTotal {
 		t.Fatalf("next block queries = %#v, want independent rows and count", recorder.queries)
+	}
+
+	definition, ok := metrics.VisualizationDefinition("executive-sales", "orders_table")
+	if !ok {
+		t.Fatal("compiled orders table definition is missing")
+	}
+	window, err := metrics.QueryVisualizationWindow(ctx, "executive-sales", "overview", dashboard.Filters{}, visualizationir.VisualizationWindowRequest{
+		VisualID: "orders_table", SpecRevision: definition.SpecRevision, DataRevision: 4,
+		BlockID: "b", Start: dashboard.TableChunkSize, Limit: dashboard.TableChunkSize, RequestSeq: 11,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	windowState, ok := window.DataState.Value.(*visualizationir.WindowedVisualizationDataState)
+	if !ok || window.DataRevision != 4 || len(windowState.Blocks["b"].Rows) != dashboard.TableChunkSize {
+		t.Fatalf("canonical visualization window = %#v", window)
+	}
+	if _, err := metrics.QueryVisualizationWindow(ctx, "executive-sales", "overview", dashboard.Filters{}, visualizationir.VisualizationWindowRequest{
+		VisualID: "orders_table", SpecRevision: "sha256:stale", BlockID: "a", Limit: dashboard.TableChunkSize,
+	}); err == nil {
+		t.Fatal("stale visualization specification revision was accepted")
 	}
 
 	jump, err := metrics.queries.visualizations.queryTableRowsPage(ctx, "executive-sales", "", dashboard.Filters{}, dashboard.TableRequest{
@@ -872,7 +898,7 @@ relogios_presentes,watches_gifts
 		t.Fatalf("hierarchy rows missing health_beauty node: %#v", envelopeRows(t, sunburstPatch.Visuals["category_status_sunburst"]))
 	}
 
-	table, err := metrics.QueryTable(context.Background(), "executive-sales", dashboard.Filters{}, dashboard.TableRequest{
+	table, err := metrics.queryTableForTest(context.Background(), "executive-sales", dashboard.Filters{}, dashboard.TableRequest{
 		Table:      "orders_table",
 		Block:      "a",
 		Start:      0,
@@ -905,7 +931,7 @@ relogios_presentes,watches_gifts
 		t.Fatalf("orders revenue format = %q, want currency", got)
 	}
 
-	conditionalTable, err := metrics.QueryTable(context.Background(), "executive-sales", dashboard.Filters{}, dashboard.TableRequest{
+	conditionalTable, err := metrics.queryTableForTest(context.Background(), "executive-sales", dashboard.Filters{}, dashboard.TableRequest{
 		Table: "orders_conditional",
 		Block: "all",
 		Count: 10,
@@ -923,7 +949,7 @@ relogios_presentes,watches_gifts
 		t.Fatalf("conditional table status column missing badge formatting: %#v", conditionalTable.Columns)
 	}
 
-	filteredTable, err := metrics.QueryTable(context.Background(), "executive-sales", dashboard.Filters{
+	filteredTable, err := metrics.queryTableForTest(context.Background(), "executive-sales", dashboard.Filters{
 		Selections: []dashboard.InteractionSelection{
 			interactionSelection("visual", "orders", "point_selection", "orders.status", "delivered"),
 		},
@@ -938,7 +964,7 @@ relogios_presentes,watches_gifts
 		t.Fatalf("targeted table available rows = %d, want 1", filteredTable.AvailableRows)
 	}
 
-	andFilteredTable, err := metrics.QueryTable(context.Background(), "executive-sales", dashboard.Filters{
+	andFilteredTable, err := metrics.queryTableForTest(context.Background(), "executive-sales", dashboard.Filters{
 		Selections: []dashboard.InteractionSelection{
 			interactionSelection("visual", "orders", "point_selection", "orders.status", "delivered"),
 			interactionSelection("visual", "categories", "point_selection", "orders.category", "watches_gifts"),
@@ -954,7 +980,7 @@ relogios_presentes,watches_gifts
 		t.Fatalf("all block request seq = %d, want 8", got)
 	}
 
-	selectedRowTable, err := metrics.QueryTable(context.Background(), "executive-sales", dashboard.Filters{
+	selectedRowTable, err := metrics.queryTableForTest(context.Background(), "executive-sales", dashboard.Filters{
 		Selections: []dashboard.InteractionSelection{
 			interactionSelection("visual", "orders_table", "row_selection", "orders.order_id", "o1"),
 		},
@@ -974,7 +1000,7 @@ relogios_presentes,watches_gifts
 			interactionSelection("visual", "orders_table", "row_selection", dashboard.UIRowSelectionField, "o1"),
 		},
 	}
-	uiOnlyRowTable, err := metrics.QueryTable(context.Background(), "executive-sales", uiOnlyRowSelection, dashboard.TableRequest{Table: "orders_table", Block: "all", Count: 10, RequestSeq: 11})
+	uiOnlyRowTable, err := metrics.queryTableForTest(context.Background(), "executive-sales", uiOnlyRowSelection, dashboard.TableRequest{Table: "orders_table", Block: "all", Count: 10, RequestSeq: 11})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1020,7 +1046,7 @@ relogios_presentes,watches_gifts
 		t.Fatalf("page filter AND multi-row selected orders KPI value = %d, want 1", got)
 	}
 
-	matrixTable, err := metrics.QueryTable(context.Background(), "executive-sales", dashboard.Filters{}, dashboard.TableRequest{
+	matrixTable, err := metrics.queryTableForTest(context.Background(), "executive-sales", dashboard.Filters{}, dashboard.TableRequest{
 		Table:      "state_status_matrix",
 		Block:      "all",
 		Count:      10,
@@ -1049,7 +1075,7 @@ relogios_presentes,watches_gifts
 		t.Fatalf("matrix rows missing delivered order count values: %#v", matrixTable.Blocks["a"].Rows)
 	}
 
-	pivotTable, err := metrics.QueryTable(context.Background(), "executive-sales", dashboard.Filters{}, dashboard.TableRequest{
+	pivotTable, err := metrics.queryTableForTest(context.Background(), "executive-sales", dashboard.Filters{}, dashboard.TableRequest{
 		Table:      "category_status_pivot",
 		Block:      "all",
 		Count:      10,
@@ -1074,7 +1100,7 @@ relogios_presentes,watches_gifts
 		t.Fatalf("pivot rows missing delivered values: %#v", pivotTable.Blocks["a"].Rows)
 	}
 
-	formattedMatrix, err := metrics.QueryTable(context.Background(), "executive-sales", dashboard.Filters{}, dashboard.TableRequest{
+	formattedMatrix, err := metrics.queryTableForTest(context.Background(), "executive-sales", dashboard.Filters{}, dashboard.TableRequest{
 		Table: "state_status_matrix_formatted",
 		Block: "all",
 		Count: 10,
@@ -1090,7 +1116,7 @@ relogios_presentes,watches_gifts
 		t.Fatalf("formatted matrix revenue column missing data bar formatting: %#v", formattedMatrix.Columns)
 	}
 
-	heatPivot, err := metrics.QueryTable(context.Background(), "executive-sales", dashboard.Filters{}, dashboard.TableRequest{
+	heatPivot, err := metrics.queryTableForTest(context.Background(), "executive-sales", dashboard.Filters{}, dashboard.TableRequest{
 		Table: "category_status_pivot_heat",
 		Block: "all",
 		Count: 10,
@@ -1357,6 +1383,10 @@ func exactTableRows(t *testing.T, table dashboard.Table) int {
 		t.Fatalf("table cardinality = %#v, want exact", table.Cardinality)
 	}
 	return value
+}
+
+func (m *Service) queryTableForTest(ctx context.Context, dashboardID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
+	return m.visualizations.queryTablePage(ctx, dashboardID, "", filters, request, true)
 }
 
 func specBase(t *testing.T, envelope visualizationir.VisualizationEnvelope) visualizationir.VisualizationSpecBase {

@@ -85,7 +85,7 @@ func TestCoordinatorOwnsMonotonicDataRevisionsPerVisual(t *testing.T) {
 
 	publishResults := func(_ context.Context, publish RefreshPublisher) {
 		publish(testVisualizationEvent(RefreshEventVisual, "orders"))
-		publish(testVisualizationEvent(RefreshEventTableMetadata, "orders"))
+		publish(testVisualizationEvent(RefreshEventVisualMetadata, "orders"))
 		publish(testVisualizationEvent(RefreshEventVisual, "revenue"))
 	}
 	if _, err := coordinator.Begin(nil, publishResults); err != nil {
