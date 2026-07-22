@@ -29,6 +29,7 @@ func TestAnalyticalCollectorUsesBoundedLabels(t *testing.T) {
 	}
 	want := map[string]bool{
 		"leapview_arrow_result_leases":     false,
+		"leapview_arrow_transient_bytes":   false,
 		"leapview_duckdb_connections_open": false,
 		"leapview_query_cache_entries":     false,
 		"leapview_query_cache_store_total": false,

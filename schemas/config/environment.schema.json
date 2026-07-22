@@ -1946,7 +1946,7 @@
     },
     "LEAPVIEW_QUERY_CACHE_NODE_MAX_BYTES": {
       "default": "536870912",
-      "description": "Maximum estimated cached result bytes retained by the node.",
+      "description": "Maximum conservatively retained Arrow cache bytes for the node.",
       "pattern": "^-?[0-9]+$",
       "type": "string",
       "x-lifecycle": "supported",
@@ -1962,7 +1962,7 @@
     },
     "LEAPVIEW_QUERY_CACHE_RUNTIME_MAX_BYTES": {
       "default": "67108864",
-      "description": "Maximum estimated cached result bytes retained by one serving generation.",
+      "description": "Maximum conservatively retained Arrow cache bytes for one serving generation.",
       "pattern": "^-?[0-9]+$",
       "type": "string",
       "x-lifecycle": "supported",
@@ -1978,7 +1978,7 @@
     },
     "LEAPVIEW_QUERY_CACHE_WORKSPACE_MAX_BYTES": {
       "default": "134217728",
-      "description": "Maximum estimated cached result bytes retained across one workspace's serving generations.",
+      "description": "Maximum conservatively retained Arrow cache bytes across one workspace's serving generations.",
       "pattern": "^-?[0-9]+$",
       "type": "string",
       "x-lifecycle": "supported",
@@ -1994,7 +1994,7 @@
     },
     "LEAPVIEW_QUERY_RESULT_MAX_BYTES": {
       "default": "33554432",
-      "description": "Maximum estimated retained bytes for one logical analytical operation.",
+      "description": "Maximum conservatively retained Arrow bytes for one logical analytical operation.",
       "pattern": "^-?[0-9]+$",
       "type": "string",
       "x-lifecycle": "supported",

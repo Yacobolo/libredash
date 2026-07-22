@@ -8,14 +8,14 @@ import (
 )
 
 type analyticalCollector struct {
-	database                                              *analyticsducklake.Environment
-	cache                                                 *resultcache.Pool
-	connectionsOpen, connectionsActive, connectionsIdle   *prometheus.Desc
-	cacheEntries, cacheBytes, cacheEvictions, cacheStores *prometheus.Desc
-	arrowResults, arrowLeases, arrowBytes                 *prometheus.Desc
-	connectionAcquisitions, extensionInitializations      *prometheus.Desc
-	sourceAcquisitions, scopeContention, commitRetries    *prometheus.Desc
-	refreshCleanup, fatalHealth                           *prometheus.Desc
+	database                                                   *analyticsducklake.Environment
+	cache                                                      *resultcache.Pool
+	connectionsOpen, connectionsActive, connectionsIdle        *prometheus.Desc
+	cacheEntries, cacheBytes, cacheEvictions, cacheStores      *prometheus.Desc
+	arrowResults, arrowLeases, arrowBytes, arrowTransientBytes *prometheus.Desc
+	connectionAcquisitions, extensionInitializations           *prometheus.Desc
+	sourceAcquisitions, scopeContention, commitRetries         *prometheus.Desc
+	refreshCleanup, fatalHealth                                *prometheus.Desc
 }
 
 func newAnalyticalCollector(database *analyticsducklake.Environment, cache *resultcache.Pool) *analyticalCollector {
@@ -30,6 +30,7 @@ func newAnalyticalCollector(database *analyticsducklake.Environment, cache *resu
 		arrowResults:             prometheus.NewDesc("leapview_arrow_results", "Live owned Arrow analytical results.", nil, nil),
 		arrowLeases:              prometheus.NewDesc("leapview_arrow_result_leases", "Active Arrow analytical result leases.", nil, nil),
 		arrowBytes:               prometheus.NewDesc("leapview_arrow_result_bytes", "Conservatively retained bytes in live Arrow analytical results.", nil, nil),
+		arrowTransientBytes:      prometheus.NewDesc("leapview_arrow_transient_bytes", "Transient bytes retained while materializing owned Arrow analytical results.", nil, nil),
 		cacheEvictions:           prometheus.NewDesc("leapview_query_cache_evictions_total", "Query-result cache evictions by limiting constraint.", []string{"constraint"}, nil),
 		cacheStores:              prometheus.NewDesc("leapview_query_cache_store_total", "Query-result cache store outcomes.", []string{"outcome"}, nil),
 		connectionAcquisitions:   prometheus.NewDesc("leapview_duckdb_connection_acquisitions_total", "Admitted analytical connection acquisitions.", nil, nil),
@@ -43,7 +44,7 @@ func newAnalyticalCollector(database *analyticsducklake.Environment, cache *resu
 }
 
 func (c *analyticalCollector) Describe(ch chan<- *prometheus.Desc) {
-	for _, description := range []*prometheus.Desc{c.connectionsOpen, c.connectionsActive, c.connectionsIdle, c.cacheEntries, c.cacheBytes, c.cacheEvictions, c.cacheStores, c.arrowResults, c.arrowLeases, c.arrowBytes, c.connectionAcquisitions, c.extensionInitializations, c.sourceAcquisitions, c.scopeContention, c.commitRetries, c.refreshCleanup, c.fatalHealth} {
+	for _, description := range []*prometheus.Desc{c.connectionsOpen, c.connectionsActive, c.connectionsIdle, c.cacheEntries, c.cacheBytes, c.cacheEvictions, c.cacheStores, c.arrowResults, c.arrowLeases, c.arrowBytes, c.arrowTransientBytes, c.connectionAcquisitions, c.extensionInitializations, c.sourceAcquisitions, c.scopeContention, c.commitRetries, c.refreshCleanup, c.fatalHealth} {
 		ch <- description
 	}
 }
@@ -53,6 +54,7 @@ func (c *analyticalCollector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(c.arrowResults, prometheus.GaugeValue, float64(arrowStats.Results))
 	ch <- prometheus.MustNewConstMetric(c.arrowLeases, prometheus.GaugeValue, float64(arrowStats.Leases))
 	ch <- prometheus.MustNewConstMetric(c.arrowBytes, prometheus.GaugeValue, float64(arrowStats.Bytes))
+	ch <- prometheus.MustNewConstMetric(c.arrowTransientBytes, prometheus.GaugeValue, float64(arrowStats.TransientBytes))
 	if c.database != nil {
 		stats := c.database.ConnectionStats()
 		ch <- prometheus.MustNewConstMetric(c.connectionsOpen, prometheus.GaugeValue, float64(stats.OpenConnections))

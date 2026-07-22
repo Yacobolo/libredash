@@ -53,6 +53,9 @@ func queryArrow(ctx context.Context, conn *sql.Conn, plan semanticquery.Plan, si
 			return err
 		}
 		defer reader.Release()
+		if err := arrowquery.ConsumeSchemaBudget(ctx, reader.Schema()); err != nil {
+			return err
+		}
 		if err := sink.WriteSchema(reader.Schema()); err != nil {
 			return err
 		}

@@ -2,10 +2,13 @@ package resultcache
 
 import (
 	"context"
+	"errors"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
 
+	"github.com/Yacobolo/leapview/internal/analytics/arrowresult"
 	"github.com/apache/arrow-go/v18/arrow/memory"
 )
 
@@ -100,6 +103,135 @@ func TestCoalesceCancellationDoesNotPoisonLiveWaiter(t *testing.T) {
 	}
 	if calls.Load() != 2 {
 		t.Fatalf("calls = %d", calls.Load())
+	}
+}
+
+func TestCoalesceArrowReturnsIndependentLeasesAndReleasesFlightHold(t *testing.T) {
+	allocator := memory.NewCheckedAllocator(memory.DefaultAllocator)
+	defer allocator.AssertSize(t, 0)
+	pool, _ := New(testLimits())
+	defer pool.Close()
+	scope := mustScope(t, pool, ScopeID{WorkspaceID: "a", RuntimeID: "one"})
+	started := make(chan struct{})
+	release := make(chan struct{})
+	result := testArrowResult(t, allocator, "shared")
+	base, err := result.Acquire()
+	if err != nil {
+		t.Fatal(err)
+	}
+	result.Release()
+	var calls atomic.Int32
+	type response struct {
+		lease  *ArrowFlightLease
+		status ArrowFlightStatus
+		err    error
+	}
+	responses := make(chan response, 2)
+	execute := func() (ArrowFlightValue, error) {
+		calls.Add(1)
+		close(started)
+		<-release
+		return ArrowFlightValue{Data: base, Metadata: Metadata{SQL: "metadata"}}, nil
+	}
+	go func() {
+		lease, status, executeErr := scope.CoalesceArrow(context.Background(), "key", execute)
+		responses <- response{lease: lease, status: status, err: executeErr}
+	}()
+	<-started
+	go func() {
+		lease, status, executeErr := scope.CoalesceArrow(context.Background(), "key", execute)
+		responses <- response{lease: lease, status: status, err: executeErr}
+	}()
+	waitForArrowFlightWaiters(t, pool, scope.key+"\x00key", 2)
+	close(release)
+	first, second := <-responses, <-responses
+	if first.err != nil || second.err != nil {
+		t.Fatalf("coalesced errors = (%v, %v)", first.err, second.err)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("executions = %d, want 1", calls.Load())
+	}
+	if !first.status.Shared || !second.status.Shared {
+		t.Fatalf("statuses = (%#v, %#v), want shared", first.status, second.status)
+	}
+	if first.lease == second.lease || first.lease.Data() == second.lease.Data() {
+		t.Fatal("coalesced callers received the same lease")
+	}
+	if first.lease.Metadata().SQL != "metadata" || second.lease.Metadata().SQL != "metadata" {
+		t.Fatalf("metadata = (%v, %v)", first.lease.Metadata(), second.lease.Metadata())
+	}
+	first.lease.Release()
+	rows, err := arrowresult.DecodeRows(second.lease.Data())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := rows[0]["value"]; got != "shared" {
+		t.Fatalf("second leased value = %#v", got)
+	}
+	second.lease.Release()
+}
+
+func TestCoalesceArrowCanceledWaiterDoesNotLeakOrCancelLiveWaiter(t *testing.T) {
+	allocator := memory.NewCheckedAllocator(memory.DefaultAllocator)
+	defer allocator.AssertSize(t, 0)
+	pool, _ := New(testLimits())
+	defer pool.Close()
+	scope := mustScope(t, pool, ScopeID{WorkspaceID: "a", RuntimeID: "one"})
+	started := make(chan struct{})
+	release := make(chan struct{})
+	owner, cancel := context.WithCancel(context.Background())
+	ownerDone := make(chan error, 1)
+	go func() {
+		_, _, err := scope.CoalesceArrow(owner, "key", func() (ArrowFlightValue, error) {
+			close(started)
+			<-release
+			result := testArrowResult(t, allocator, "live")
+			base, acquireErr := result.Acquire()
+			result.Release()
+			return ArrowFlightValue{Data: base}, acquireErr
+		})
+		ownerDone <- err
+	}()
+	<-started
+	liveDone := make(chan *ArrowFlightLease, 1)
+	liveErr := make(chan error, 1)
+	go func() {
+		lease, _, err := scope.CoalesceArrow(context.Background(), "key", func() (ArrowFlightValue, error) {
+			result := testArrowResult(t, allocator, "replacement")
+			base, acquireErr := result.Acquire()
+			result.Release()
+			return ArrowFlightValue{Data: base}, acquireErr
+		})
+		liveDone <- lease
+		liveErr <- err
+	}()
+	waitForArrowFlightWaiters(t, pool, scope.key+"\x00key", 2)
+	cancel()
+	close(release)
+	if err := <-ownerDone; !errors.Is(err, context.Canceled) {
+		t.Fatalf("owner error = %v, want cancellation", err)
+	}
+	if err := <-liveErr; err != nil {
+		t.Fatal(err)
+	}
+	lease := <-liveDone
+	if lease == nil || lease.Data().Rows() != 1 {
+		t.Fatalf("live lease = %#v", lease)
+	}
+	lease.Release()
+}
+
+func waitForArrowFlightWaiters(t *testing.T, pool *Pool, key string, want int) {
+	t.Helper()
+	for {
+		pool.mu.Lock()
+		flight := pool.arrowFlights[key]
+		ready := flight != nil && flight.waiters >= want
+		pool.mu.Unlock()
+		if ready {
+			return
+		}
+		runtime.Gosched()
 	}
 }
 

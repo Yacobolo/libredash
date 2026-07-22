@@ -2,6 +2,7 @@ package arrowquery
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/Yacobolo/leapview/internal/dataquery"
@@ -9,6 +10,19 @@ import (
 	"github.com/apache/arrow-go/v18/arrow/array"
 	"github.com/apache/arrow-go/v18/arrow/memory"
 )
+
+func TestConsumeSchemaBudgetUsesRetainedSchemaAccounting(t *testing.T) {
+	schema := arrow.NewSchema([]arrow.Field{{Name: "nested", Type: arrow.ListOf(arrow.BinaryTypes.String)}}, nil)
+	ctx := dataquery.WithResultBudget(context.Background(), dataquery.ResultLimits{MaxRows: 1, MaxBytes: 1})
+	err := ConsumeSchemaBudget(ctx, schema)
+	var limit *dataquery.ResultLimitError
+	if !errors.As(err, &limit) || limit.Reason != dataquery.ResultBytes {
+		t.Fatalf("schema budget error = %v, want byte limit", err)
+	}
+	if limit.Observed <= 1 {
+		t.Fatalf("observed schema bytes = %d, want more than limit", limit.Observed)
+	}
+}
 
 func TestConsumeResultBudgetAccountsNativeRecord(t *testing.T) {
 	allocator := memory.NewCheckedAllocator(memory.DefaultAllocator)
