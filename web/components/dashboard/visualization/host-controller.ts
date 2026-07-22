@@ -287,6 +287,7 @@ function changes(previous: VisualizationEnvelope | undefined, next: Visualizatio
 }
 
 function sameJSON(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true
   return JSON.stringify(left) === JSON.stringify(right)
 }
 

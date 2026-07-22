@@ -104,6 +104,7 @@ class MapLibreHandle implements RendererHandle {
   private readonly legend: HTMLDivElement
   private readonly accessibleTable: HTMLDetailsElement
   private homeCamera?: { center: [number, number]; zoom: number; bearing: number; pitch: number }
+  private viewportInitialized = false
   private updateQueue: Promise<void> = Promise.resolve()
   private spatialRequestSeq = 0
   private spatialRequestTimer?: number
@@ -156,8 +157,11 @@ class MapLibreHandle implements RendererHandle {
       return
     }
     if ((change & Change.Spec) === 0 && (change & Change.Data) !== 0 && this.dynamicLayers.length > 0) {
-      this.updateSelectionData(envelope)
+      const collections = this.updateSelectionData(envelope)
+      const fitted = this.initializeViewport(envelope, collections)
       this.updateLegend(envelope)
+      if (fitted) this.handleMoveEnd()
+      await waitForMapRender(this.map)
       return
     }
     this.removeOwnedMapData()
@@ -168,6 +172,7 @@ class MapLibreHandle implements RendererHandle {
     this.tooltipLayerIDs = []
     this.clusterLayerIDs = []
     this.clusterSources.clear()
+    this.viewportInitialized = false
     const collections: FeatureCollection[] = []
     const coordinateCollections: FeatureCollection[] = []
     const attributions = new Set<string>()
@@ -184,8 +189,7 @@ class MapLibreHandle implements RendererHandle {
     if (!envelope.spec.presentation.basemap) this.addCoordinateReferenceGrid(coordinateCollections)
     this.attribution.textContent = [...attributions].join(' · ')
     this.attribution.hidden = attributions.size === 0
-    fitMapToGeographicData(this.map, collections, envelope.spec.presentation.camera)
-    this.captureHomeCamera()
+    this.initializeViewport(envelope, collections)
     this.updateMapControls(envelope)
     this.updateLegend(envelope)
     this.handleMoveEnd()
@@ -289,9 +293,20 @@ class MapLibreHandle implements RendererHandle {
     return data
   }
 
-  private updateSelectionData(envelope: VisualizationEnvelope): void {
-    updateSelectionSources(envelope, this.dynamicLayers, (sourceID) => this.map.getSource(sourceID) as GeoJSONSource | undefined)
+  private updateSelectionData(envelope: VisualizationEnvelope): FeatureCollection[] {
+    const result = updateSelectionSources(envelope, this.dynamicLayers, (sourceID) => this.map.getSource(sourceID) as GeoJSONSource | undefined)
     this.map.triggerRepaint()
+    return result.collections
+  }
+
+  private initializeViewport(envelope: VisualizationEnvelope, collections: FeatureCollection[]): boolean {
+    if (this.viewportInitialized || envelope.spec.kind !== 'geographic') return false
+    const camera = envelope.spec.presentation.camera
+    const fitted = fitMapToGeographicData(this.map, collections, camera)
+    if (!fitted && camera.mode !== 'preserve') return false
+    this.viewportInitialized = true
+    this.captureHomeCamera()
+    return fitted
   }
 
   private removeOwnedMapData(): void {
@@ -462,11 +477,11 @@ class MapLibreHandle implements RendererHandle {
   }
 
   private readonly handleMoveEnd = () => {
-    if (!this.envelope || this.envelope.dataState.kind !== 'spatial_windowed') return
+    if (!this.envelope || this.envelope.dataState.kind !== 'spatial_windowed' || !this.envelope.dataState.window) return
     if (this.spatialRequestTimer !== undefined) window.clearTimeout(this.spatialRequestTimer)
     this.spatialRequestTimer = window.setTimeout(() => {
       this.spatialRequestTimer = undefined
-      if (!this.envelope || this.envelope.dataState.kind !== 'spatial_windowed' || this.disposed) return
+      if (!this.envelope || this.envelope.dataState.kind !== 'spatial_windowed' || !this.envelope.dataState.window || this.disposed) return
       const bounds = this.map.getBounds()
       const requestSeq = nextSpatialRequestSequence(this.envelope, this.spatialRequestSeq)
       const request = spatialWindowRequest(this.envelope, {

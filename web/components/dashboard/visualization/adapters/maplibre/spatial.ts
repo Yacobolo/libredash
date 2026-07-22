@@ -15,7 +15,7 @@ export function spatialWindowRequest(
   height: number,
   requestSeq: number,
 ): MapSpatialWindowRequest | undefined {
-  if (envelope.dataState.kind !== 'spatial_windowed') return undefined
+  if (envelope.dataState.kind !== 'spatial_windowed' || !envelope.dataState.window) return undefined
   if (!Number.isInteger(requestSeq) || requestSeq <= 0 || !Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0 || !Number.isFinite(zoom)) return undefined
   const normalizedBounds = normalizeSpatialBounds(bounds)
   if (!normalizedBounds) return undefined

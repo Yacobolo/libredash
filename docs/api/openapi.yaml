@@ -24673,6 +24673,25 @@ paths:
                   key: example
                 selections:
                   - key: example
+                spatialSelections:
+                  - geometry:
+                      bounds:
+                        east: !!float 1
+                        north: !!float 1
+                        south: !!float 1
+                        west: !!float 1
+                      center:
+                        latitude: !!float 1
+                        longitude: !!float 1
+                      kind: example
+                      points:
+                        - latitude: !!float 1
+                          longitude: !!float 1
+                      radiusMeters: !!float 1
+                    gesture: box
+                    interactionID: example
+                    order: 1
+                    visualID: example
       x-apigen-tool:
         confirmation: never
         effect: read
@@ -25015,6 +25034,25 @@ paths:
                   key: example
                 selections:
                   - key: example
+                spatialSelections:
+                  - geometry:
+                      bounds:
+                        east: !!float 1
+                        north: !!float 1
+                        south: !!float 1
+                        west: !!float 1
+                      center:
+                        latitude: !!float 1
+                        longitude: !!float 1
+                      kind: example
+                      points:
+                        - latitude: !!float 1
+                          longitude: !!float 1
+                      radiusMeters: !!float 1
+                    gesture: box
+                    interactionID: example
+                    order: 1
+                    visualID: example
       x-apigen-tool:
         confirmation: never
         effect: read
@@ -25660,6 +25698,25 @@ paths:
                   key: example
                 selections:
                   - key: example
+                spatialSelections:
+                  - geometry:
+                      bounds:
+                        east: !!float 1
+                        north: !!float 1
+                        south: !!float 1
+                        west: !!float 1
+                      center:
+                        latitude: !!float 1
+                        longitude: !!float 1
+                      kind: example
+                      points:
+                        - latitude: !!float 1
+                          longitude: !!float 1
+                      radiusMeters: !!float 1
+                    gesture: box
+                    interactionID: example
+                    order: 1
+                    visualID: example
               limit: 1
               pageToken: example
       x-apigen-tool:
@@ -40390,11 +40447,53 @@ components:
             additionalProperties: {}
           example:
             - key: example
+        spatialSelections:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardSpatialInteractionSelection'
+          example:
+            - geometry:
+                bounds:
+                  east: !!float 1
+                  north: !!float 1
+                  south: !!float 1
+                  west: !!float 1
+                center:
+                  latitude: !!float 1
+                  longitude: !!float 1
+                kind: example
+                points:
+                  - latitude: !!float 1
+                    longitude: !!float 1
+                radiusMeters: !!float 1
+              gesture: box
+              interactionID: example
+              order: 1
+              visualID: example
       example:
         controls:
           key: example
         selections:
           - key: example
+        spatialSelections:
+          - geometry:
+              bounds:
+                east: !!float 1
+                north: !!float 1
+                south: !!float 1
+                west: !!float 1
+              center:
+                latitude: !!float 1
+                longitude: !!float 1
+              kind: example
+              points:
+                - latitude: !!float 1
+                  longitude: !!float 1
+              radiusMeters: !!float 1
+            gesture: box
+            interactionID: example
+            order: 1
+            visualID: example
     DashboardHeaderComponentResponse:
       type: object
       allOf:
@@ -40603,6 +40702,25 @@ components:
             key: example
           selections:
             - key: example
+          spatialSelections:
+            - geometry:
+                bounds:
+                  east: !!float 1
+                  north: !!float 1
+                  south: !!float 1
+                  west: !!float 1
+                center:
+                  latitude: !!float 1
+                  longitude: !!float 1
+                kind: example
+                points:
+                  - latitude: !!float 1
+                    longitude: !!float 1
+                radiusMeters: !!float 1
+              gesture: box
+              interactionID: example
+              order: 1
+              visualID: example
     DashboardPageQueryResponse:
       type: object
       required:
@@ -40877,6 +40995,89 @@ components:
         - suspended
         - unconfigured
       example: active
+    DashboardSpatialInteractionSelection:
+      type: object
+      required:
+        - visualID
+        - interactionID
+        - gesture
+        - geometry
+        - order
+      properties:
+        visualID:
+          type: string
+          example: example
+        interactionID:
+          type: string
+          example: example
+        gesture:
+          $ref: '#/components/schemas/VisualizationSpatialSelectionGesture'
+        geometry:
+          $ref: '#/components/schemas/DashboardSpatialSelectionGeometry'
+        order:
+          type: integer
+          format: int32
+          example: 1
+      example:
+        geometry:
+          bounds:
+            east: !!float 1
+            north: !!float 1
+            south: !!float 1
+            west: !!float 1
+          center:
+            latitude: !!float 1
+            longitude: !!float 1
+          kind: example
+          points:
+            - latitude: !!float 1
+              longitude: !!float 1
+          radiusMeters: !!float 1
+        gesture: box
+        interactionID: example
+        order: 1
+        visualID: example
+    DashboardSpatialSelectionGeometry:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          enum:
+            - box
+            - lasso
+            - radius
+          example: example
+        bounds:
+          $ref: '#/components/schemas/VisualizationSpatialBounds'
+        points:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisualizationSpatialCoordinate'
+          example:
+            - latitude: !!float 1
+              longitude: !!float 1
+        center:
+          $ref: '#/components/schemas/VisualizationSpatialCoordinate'
+        radiusMeters:
+          type: number
+          format: double
+          example: !!float 1
+      example:
+        bounds:
+          east: !!float 1
+          north: !!float 1
+          south: !!float 1
+          west: !!float 1
+        center:
+          latitude: !!float 1
+          longitude: !!float 1
+        kind: example
+        points:
+          - latitude: !!float 1
+            longitude: !!float 1
+        radiusMeters: !!float 1
     DashboardSummary:
       type: object
       required:
@@ -41012,6 +41213,25 @@ components:
             key: example
           selections:
             - key: example
+          spatialSelections:
+            - geometry:
+                bounds:
+                  east: !!float 1
+                  north: !!float 1
+                  south: !!float 1
+                  west: !!float 1
+                center:
+                  latitude: !!float 1
+                  longitude: !!float 1
+                kind: example
+                points:
+                  - latitude: !!float 1
+                    longitude: !!float 1
+                radiusMeters: !!float 1
+              gesture: box
+              interactionID: example
+              order: 1
+              visualID: example
         limit: 1
         pageToken: example
     DataPolicyListResponse:

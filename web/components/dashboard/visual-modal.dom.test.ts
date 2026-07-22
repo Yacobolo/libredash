@@ -73,7 +73,7 @@ async function dispatchVisualAction(page: Awaited<ReturnType<typeof setupPage>>,
   await page.locator('lv-visual-modal').evaluate((modal: any) => modal.updateComplete)
 }
 
-test('focus action renders a modal clone and leaves the live source in place', async () => {
+test('focus action moves the live visual into the modal and restores it in place', async () => {
   const page = await setupPage()
   try {
     await page.locator('#trigger').focus()
@@ -83,25 +83,20 @@ test('focus action renders a modal clone and leaves the live source in place', a
       const modal = document.querySelector('lv-visual-modal')!
       const first = document.getElementById('first')!
       const parent = document.getElementById('parent')!
-      const clone = modal.querySelector('[data-visual-focus-clone]')
       return {
         sourceParent: first.parentElement?.localName,
         slot: first.getAttribute('slot'),
         sourcePosition: parent.children[0] === first,
-        cloneParent: clone?.parentElement?.localName,
-        cloneSlot: clone?.getAttribute('slot'),
-        cloneSource: clone?.getAttribute('data-visual-focus-source-id'),
+        sourceInModal: modal.querySelector('[slot="focus-visual"]') === first,
         activeInModal: modal.shadowRoot?.activeElement?.classList.contains('focus-close') ?? false,
       }
     })
 
     expect(focusedState).toEqual({
-      sourceParent: 'section',
-      slot: null,
-      sourcePosition: true,
-      cloneParent: 'lv-visual-modal',
-      cloneSlot: 'focus-visual',
-      cloneSource: 'first',
+      sourceParent: 'lv-visual-modal',
+      slot: 'focus-visual',
+      sourcePosition: false,
+      sourceInModal: true,
       activeInModal: true,
     })
 
@@ -120,7 +115,7 @@ test('focus action renders a modal clone and leaves the live source in place', a
         sourceParent: first.parentElement?.id,
         slot: first.getAttribute('slot'),
         restoredPosition: parent.children[0] === first,
-        cloneRemoved: !document.querySelector('lv-visual-modal')?.querySelector('[data-visual-focus-clone]'),
+        focusSlotEmpty: !document.querySelector('lv-visual-modal')?.querySelector('[slot="focus-visual"]'),
         activeId: document.activeElement?.id,
       }
     })
@@ -129,7 +124,7 @@ test('focus action renders a modal clone and leaves the live source in place', a
       sourceParent: 'parent',
       slot: null,
       restoredPosition: true,
-      cloneRemoved: true,
+      focusSlotEmpty: true,
       activeId: 'trigger',
     })
   } finally {
@@ -147,22 +142,22 @@ test('opening another focused source restores the previous element first', async
       const parent = document.getElementById('parent')!
       const first = document.getElementById('first')!
       const second = document.getElementById('second')!
-      const clone = document.querySelector('lv-visual-modal')?.querySelector('[data-visual-focus-clone]')
+      const modal = document.querySelector('lv-visual-modal')!
       return {
         firstParent: first.parentElement?.id,
         firstPosition: parent.children[0] === first,
-        secondParent: second.parentElement?.id,
+        secondParent: second.parentElement?.localName,
         secondSlot: second.getAttribute('slot'),
-        cloneSource: clone?.getAttribute('data-visual-focus-source-id'),
+        secondInModal: modal.querySelector('[slot="focus-visual"]') === second,
       }
     })
 
     expect(state).toEqual({
       firstParent: 'parent',
       firstPosition: true,
-      secondParent: 'parent',
-      secondSlot: null,
-      cloneSource: 'second',
+      secondParent: 'lv-visual-modal',
+      secondSlot: 'focus-visual',
+      secondInModal: true,
     })
   } finally {
     await page.close()
@@ -181,7 +176,7 @@ test('non-focus visual actions do not move the source element', async () => {
         sourceParent: first.parentElement?.id,
         slot: first.getAttribute('slot'),
         hasFocusSlot: Boolean(modal.shadowRoot?.querySelector('slot[name="focus-visual"]')),
-        hasFocusClone: Boolean(modal.querySelector('[data-visual-focus-clone]')),
+        hasFocusedVisual: Boolean(modal.querySelector('[slot="focus-visual"]')),
       }
     })
 
@@ -189,7 +184,7 @@ test('non-focus visual actions do not move the source element', async () => {
       sourceParent: 'parent',
       slot: null,
       hasFocusSlot: false,
-      hasFocusClone: false,
+      hasFocusedVisual: false,
     })
   } finally {
     await page.close()

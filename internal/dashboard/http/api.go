@@ -152,7 +152,7 @@ func (h Handler) QueryDashboardPage(w nethttp.ResponseWriter, r *nethttp.Request
 	}
 	dashboardID := chi.URLParam(r, "dashboard")
 	filters := dashboardFilters(input.Filters)
-	if filters.Controls == nil && filters.Selections == nil {
+	if !dashboardFiltersProvided(filters) {
 		filters = metrics.DefaultFilters(dashboardID)
 	}
 	pageID := chi.URLParam(r, "page")
@@ -245,7 +245,7 @@ func (h Handler) QueryDashboardVisualData(w nethttp.ResponseWriter, r *nethttp.R
 	}
 	dashboardID := chi.URLParam(r, "dashboard")
 	filters := dashboardFilters(input.Filters)
-	if filters.Controls == nil && filters.Selections == nil {
+	if !dashboardFiltersProvided(filters) {
 		filters = metrics.DefaultFilters(dashboardID)
 	}
 	ctx := dataquery.WithMetadata(r.Context(), h.requestQueryMetadata(r, dataquery.SurfaceAPI, dataquery.OperationAPIQuery, "dashboard_visual", dashboardID+":"+visualID))
@@ -288,7 +288,7 @@ func (h Handler) queryDashboardTabularVisual(w nethttp.ResponseWriter, r *nethtt
 	}
 	dashboardID := chi.URLParam(r, "dashboard")
 	filters := dashboardFilters(input.Filters)
-	if filters.Controls == nil && filters.Selections == nil {
+	if !dashboardFiltersProvided(filters) {
 		filters = metrics.DefaultFilters(dashboardID)
 	}
 	ctx := dataquery.WithMetadata(r.Context(), h.requestQueryMetadata(r, dataquery.SurfaceAPI, dataquery.OperationAPIQuery, "dashboard_visual", dashboardID+":"+visualID))
@@ -341,7 +341,7 @@ func (h Handler) ListDashboardFilterOptions(w nethttp.ResponseWriter, r *nethttp
 	}
 	dashboardID := chi.URLParam(r, "dashboard")
 	filters := dashboardFilters(input.Filters)
-	if filters.Controls == nil && filters.Selections == nil {
+	if !dashboardFiltersProvided(filters) {
 		filters = metrics.DefaultFilters(dashboardID)
 	}
 	ctx := dataquery.WithMetadata(r.Context(), h.requestQueryMetadata(r, dataquery.SurfaceAPI, dataquery.OperationAPIQuery, "dashboard_filter", dashboardID+":"+filterID))
@@ -465,6 +465,10 @@ func dashboardFilters(raw map[string]any) dashboard.Filters {
 		return dashboard.Filters{}
 	}
 	return filters
+}
+
+func dashboardFiltersProvided(filters dashboard.Filters) bool {
+	return filters.Controls != nil || filters.Selections != nil || filters.SpatialSelections != nil
 }
 
 func dashboardSummaryDTO(row dashboard.CatalogDashboard) api.DashboardSummary {

@@ -346,6 +346,23 @@ model SemanticModelDescriptionResponse {
 model DashboardFilters {
   controls?: Record<unknown>;
   selections?: Record<unknown>[];
+  spatialSelections?: DashboardSpatialInteractionSelection[];
+}
+
+model DashboardSpatialInteractionSelection {
+  visualID: string;
+  interactionID: string;
+  gesture: LeapViewVisualization.VisualizationSpatialSelectionGesture;
+  geometry: DashboardSpatialSelectionGeometry;
+  order: int32;
+}
+
+model DashboardSpatialSelectionGeometry {
+  kind: "box" | "lasso" | "radius";
+  bounds?: LeapViewVisualization.VisualizationSpatialBounds;
+  points?: LeapViewVisualization.VisualizationSpatialCoordinate[];
+  center?: LeapViewVisualization.VisualizationSpatialCoordinate;
+  radiusMeters?: float64;
 }
 
 model DashboardPageQueryRequest {

@@ -131,6 +131,32 @@ test('controller updates data when a loading envelope is populated at the same r
   expect(updates).toEqual([Change.Data | Change.Status])
 })
 
+test('controller does not serialize an unchanged shared data frame for status-only updates', async () => {
+  const updates: Change[] = []
+  let serializations = 0
+  const handle: RendererHandle = {
+    update: (_value, change) => updates.push(change), resize: () => {}, snapshot: async () => new Blob(), dispose: () => {},
+  }
+  const registry = new RendererRegistry()
+  registry.register({
+    id: 'test', version: '1.0.0', schemaVersion: currentVisualizationSchemaVersion, kinds: ['kpi'], capabilities: { snapshot: true, windowed: false, interactive: false },
+    load: async () => ({ mount: () => handle }),
+  })
+  const controller = new VisualizationController(registry, {} as HTMLElement)
+  const initial = envelopeWithRows(1, [[42]], { kind: 'loading' })
+  const sharedDataState = initial.dataState as VisualizationEnvelope['dataState'] & { toJSON?: () => unknown }
+  sharedDataState.toJSON = () => {
+    serializations++
+    return { kind: 'inline' }
+  }
+
+  await controller.apply(initial)
+  await controller.apply({ ...initial, status: { kind: 'ready' } })
+
+  expect(updates).toEqual([Change.Status])
+  expect(serializations).toBe(0)
+})
+
 test('controller transfers renderer view state across a lazy focus mount', async () => {
   const camera = { center: [-46.63, -23.55], zoom: 7 }
   const restored: unknown[] = []

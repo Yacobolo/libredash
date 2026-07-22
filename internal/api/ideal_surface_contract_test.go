@@ -157,6 +157,19 @@ func TestDashboardVisualResponsesUseVersionedVisualizationEnvelope(t *testing.T)
 	}
 }
 
+func TestDashboardFiltersExposeSpatialSelections(t *testing.T) {
+	spec := managedDataOpenAPISpec(t)
+	schemas := openAPIMap(t, openAPIMap(t, spec, "components"), "schemas")
+	spatialSelections := schemaProperty(t, openAPISchema(t, schemas, "DashboardFilters"), "spatialSelections")
+	if spatialSelections["type"] != "array" {
+		t.Fatalf("dashboard spatial selections are not an array: %#v", spatialSelections)
+	}
+	items, _ := spatialSelections["items"].(map[string]any)
+	if items["$ref"] != "#/components/schemas/DashboardSpatialInteractionSelection" {
+		t.Fatalf("dashboard spatial selection items are not typed: %#v", spatialSelections)
+	}
+}
+
 func TestDashboardPageComponentsAreKindDiscriminated(t *testing.T) {
 	spec := managedDataOpenAPISpec(t)
 	schemas := openAPIMap(t, openAPIMap(t, spec, "components"), "schemas")

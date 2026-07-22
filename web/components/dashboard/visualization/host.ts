@@ -21,8 +21,6 @@ export class VisualizationHost extends LitElement {
   private applyGeneration = 0
   private connectionGeneration = 0
   private presentedRendererID = ''
-  private focusMirror?: VisualizationHost
-  private pendingViewState?: { value: unknown }
   private contextListenersConnected = false
   private reducedMotionMedia?: MediaQueryList
 
@@ -172,16 +170,11 @@ export class VisualizationHost extends LitElement {
       this.controller?.resize(entry.contentRect.width, entry.contentRect.height, window.devicePixelRatio || 1)
     })
     this.resizeObserver.observe(this.rendererContainer)
-    if (this.pendingViewState) {
-      this.controller.restoreViewState(this.pendingViewState.value)
-      this.pendingViewState = undefined
-    }
     void this.applyEnvelope()
   }
 
   protected updated(changed: Map<PropertyKey, unknown>): void {
     if (changed.has('envelope')) {
-      if (this.focusMirror) this.focusMirror.envelope = this.envelope
       void this.applyEnvelope()
     }
   }
@@ -205,23 +198,6 @@ export class VisualizationHost extends LitElement {
   }
 
   async snapshot(): Promise<Blob> { return this.controller?.snapshot() ?? Promise.reject(new Error('visualization is not mounted')) }
-
-  setFocusMirror(mirror?: VisualizationHost): void {
-    this.focusMirror = mirror
-    if (mirror) {
-      mirror.envelope = this.envelope
-      const state = this.controller?.captureViewState()
-      if (state !== undefined) mirror.restoreViewState(state)
-    }
-  }
-
-  private restoreViewState(state: unknown): void {
-    if (this.controller) {
-      this.controller.restoreViewState(state)
-      return
-    }
-    this.pendingViewState = { value: state }
-  }
 
   protected render() {
     const statusError = this.envelope?.status.kind === 'error' ? this.envelope.status.message ?? 'Visualization error' : ''

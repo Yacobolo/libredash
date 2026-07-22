@@ -193,8 +193,9 @@ test('MapLibre selection-only refreshes update existing sources without rebuildi
   const layer = envelope.spec.kind === 'geographic' ? envelope.spec.layers[0]! : undefined
   const geometry = { type: 'FeatureCollection', features: [{ type: 'Feature', id: 'SP', geometry: { type: 'Polygon', coordinates: [] }, properties: { id: 'SP' } }] } as FeatureCollection
   const updates: FeatureCollection[] = []
-  const updated = updateSelectionSources(envelope, [{ spec: layer!, sourceID: 'lv-states', geometry }], (sourceID) => sourceID === 'lv-states' ? { setData: (data) => updates.push(data as FeatureCollection) } : undefined)
-  expect(updated).toBe(1)
+  const result = updateSelectionSources(envelope, [{ spec: layer!, sourceID: 'lv-states', geometry }], (sourceID) => sourceID === 'lv-states' ? { setData: (data) => updates.push(data as FeatureCollection) } : undefined)
+  expect(result.updated).toBe(1)
+  expect(result.collections).toEqual(updates)
   expect(updates).toHaveLength(1)
   expect(updates[0]?.features[0]?.properties).toMatchObject({ __lv_dataset: 'primary', __lv_row_index: 0, __lv_layer_id: 'states' })
 })
@@ -210,7 +211,19 @@ test('MapLibre spatial requests preserve revision and viewport identity', () => 
       resetVersion: 4,
     },
   } as VisualizationEnvelope
-  expect(spatialWindowRequest(envelope, { west: 170, south: -20, east: -170, north: 25 }, 3.25, 960, 540, 8)).toEqual({
+  expect(spatialWindowRequest(envelope, { west: 170, south: -20, east: -170, north: 25 }, 3.25, 960, 540, 8)).toBeUndefined()
+
+  const populated = {
+    ...envelope,
+    dataState: {
+      ...envelope.dataState,
+      window: {
+        id: 'initial', bounds: { west: -180, south: -85, east: 180, north: 85 }, zoom: 0, width: 960, height: 540,
+        precision: 'aggregated', rows: [], requestSeq: 7, resetVersion: 4,
+      },
+    },
+  } as VisualizationEnvelope
+  expect(spatialWindowRequest(populated, { west: 170, south: -20, east: -170, north: 25 }, 3.25, 960, 540, 8)).toEqual({
     visualID: 'state-map', specRevision: 'sha256:test', dataRevision: 12, requestSeq: 8, resetVersion: 4,
     bounds: { west: 170, south: -20, east: -170, north: 25 }, zoom: 3.25, width: 960, height: 540,
     windowID: '170.000000,-20.000000,-170.000000,25.000000@3.250:960x540',
@@ -226,6 +239,10 @@ test('MapLibre spatial requests normalize wrapped worlds and bound browser-contr
       schema: selectableEnvelope().spec.datasets[0], cardinality: { kind: 'estimate', count: 1_000_000 },
       extent: { west: -180, south: -85, east: 180, north: 85 }, rowCap: 1_000_000, featureCap: 5000,
       resetVersion: 4,
+      window: {
+        id: 'initial', bounds: { west: -180, south: -85, east: 180, north: 85 }, zoom: 0, width: 100, height: 100,
+        precision: 'aggregated', rows: [], requestSeq: 8, resetVersion: 4,
+      },
     },
   } as VisualizationEnvelope
 

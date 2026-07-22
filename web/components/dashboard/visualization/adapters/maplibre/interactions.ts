@@ -57,8 +57,9 @@ export function updateSelectionSources(
   envelope: VisualizationEnvelope,
   layers: readonly { spec: VisualizationGeographicLayer; sourceID: string; geometry?: FeatureCollection }[],
   getSource: (sourceID: string) => Pick<GeoJSONSource, 'setData'> | undefined,
-): number {
+): { updated: number; collections: FeatureCollection[] } {
   let updated = 0
+  const collections: FeatureCollection[] = []
   for (const layer of layers) {
     const data = layer.spec.kind === 'choropleth' && layer.geometry
       ? joinGeometry(envelope, layer.spec, layer.geometry)
@@ -67,10 +68,12 @@ export function updateSelectionSources(
         : layer.spec.kind === 'reference' && layer.geometry
           ? layer.geometry
           : coordinateGeometry(envelope, layer.spec)
+    const scaled = applyFeatureScales(data, layer.spec)
+    collections.push(scaled)
     const source = getSource(layer.sourceID)
     if (!source) continue
-    source.setData(applyFeatureScales(data, layer.spec))
+    source.setData(scaled)
     updated++
   }
-  return updated
+  return { updated, collections }
 }
