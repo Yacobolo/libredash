@@ -18,7 +18,7 @@ Date ranges, multi-selects, and text filters have different value and operator c
 
 ## Visual definitions
 
-A visual definition pairs a renderer-neutral shape with a semantic query and presentation options. For example, a chart query names result aliases for dimensions and measures, declares sort order, and sets a result limit. A KPI query requests a single measure or metric.
+A visual definition pairs a closed visual type with a semantic query and typed presentation. The compiler resolves it into a renderer-independent `VisualizationSpec`. For example, a chart query names stable field aliases for dimensions and measures, declares sort order, and sets a result limit. A KPI query requests a single measure or metric.
 
 Visual IDs are local reusable identities inside the dashboard. A page component references the visual by ID:
 
@@ -35,7 +35,7 @@ visuals:
       limit: 30
 ```
 
-The browser renderer receives a presentation-shaped payload; it does not parse semantic expressions or execute SQL. See the [visual reference](/docs/visuals/overview) for supported shapes and focused examples.
+The browser host receives a versioned visualization envelope; it does not parse semantic expressions or execute SQL. See the [visual reference](/docs/visuals/overview) for supported types and focused examples.
 
 ## Tables, matrices, and pivots
 

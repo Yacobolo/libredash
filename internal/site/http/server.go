@@ -7,10 +7,13 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 
+	mapassethttp "github.com/Yacobolo/leapview/internal/visualization/mapasset/http"
 	"github.com/Yacobolo/leapview/pkg/pagestream"
 	siteassets "github.com/Yacobolo/leapview/site"
 )
@@ -71,8 +74,25 @@ func NewHandlerWithOptions(options Options) http.Handler {
 	mux.HandleFunc("GET /updates", updates)
 	mux.Handle("GET /static/", compressedAssets(http.StripPrefix("/static/", http.FileServer(http.FS(siteassets.Static())))))
 	mux.Handle("GET /shared/", compressedAssets(http.StripPrefix("/shared/", http.FileServer(http.FS(siteassets.Shared())))))
+	mux.Handle("GET /map-assets/", mapassethttp.CacheHandler(http.StripPrefix("/map-assets/", siteMapAssets())))
 	mux.HandleFunc("GET /{path...}", server.notFound)
 	return server.productionHeaders(mux)
+}
+
+func siteMapAssets() http.Handler {
+	diskFS := os.DirFS(".data/map-assets")
+	disk := http.FileServer(http.FS(diskFS))
+	embedded := http.FileServer(http.FS(siteassets.MapAssets()))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/")
+		if path != "" && fs.ValidPath(path) {
+			if _, err := fs.Stat(diskFS, path); err == nil {
+				disk.ServeHTTP(w, r)
+				return
+			}
+		}
+		embedded.ServeHTTP(w, r)
+	})
 }
 
 func cloneURL(value *url.URL) *url.URL {
@@ -85,7 +105,7 @@ func cloneURL(value *url.URL) *url.URL {
 
 func (s *siteServer) productionHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		policy := "default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data:; object-src 'none'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'"
+		policy := "default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data: blob:; object-src 'none'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:"
 		if r.URL.Path == "/showcase" && s.showcaseOrigin != "" {
 			policy += "; frame-src " + s.showcaseOrigin
 		}
@@ -94,10 +114,16 @@ func (s *siteServer) productionHeaders(next http.Handler) http.Handler {
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
+		if r.URL.Path == "/static/vega-sandbox.js" {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+		}
 		if s.baseURL != nil && s.baseURL.Scheme == "https" {
 			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		}
 		switch {
+		case strings.HasPrefix(r.URL.Path, "/map-assets/"):
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			w.Header().Set("Accept-Ranges", "bytes")
 		case strings.HasPrefix(r.URL.Path, "/static/chunks/"):
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		case strings.HasPrefix(r.URL.Path, "/static/"), strings.HasPrefix(r.URL.Path, "/shared/"):

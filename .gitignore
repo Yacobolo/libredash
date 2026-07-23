@@ -1,6 +1,7 @@
 .DS_Store
 .playwright-cli/
 .data/
+.libredash/
 .leapview/
 .task/
 .tmp/
@@ -9,6 +10,7 @@ node_modules/
 bin/
 coverage.out
 api/gen/
+api/.apigen/
 internal/api/gen/
 internal/config/config_gen.go
 internal/configspec/names_gen.go
@@ -35,6 +37,8 @@ static/chunks/
 !static/theme.js
 site/static/*.js
 site/static/chunks/
+site/static/geometry/
+site/static/map-assets/
 site/static/shared/
 site/static/vendor/
 static/asset-lineage-graph.css

@@ -48,7 +48,7 @@ visuals:
 
 ## Aligned labels
 
-Set `funnel_align: left` to anchor the stages, keep labels visible, and use `options.sort` to control the visual stage order independently.
+Set `presentation.align: left` to anchor the stages, keep labels visible, and use `presentation.sort` to control the visual stage order independently.
 
 {{< visual id="status_funnel_left" >}}
 
@@ -57,8 +57,8 @@ visuals:
   status_funnel_left:
     title: Left aligned status funnel
     type: funnel
-    options:
-      funnel_align: left
+    presentation:
+      align: left
       sort: ascending
       show_labels: true
     query:

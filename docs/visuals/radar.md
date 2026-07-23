@@ -15,8 +15,6 @@ visuals:
   status_radar:
     title: Order status radar
     description: Compares order status counts on a radar chart.
-    shape: category_value
-    renderer: echarts
     type: radar
     query:
       dimensions:
@@ -39,8 +37,6 @@ Replace status with delivery buckets to compare a different categorical profile 
 visuals:
   delivery_radar:
     title: Delivery speed radar
-    shape: category_value
-    renderer: echarts
     type: radar
     query:
       dimensions:
@@ -54,7 +50,7 @@ visuals:
 
 ## Filled area
 
-Enable `options.area` to emphasize the overall revenue profile across states rather than only the outline between individual values.
+Enable `presentation.area` to emphasize the overall revenue profile across states rather than only the outline between individual values.
 
 {{< visual id="state_radar" >}}
 
@@ -62,10 +58,8 @@ Enable `options.area` to emphasize the overall revenue profile across states rat
 visuals:
   state_radar:
     title: State revenue radar
-    shape: category_value
-    renderer: echarts
     type: radar
-    options:
+    presentation:
       area: false
     query:
       dimensions:

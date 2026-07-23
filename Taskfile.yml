@@ -10,6 +10,7 @@ tasks:
       - task: generate
       - task: build
       - task: bootstrap
+      - task: map-assets:install
       - ./scripts/dev-server.sh start
 
   dev:movielens:
@@ -24,6 +25,49 @@ tasks:
     desc: Download/sync Olist CSVs if missing
     cmds:
       - go run ./internal/tools/bootstrapolist --out .data/olist
+
+  map-style:generate:
+    desc: Generate the pinned renderer-owned MapLibre style
+    deps:
+      - node:deps
+    sources:
+      - scripts/generate_map_style.ts
+      - package.json
+      - bun.lock
+    generates:
+      - static/map-assets/leapview-streets/style.json
+    cmds:
+      - bun scripts/generate_map_style.ts
+
+  map-assets:install:
+    desc: Install the pinned local PMTiles, glyph, and sprite assets used by development
+    cmds:
+      - go run ./internal/tools/mapassets --out .data/map-assets
+
+  map-assets:publish:
+    desc: Publish the verified content-addressed map package to managed S3 storage and optionally verify its public delivery
+    requires:
+      vars: [MAP_ASSET_S3_BUCKET]
+    cmds:
+      - >-
+        go run ./internal/tools/mapassets
+        --out .data/map-assets
+        --publish-s3-bucket {{.MAP_ASSET_S3_BUCKET | quote}}
+        --publish-s3-prefix {{default "map-assets" .MAP_ASSET_S3_PREFIX | quote}}
+        {{if .MAP_ASSET_S3_REGION}}--publish-s3-region {{.MAP_ASSET_S3_REGION | quote}}{{end}}
+        {{if .MAP_ASSET_S3_ENDPOINT}}--publish-s3-endpoint {{.MAP_ASSET_S3_ENDPOINT | quote}}{{end}}
+        {{if .MAP_ASSET_S3_PATH_STYLE}}--publish-s3-path-style{{end}}
+        {{if .MAP_ASSET_BASE_URL}}--verify-base-url {{.MAP_ASSET_BASE_URL | quote}}{{end}}
+
+  map-assets:verify:
+    desc: Verify the complete map package through its same-origin production delivery path
+    requires:
+      vars: [MAP_ASSET_BASE_URL]
+    cmds:
+      - >-
+        go run ./internal/tools/mapassets
+        --out .data/map-assets
+        --verify-base-url {{.MAP_ASSET_BASE_URL | quote}}
 
   bootstrap:movielens:
     desc: Download/sync MovieLens 32M CSVs if missing
@@ -139,6 +183,8 @@ tasks:
       - task: api:generate
       - task: ui-signals:generate
       - task: schema:generate
+      - task: visualization-ir:generate
+      - task: map-style:generate
       - task: cli-docs:generate
       - task: node:deps
       - task: docs:render
@@ -285,6 +331,7 @@ tasks:
       - Taskfile.yml
       - api/apigen.yaml
       - api/typespec/**/*.tsp
+      - api/visualization/**/*.tsp
       - internal/tools/openapidocgen/**/*.go
     generates:
       - api/gen/json-ir.json
@@ -296,8 +343,8 @@ tasks:
       - docs/api/openapi.yaml
       - docs/api/operations.json
     cmds:
-      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3 typespec-compile -manifest api/apigen.yaml -target leapview-v1
-      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3 all -manifest api/apigen.yaml -target leapview-v1
+      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.6.5 typespec-compile -manifest api/apigen.yaml -target leapview-v1
+      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.6.5 all -manifest api/apigen.yaml -target leapview-v1
       - go run ./internal/tools/openapidocgen
 
   schema:generate:
@@ -333,15 +380,40 @@ tasks:
       - Taskfile.yml
       - api/apigen.yaml
       - api/signals/**/*.tsp
-      - internal/tools/uisignalspostprocess/**/*.go
+      - api/visualization/**/*.tsp
     generates:
       - api/gen/ui-signals-ir.json
       - internal/ui/signals/models.gen.go
       - web/generated/signals/index.ts
     cmds:
-      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3 typespec-compile -manifest api/apigen.yaml -target ui-signals
-      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3 all -manifest api/apigen.yaml -target ui-signals
-      - go run ./internal/tools/uisignalspostprocess
+      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.6.5 typespec-compile -manifest api/apigen.yaml -target ui-signals
+      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.6.5 all -manifest api/apigen.yaml -target ui-signals
+
+  visualization-ir:generate:
+    desc: Generate renderer-independent visualization IR contracts from TypeSpec
+    deps:
+      - node:deps
+    method: checksum
+    sources:
+      - Taskfile.yml
+      - api/apigen.yaml
+      - api/visualization/**/*.tsp
+      - scripts/generate_visualization_validator.ts
+      - scripts/generate_vega_lite_validator.ts
+    generates:
+      - api/gen/visualization-ir.json
+      - internal/visualization/ir/models.gen.go
+      - internal/visualization/ir/schema_version.gen.go
+      - web/generated/visualization/index.ts
+      - web/generated/visualization/schema-version.ts
+      - web/generated/visualization/validate.ts
+      - web/generated/vega-lite/validate.ts
+      - api/gen/visualization.schema.json
+    cmds:
+      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.6.5 typespec-compile -manifest api/apigen.yaml -target visualization-ir
+      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.6.5 all -manifest api/apigen.yaml -target visualization-ir
+      - bun scripts/generate_visualization_validator.ts
+      - bun scripts/generate_vega_lite_validator.ts
 
   test:
     desc: Run tests
@@ -354,6 +426,7 @@ tasks:
       - bun run test:theme
       - bun run test:site
       - bun run test:datastar-lit
+      - bun run test:visualization-ir
       - bun run test:app-shell
       - bun run test:interaction-selection
       - bun run test:movielens-performance-harness
@@ -380,7 +453,11 @@ tasks:
       - bun run test:semantic-model-graph
       - bun run typecheck:app
       - bun run typecheck:contracts
-      - go test ./...
+      # CUE-heavy compiler/application packages can each saturate a core and
+      # starve timing-sensitive integration tests when every package runs at
+      # once. Bound package parallelism while retaining Go's in-package
+      # parallelism so local and hosted CI exercise the same reliable suite.
+      - go test -p 2 ./...
 
   ci:
     desc: Run the full CI test suite

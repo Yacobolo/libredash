@@ -15,8 +15,6 @@ visuals:
   delivery_distribution:
     title: Delivery day distribution
     description: Summarizes delivery-day distribution by speed bucket.
-    shape: distribution
-    renderer: echarts
     type: boxplot
     query:
       table: orders
@@ -39,8 +37,6 @@ Swap the numeric measure to compare review-score spread with the same `distribut
 visuals:
   review_distribution:
     title: Review score distribution
-    shape: distribution
-    renderer: echarts
     type: boxplot
     query:
       table: orders
@@ -55,7 +51,7 @@ visuals:
 
 ## Zoomable distribution
 
-Use revenue as the raw measure and enable `options.data_zoom` when the range contains values that benefit from closer inspection.
+Use revenue as the raw measure and enable `presentation.data_zoom` when the range contains values that benefit from closer inspection.
 
 {{< visual id="revenue_distribution" >}}
 
@@ -63,10 +59,8 @@ Use revenue as the raw measure and enable `options.data_zoom` when the range con
 visuals:
   revenue_distribution:
     title: Revenue distribution
-    shape: distribution
-    renderer: echarts
     type: boxplot
-    options:
+    presentation:
       data_zoom: true
     query:
       table: orders

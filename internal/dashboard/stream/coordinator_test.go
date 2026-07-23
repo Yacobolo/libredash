@@ -2,14 +2,30 @@ package stream
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	"github.com/Yacobolo/leapview/internal/dataquery"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 )
+
+func testVisualizationEvent(eventType RefreshEventType, target string) RefreshEvent {
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "api", "visualization", "conformance", "cartesian-inline.json"))
+	if err != nil {
+		panic(err)
+	}
+	var envelope visualizationir.VisualizationEnvelope
+	if err := json.Unmarshal(data, &envelope); err != nil {
+		panic(err)
+	}
+	return RefreshEvent{Type: eventType, Target: target, Value: envelope}
+}
 
 func TestCoordinatorPublishesStartBeforeWorkCompletes(t *testing.T) {
 	events := make(chan RefreshEvent, 4)
@@ -27,7 +43,7 @@ func TestCoordinatorPublishesStartBeforeWorkCompletes(t *testing.T) {
 		close(workStarted)
 		select {
 		case <-release:
-			publish(RefreshEvent{Type: RefreshEventVisual, Target: "orders"})
+			publish(testVisualizationEvent(RefreshEventVisual, "orders"))
 		case <-ctx.Done():
 		}
 	})
@@ -60,6 +76,58 @@ func TestCoordinatorPublishesStartBeforeWorkCompletes(t *testing.T) {
 	close(release)
 	assertRefreshEvent(t, events, RefreshEventVisual, 1)
 	assertRefreshEvent(t, events, RefreshEventComplete, 1)
+}
+
+func TestCoordinatorOwnsMonotonicDataRevisionsPerVisual(t *testing.T) {
+	events := make(chan RefreshEvent, 16)
+	coordinator := NewCoordinator(context.Background(), func(event RefreshEvent) { events <- event })
+	t.Cleanup(coordinator.Close)
+
+	publishResults := func(_ context.Context, publish RefreshPublisher) {
+		publish(testVisualizationEvent(RefreshEventVisual, "orders"))
+		publish(testVisualizationEvent(RefreshEventVisualMetadata, "orders"))
+		publish(testVisualizationEvent(RefreshEventVisual, "revenue"))
+	}
+	if _, err := coordinator.Begin(nil, publishResults); err != nil {
+		t.Fatal(err)
+	}
+
+	got := map[string][]int64{}
+	for len(got["orders"]) < 2 || len(got["revenue"]) < 1 {
+		select {
+		case event := <-events:
+			if event.DataRevision > 0 {
+				got[event.Target] = append(got[event.Target], event.DataRevision)
+			}
+		case <-time.After(time.Second):
+			t.Fatalf("timed out waiting for revisions: %#v", got)
+		}
+	}
+	if revisions := got["orders"]; len(revisions) != 2 || revisions[0] != 1 || revisions[1] != 2 {
+		t.Fatalf("orders revisions = %#v, want [1 2]", revisions)
+	}
+	if revisions := got["revenue"]; len(revisions) != 1 || revisions[0] != 1 {
+		t.Fatalf("revenue revisions = %#v, want [1]", revisions)
+	}
+
+	if _, err := coordinator.Begin(nil, func(_ context.Context, publish RefreshPublisher) {
+		publish(testVisualizationEvent(RefreshEventVisual, "orders"))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for {
+		select {
+		case event := <-events:
+			if event.Target == "orders" && event.DataRevision > 0 {
+				if event.DataRevision != 3 {
+					t.Fatalf("next orders revision = %d, want 3", event.DataRevision)
+				}
+				return
+			}
+		case <-time.After(time.Second):
+			t.Fatal("timed out waiting for next orders revision")
+		}
+	}
 }
 
 func TestCoordinatorPublishesMonotonicBackendProgressAndCompletesThePlan(t *testing.T) {
@@ -148,6 +216,63 @@ func TestCoordinatorDebounceSkipsSupersededGenerationWork(t *testing.T) {
 	}
 }
 
+func TestCoordinatorRejectsStaleSequencedPreparationWithoutSupersedingCurrentWork(t *testing.T) {
+	events := make(chan RefreshEvent, 8)
+	coordinator := NewCoordinator(context.Background(), func(event RefreshEvent) { events <- event })
+	t.Cleanup(coordinator.Close)
+	started := make(chan struct{})
+	release := make(chan struct{})
+
+	begin := func(sequence, epoch int64) (Refresh, error) {
+		return coordinator.BeginPrepared(func(current dashboard.Filters) (RefreshPreparation, error) {
+			return RefreshPreparation{Filters: current, Command: "visual_spatial_window", SequenceKey: "spatial:customer_map", Sequence: sequence, SequenceEpoch: epoch}, nil
+		}, func(RefreshPreparation) RefreshWork {
+			return func(ctx context.Context, _ RefreshPublisher) {
+				select {
+				case started <- struct{}{}:
+				case <-ctx.Done():
+					return
+				}
+				select {
+				case <-release:
+				case <-ctx.Done():
+				}
+			}
+		})
+	}
+
+	current, err := begin(8, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertRefreshEvent(t, events, RefreshEventStart, current.Generation)
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("current work did not start")
+	}
+	if _, err := begin(7, 2); !errors.Is(err, ErrStalePreparation) {
+		t.Fatalf("out-of-order request error = %v, want ErrStalePreparation", err)
+	}
+	if _, err := begin(8, 2); !errors.Is(err, ErrStalePreparation) {
+		t.Fatalf("duplicate request error = %v, want ErrStalePreparation", err)
+	}
+	select {
+	case event := <-events:
+		t.Fatalf("stale request published event %#v", event)
+	default:
+	}
+	close(release)
+
+	reset, err := begin(1, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reset.Generation != current.Generation+1 {
+		t.Fatalf("reset generation = %d, want %d", reset.Generation, current.Generation+1)
+	}
+}
+
 func TestCoordinatorLatestGenerationSuppressesCanceledResultsAndCompletion(t *testing.T) {
 	var (
 		mu     sync.Mutex
@@ -167,7 +292,7 @@ func TestCoordinatorLatestGenerationSuppressesCanceledResultsAndCompletion(t *te
 	}, func(_ context.Context, publish RefreshPublisher) {
 		close(firstStarted)
 		<-firstRelease
-		publish(RefreshEvent{Type: RefreshEventVisual, Target: "stale"})
+		publish(testVisualizationEvent(RefreshEventVisual, "stale"))
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -178,7 +303,7 @@ func TestCoordinatorLatestGenerationSuppressesCanceledResultsAndCompletion(t *te
 	_, err = coordinator.Begin(func(current dashboard.Filters) (dashboard.Filters, error) {
 		return current, nil
 	}, func(_ context.Context, publish RefreshPublisher) {
-		publish(RefreshEvent{Type: RefreshEventVisual, Target: "current"})
+		publish(testVisualizationEvent(RefreshEventVisual, "current"))
 		close(secondDone)
 	})
 	if err != nil {
@@ -221,7 +346,7 @@ func TestCoordinatorsForSeparateStreamInstancesDoNotCancelEachOther(t *testing.T
 	release := make(chan struct{})
 	work := func(_ context.Context, publish RefreshPublisher) {
 		<-release
-		publish(RefreshEvent{Type: RefreshEventVisual, Target: "orders"})
+		publish(testVisualizationEvent(RefreshEventVisual, "orders"))
 	}
 	for _, coordinator := range []*Coordinator{first, second} {
 		if _, err := coordinator.Begin(func(current dashboard.Filters) (dashboard.Filters, error) { return current, nil }, work); err != nil {
@@ -268,7 +393,9 @@ func TestCoordinatorSummaryDistinguishesPartialAndRefreshErrors(t *testing.T) {
 		{
 			name: "partial",
 			work: func(_ context.Context, publish RefreshPublisher) {
-				publish(RefreshEvent{Type: RefreshEventVisual, Target: "ok", Queries: 1})
+				event := testVisualizationEvent(RefreshEventVisual, "ok")
+				event.Queries = 1
+				publish(event)
 				publish(RefreshEvent{Type: RefreshEventTargetError, Target: "visual:bad", Err: errors.New("bad"), Queries: 1})
 			},
 			wantOutcome: "partial",
@@ -330,14 +457,14 @@ func TestCoordinatorSummaryIncludesTargetsCachesAndCancellationReason(t *testing
 	}, func(RefreshPreparation) RefreshWork {
 		return func(_ context.Context, publish RefreshPublisher) {
 			<-release
-			publish(RefreshEvent{Type: RefreshEventVisual, Target: "a"})
+			publish(testVisualizationEvent(RefreshEventVisual, "a"))
 		}
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := coordinator.Begin(nil, func(_ context.Context, publish RefreshPublisher) {
 		publish(RefreshEvent{Type: RefreshEventCacheOutcome, CacheOutcome: dataquery.CacheHit})
-		publish(RefreshEvent{Type: RefreshEventVisual, Target: "current"})
+		publish(testVisualizationEvent(RefreshEventVisual, "current"))
 		publish(RefreshEvent{Type: RefreshEventTargetError, Target: "visual:bad", Err: errors.New("bad")})
 	}); err != nil {
 		t.Fatal(err)
@@ -362,7 +489,9 @@ func TestCoordinatorSummarySeparatesTargetWorkSumFromCriticalPath(t *testing.T) 
 
 	if _, err := coordinator.Begin(nil, func(_ context.Context, publish RefreshPublisher) {
 		publish(RefreshEvent{Type: RefreshEventProgress, Duration: 30 * time.Millisecond})
-		publish(RefreshEvent{Type: RefreshEventVisual, Target: "a", Duration: 90 * time.Millisecond})
+		event := testVisualizationEvent(RefreshEventVisual, "a")
+		event.Duration = 90 * time.Millisecond
+		publish(event)
 		publish(RefreshEvent{Type: RefreshEventProgress, Duration: 20 * time.Millisecond, StageTimingsMs: map[string]float64{"targetCriticalPath": 35}})
 	}); err != nil {
 		t.Fatal(err)
@@ -394,7 +523,7 @@ func TestCoordinatorTerminalErrorReflectsTargetFailureSeverity(t *testing.T) {
 		{
 			name: "ordinary partial failure remains component scoped",
 			work: func(_ context.Context, publish RefreshPublisher) {
-				publish(RefreshEvent{Type: RefreshEventVisual, Target: "ok"})
+				publish(testVisualizationEvent(RefreshEventVisual, "ok"))
 				publish(RefreshEvent{Type: RefreshEventTargetError, Target: "visual:bad", Err: errors.New("bad")})
 			},
 		},
@@ -408,7 +537,7 @@ func TestCoordinatorTerminalErrorReflectsTargetFailureSeverity(t *testing.T) {
 		{
 			name: "setup required survives partial success",
 			work: func(_ context.Context, publish RefreshPublisher) {
-				publish(RefreshEvent{Type: RefreshEventVisual, Target: "ok"})
+				publish(testVisualizationEvent(RefreshEventVisual, "ok"))
 				publish(RefreshEvent{Type: RefreshEventTargetError, Target: "visual:missing", Err: setupRequiredTestError{}})
 			},
 			wantTerminalError: true,

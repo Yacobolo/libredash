@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/Yacobolo/leapview/internal/api"
-	"github.com/Yacobolo/leapview/internal/dashboard"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/apache/arrow-go/v18/arrow/array"
 	"github.com/apache/arrow-go/v18/arrow/ipc"
@@ -20,36 +20,65 @@ import (
 
 const dashboardArrowMediaType = "application/vnd.apache.arrow.stream"
 
-func dashboardTableRowset(id string, table dashboard.Table, block string, start, limit int, scope, snapshot string) api.DashboardTableQueryResponse {
-	rows := table.Blocks[block].Rows
+func dashboardVisualizationRowset(envelope visualizationir.VisualizationEnvelope, block string, start, limit int, scope, snapshot string) (api.DashboardTableQueryResponse, error) {
+	state, ok := envelope.DataState.Value.(*visualizationir.WindowedVisualizationDataState)
+	if !ok {
+		return api.DashboardTableQueryResponse{}, fmt.Errorf("visualization %q is not windowed", envelope.VisualID)
+	}
+	window, ok := state.Blocks[block]
+	if !ok {
+		return api.DashboardTableQueryResponse{}, fmt.Errorf("visualization %q omitted requested block %q", envelope.VisualID, block)
+	}
+	rows := window.Rows
 	if len(rows) > limit {
 		rows = rows[:limit]
 	}
-	columns := make([]api.QueryColumn, len(table.Columns))
+	columns := make([]api.QueryColumn, len(state.Schema.Fields))
 	encodedRows := make([][]string, 0, len(rows))
-	for index, column := range table.Columns {
-		columns[index] = api.QueryColumn{Name: column.Key, Type: dashboardColumnType(rows, column.Key), Nullable: dashboardColumnNullable(rows, column.Key)}
+	for index, field := range state.Schema.Fields {
+		columns[index] = api.QueryColumn{Name: field.ID, Type: visualizationFieldType(field.DataType), Nullable: field.Nullable}
 	}
 	for _, row := range rows {
-		values := make([]string, len(table.Columns))
-		for index, column := range table.Columns {
-			values[index] = dashboardCellString(row[column.Key])
+		values := make([]string, len(state.Schema.Fields))
+		for index := range state.Schema.Fields {
+			if index < len(row) {
+				values[index] = dashboardCellString(row[index])
+			}
 		}
 		encodedRows = append(encodedRows, values)
 	}
 	next := ""
-	if start+len(encodedRows) < table.AvailableRows {
+	if int64(start+len(encodedRows)) < state.AvailableRows {
 		next = encodeIndexCursor(start+len(encodedRows), scope, snapshot)
+	}
+	base, err := visualizationir.SpecificationBase(envelope.Spec)
+	if err != nil {
+		return api.DashboardTableQueryResponse{}, err
 	}
 	queryDigest := sha256String(scope)
 	return api.DashboardTableQueryResponse{
-		ID: id, Type: dashboard.NewTabularVisual(id, table).Type,
-		QueryID: "query_" + queryDigest[:24], ServingSnapshot: snapshot, Title: table.Title,
-		Columns: columns, Rows: encodedRows, AvailableRows: table.AvailableRows, Page: api.PageInfo{NextCursor: next},
+		ID: envelope.VisualID, Type: base.Kind,
+		QueryID: "query_" + queryDigest[:24], ServingSnapshot: snapshot, Title: base.Title,
+		Columns: columns, Rows: encodedRows, AvailableRows: int(state.AvailableRows), Page: api.PageInfo{NextCursor: next},
+	}, nil
+}
+
+func visualizationFieldType(value visualizationir.VisualizationDataType) string {
+	switch value {
+	case visualizationir.VisualizationDataTypeBoolean:
+		return "boolean"
+	case visualizationir.VisualizationDataTypeInteger:
+		return "int64"
+	case visualizationir.VisualizationDataTypeDecimal:
+		return "float64"
+	case visualizationir.VisualizationDataTypeDate, visualizationir.VisualizationDataTypeTemporal:
+		return "timestamp"
+	default:
+		return "string"
 	}
 }
 
-func writeDashboardTableRowset(w stdhttp.ResponseWriter, r *stdhttp.Request, response api.DashboardTableQueryResponse) {
+func writeDashboardTableRowset(w stdhttp.ResponseWriter, r *stdhttp.Request, response api.DashboardTableQueryResponse, envelope visualizationir.VisualizationEnvelope) {
 	if requestID := strings.TrimSpace(r.Header.Get("X-Request-ID")); requestID != "" {
 		response.QueryID = requestID
 	}
@@ -66,6 +95,9 @@ func writeDashboardTableRowset(w stdhttp.ResponseWriter, r *stdhttp.Request, res
 	w.Header().Set("Content-Type", dashboardArrowMediaType)
 	w.Header().Set("X-Query-ID", response.QueryID)
 	w.Header().Set("X-Serving-Snapshot", response.ServingSnapshot)
+	w.Header().Set("X-Visualization-Schema-Version", strconv.FormatInt(int64(envelope.SchemaVersion), 10))
+	w.Header().Set("X-Visualization-Spec-Revision", envelope.SpecRevision)
+	w.Header().Set("X-Visualization-Data-Revision", strconv.FormatInt(envelope.DataRevision, 10))
 	if response.Page.NextCursor != "" {
 		w.Header().Set("X-Next-Cursor", response.Page.NextCursor)
 	}
@@ -123,39 +155,6 @@ func encodeDashboardTableArrow(response api.DashboardTableQueryResponse) ([]byte
 		return nil, err
 	}
 	return output.Bytes(), nil
-}
-
-func dashboardColumnType(rows []map[string]any, key string) string {
-	for _, row := range rows {
-		value := row[key]
-		if value == nil {
-			continue
-		}
-		switch value.(type) {
-		case bool:
-			return "boolean"
-		case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
-			return "int64"
-		case float32, float64:
-			return "float64"
-		case time.Time:
-			return "timestamp"
-		case json.RawMessage, map[string]any, []any:
-			return "json"
-		default:
-			return "string"
-		}
-	}
-	return "string"
-}
-
-func dashboardColumnNullable(rows []map[string]any, key string) bool {
-	for _, row := range rows {
-		if value, ok := row[key]; !ok || value == nil {
-			return true
-		}
-	}
-	return len(rows) == 0
 }
 
 func dashboardCellString(value any) string {

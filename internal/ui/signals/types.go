@@ -10,7 +10,10 @@ import (
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	"github.com/Yacobolo/leapview/internal/brand"
 	"github.com/Yacobolo/leapview/internal/dashboard"
-	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
+	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
+	visualizationruntime "github.com/Yacobolo/leapview/internal/visualization/runtime"
 	workspaceview "github.com/Yacobolo/leapview/internal/workspace"
 )
 
@@ -167,7 +170,7 @@ type WorkspaceAccessResponse struct {
 
 type ChatViewState struct {
 	Agent   ChatSignal
-	Visuals map[string]DashboardVisual
+	Visuals map[string]visualizationir.VisualizationEnvelope
 }
 
 func ChatTranscriptItems(items []agent.ChatTranscriptItem) []ChatTranscriptItemSignal {
@@ -270,7 +273,7 @@ func referenceHierarchyFromTurn(reference agent.TurnReference) []string {
 	return hierarchy
 }
 
-func DashboardInitialEnvelope(clientID, streamInstanceID string, catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model, pages []dashboard.Page, activePage dashboard.Page, initialFilters dashboard.Filters) DashboardEnvelope {
+func DashboardInitialEnvelope(clientID, streamInstanceID string, catalog dashboard.Catalog, report dashboarddefinition.Definition, model *semanticmodel.Model, definitions map[string]visualizationdefinition.Definition, pages []dashboard.Page, activePage dashboard.Page, initialFilters dashboard.Filters) DashboardEnvelope {
 	activePage = activePage.WithDefaults()
 	tableRequest := DefaultTableRequest(report, activePage)
 	initialFilters = report.NormalizeFiltersForPage(activePage.ID, initialFilters).WithDefaults()
@@ -308,7 +311,7 @@ func DashboardInitialEnvelope(clientID, streamInstanceID string, catalog dashboa
 		AgentReferenceSearch: AgentReferenceSearchSignal{
 			Results: []AgentReferenceSignal{},
 		},
-		AgentVisuals: map[string]DashboardVisual{},
+		AgentVisuals: map[string]visualizationir.VisualizationEnvelope{},
 		Chrome:       ChromeSignal{Sidebar: sidebarConfig(catalog, "workspaces", report.ID, workspaceDisplayTitle(catalog), report.Title, activePage.Title, modelID, modelTitle, true, "", strings.TrimSpace(catalog.Workspace.ID) != "")},
 		Page: DashboardPageSignal{
 			Kind:           RouteDashboard,
@@ -335,18 +338,15 @@ func DashboardInitialEnvelope(clientID, streamInstanceID string, catalog dashboa
 			PageID:           optionalValue(activePage.ID),
 			ModelID:          optionalValue(modelID),
 		},
-		ComponentStatus:     map[string]DashboardComponentStatus{},
-		FilterConfig:        ReportFilterConfigsFromReport(report.FilterConfigForPage(activePage.ID)),
-		Filters:             DashboardFiltersFromDashboard(initialFilters),
-		URLParams:           report.URLParamsFromFiltersForPage(activePage.ID, initialFilters),
-		URLParamShape:       report.URLParamShapeForPage(activePage.ID),
-		FilterOptions:       map[string][]DashboardFilterOption{},
-		InteractionCommand:  DashboardInteractionCommandFromDashboard(dashboard.InteractionCommand{Toggle: true, Mappings: []dashboard.InteractionCommandMapping{}}),
-		VisualWindowCommand: DashboardVisualWindowRequestFromDashboard(tableRequest),
-		Visuals: DashboardVisualsFromDashboard(
-			VisualSignals(report, model, activePage),
-			TableSignals(report, activePage, tableRequest),
-		),
+		FilterConfig:               ReportFilterConfigsFromReport(report.FilterConfigForPage(activePage.ID)),
+		Filters:                    DashboardFiltersFromDashboard(initialFilters),
+		URLParams:                  report.URLParamsFromFiltersForPage(activePage.ID, initialFilters),
+		URLParamShape:              report.URLParamShapeForPage(activePage.ID),
+		FilterOptions:              map[string][]DashboardFilterOption{},
+		InteractionCommand:         DashboardInteractionCommandFromDashboard(dashboard.InteractionCommand{Toggle: true, Mappings: []dashboard.InteractionCommandMapping{}}),
+		VisualWindowCommand:        DashboardVisualWindowRequestFromDashboard(tableRequest),
+		VisualSpatialWindowCommand: DashboardVisualSpatialWindowRequestFromDashboard(dashboard.SpatialWindowRequest{}),
+		Visuals:                    InitialVisualizationEnvelopes(definitions, activePage, tableRequest),
 		Status: DashboardStatusFromDashboard(dashboard.Status{
 			Loading:       false,
 			Error:         "",
@@ -488,78 +488,43 @@ func sidebarConfig(catalog dashboard.Catalog, active, dashboardID, workspaceTitl
 	}
 }
 
-func DefaultTableRequest(report reportdef.Dashboard, page dashboard.Page) dashboard.TableRequest {
+func DefaultTableRequest(report dashboarddefinition.Definition, page dashboard.Page) dashboard.TableRequest {
 	request := dashboard.TableRequest{Block: "all", Start: 0, Count: dashboard.TableChunkSize}
-	for _, name := range pageTableIDs(page) {
-		table, ok := report.Tables[name]
-		if !ok {
+	for _, name := range pageVisualIDs(page) {
+		table, ok := report.Visualizations[name]
+		if !ok || table.Query.Kind != visualizationdefinition.QueryDetail {
 			continue
 		}
-		if table.KindOrDefault() == "data_table" {
-			request.Table = name
-			request.Sort = table.DefaultSort
-			break
+		request.Table = name
+		if len(table.Query.Detail.DefaultSort) > 0 {
+			request.Sort = dashboard.TableSort{Key: table.Query.Detail.DefaultSort[0].FieldID, Direction: table.Query.Detail.DefaultSort[0].Direction}
 		}
+		break
 	}
 	return request
 }
 
-func TableSignals(report reportdef.Dashboard, page dashboard.Page, request dashboard.TableRequest) map[string]dashboard.Table {
-	tables := map[string]dashboard.Table{}
-	for _, name := range pageTableIDs(page) {
-		table, ok := report.Tables[name]
+func InitialVisualizationEnvelopes(definitions map[string]visualizationdefinition.Definition, page dashboard.Page, request dashboard.TableRequest) map[string]DashboardVisualizationSignal {
+	ids := pageVisualIDs(page)
+	out := make(map[string]DashboardVisualizationSignal, len(ids))
+	for _, id := range ids {
+		definition, ok := definitions[id]
 		if !ok {
-			continue
+			panic(fmt.Sprintf("compiled dashboard visualization %q is missing from initial signals", id))
 		}
-		style := table.Style.WithDefaults()
-		tables[name] = dashboard.Table{
-			Version:       2,
-			Kind:          table.KindOrDefault(),
-			Title:         table.Title,
-			Style:         style,
-			Interaction:   interactionSignal("row_selection", table.Interaction.RowSelection),
-			Selection:     []dashboard.InteractionSelectionEntry{},
-			Columns:       table.Columns,
-			Cardinality:   dashboard.TableCardinality{Kind: dashboard.CardinalityUnknown},
-			AvailableRows: 0,
-			IsCapped:      false,
-			RowCap:        dashboard.TableInteractiveRowCap,
-			ChunkSize:     dashboard.TableChunkSize,
-			RowHeight:     style.RowHeight(),
-			ResetVersion:  request.ResetVersion,
-			Sort:          table.DefaultSort,
-			Blocks: map[string]dashboard.TableBlock{
-				"a": {Start: 0, Rows: []map[string]any{}},
-				"b": {Start: dashboard.TableChunkSize, Rows: []map[string]any{}},
-				"c": {Start: dashboard.TableChunkSize * 2, Rows: []map[string]any{}},
-			},
-			LoadingBlock: "",
-			Error:        "",
+		dataRevision := int64(1)
+		resetVersion := int64(0)
+		if definition.Query.Kind == visualizationdefinition.QueryDetail || definition.Query.Kind == visualizationdefinition.QueryMatrix || definition.Query.Kind == visualizationdefinition.QueryPivot {
+			resetVersion = int64(request.ResetVersion)
+			dataRevision = int64(max(request.ResetVersion, 1))
 		}
+		envelope, err := visualizationruntime.EmptyEnvelopeFromDefinition(definition, dataRevision, 1, resetVersion)
+		if err != nil {
+			panic(fmt.Sprintf("compiled dashboard visualization %q has invalid initial envelope: %v", id, err))
+		}
+		out[id] = DashboardVisualizationSignalFromIR(envelope)
 	}
-	return tables
-}
-
-func VisualSignals(report reportdef.Dashboard, model *semanticmodel.Model, page dashboard.Page) map[string]dashboard.Visual {
-	visuals := map[string]dashboard.Visual{}
-	for _, id := range pageVisualIDs(page) {
-		visual, ok := report.Visuals[id]
-		if !ok {
-			continue
-		}
-		measureName := ""
-		unit := ""
-		format := ""
-		title := visual.Title
-		if model != nil && len(visual.Query.Measures) > 0 {
-			measureName = displayField(visual.Query.Measures[0].Field)
-		}
-		if title == "" {
-			title = measureName
-		}
-		visuals[id] = visualSignal(id, visual, title, unit, format, measureName)
-	}
-	return visuals
+	return out
 }
 
 func ReportPageHeaderDetail(pages []dashboard.Page, activePage dashboard.Page) string {
@@ -638,20 +603,10 @@ func dashboardPageNav(workspaceID, reportID string, pages []dashboard.Page, acti
 func dashboardComponents(page dashboard.Page) []DashboardComponentSignal {
 	components := make([]DashboardComponentSignal, 0, len(page.Visuals))
 	for _, visual := range page.PlacedVisuals() {
-		kind := visual.Kind
-		visualID := visual.Visual
-		if visual.Table != "" {
-			kind = "visual"
-			visualID = visual.Table
-		} else if visual.Visual != "" {
-			kind = "visual"
-		} else if visual.Filter != "" {
-			kind = "filter"
-		}
 		components = append(components, DashboardComponentSignal{
 			ID:          visual.ID,
-			Kind:        kind,
-			Visual:      optionalValue(visualID),
+			Kind:        visual.Kind,
+			Visual:      optionalValue(visual.Visual),
 			Filter:      optionalValue(visual.Filter),
 			Description: optionalValue(visual.Description),
 			Placement:   DashboardPagePlacementFromDashboard(visual.Placement),
@@ -721,96 +676,6 @@ func pageVisualIDs(page dashboard.Page) []string {
 	}
 	sort.Strings(ids)
 	return ids
-}
-
-func pageTableIDs(page dashboard.Page) []string {
-	seen := map[string]struct{}{}
-	ids := []string{}
-	for _, item := range page.Visuals {
-		if item.Table == "" {
-			continue
-		}
-		if _, ok := seen[item.Table]; ok {
-			continue
-		}
-		seen[item.Table] = struct{}{}
-		ids = append(ids, item.Table)
-	}
-	sort.Strings(ids)
-	return ids
-}
-
-func visualSignal(id string, visual reportdef.Visual, title, unit, format, measure string) dashboard.Visual {
-	seriesList := []string{}
-	if !visual.Query.Series.IsZero() {
-		seriesList = append(seriesList, displayField(visual.Query.Series.Field))
-	}
-	visualType := visual.Type
-	if visualType == "" && visual.KindOrDefault() == "kpi" {
-		visualType = "kpi"
-	}
-	rendererOptions := map[string]map[string]any{}
-	if len(visual.RendererOptions) > 0 {
-		for key, value := range visual.RendererOptions {
-			if nested, ok := value.(map[string]any); ok {
-				rendererOptions[key] = nested
-				continue
-			}
-			rendererOptions[key] = map[string]any{"value": value}
-		}
-	}
-	return dashboard.Visual{
-		Version:         3,
-		ID:              id,
-		Kind:            visual.KindOrDefault(),
-		Shape:           visual.ShapeOrDefault(),
-		Renderer:        visual.RendererOrDefault(),
-		Type:            visualType,
-		Title:           title,
-		Unit:            unit,
-		Format:          format,
-		Interaction:     interactionSignal("point_selection", visual.Interaction.PointSelection),
-		Dimensions:      displayFieldRefs(visual.Query.Dimensions),
-		Measure:         measure,
-		Measures:        displayFieldRefs(visual.Query.Measures),
-		Series:          seriesList,
-		Options:         visual.CoreOptions(),
-		RendererOptions: rendererOptions,
-		Selection:       []dashboard.InteractionSelectionEntry{},
-		Data:            []dashboard.Datum{},
-	}
-}
-
-func interactionSignal(kind string, selection reportdef.SelectionInteraction) dashboard.InteractionConfig {
-	mappings := make([]dashboard.InteractionConfigMapping, 0, len(selection.Mappings))
-	for _, mapping := range selection.Mappings {
-		mappings = append(mappings, dashboard.InteractionConfigMapping{
-			Field: mapping.Field,
-			Fact:  mapping.Fact,
-			Grain: mapping.Grain,
-			Value: mapping.Value,
-			Label: mapping.Label,
-		})
-	}
-	return dashboard.InteractionConfig{
-		Kind:     kind,
-		Toggle:   selection.Toggle,
-		Mappings: mappings,
-		Targets:  append([]string{}, selection.Targets...),
-	}
-}
-
-func displayFieldRefs(refs []reportdef.FieldRef) []string {
-	fields := make([]string, len(refs))
-	for i, ref := range refs {
-		fields[i] = displayField(ref.Field)
-	}
-	return fields
-}
-
-func displayField(field string) string {
-	parts := strings.Split(field, ".")
-	return parts[len(parts)-1]
 }
 
 func displayLabel(label, fallback string) string {

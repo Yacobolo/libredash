@@ -9,6 +9,7 @@ import (
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 	"github.com/Yacobolo/leapview/internal/dataquery"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 	"github.com/Yacobolo/leapview/internal/workload"
 )
 
@@ -48,12 +49,20 @@ func (m workloadMetrics) QueryDashboardPage(ctx context.Context, dashboardID, pa
 	return m.QueryMetrics.QueryDashboardPage(m.readContext(ctx), dashboardID, pageID, filters)
 }
 
-func (m workloadMetrics) QueryTable(ctx context.Context, dashboardID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
-	return m.QueryTablePage(ctx, dashboardID, "", filters, request)
+func (m workloadMetrics) QueryDashboardVisualizations(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters) (dashboard.Patch, error) {
+	return m.QueryMetrics.QueryDashboardVisualizations(m.readContext(ctx), dashboardID, pageID, filters)
 }
 
-func (m workloadMetrics) QueryTablePage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
-	return m.QueryMetrics.QueryTablePage(m.readContext(ctx), dashboardID, pageID, filters, request)
+func (m workloadMetrics) QueryVisualization(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualID string) (visualizationir.VisualizationEnvelope, error) {
+	return m.QueryMetrics.QueryVisualization(m.readContext(ctx), dashboardID, pageID, filters, visualID)
+}
+
+func (m workloadMetrics) QueryVisualizationWindow(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request visualizationir.VisualizationWindowRequest) (visualizationir.VisualizationEnvelope, error) {
+	return m.QueryMetrics.QueryVisualizationWindow(m.readContext(ctx), dashboardID, pageID, filters, request)
+}
+
+func (m workloadMetrics) QueryVisualizationSpatialWindow(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request visualizationir.VisualizationSpatialWindowRequest) (visualizationir.VisualizationEnvelope, error) {
+	return m.QueryMetrics.QueryVisualizationSpatialWindow(m.readContext(ctx), dashboardID, pageID, filters, request)
 }
 
 func (m workloadMetrics) ExecuteDataQuery(ctx context.Context, request dataquery.Query) (dataquery.Result, error) {

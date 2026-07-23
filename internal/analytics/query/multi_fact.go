@@ -589,23 +589,37 @@ func (p *Planner) validateAggregateFilters(filters []Filter, resolved aggregateR
 	}
 	for _, filter := range filters {
 		scopes := []string{}
+		collectField := func(field, filterFact string) error {
+			if _, semantic := p.Model.Dimensions[field]; semantic && filterFact == "" {
+				scopes = append(scopes, "conformed")
+				return nil
+			}
+			fact := filterFact
+			if fact == "" {
+				if resolved.MultiFact {
+					return fmt.Errorf("fact-local filter %q requires fact in a multi-fact query", field)
+				}
+				fact = resolved.Facts[0]
+			}
+			if !factSet[fact] {
+				return fmt.Errorf("filter fact %q is not a participating fact", fact)
+			}
+			scopes = append(scopes, fact)
+			return nil
+		}
 		var collect func(Filter) error
 		collect = func(item Filter) error {
 			if item.Field != "" {
-				if _, semantic := p.Model.Dimensions[item.Field]; semantic && item.Fact == "" {
-					scopes = append(scopes, "conformed")
-				} else {
-					fact := item.Fact
-					if fact == "" {
-						if resolved.MultiFact {
-							return fmt.Errorf("fact-local filter %q requires fact in a multi-fact query", item.Field)
-						}
-						fact = resolved.Facts[0]
-					}
-					if !factSet[fact] {
-						return fmt.Errorf("filter fact %q is not a participating fact", fact)
-					}
-					scopes = append(scopes, fact)
+				if err := collectField(item.Field, item.Fact); err != nil {
+					return err
+				}
+			}
+			if item.Spatial != nil {
+				if err := collectField(item.Spatial.LatitudeField, item.Spatial.Fact); err != nil {
+					return err
+				}
+				if err := collectField(item.Spatial.LongitudeField, item.Spatial.Fact); err != nil {
+					return err
 				}
 			}
 			for _, group := range item.Groups {
@@ -637,6 +651,17 @@ func (p *Planner) factFilterFields(filters []Filter, resolved aggregateResolutio
 	bindings := []physicalFieldBinding{}
 	var walk func(Filter) error
 	walk = func(filter Filter) error {
+		if filter.Spatial != nil {
+			for _, ref := range []string{filter.Spatial.LatitudeField, filter.Spatial.LongitudeField} {
+				field, path, applies, err := p.resolveFactFilterField(Filter{Field: ref, Fact: filter.Spatial.Fact}, resolved, fact)
+				if err != nil {
+					return err
+				}
+				if applies {
+					bindings = append(bindings, physicalFieldBinding{Field: field, Path: path})
+				}
+			}
+		}
 		if filter.Field != "" {
 			field, path, applies, err := p.resolveFactFilterField(filter, resolved, fact)
 			if err != nil {
@@ -680,6 +705,38 @@ func (p *Planner) factWhereParts(filters []Filter, resolved aggregateResolution,
 }
 
 func (p *Planner) factFilterPart(filter Filter, resolved aggregateResolution, fact string, aliases pathAliasSet) (string, []any, error) {
+	if filter.Spatial != nil {
+		if filter.Field != "" || len(filter.Groups) != 0 {
+			return "", nil, fmt.Errorf("spatial filter cannot combine scalar or grouped filter fields")
+		}
+		resolveExpr := func(ref string) (string, bool, error) {
+			field, path, applies, err := p.resolveFactFilterField(Filter{Field: ref, Fact: filter.Spatial.Fact}, resolved, fact)
+			if err != nil || !applies {
+				return "", applies, err
+			}
+			physical, err := p.Model.ResolveDimension(field)
+			if err != nil {
+				return "", false, err
+			}
+			expr, err := dimensionExprForPath(physical, aliases, path)
+			return expr, true, err
+		}
+		latitudeExpr, latitudeApplies, err := resolveExpr(filter.Spatial.LatitudeField)
+		if err != nil {
+			return "", nil, err
+		}
+		longitudeExpr, longitudeApplies, err := resolveExpr(filter.Spatial.LongitudeField)
+		if err != nil {
+			return "", nil, err
+		}
+		if latitudeApplies != longitudeApplies {
+			return "", nil, fmt.Errorf("spatial coordinate fields resolve to different fact scopes")
+		}
+		if !latitudeApplies {
+			return "", nil, nil
+		}
+		return spatialFilterSQL(latitudeExpr, longitudeExpr, *filter.Spatial)
+	}
 	if len(filter.Groups) > 0 {
 		orParts := []string{}
 		args := []any{}

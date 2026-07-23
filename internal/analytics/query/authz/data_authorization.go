@@ -15,6 +15,7 @@ import (
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 	"github.com/Yacobolo/leapview/internal/dataquery"
 	"github.com/Yacobolo/leapview/internal/queryruntime"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 )
 
 type Principal struct {
@@ -280,7 +281,7 @@ func (m Metrics) authorizeDataQuery(ctx context.Context, principalID string, pri
 
 func (m Metrics) resolvedDependencyObjects(request dataquery.Query, includePublicInteractions bool) ([]access.ObjectRef, []access.ObjectRef, error) {
 	switch request.Kind {
-	case dataquery.KindSemanticAggregate:
+	case dataquery.KindSemanticAggregate, dataquery.KindSemanticSpatial:
 	case dataquery.KindSemanticRows, dataquery.KindSemanticHistogram, dataquery.KindSemanticDistribution:
 		if !includePublicInteractions {
 			return nil, nil, nil
@@ -389,9 +390,24 @@ func dataFiltersToSemanticFilters(filters []dataquery.Filter) []semanticquery.Fi
 		for _, group := range filter.Groups {
 			groups = append(groups, semanticquery.FilterGroup{Filters: dataFiltersToSemanticFilters(group.Filters)})
 		}
-		out = append(out, semanticquery.Filter{Field: filter.Field, Fact: filter.Fact, Operator: filter.Operator, Values: append([]any{}, filter.Values...), Groups: groups})
+		out = append(out, semanticquery.Filter{Field: filter.Field, Fact: filter.Fact, Operator: filter.Operator, Values: append([]any{}, filter.Values...), Groups: groups, Spatial: dataSpatialFilterToSemantic(filter.Spatial)})
 	}
 	return out
+}
+
+func dataSpatialFilterToSemantic(value *dataquery.SpatialFilter) *semanticquery.SpatialFilter {
+	if value == nil {
+		return nil
+	}
+	points := make([]semanticquery.SpatialPoint, len(value.Points))
+	for index, point := range value.Points {
+		points[index] = semanticquery.SpatialPoint{Longitude: point.Longitude, Latitude: point.Latitude}
+	}
+	return &semanticquery.SpatialFilter{
+		Kind: value.Kind, LatitudeField: value.LatitudeField, LongitudeField: value.LongitudeField, Fact: value.Fact,
+		West: value.West, South: value.South, East: value.East, North: value.North, Points: points,
+		Center: semanticquery.SpatialPoint{Longitude: value.Center.Longitude, Latitude: value.Center.Latitude}, RadiusMeters: value.RadiusMeters,
+	}
 }
 
 func dataSortToSemanticSort(sort []dataquery.Sort) []semanticquery.Sort {
@@ -547,12 +563,20 @@ func (m Metrics) QueryDashboardPage(ctx context.Context, dashboardID, pageID str
 	return m.Metrics.QueryDashboardPage(dataquery.WithGovernor(ctx, m), dashboardID, pageID, filters)
 }
 
-func (m Metrics) QueryTable(ctx context.Context, dashboardID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
-	return m.QueryTablePage(ctx, dashboardID, "", filters, request)
+func (m Metrics) QueryDashboardVisualizations(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters) (dashboard.Patch, error) {
+	return m.Metrics.QueryDashboardVisualizations(dataquery.WithGovernor(ctx, m), dashboardID, pageID, filters)
 }
 
-func (m Metrics) QueryTablePage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
-	return m.Metrics.QueryTablePage(dataquery.WithGovernor(ctx, m), dashboardID, pageID, filters, request)
+func (m Metrics) QueryVisualization(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualID string) (visualizationir.VisualizationEnvelope, error) {
+	return m.Metrics.QueryVisualization(dataquery.WithGovernor(ctx, m), dashboardID, pageID, filters, visualID)
+}
+
+func (m Metrics) QueryVisualizationWindow(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request visualizationir.VisualizationWindowRequest) (visualizationir.VisualizationEnvelope, error) {
+	return m.Metrics.QueryVisualizationWindow(dataquery.WithGovernor(ctx, m), dashboardID, pageID, filters, request)
+}
+
+func (m Metrics) QueryVisualizationSpatialWindow(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request visualizationir.VisualizationSpatialWindowRequest) (visualizationir.VisualizationEnvelope, error) {
+	return m.Metrics.QueryVisualizationSpatialWindow(dataquery.WithGovernor(ctx, m), dashboardID, pageID, filters, request)
 }
 
 func (m Metrics) applyDataPolicies(ctx context.Context, request dataquery.Query, objects []access.ObjectRef) (dataquery.Query, error) {
@@ -574,7 +598,7 @@ func (m Metrics) applyDataPolicies(ctx context.Context, request dataquery.Query,
 				return request, err
 			}
 			maskedFields := selectedMaskedFields(request, mask)
-			if request.Kind == dataquery.KindSemanticAggregate {
+			if request.Kind == dataquery.KindSemanticAggregate || request.Kind == dataquery.KindSemanticSpatial {
 				maskedFields = append(maskedFields, mask.Fields...)
 			}
 			for _, field := range uniqueStrings(maskedFields) {

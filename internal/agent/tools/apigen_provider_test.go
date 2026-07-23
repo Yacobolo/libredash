@@ -64,7 +64,7 @@ func TestGlobalAPIGenDefinitionsRequireWorkspaceForWorkspaceRoutes(t *testing.T)
 	}
 }
 
-func TestAPIGenDefinitionsExposeObjectOutputSchemas(t *testing.T) {
+func TestAPIGenDefinitionsExposeClosedVisualizationEnvelopeOutputSchemas(t *testing.T) {
 	for _, definition := range (APIGenProvider{}).Definitions(Scope{PrincipalID: "principal-1"}) {
 		if definition.Name != "query_dashboard_visual" {
 			continue
@@ -76,9 +76,20 @@ func TestAPIGenDefinitionsExposeObjectOutputSchemas(t *testing.T) {
 		if schema["type"] != "object" {
 			t.Fatalf("output schema type = %#v, want object: %s", schema["type"], definition.OutputSchema)
 		}
-		if _, hasOneOf := schema["oneOf"]; !hasOneOf {
-			if _, hasAllOf := schema["allOf"]; !hasAllOf {
-				t.Fatalf("normalized output schema lost its composition: %s", definition.OutputSchema)
+		if schema["additionalProperties"] != false {
+			t.Fatalf("output schema is not closed: %s", definition.OutputSchema)
+		}
+		properties, ok := schema["properties"].(map[string]any)
+		if !ok {
+			t.Fatalf("output schema properties = %#v", schema["properties"])
+		}
+		for _, property := range []string{"spec", "dataState"} {
+			propertySchema, ok := properties[property].(map[string]any)
+			if !ok {
+				t.Fatalf("output schema property %q = %#v", property, properties[property])
+			}
+			if _, ok := propertySchema["oneOf"]; !ok {
+				t.Fatalf("output schema property %q lost its discriminated union: %s", property, definition.OutputSchema)
 			}
 		}
 		return

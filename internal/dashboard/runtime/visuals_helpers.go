@@ -1,10 +1,9 @@
 package runtime
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"math"
+	"math/big"
 	"strconv"
 	"strings"
 	"time"
@@ -12,41 +11,131 @@ import (
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 )
+
+// visualPlan is the runtime query plan derived from the immutable compiled
+// visualization definition. It deliberately contains no authoring model or
+// renderer-native configuration.
+type visualPlan struct {
+	Definition visualizationdefinition.Definition
+	Table      string
+	Dimensions []visualizationdefinition.FieldBinding
+	Series     *visualizationdefinition.FieldBinding
+	Measures   []visualizationdefinition.FieldBinding
+	Time       *visualizationdefinition.TimeBinding
+	Sort       []visualizationdefinition.Sort
+	Limit      int
+}
+
+func newVisualPlan(definition visualizationdefinition.Definition) (visualPlan, error) {
+	plan := visualPlan{Definition: definition}
+	switch definition.Query.Kind {
+	case visualizationdefinition.QueryAggregate:
+		query := definition.Query.Aggregate
+		if query == nil {
+			return visualPlan{}, fmt.Errorf("visualization %q has no aggregate binding", definition.ID)
+		}
+		plan.Table, plan.Dimensions, plan.Series, plan.Measures, plan.Time, plan.Sort, plan.Limit = query.TableID, query.Dimensions, query.Series, query.Measures, query.Time, query.Sort, int(query.Limit)
+	case visualizationdefinition.QuerySpatial:
+		query := definition.Query.Spatial
+		if query == nil {
+			return visualPlan{}, fmt.Errorf("visualization %q has no spatial binding", definition.ID)
+		}
+		plan.Table, plan.Dimensions, plan.Series, plan.Measures, plan.Time, plan.Sort, plan.Limit = query.TableID, query.Dimensions, query.Series, query.Measures, query.Time, query.Sort, int(query.Limit)
+	case visualizationdefinition.QueryCustom:
+		query := definition.Query.Custom
+		if query == nil {
+			return visualPlan{}, fmt.Errorf("visualization %q has no custom binding", definition.ID)
+		}
+		plan.Table, plan.Sort, plan.Limit = query.TableID, query.Sort, int(query.Limit)
+		base, err := visualizationir.SpecificationBase(definition.Spec)
+		if err != nil {
+			return visualPlan{}, err
+		}
+		roles := make(map[string]visualizationir.VisualizationFieldRole, len(base.Datasets[0].Fields))
+		for _, field := range base.Datasets[0].Fields {
+			roles[field.ID] = field.Role
+		}
+		for _, binding := range query.Fields {
+			if roles[binding.Alias] == visualizationir.VisualizationFieldRoleMeasure {
+				plan.Measures = append(plan.Measures, binding)
+			} else {
+				plan.Dimensions = append(plan.Dimensions, binding)
+			}
+		}
+	default:
+		return visualPlan{}, fmt.Errorf("visualization %q query kind %q is not a chart query", definition.ID, definition.Query.Kind)
+	}
+	return plan, nil
+}
+
+func (visual visualPlan) ResultShape() visualizationdefinition.ResultShape {
+	return visual.Definition.Query.ResultShape
+}
+
+func (visual visualPlan) Title() string {
+	base, err := visualizationir.SpecificationBase(visual.Definition.Spec)
+	if err != nil {
+		return visual.Definition.ID
+	}
+	return base.Title
+}
+
+func (visual visualPlan) KindAndType() (string, string) {
+	switch value := visual.Definition.Spec.Value.(type) {
+	case *visualizationir.KPIVisualizationSpec:
+		return "kpi", "kpi"
+	case *visualizationir.CartesianVisualizationSpec:
+		return "chart", string(value.Mark)
+	case *visualizationir.ProportionalVisualizationSpec:
+		return "chart", string(value.Mark)
+	case *visualizationir.HierarchyVisualizationSpec:
+		return "chart", string(value.Mark)
+	case *visualizationir.PolarVisualizationSpec:
+		return "chart", string(value.Mark)
+	case *visualizationir.GeographicVisualizationSpec:
+		return "chart", "map"
+	case *visualizationir.CustomVisualizationSpec:
+		return "chart", "custom"
+	default:
+		return "chart", ""
+	}
+}
+
+func (visual visualPlan) Interaction() (visualizationir.VisualizationInteraction, bool) {
+	base, err := visualizationir.SpecificationBase(visual.Definition.Spec)
+	if err != nil || len(base.Interactions) == 0 {
+		return visualizationir.VisualizationInteraction{}, false
+	}
+	return base.Interactions[0], true
+}
+
+func (visual visualPlan) HistogramBins() int {
+	if value, ok := visual.Definition.Spec.Value.(*visualizationir.CartesianVisualizationSpec); ok && value.Presentation.HistogramBins != nil {
+		return int(*value.Presentation.HistogramBins)
+	}
+	return 20
+}
 
 func fieldRef(field string, alias string) reportdef.QueryField {
 	return reportdef.QueryField{Field: field, Alias: alias}
 }
 
-func queryFieldRef(ref reportdef.FieldRef, alias string) reportdef.QueryField {
+func queryFieldRef(ref visualizationdefinition.FieldBinding, alias string) reportdef.QueryField {
 	return reportdef.QueryField{
-		Field: ref.Field,
+		Field: ref.FieldID,
 		Alias: alias,
 	}
 }
 
-func queryDimensionFields(dimensions []reportdef.FieldRef) []string {
+func queryDimensionFields(dimensions []visualizationdefinition.FieldBinding) []string {
 	fields := make([]string, len(dimensions))
 	for i, dimension := range dimensions {
-		fields[i] = dimension.Field
+		fields[i] = dimension.FieldID
 	}
 	return fields
-}
-
-func queryMeasureFields(measures []reportdef.FieldRef) []string {
-	fields := make([]string, len(measures))
-	for i, measure := range measures {
-		fields[i] = measure.Field
-	}
-	return fields
-}
-
-func displayFields(fields []string) []string {
-	values := make([]string, len(fields))
-	for i, field := range fields {
-		values[i] = displayField(field)
-	}
-	return values
 }
 
 func displayField(field string) string {
@@ -54,24 +143,24 @@ func displayField(field string) string {
 	return parts[len(parts)-1]
 }
 
-func visualSorts(visual reportdef.Visual) []reportdef.QuerySort {
-	if len(visual.Query.Sort) == 0 {
+func visualSorts(visual visualPlan) []reportdef.QuerySort {
+	if len(visual.Sort) == 0 {
 		return []reportdef.QuerySort{{Field: defaultSortColumn(visual), Direction: "asc"}}
 	}
-	sorts := make([]reportdef.QuerySort, 0, len(visual.Query.Sort))
-	for _, sort := range visual.Query.Sort {
-		field := sort.Field
+	sorts := make([]reportdef.QuerySort, 0, len(visual.Sort))
+	for _, sort := range visual.Sort {
+		field := sort.FieldID
 		if field == "" {
 			field = defaultSortColumn(visual)
 		}
 		if field != "value" && field != "series" {
-			for index, dimension := range visual.Query.Dimensions {
-				if field == dimension.Field || field == dimension.Alias || field == displayField(dimension.Field) {
-					field = dimensionSortColumn(visual.ShapeOrDefault(), index)
+			for index, dimension := range visual.Dimensions {
+				if field == dimension.FieldID || field == dimension.Alias || field == displayField(dimension.FieldID) {
+					field = dimensionSortColumn(visual.ResultShape(), index)
 					break
 				}
 			}
-			if !visual.Query.Series.IsZero() && (field == visual.Query.Series.Field || field == visual.Query.Series.Alias || field == displayField(visual.Query.Series.Field)) {
+			if visual.Series != nil && (field == visual.Series.FieldID || field == visual.Series.Alias || field == displayField(visual.Series.FieldID)) {
 				field = "series"
 			}
 		}
@@ -158,13 +247,13 @@ func formatBinLabel(start, end float64) string {
 	return fmt.Sprintf("%s-%s", strconv.FormatFloat(round(start), 'f', -1, 64), strconv.FormatFloat(round(end), 'f', -1, 64))
 }
 
-func distributionSorts(visual reportdef.Visual) []reportdef.QuerySort {
-	if len(visual.Query.Sort) == 0 {
+func distributionSorts(visual visualPlan) []reportdef.QuerySort {
+	if len(visual.Sort) == 0 {
 		return nil
 	}
-	sorts := make([]reportdef.QuerySort, 0, len(visual.Query.Sort))
-	for _, sortSpec := range visual.Query.Sort {
-		field := sortSpec.Field
+	sorts := make([]reportdef.QuerySort, 0, len(visual.Sort))
+	for _, sortSpec := range visual.Sort {
+		field := sortSpec.FieldID
 		if field == "" {
 			field = "label"
 		}
@@ -176,36 +265,36 @@ func distributionSorts(visual reportdef.Visual) []reportdef.QuerySort {
 	return sorts
 }
 
-func defaultSortColumn(visual reportdef.Visual) string {
-	switch visual.ShapeOrDefault() {
-	case "matrix":
+func defaultSortColumn(visual visualPlan) string {
+	switch visual.ResultShape() {
+	case visualizationdefinition.ResultMatrixCells:
 		return "row"
-	case "graph":
+	case visualizationdefinition.ResultGraphEdges:
 		return "source"
-	case "geo":
+	case visualizationdefinition.ResultGeographicFeatures:
 		return "name"
-	case "hierarchy":
+	case visualizationdefinition.ResultHierarchyNodes:
 		return "value"
 	default:
 		return "label"
 	}
 }
 
-func dimensionSortColumn(shape string, index int) string {
+func dimensionSortColumn(shape visualizationdefinition.ResultShape, index int) string {
 	switch shape {
-	case "matrix":
+	case visualizationdefinition.ResultMatrixCells:
 		if index == 1 {
 			return "chart_column"
 		}
 		return "row"
-	case "graph":
+	case visualizationdefinition.ResultGraphEdges:
 		if index == 1 {
 			return "target"
 		}
 		return "source"
-	case "geo":
+	case visualizationdefinition.ResultGeographicFeatures:
 		return "name"
-	case "hierarchy":
+	case visualizationdefinition.ResultHierarchyNodes:
 		return fmt.Sprintf("level_%d", index)
 	default:
 		return "label"
@@ -239,6 +328,24 @@ func interactionConfig(kind string, selection reportdef.SelectionInteraction) da
 	}
 }
 
+func compiledInteractionConfig(interaction visualizationir.VisualizationInteraction) dashboard.InteractionConfig {
+	mappings := make([]dashboard.InteractionConfigMapping, 0, len(interaction.Mappings))
+	for _, mapping := range interaction.Mappings {
+		fact, grain, label := "", "", ""
+		if mapping.TargetFactID != nil {
+			fact = *mapping.TargetFactID
+		}
+		if mapping.Grain != nil {
+			grain = *mapping.Grain
+		}
+		if mapping.Label != nil {
+			label = mapping.Label.Field
+		}
+		mappings = append(mappings, dashboard.InteractionConfigMapping{Field: mapping.TargetFieldID, Fact: fact, Grain: grain, Value: mapping.Source.Field, Label: label})
+	}
+	return dashboard.InteractionConfig{Kind: interaction.ID, Toggle: interaction.Mode == visualizationir.VisualizationSelectionModeMultiple, Mappings: mappings, Targets: append([]string(nil), interaction.Targets...)}
+}
+
 func selectedEntries(filters dashboard.Filters, sourceKind, sourceID string) []dashboard.InteractionSelectionEntry {
 	entries := []dashboard.InteractionSelectionEntry{}
 	for _, selection := range filters.Selections {
@@ -252,6 +359,16 @@ func selectedEntries(filters dashboard.Filters, sourceKind, sourceID string) []d
 	return entries
 }
 
+func selectedSpatialState(filters dashboard.Filters, visualID string) *visualizationir.VisualizationSpatialSelectionState {
+	for index := len(filters.SpatialSelections) - 1; index >= 0; index-- {
+		selection := filters.SpatialSelections[index]
+		if selection.VisualID == visualID {
+			return &visualizationir.VisualizationSpatialSelectionState{VisualID: visualID, InteractionID: selection.InteractionID, Geometry: selection.Geometry}
+		}
+	}
+	return nil
+}
+
 func copySelectionEntry(entry dashboard.InteractionSelectionEntry) dashboard.InteractionSelectionEntry {
 	next := dashboard.InteractionSelectionEntry{
 		Label:    entry.Label,
@@ -261,64 +378,22 @@ func copySelectionEntry(entry dashboard.InteractionSelectionEntry) dashboard.Int
 	return next
 }
 
-func markSelected(data []dashboard.Datum, selection reportdef.SelectionInteraction, entries []dashboard.InteractionSelectionEntry) {
-	if len(data) == 0 || len(selection.Mappings) == 0 || len(entries) == 0 {
-		return
-	}
-	for _, row := range data {
-		if datumMatchesAnySelectionEntry(row, selection.Mappings, entries) {
-			row["selected"] = true
-		}
-	}
-}
-
-func datumMatchesAnySelectionEntry(row dashboard.Datum, mappings []reportdef.SelectionMapping, entries []dashboard.InteractionSelectionEntry) bool {
-	for _, entry := range entries {
-		if datumMatchesSelectionEntry(row, mappings, entry) {
-			return true
-		}
-	}
-	return false
-}
-
-func datumMatchesSelectionEntry(row dashboard.Datum, mappings []reportdef.SelectionMapping, entry dashboard.InteractionSelectionEntry) bool {
-	if len(entry.Mappings) == 0 {
-		return false
-	}
-	for _, mapping := range mappings {
-		selectedValue, ok := selectionEntryMappingValue(entry, mapping.Field, mapping.Fact, mapping.Grain)
-		if !ok {
-			return false
-		}
-		value, ok := row[mapping.Value]
-		if !ok || !selectionValuesEqual(value, selectedValue) {
-			return false
-		}
-	}
-	return true
-}
-
-func selectionEntryMappingValue(entry dashboard.InteractionSelectionEntry, field, fact, grain string) (dashboard.InteractionSelectionValue, bool) {
-	for _, mapping := range entry.Mappings {
-		if mapping.Field == field && mapping.Fact == fact && mapping.Grain == grain {
-			return mapping.Value, true
-		}
-	}
-	return nil, false
-}
-
-func selectionValuesEqual(left, right any) bool {
-	leftJSON, leftErr := json.Marshal(left)
-	rightJSON, rightErr := json.Marshal(right)
-	return leftErr == nil && rightErr == nil && bytes.Equal(leftJSON, rightJSON)
-}
-
 func normalizeDatumValue(value any) any {
 	switch typed := normalizeDBValue(value).(type) {
 	case float64:
 		return round(typed)
 	case float32:
 		return round(float64(typed))
+	case *big.Int:
+		if typed != nil && typed.BitLen() <= 53 {
+			return float64(typed.Int64())
+		}
+		return typed
+	case big.Int:
+		if typed.BitLen() <= 53 {
+			return float64(typed.Int64())
+		}
+		return typed
 	default:
 		return typed
 	}

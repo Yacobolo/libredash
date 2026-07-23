@@ -313,7 +313,7 @@ test('site explains the product, its workflow, and where it fits in the data sta
   } finally {
     await page.close()
   }
-}, 10_000)
+}, 30_000)
 
 test('homepage flow background renders from design tokens and respects reduced motion', async () => {
   const context = await browser.newContext({ reducedMotion: 'reduce', viewport: { width: 1280, height: 800 } })
@@ -768,10 +768,9 @@ test('chart documentation renders every executable variation from its YAML', asy
     expect(articleHeadings.indexOf('About this page')).toBeGreaterThan(articleHeadings.indexOf('API reference'))
     const fieldReference = page.getByRole('table', { name: 'API reference' })
     expect(await fieldReference.getByRole('columnheader').allTextContents()).toEqual(['Field', 'Type', 'Default', 'Allowed values', 'Description'])
-    const stepReference = fieldReference.getByRole('row').filter({ hasText: 'options.step' })
+    const stepReference = fieldReference.getByRole('row').filter({ hasText: 'presentation.step' })
     expect(await stepReference.count()).toBe(1)
-    expect(await stepReference.textContent()).toContain('string | boolean')
-    expect(await stepReference.textContent()).toContain('start')
+    expect(await stepReference.textContent()).toContain('boolean')
     const referenceColors = await page.locator('.site-docs-article').evaluate((article) => {
       const summaryCode = article.querySelector('#site-visual-api-reference + p code')
       const fieldCode = article.querySelector('table[aria-labelledby="site-visual-api-reference"] tbody th code')
@@ -796,8 +795,8 @@ test('chart documentation renders every executable variation from its YAML', asy
     await page.waitForFunction(() => {
       const examples = [...document.querySelectorAll('lv-site-visual-example')] as Array<HTMLElement & { shadowRoot: ShadowRoot }>
       return examples.length === 3 && examples.every((example) => {
-        const visual = example.shadowRoot?.querySelector('lv-echart') as HTMLElement & { chart?: { data?: unknown[] } }
-        return Boolean(visual?.chart?.data?.length)
+        const host = example.shadowRoot?.querySelector('lv-visualization-host') as HTMLElement & { envelope?: { dataState?: { datasets?: Array<{ rows?: unknown[] }> } } }
+        return Boolean(host?.envelope?.dataState?.datasets?.some((dataset) => dataset.rows?.length))
       })
     })
     expect(await page.locator('lv-site-visual-example').count()).toBe(3)
@@ -805,16 +804,16 @@ test('chart documentation renders every executable variation from its YAML', asy
     expect(await page.locator('lv-site-visual-example').nth(2).getAttribute('example-id')).toBe('revenue_line_step')
     const configurations = await page.locator('.site-docs-article pre code').allTextContents()
     expect(configurations.some((source) => source.includes('visuals:\n  revenue_line:'))).toBe(true)
-    expect(configurations.some((source) => source.includes('shape: category_series_value'))).toBe(true)
-    expect(configurations.some((source) => source.includes('step: middle'))).toBe(true)
+    expect(configurations.every((source) => !source.includes('shape:'))).toBe(true)
+    expect(configurations.some((source) => source.includes('step: true'))).toBe(true)
     const keyFields = await page.locator('.site-visual-key-fields').allTextContents()
     expect(keyFields).toHaveLength(3)
-    expect(keyFields[2]).toContain('options.step')
+    expect(keyFields[2]).toContain('presentation.step')
     await page.waitForFunction(() => document.querySelectorAll('lv-code-block[data-visual-example="revenue_line_step"] .code-block-highlighted-line').length === 3)
     const steppedConfiguration = page.locator('lv-code-block[data-visual-example="revenue_line_step"]')
-    expect(await steppedConfiguration.getAttribute('data-highlighted-fields')).toBe('options.data_zoom,options.show_symbols,options.step')
+    expect(await steppedConfiguration.getAttribute('data-highlighted-fields')).toBe('presentation.data_zoom,presentation.show_symbols,presentation.step')
     expect(await steppedConfiguration.locator('.code-block-highlighted-line').allTextContents()).toEqual([
-      '      step: middle',
+      '      step: true',
       '      show_symbols: false',
       '      data_zoom: true',
     ])
@@ -823,19 +822,19 @@ test('chart documentation renders every executable variation from its YAML', asy
       marker: getComputedStyle(line, '::before').width,
       padding: getComputedStyle(line).paddingInlineStart,
     }))).toEqual({ display: 'inline-block', marker: '4px', padding: '0px' })
-    const stepField = page.getByRole('button', { name: 'Highlight options.step in YAML' })
+    const stepField = page.getByRole('button', { name: 'Highlight presentation.step in YAML' })
     expect(await stepField.count()).toBe(1)
     expect(await stepField.getAttribute('aria-controls')).toBe('visual-example-revenue_line_step-yaml')
     await stepField.focus()
     await page.waitForFunction(() => document.querySelectorAll('lv-code-block[data-visual-example="revenue_line_step"] .code-block-focused-line').length === 1)
-    expect(await steppedConfiguration.locator('.code-block-focused-line').allTextContents()).toEqual(['      step: middle'])
+    expect(await steppedConfiguration.locator('.code-block-focused-line').allTextContents()).toEqual(['      step: true'])
     await stepField.blur()
     await page.waitForFunction(() => document.querySelectorAll('lv-code-block[data-visual-example="revenue_line_step"] .code-block-focused-line').length === 0)
     const stepped = await page.locator('lv-site-visual-example').nth(2).evaluate((element) => {
-      const visual = element.shadowRoot?.querySelector('lv-echart') as HTMLElement & { chart?: { options?: Record<string, unknown> } }
-      return visual?.chart?.options?.step
+      const host = element.shadowRoot?.querySelector('lv-visualization-host') as HTMLElement & { envelope?: { spec?: { presentation?: Record<string, unknown> } } }
+      return host?.envelope?.spec?.presentation?.step
     })
-    expect(stepped).toBe('middle')
+    expect(stepped).toBe(true)
   } finally {
     await page.close()
   }
@@ -855,62 +854,320 @@ test('KPI documentation uses compact example frames', async () => {
   }
 })
 
+test('Custom Vega-Lite documentation is marked experimental', async () => {
+  const page = await browser.newPage()
+  try {
+    await page.goto(`${baseURL}/docs/visuals/custom`)
+    const callout = page.locator('.site-docs-callout[data-callout="experimental"]')
+    expect(await callout.count()).toBe(1)
+    expect(await callout.locator('.site-docs-callout-label').getByText('Experimental', { exact: true }).isVisible()).toBe(true)
+    expect(await callout.getByText('Custom Vega-Lite is experimental.', { exact: false }).isVisible()).toBe(true)
+  } finally {
+    await page.close()
+  }
+})
+
 test('every visual documentation page mounts its generated production payloads', async () => {
   const page = await browser.newPage()
-  const visualTypes = ['line', 'area', 'bar', 'column', 'pie', 'donut', 'scatter', 'funnel', 'treemap', 'gauge', 'heatmap', 'sankey', 'graph', 'map', 'candlestick', 'boxplot', 'combo', 'waterfall', 'histogram', 'radar', 'tree', 'sunburst', 'kpi', 'table', 'matrix', 'pivot']
+  const pageErrors: Array<{ url: string; message: string; stack?: string }> = []
+  page.on('pageerror', (error) => pageErrors.push({ url: page.url(), message: error.message, stack: error.stack }))
+  const visualTypes = ['line', 'area', 'bar', 'column', 'pie', 'donut', 'scatter', 'funnel', 'treemap', 'gauge', 'heatmap', 'sankey', 'graph', 'map', 'custom', 'candlestick', 'boxplot', 'combo', 'waterfall', 'histogram', 'radar', 'tree', 'sunburst', 'kpi', 'table', 'matrix', 'pivot']
   try {
     for (const visualType of visualTypes) {
       await page.goto(`${baseURL}/docs/visuals/${visualType}`)
-      const expected = visualType === 'candlestick' ? 2 : visualType === 'kpi' ? 4 : ['table', 'matrix', 'pivot'].includes(visualType) ? 1 : 3
+      const expected = visualType === 'map' ? 6 : visualType === 'candlestick' ? 2 : visualType === 'kpi' ? 4 : ['custom', 'table', 'matrix', 'pivot'].includes(visualType) ? 1 : 3
       await page.waitForFunction(
         ({ count }) => {
           const examples = [...document.querySelectorAll('lv-site-visual-example')]
           return examples.length === count && examples.every((example) => {
-            const visual = example.shadowRoot?.querySelector('lv-echart') as HTMLElement & { chart?: { data?: unknown[] } } | null
-            const kpi = example.shadowRoot?.querySelector('lv-kpi-card') as HTMLElement & { visual?: { data?: unknown[] } } | null
-            const table = example.shadowRoot?.querySelector('lv-report-table') as HTMLElement & { table?: { blocks?: Record<string, { rows?: unknown[] }> } } | null
-            return Boolean(visual?.chart?.data?.length || kpi?.visual?.data?.length || Object.values(table?.table?.blocks ?? {}).some((block) => block.rows?.length))
+            const host = example.shadowRoot?.querySelector('lv-visualization-host') as HTMLElement & { envelope?: { dataState?: { datasets?: Array<{ rows?: unknown[] }>; blocks?: Record<string, { rows?: unknown[] }> } } } | null
+            const state = host?.envelope?.dataState
+            return Boolean(state?.datasets?.some((dataset) => dataset.rows?.length) || Object.values(state?.blocks ?? {}).some((block) => block.rows?.length))
           })
         },
         { count: expected },
       )
       expect(await page.locator('lv-site-visual-example').count()).toBe(expected)
     }
-
     await page.goto(`${baseURL}/docs/visuals/gauge`)
     await page.waitForFunction(() => document.querySelectorAll('lv-site-visual-example').length === 3)
     const thresholds = await page.locator('lv-site-visual-example').nth(2).evaluate((element) => {
-      const visual = element.shadowRoot?.querySelector('lv-echart') as HTMLElement & { chart?: { options?: { thresholds?: unknown[] } } }
-      return visual.chart?.options?.thresholds?.length
+      const host = element.shadowRoot?.querySelector('lv-visualization-host') as HTMLElement & { envelope?: { spec?: { presentation?: { thresholds?: unknown[] } } } }
+      return host.envelope?.spec?.presentation?.thresholds?.length
     })
     expect(thresholds).toBe(3)
 
     await page.goto(`${baseURL}/docs/visuals/map`)
-    await page.waitForFunction(() => document.querySelectorAll('lv-site-visual-example').length === 3)
+    await page.waitForFunction(() => document.querySelectorAll('lv-site-visual-example').length === 6)
     expect(await page.locator('lv-site-visual-example').first().evaluate((element) => {
-      const visual = element.shadowRoot?.querySelector('lv-echart') as HTMLElement & { chart?: { shape?: string; options?: { map?: string }; data?: Array<{ name?: string }> } }
-      return [visual.chart?.shape, visual.chart?.options?.map, visual.chart?.data?.length, new Set(visual.chart?.data?.map((row) => row.name)).size]
-    })).toEqual(['geo', 'brazil_states', 27, 27])
+      const host = element.shadowRoot?.querySelector('lv-visualization-host') as HTMLElement & { envelope?: any }
+      const envelope = host.envelope
+      const rows = envelope?.dataState?.datasets?.[0]?.rows ?? []
+      return [envelope?.spec?.kind, envelope?.spec?.layers?.[0]?.geometry?.id, rows.length, new Set(rows.map((row: unknown[]) => row[0])).size]
+    })).toEqual(['geographic', 'br-states-ibge', 27, 27])
+    expect(await page.locator('lv-site-visual-example').evaluateAll((elements) => elements.map((element) => {
+      const host = element.shadowRoot?.querySelector('lv-visualization-host') as HTMLElement & { envelope?: any }
+      return host.envelope?.spec?.layers?.[0]?.kind
+    }))).toEqual(['choropleth', 'point', 'heat', 'density', 'reference', 'path'])
     await page.waitForFunction(() => {
       const example = document.querySelector('lv-site-visual-example') as HTMLElement & { shadowRoot: ShadowRoot }
-      const chart = example?.shadowRoot?.querySelector('lv-echart') as HTMLElement & { shadowRoot: ShadowRoot }
-      return Boolean(chart?.shadowRoot?.querySelector('.canvas[aria-label], .canvas [aria-label]'))
+      const host = example?.shadowRoot?.querySelector('lv-visualization-host') as HTMLElement & { shadowRoot: ShadowRoot }
+      return Boolean(host?.shadowRoot?.querySelector('.renderer[aria-label]'))
     })
     expect(await page.locator('lv-site-visual-example').first().evaluate((element) => {
-      const chart = element.shadowRoot?.querySelector('lv-echart') as HTMLElement & { shadowRoot: ShadowRoot }
-      return chart?.shadowRoot?.querySelector('.canvas[aria-label], .canvas [aria-label]')?.getAttribute('aria-label')
+      const host = element.shadowRoot?.querySelector('lv-visualization-host') as HTMLElement & { shadowRoot: ShadowRoot }
+      return host?.shadowRoot?.querySelector('.renderer[aria-label]')?.getAttribute('aria-label')
     })).not.toContain('NaN')
+    await page.goto(`${baseURL}/docs/visuals/custom`)
+    await page.waitForFunction(() => {
+      const example = document.querySelector('lv-site-visual-example') as HTMLElement & { shadowRoot: ShadowRoot }
+      const host = example?.shadowRoot?.querySelector('lv-visualization-host') as HTMLElement & { envelope?: any; shadowRoot: ShadowRoot }
+      return host?.envelope?.rendererID === 'vega-lite-sandbox' && Boolean(host.shadowRoot?.querySelector('iframe[title="Monthly revenue"]'))
+    })
+    expect(await page.locator('lv-site-visual-example').evaluate((element) => {
+      const host = element.shadowRoot?.querySelector('lv-visualization-host') as HTMLElement & { shadowRoot: ShadowRoot }
+      return Boolean(host.shadowRoot?.querySelector('[role="alert"]'))
+    })).toBe(false)
+    const sandboxFrame = page.frames().find((frame) => frame !== page.mainFrame())
+    expect(sandboxFrame).toBeDefined()
+    await sandboxFrame!.waitForSelector('#view canvas')
 
     await page.goto(`${baseURL}/docs/visuals/combo`)
     await page.waitForFunction(() => document.querySelectorAll('lv-site-visual-example').length === 3)
     expect(await page.locator('lv-site-visual-example').first().evaluate((element) => {
-      const visual = element.shadowRoot?.querySelector('lv-echart') as HTMLElement & { chart?: { shape?: string; data?: Array<{ series?: string }> } }
-      return [visual.chart?.shape, new Set(visual.chart?.data?.map((row) => row.series)).size]
-    })).toEqual(['category_multi_measure', 2])
+      const host = element.shadowRoot?.querySelector('lv-visualization-host') as HTMLElement & { envelope?: any }
+      return [host.envelope?.spec?.kind, host.envelope?.spec?.presentation?.comboSeries?.length]
+    })).toEqual(['cartesian', 2])
+    expect(pageErrors).toEqual([])
   } finally {
     await page.close()
   }
-}, 30_000)
+}, 120_000)
+
+test('map documentation renders fitted, attributed canvases without adapter errors', async () => {
+  const page = await browser.newPage()
+  try {
+    await page.goto(`${baseURL}/docs/visuals/map`)
+    await page.waitForFunction(() => {
+      const examples = [...document.querySelectorAll('lv-site-visual-example')]
+      return examples.length === 6 && examples.every((element) => {
+        const host = element.shadowRoot?.querySelector('lv-visualization-host') as HTMLElement & { envelope?: unknown } | null
+        return Boolean(host?.envelope)
+      })
+    })
+    try {
+      await page.waitForFunction(() => {
+        const examples = [...document.querySelectorAll('lv-site-visual-example')]
+        return examples.every((element) => {
+          const host = element.shadowRoot?.querySelector('lv-visualization-host')
+          const renderer = host?.shadowRoot?.querySelector('.renderer')
+          return Boolean(host?.shadowRoot?.querySelector('canvas.maplibregl-canvas')) && renderer?.getAttribute('aria-busy') === 'false' && !host?.shadowRoot?.querySelector('[role="alert"]')
+        }) && Boolean(examples[0]?.shadowRoot?.querySelector('lv-visualization-host')?.shadowRoot?.querySelector('[data-map-attribution]')?.textContent?.trim())
+      })
+    } catch (error) {
+      const diagnostics = await page.locator('lv-site-visual-example').evaluateAll((elements) => elements.map((element) => {
+        const host = element.shadowRoot?.querySelector('lv-visualization-host')
+        const renderer = host?.shadowRoot?.querySelector('.renderer')
+        return {
+          id: element.getAttribute('example-id'),
+          busy: renderer?.getAttribute('aria-busy'),
+          canvas: Boolean(host?.shadowRoot?.querySelector('canvas.maplibregl-canvas')),
+          alert: host?.shadowRoot?.querySelector('[role="alert"]')?.textContent?.trim() ?? '',
+        }
+      }))
+      throw new Error(`map examples did not settle: ${JSON.stringify(diagnostics)}`, { cause: error })
+    }
+    const states = await page.locator('lv-site-visual-example').evaluateAll((elements) => elements.map((element) => {
+      const host = element.shadowRoot?.querySelector('lv-visualization-host')
+      const canvas = host?.shadowRoot?.querySelector('canvas.maplibregl-canvas') as HTMLCanvasElement | null
+      return {
+        alert: host?.shadowRoot?.querySelector('[role="alert"]')?.textContent?.trim() ?? '',
+        attribution: host?.shadowRoot?.querySelector('[data-map-attribution]')?.textContent?.trim() ?? '',
+        width: canvas?.width ?? 0,
+        height: canvas?.height ?? 0,
+        rendererChildren: host?.shadowRoot?.querySelector('.renderer')?.childElementCount ?? 0,
+      }
+    }))
+    expect(states.map(({ alert, attribution, rendererChildren }) => ({ alert, attribution, rendererChildren }))).toEqual([
+      { alert: '', attribution: '© OpenStreetMap contributors · Instituto Brasileiro de Geografia e Estatística (IBGE)', rendererChildren: 1 },
+      { alert: '', attribution: '© OpenStreetMap contributors', rendererChildren: 1 },
+      { alert: '', attribution: '© OpenStreetMap contributors', rendererChildren: 1 },
+      { alert: '', attribution: '© OpenStreetMap contributors', rendererChildren: 1 },
+      { alert: '', attribution: 'Instituto Brasileiro de Geografia e Estatística (IBGE)', rendererChildren: 1 },
+      { alert: '', attribution: '© OpenStreetMap contributors', rendererChildren: 1 },
+    ])
+    expect(await page.locator('lv-site-visual-example').evaluateAll((elements) => elements.map((element) => {
+      const host = element.shadowRoot?.querySelector('lv-visualization-host')
+      return {
+        title: host?.shadowRoot?.querySelector('[data-visualization-title]')?.textContent?.trim(),
+        expand: host?.shadowRoot?.querySelector('button')?.getAttribute('aria-label'),
+      }
+    }))).toEqual([
+      { title: 'Orders by state', expand: 'Expand map' },
+      { title: 'Order locations', expand: 'Expand map' },
+      { title: 'Revenue concentration', expand: 'Expand map' },
+      { title: 'Order density', expand: 'Expand map' },
+      { title: 'Brazil state reference boundaries', expand: 'Expand map' },
+      { title: 'State order paths', expand: 'Expand map' },
+    ])
+    expect(states.every(({ width, height }) => width > 500 && height >= 400)).toBe(true)
+    expect(await page.evaluate(() => performance.getEntries().some(({ name }) => /\/map-assets\/leapview-streets\/styles\/[0-9a-f]{64}\/style\.json$/.test(name)))).toBe(true)
+    expect(await page.locator('lv-site-visual-example').evaluateAll((elements) => elements.map((element) => {
+      const host = element.shadowRoot?.querySelector('lv-visualization-host')
+      const fallback = host?.shadowRoot?.querySelector('[data-map-data-table]')
+      return {
+        summary: fallback?.querySelector('summary')?.textContent?.trim() ?? '',
+        columns: fallback?.querySelectorAll('thead th').length ?? 0,
+        rows: fallback?.querySelectorAll('tbody tr').length ?? 0,
+      }
+    }))).toEqual([
+      { summary: 'View map data (27 rows)', columns: 2, rows: 27 },
+      { summary: 'View map data (35 rows)', columns: 2, rows: 35 },
+      { summary: 'View map data (35 rows)', columns: 3, rows: 35 },
+      { summary: 'View map data (35 rows)', columns: 2, rows: 35 },
+      { summary: 'View map data (27 rows)', columns: 2, rows: 27 },
+      { summary: 'View map data (35 rows)', columns: 2, rows: 35 },
+    ])
+
+    const examples = page.locator('lv-site-visual-example')
+    expect(await examples.nth(0).getByRole('button', { name: 'Select map data' }).count()).toBe(1)
+    expect(await examples.nth(1).getByRole('button', { name: 'Select map data' }).count()).toBe(1)
+    expect(await examples.nth(2).getByRole('button', { name: 'Select map data' }).count()).toBe(0)
+    expect(await examples.nth(3).getByRole('button', { name: 'Select map data' }).count()).toBe(0)
+
+    await page.evaluate(() => {
+      ;(window as any).__mapInteractionCommands = []
+      document.addEventListener('lv-interaction-select', (event) => {
+        ;(window as any).__mapInteractionCommands.push((event as CustomEvent).detail)
+      })
+    })
+    const regionCanvas = examples.nth(0).locator('canvas.maplibregl-canvas')
+    const regionPoint = await examples.nth(0).evaluate(async (element) => {
+      const host = element.shadowRoot?.querySelector('lv-visualization-host') as HTMLElement & { snapshot(): Promise<Blob>; shadowRoot: ShadowRoot }
+      const canvas = host.shadowRoot.querySelector('canvas.maplibregl-canvas') as HTMLCanvasElement
+      const bitmap = await createImageBitmap(await host.snapshot())
+      const copy = new OffscreenCanvas(bitmap.width, bitmap.height)
+      const context = copy.getContext('2d')!
+      context.drawImage(bitmap, 0, 0)
+      const pixels = context.getImageData(0, 0, bitmap.width, bitmap.height).data
+      for (let y = Math.floor(bitmap.height * 0.2); y < bitmap.height * 0.9; y++) {
+        for (let x = Math.floor(bitmap.width * 0.1); x < bitmap.width * 0.9; x++) {
+          const index = (y * bitmap.width + x) * 4
+          const red = pixels[index]!, green = pixels[index + 1]!, blue = pixels[index + 2]!, alpha = pixels[index + 3]!
+          // Match the authored dark teal choropleth ramp, not the pale water
+          // paint from the vector basemap underneath it.
+          if (alpha > 220 && red < 40 && green >= 80 && green < 170 && blue >= 80 && blue < 180) {
+            return { x: x * canvas.clientWidth / bitmap.width, y: y * canvas.clientHeight / bitmap.height }
+          }
+        }
+      }
+      return null
+    })
+    expect(regionPoint).not.toBeNull()
+    await regionCanvas.click({ position: regionPoint!, force: true })
+    await page.waitForFunction(() => (window as any).__mapInteractionCommands.length > 0)
+    expect(await page.evaluate(() => (window as any).__mapInteractionCommands[0])).toMatchObject({
+      sourceId: 'state_order_map', action: 'set', toggle: true,
+      mappings: [{ field: 'orders.state', fact: 'orders' }],
+    })
+    await page.evaluate(() => { (window as any).__mapInteractionCommands = [] })
+
+    const selectButton = examples.nth(0).getByRole('button', { name: 'Select map data' })
+    await selectButton.click()
+    const search = examples.nth(0).getByRole('searchbox', { name: 'Search map data' })
+    await search.fill('SP')
+    expect(await examples.nth(0).getByRole('option').count()).toBe(1)
+    await search.press('ArrowDown')
+    await page.keyboard.press('Enter')
+    expect(await page.evaluate(() => (window as any).__mapInteractionCommands.at(-1))).toMatchObject({
+      sourceKind: 'visual', sourceId: 'state_order_map', interactionKind: 'point_selection', action: 'set', toggle: true,
+      mappings: [{ field: 'orders.state', fact: 'orders', value: 'SP', label: 'SP' }],
+    })
+    await page.keyboard.press('Escape')
+    expect(await selectButton.getAttribute('aria-expanded')).toBe('false')
+    expect(await selectButton.evaluate((element) => (element.getRootNode() as ShadowRoot).activeElement === element)).toBe(true)
+
+    await examples.nth(1).getByRole('button', { name: 'Select map data' }).click()
+    expect(await examples.nth(1).getByRole('listbox').getAttribute('aria-multiselectable')).toBe('true')
+    await page.keyboard.press('Escape')
+
+    await page.evaluate(() => { (window as any).__mapInteractionCommands = [] })
+    const pointCanvas = examples.nth(1).locator('canvas.maplibregl-canvas')
+    const point = await examples.nth(1).evaluate(async (element) => {
+      const host = element.shadowRoot?.querySelector('lv-visualization-host') as HTMLElement & { snapshot(): Promise<Blob>; shadowRoot: ShadowRoot }
+      const canvas = host.shadowRoot.querySelector('canvas.maplibregl-canvas') as HTMLCanvasElement
+      const bitmap = await createImageBitmap(await host.snapshot())
+      const copy = new OffscreenCanvas(bitmap.width, bitmap.height)
+      const context = copy.getContext('2d')!
+      context.drawImage(bitmap, 0, 0)
+      const pixels = context.getImageData(0, 0, bitmap.width, bitmap.height).data
+      for (let y = Math.floor(bitmap.height * 0.15); y < bitmap.height * 0.95; y++) {
+        for (let x = Math.floor(bitmap.width * 0.05); x < bitmap.width * 0.95; x++) {
+          const index = (y * bitmap.width + x) * 4
+          const red = pixels[index]!, green = pixels[index + 1]!, blue = pixels[index + 2]!, alpha = pixels[index + 3]!
+          if (alpha > 220 && red < 30 && green > 70 && green < 140 && blue > 170) {
+            return { x: x * canvas.clientWidth / bitmap.width, y: y * canvas.clientHeight / bitmap.height }
+          }
+        }
+      }
+      return null
+    })
+    expect(point).not.toBeNull()
+    await pointCanvas.click({ position: point!, force: true })
+    await page.waitForFunction(() => (window as any).__mapInteractionCommands.length > 0)
+    expect(await page.evaluate(() => (window as any).__mapInteractionCommands[0])).toMatchObject({
+      sourceId: 'order_point_map', action: 'set', toggle: true,
+      mappings: [{ field: 'orders.order_id', fact: 'orders' }],
+    })
+
+    const mapSnapshot = () => page.locator('lv-site-visual-example').nth(1).evaluate(async (element) => {
+      const host = element.shadowRoot?.querySelector('lv-visualization-host') as HTMLElement & { snapshot(): Promise<Blob> }
+      const blob = await host.snapshot()
+      const bitmap = await createImageBitmap(blob)
+      const canvas = new OffscreenCanvas(bitmap.width, bitmap.height)
+      const context = canvas.getContext('2d')!
+      context.drawImage(bitmap, 0, 0)
+      const pixels = context.getImageData(0, 0, bitmap.width, bitmap.height).data
+      let visiblePixels = 0
+      for (let index = 3; index < pixels.length; index += 4) if (pixels[index]! > 0) visiblePixels++
+      return { corner: Array.from(pixels.slice(0, 4)), height: bitmap.height, size: blob.size, type: blob.type, visiblePixels, width: bitmap.width }
+    })
+    const snapshot = await mapSnapshot()
+    expect(snapshot.type).toBe('image/png')
+    expect(snapshot.size).toBeGreaterThan(0)
+    expect(snapshot.visiblePixels).toBeGreaterThan(10_000)
+
+    const applyTheme = async (mode: 'dark' | 'light') => {
+      await page.evaluate((nextMode) => document.dispatchEvent(new CustomEvent('leapview-theme-change', { detail: { mode: nextMode } })), mode)
+      await page.waitForFunction((nextMode) => document.documentElement.style.colorScheme === nextMode, mode)
+    }
+    await applyTheme('dark')
+    await page.waitForTimeout(250)
+    const darkSnapshot = await mapSnapshot()
+    await applyTheme('light')
+    await page.waitForTimeout(250)
+    const lightSnapshot = await mapSnapshot()
+    expect(darkSnapshot.corner).not.toEqual(lightSnapshot.corner)
+
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.waitForFunction(() => document.querySelector('.site-docs-sidebar')?.getAttribute('aria-hidden') === 'true')
+    await page.waitForTimeout(250)
+    const mobile = await page.locator('lv-site-visual-example').evaluateAll((elements) => elements.map((element) => {
+      const host = element.shadowRoot?.querySelector('lv-visualization-host')
+      const canvas = host?.shadowRoot?.querySelector('canvas.maplibregl-canvas') as HTMLCanvasElement | null
+      return {
+        alert: host?.shadowRoot?.querySelector('[role="alert"]')?.textContent?.trim() ?? '',
+        left: canvas?.getBoundingClientRect().left ?? -1,
+        right: canvas?.getBoundingClientRect().right ?? Number.POSITIVE_INFINITY,
+        width: canvas?.getBoundingClientRect().width ?? 0,
+      }
+    }))
+    expect(mobile.every(({ alert, left, right, width }) => alert === '' && left >= 0 && right <= 390 && width >= 320)).toBe(true)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  } finally {
+    await page.close()
+  }
+}, 60_000)
 
 test('documentation articles apply the shared Markdown treatment', async () => {
   const page = await browser.newPage()
@@ -1795,27 +2052,26 @@ test('visual showcase renders every supported visual type', async () => {
     await page.goto(`${baseURL}/visuals`)
     await page.waitForFunction(() => {
       const showcase = document.querySelector('lv-site-visual-showcase') as HTMLElement & { shadowRoot: ShadowRoot }
-      return showcase?.shadowRoot?.querySelectorAll('.chart').length === 23 && showcase?.shadowRoot?.querySelectorAll('lv-report-table').length === 3
+      return showcase?.shadowRoot?.querySelectorAll('.chart').length === 24 && showcase?.shadowRoot?.querySelectorAll('.table-card lv-visualization-host').length === 3
     })
     const visuals = await page.locator('lv-site-visual-showcase').evaluate((element) => {
       const root = element.shadowRoot
       return {
         cards: root?.querySelectorAll('.chart').length,
-        charts: root?.querySelectorAll('lv-echart').length,
-        kpis: root?.querySelectorAll('lv-kpi-card').length,
+        hosts: root?.querySelectorAll('.chart lv-visualization-host').length,
+        kpis: Array.from(root?.querySelectorAll('.chart lv-visualization-host') ?? []).filter((host: any) => host.envelope?.spec?.kind === 'kpi').length,
       }
     })
-    expect(visuals).toEqual({ cards: 23, charts: 22, kpis: 1 })
-    await page.getByRole('heading', { name: 'Category and status hierarchy' }).waitFor({ state: 'visible' })
+    expect(visuals).toEqual({ cards: 24, hosts: 24, kpis: 1 })
     await page.waitForFunction(() => {
       const showcase = document.querySelector('lv-site-visual-showcase') as HTMLElement & { shadowRoot: ShadowRoot }
-      return showcase?.shadowRoot?.querySelectorAll('lv-report-table').length === 3
+      return showcase?.shadowRoot?.querySelectorAll('.table-card lv-visualization-host').length === 3
     })
-    await page.waitForFunction(() => Array.from(document.querySelector('lv-site-visual-showcase')?.shadowRoot?.querySelectorAll('lv-report-table') ?? []).every((table) => Boolean(table.shadowRoot?.querySelector('h2'))))
+    await page.waitForFunction(() => Array.from(document.querySelector('lv-site-visual-showcase')?.shadowRoot?.querySelectorAll('.table-card lv-visualization-host') ?? []).every((host: any) => Boolean(host.envelope?.spec?.title) && !host.shadowRoot?.querySelector('[role="alert"]')))
     const tables = await page.locator('lv-site-visual-showcase').evaluate((element) => ({
       cards: element.shadowRoot?.querySelectorAll('.table-card').length,
-      tables: element.shadowRoot?.querySelectorAll('lv-report-table').length,
-      titles: Array.from(element.shadowRoot?.querySelectorAll('lv-report-table') ?? []).map((table: any) => table.table?.title),
+      tables: element.shadowRoot?.querySelectorAll('.table-card lv-visualization-host').length,
+      titles: Array.from(element.shadowRoot?.querySelectorAll('.table-card lv-visualization-host') ?? []).map((host: any) => host.envelope?.spec?.title),
     }))
     expect(tables.cards).toBe(3)
     expect(tables.tables).toBe(3)

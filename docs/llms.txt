@@ -167,6 +167,7 @@ Focused slices are available at `/docs/cli/commands/{id}.json|md` and `/docs/api
 - [Sankey](/docs/visuals/sankey): Configuration and query shape for the Sankey visual.
 - [Graph](/docs/visuals/graph): Configuration and query shape for the Graph visual.
 - [Map](/docs/visuals/map): Configuration and query shape for the Map visual.
+- [Custom Vega-Lite](/docs/visuals/custom): Configuration and query shape for the Custom Vega-Lite visual.
 - [Candlestick chart](/docs/visuals/candlestick): Configuration and query shape for the Candlestick chart visual.
 - [Boxplot](/docs/visuals/boxplot): Configuration and query shape for the Boxplot visual.
 - [Combo chart](/docs/visuals/combo): Configuration and query shape for the Combo chart visual.
@@ -189,7 +190,8 @@ Focused slices are available at `/docs/cli/commands/{id}.json|md` and `/docs/api
 - [Runtime architecture](/docs/architecture/runtime): Follow routing, query execution, and streamed UI updates.
 - [Storage architecture](/docs/storage-architecture): Understand DuckLake, DuckDB, snapshots, and serving pointers.
 - [Datastar signal flow](/docs/architecture/datastar): Understand server-owned state and SSE response contracts.
-- [Visual plugin architecture](/docs/architecture/visual-plugins): Understand renderer-neutral shapes and renderer adapters.
+- [Visualization architecture](/docs/architecture/visual-plugins): Understand the visualization IR, generated contracts, runtime data states, and renderer adapters.
+- [Geographic rendering decision](/docs/architecture/geographic-rendering): Understand why MapLibre exclusively owns built-in geographic rendering.
 
 #### Contributing
 

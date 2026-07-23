@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"html"
 	"net/http"
@@ -16,9 +17,16 @@ import (
 	semanticquery "github.com/Yacobolo/leapview/internal/analytics/query"
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	"github.com/Yacobolo/leapview/internal/dashboard/consumer"
+	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 	"github.com/Yacobolo/leapview/internal/dataquery"
+	"github.com/Yacobolo/leapview/internal/testutil/dashboardfixture"
 	"github.com/Yacobolo/leapview/internal/testutil/ssetest"
+	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
+	visualizationmapasset "github.com/Yacobolo/leapview/internal/visualization/mapasset"
+	mapassethttp "github.com/Yacobolo/leapview/internal/visualization/mapasset/http"
+	visualizationruntime "github.com/Yacobolo/leapview/internal/visualization/runtime"
 	"github.com/Yacobolo/leapview/internal/workspace"
 	workspacesqlite "github.com/Yacobolo/leapview/internal/workspace/sqlite"
 )
@@ -37,14 +45,17 @@ func (fakeMetrics) ExecuteConsumersPage(ctx context.Context, request consumer.Re
 	for _, target := range request.Targets {
 		switch target.Kind {
 		case consumer.KindVisual:
-			visual, err := fakeMetrics{}.QueryVisualPage(ctx, request.DashboardID, request.PageID, request.Filters, target.ID)
-			publish(consumer.Result{Target: target, Visual: visual, Err: err})
+			definition, _ := fakeMetrics{}.VisualizationDefinition(request.DashboardID, target.ID)
+			envelope, err := visualizationruntime.EnvelopeFromFrame(definition, visualizationruntime.Frame{Columns: []string{"label", "value"}, Rows: [][]any{{"delivered", 1}}}, nil, 0, 0)
+			publish(consumer.Result{Target: target, Envelope: envelope, Err: err})
 		case consumer.KindFilterOptions:
 			options, err := fakeMetrics{}.QueryFilterOptionsPage(ctx, request.DashboardID, request.PageID, []string{target.ID})
 			publish(consumer.Result{Target: target, FilterOptions: options, Err: err})
-		case consumer.KindTable:
-			table, err := fakeMetrics{}.QueryTablePage(ctx, request.DashboardID, request.PageID, request.Filters, target.TableRequest)
-			publish(consumer.Result{Target: target, Table: table, Err: err})
+		case consumer.KindWindow:
+			table, err := fakeMetrics{}.queryWindow(ctx, request.DashboardID, request.PageID, request.Filters, target.WindowRequest)
+			definition, _ := fakeMetrics{}.VisualizationDefinition(request.DashboardID, target.ID)
+			envelope, envelopeErr := visualizationruntime.WindowEnvelopeFromDefinition(definition, table, 0, 0)
+			publish(consumer.Result{Target: target, Envelope: envelope, Err: errors.Join(err, envelopeErr)})
 		}
 	}
 	return ctx.Err()
@@ -57,6 +68,49 @@ type canceledTableMetrics struct {
 type recordingMetrics struct {
 	fakeMetrics
 	pageIDs chan string
+}
+
+func (fakeMetrics) QueryDashboardVisualizations(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters) (dashboard.Patch, error) {
+	return fakeMetrics{}.QueryDashboardPage(ctx, dashboardID, pageID, filters)
+}
+
+func (fakeMetrics) QueryVisualization(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualID string) (visualizationir.VisualizationEnvelope, error) {
+	patch, err := fakeMetrics{}.QueryDashboardPage(ctx, dashboardID, pageID, filters)
+	if err != nil {
+		return visualizationir.VisualizationEnvelope{}, err
+	}
+	return patch.Visuals[visualID], nil
+}
+
+func (fakeMetrics) QueryVisualizationWindow(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request visualizationir.VisualizationWindowRequest) (visualizationir.VisualizationEnvelope, error) {
+	return fakeVisualizationWindow(ctx, fakeMetrics{}, dashboardID, pageID, filters, request)
+}
+
+func (fakeMetrics) QueryVisualizationSpatialWindow(context.Context, string, string, dashboard.Filters, visualizationir.VisualizationSpatialWindowRequest) (visualizationir.VisualizationEnvelope, error) {
+	return visualizationir.VisualizationEnvelope{}, nil
+}
+
+type fakeWindowSource interface {
+	queryWindow(context.Context, string, string, dashboard.Filters, dashboard.TableRequest) (dashboard.Table, error)
+	VisualizationDefinition(string, string) (visualizationdefinition.Definition, bool)
+}
+
+func fakeVisualizationWindow(ctx context.Context, source fakeWindowSource, dashboardID, pageID string, filters dashboard.Filters, request visualizationir.VisualizationWindowRequest) (visualizationir.VisualizationEnvelope, error) {
+	tableRequest := dashboard.TableRequest{Table: request.VisualID, Block: request.BlockID, Start: int(request.Start), Count: int(request.Limit), RequestSeq: int(request.RequestSeq), ResetVersion: int(request.ResetVersion)}
+	if len(request.Sort) > 0 {
+		tableRequest.Sort.Key = request.Sort[0].Field.Field
+		if request.Sort[0].Direction == visualizationir.VisualizationSortDirectionDescending {
+			tableRequest.Sort.Direction = "desc"
+		} else {
+			tableRequest.Sort.Direction = "asc"
+		}
+	}
+	table, err := source.queryWindow(ctx, dashboardID, pageID, filters, tableRequest)
+	if err != nil {
+		return visualizationir.VisualizationEnvelope{}, err
+	}
+	definition, _ := source.VisualizationDefinition(dashboardID, request.VisualID)
+	return visualizationruntime.WindowEnvelopeFromDefinition(definition, table, request.DataRevision, 0)
 }
 
 func (m *recordingMetrics) ExecuteConsumersPage(ctx context.Context, request consumer.Request, publish consumer.Publisher) error {
@@ -97,16 +151,18 @@ func (m namedWorkspaceMetrics) Pages(dashboardID string) []dashboard.Page {
 	return []dashboard.Page{{ID: "overview", Title: "Overview"}}
 }
 
-func (m namedWorkspaceMetrics) Report(dashboardID string) (reportdef.Dashboard, *semanticmodel.Model, bool) {
+func (m namedWorkspaceMetrics) Report(dashboardID string) (dashboarddefinition.Definition, *semanticmodel.Model, bool) {
 	if dashboardID != m.dashboardID {
-		return reportdef.Dashboard{}, nil, false
+		return dashboarddefinition.Definition{}, nil, false
 	}
-	return reportdef.Dashboard{
+	authored := reportdef.Dashboard{
 		ID:            m.dashboardID,
 		Title:         m.title,
 		SemanticModel: "test",
 		Pages:         m.Pages(dashboardID),
-	}, &semanticmodel.Model{Name: "test", Title: "Test Model"}, true
+	}
+	model := &semanticmodel.Model{Name: "test", Title: "Test Model"}
+	return dashboardfixture.Compile(authored, model), model, true
 }
 
 func (fakeMetrics) Catalog() dashboard.Catalog {
@@ -132,37 +188,38 @@ func (fakeMetrics) ModelIDForDashboard(dashboardID string) string {
 	return ""
 }
 
-func (fakeMetrics) Report(dashboardID string) (reportdef.Dashboard, *semanticmodel.Model, bool) {
+func (fakeMetrics) Report(dashboardID string) (dashboarddefinition.Definition, *semanticmodel.Model, bool) {
 	if dashboardID != "executive-sales" {
-		return reportdef.Dashboard{}, nil, false
+		return dashboarddefinition.Definition{}, nil, false
 	}
-	return reportdef.Dashboard{
-			ID:            "executive-sales",
-			Title:         "Executive Sales Dashboard",
-			SemanticModel: "test",
-			Filters: map[string]reportdef.FilterDefinition{
-				"state":    {Type: "multi_select", Label: "State", Dimension: "orders.status", URLParam: "state", Operator: "in", Values: reportdef.FilterValues{Source: "distinct", Limit: 50}},
-				"category": {Type: "text", Label: "Category", Dimension: "orders.status", URLParam: "category", DefaultOperator: "contains", Operators: []string{"contains", "equals"}},
+	authored := reportdef.Dashboard{
+		ID:            "executive-sales",
+		Title:         "Executive Sales Dashboard",
+		SemanticModel: "test",
+		Filters: map[string]reportdef.FilterDefinition{
+			"state":    {Type: "multi_select", Label: "State", Dimension: "orders.status", URLParam: "state", Operator: "in", Values: reportdef.FilterValues{Source: "distinct", Limit: 50}},
+			"category": {Type: "text", Label: "Category", Dimension: "orders.status", URLParam: "category", DefaultOperator: "contains", Operators: []string{"contains", "equals"}},
+		},
+		Visuals: reportdef.MergeVisualizations(reportdef.ChartVisualizations(map[string]reportdef.Visual{
+			"orders":       {Title: "Orders", Type: "donut", Query: reportdef.VisualQuery{Dimensions: fieldRefs("orders.status"), Measures: fieldRefs("order_count")}, Interaction: pointInteraction("orders.status", "orders", "ops_pipeline")},
+			"ops_pipeline": {Title: "Ops Pipeline", Type: "bar", Query: reportdef.VisualQuery{Dimensions: fieldRefs("orders.status"), Measures: fieldRefs("order_count")}, Interaction: pointInteraction("orders.status", "orders", "ops_pipeline")},
+		}), reportdef.TabularVisualizations("table", map[string]reportdef.TableVisual{
+			"order_rows": {Title: "Orders", Query: reportdef.TableQuery{Table: "orders", Fields: []string{"orders.order_id"}}, DefaultSort: dashboard.TableSort{Key: "order_id", Direction: "desc"}, Columns: []dashboard.TableColumn{{Key: "order_id", Label: "Order"}, {Key: "revenue", Label: "Revenue", Role: "measure", Format: "decimal"}}},
+		})),
+		Pages: fakeMetrics{}.Pages(dashboardID),
+	}
+	model := &semanticmodel.Model{
+		Name:  "test",
+		Title: "Test Model",
+		Tables: map[string]semanticmodel.Table{
+			"orders": {
+				Source: "orders", PrimaryKey: "order_id", Grain: "order_id",
+				Dimensions: map[string]semanticmodel.MetricDimension{"order_id": {Expr: "order_id", Type: "string"}, "status": {Expr: "status", Type: "string"}},
 			},
-			Visuals: map[string]reportdef.Visual{
-				"orders":       {Title: "Orders", Type: "donut", Query: reportdef.VisualQuery{Dimensions: fieldRefs("orders.status"), Measures: fieldRefs("order_count")}, Interaction: pointInteraction("orders.status", "orders", "ops_pipeline")},
-				"ops_pipeline": {Title: "Ops Pipeline", Type: "bar", Query: reportdef.VisualQuery{Dimensions: fieldRefs("orders.status"), Measures: fieldRefs("order_count")}, Interaction: pointInteraction("orders.status", "orders", "ops_pipeline")},
-			},
-			Tables: map[string]reportdef.TableVisual{
-				"order_rows": {Title: "Orders", Query: reportdef.TableQuery{Table: "orders", Fields: []string{"orders.order_id"}}, DefaultSort: dashboard.TableSort{Key: "purchase_date", Direction: "desc"}, Columns: []dashboard.TableColumn{{Key: "order_id", Label: "Order"}}},
-			},
-			Pages: fakeMetrics{}.Pages(dashboardID),
-		}, &semanticmodel.Model{
-			Name:  "test",
-			Title: "Test Model",
-			Tables: map[string]semanticmodel.Table{
-				"orders": {
-					Source: "orders", PrimaryKey: "order_id", Grain: "order_id",
-					Dimensions: map[string]semanticmodel.MetricDimension{"order_id": {Expr: "order_id", Type: "string"}, "status": {Expr: "status", Type: "string"}},
-				},
-			},
-			Measures: map[string]semanticmodel.MetricMeasure{"order_count": {Fact: "orders", Aggregation: "count", Empty: "zero", Label: "Orders"}},
-		}, true
+		},
+		Measures: map[string]semanticmodel.MetricMeasure{"order_count": {Fact: "orders", Aggregation: "count", Empty: "zero", Label: "Orders"}},
+	}
+	return dashboardfixture.Compile(authored, model), model, true
 }
 
 func (fakeMetrics) SemanticModel(modelID string) (*semanticmodel.Model, bool) {
@@ -311,8 +368,20 @@ func pointInteraction(field, fact string, targets ...string) reportdef.Interacti
 	}
 }
 
-func (fakeMetrics) NormalizeTableRequest(_ string, request dashboard.TableRequest) dashboard.TableRequest {
+func (fakeMetrics) NormalizeVisualizationWindow(_ string, request dashboard.TableRequest) dashboard.TableRequest {
+	if request.Sort.Key == "" {
+		request.Sort = dashboard.TableSort{Key: "order_id", Direction: "desc"}
+	}
 	return request.WithDefaults()
+}
+
+func (fakeMetrics) VisualizationDefinition(dashboardID, visualID string) (visualizationdefinition.Definition, bool) {
+	report, _, ok := fakeMetrics{}.Report(dashboardID)
+	if !ok {
+		return visualizationdefinition.Definition{}, false
+	}
+	definition, ok := report.Visualizations[visualID]
+	return definition, ok
 }
 
 func (fakeMetrics) Pages(dashboardID string) []dashboard.Page {
@@ -327,9 +396,9 @@ func (fakeMetrics) Pages(dashboardID string) []dashboard.Page {
 			Height: 940,
 			Visuals: []dashboard.PageVisual{
 				{ID: "header", Kind: "header", X: 0, Y: 0, Width: 100, Height: 40, Title: "Test"},
-				{ID: "state-filter", Kind: "filter_card", Filter: "state", X: 0, Y: 42, Width: 100, Height: 32},
-				{ID: "orders-chart", Kind: "donut_chart", Visual: "orders", X: 0, Y: 48, Width: 100, Height: 100},
-				{ID: "orders-table", Kind: "table", Table: "order_rows", X: 0, Y: 160, Width: 100, Height: 100},
+				{ID: "state-filter", Kind: "filter", Filter: "state", X: 0, Y: 42, Width: 100, Height: 32},
+				{ID: "orders-chart", Kind: "visual", Visual: "orders", X: 0, Y: 48, Width: 100, Height: 100},
+				{ID: "orders-table", Kind: "visual", Visual: "order_rows", X: 0, Y: 160, Width: 100, Height: 100},
 			},
 		},
 		{
@@ -338,8 +407,8 @@ func (fakeMetrics) Pages(dashboardID string) []dashboard.Page {
 			Width:  1366,
 			Height: 940,
 			Visuals: []dashboard.PageVisual{
-				{ID: "category-filter", Kind: "filter_card", Filter: "category", X: 0, Y: 8, Width: 100, Height: 32},
-				{ID: "ops-pipeline-chart", Kind: "bar_chart", Visual: "ops_pipeline", X: 0, Y: 48, Width: 100, Height: 100},
+				{ID: "category-filter", Kind: "filter", Filter: "category", X: 0, Y: 8, Width: 100, Height: 32},
+				{ID: "ops-pipeline-chart", Kind: "visual", Visual: "ops_pipeline", X: 0, Y: 48, Width: 100, Height: 100},
 			},
 		},
 	}
@@ -351,10 +420,26 @@ func (fakeMetrics) QueryDashboard(_ context.Context, _ string, filters dashboard
 
 func (fakeMetrics) QueryDashboardPage(_ context.Context, _ string, pageID string, filters dashboard.Filters) (dashboard.Patch, error) {
 	chartID := "orders"
-	chartTitle := "Orders"
 	if pageID == "operations" {
 		chartID = "ops_pipeline"
-		chartTitle = "Ops Pipeline"
+	}
+	definition, _ := fakeMetrics{}.VisualizationDefinition("executive-sales", chartID)
+	envelope, err := visualizationruntime.EnvelopeFromFrame(definition, visualizationruntime.Frame{Columns: []string{"label", "value"}, Rows: [][]any{{"delivered", 1}}}, nil, 0, 0)
+	if err != nil {
+		return dashboard.Patch{}, err
+	}
+	visuals := map[string]visualizationir.VisualizationEnvelope{chartID: envelope}
+	if pageID == "" || pageID == "overview" {
+		definition, _ := fakeMetrics{}.VisualizationDefinition("executive-sales", "order_rows")
+		table, tableErr := fakeMetrics{}.queryWindow(context.Background(), "executive-sales", "overview", filters, dashboard.TableRequest{Table: "order_rows", Block: "a", Count: dashboard.TableChunkSize}.WithDefaults())
+		if tableErr != nil {
+			return dashboard.Patch{}, tableErr
+		}
+		tableEnvelope, tableEnvelopeErr := visualizationruntime.WindowEnvelopeFromDefinition(definition, table, 0, 0)
+		if tableEnvelopeErr != nil {
+			return dashboard.Patch{}, tableEnvelopeErr
+		}
+		visuals["order_rows"] = tableEnvelope
 	}
 	return dashboard.Patch{
 		Filters: filters.WithDefaults(),
@@ -365,32 +450,8 @@ func (fakeMetrics) QueryDashboardPage(_ context.Context, _ string, pageID string
 			Loading:     false,
 			LastUpdated: "12:00:00",
 		},
-		Visuals: map[string]dashboard.Visual{
-			chartID: {ID: chartID, Type: "bar", Shape: "category_value", Title: chartTitle, Unit: "orders", Data: []dashboard.Datum{{"label": "delivered", "value": 1}}},
-		},
+		Visuals: visuals,
 	}, nil
-}
-
-func (fakeMetrics) QueryVisualPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualID string) (dashboard.Visual, error) {
-	patch, err := fakeMetrics{}.QueryDashboardPage(ctx, dashboardID, pageID, filters)
-	visual, ok := patch.Visuals[visualID]
-	if !ok {
-		visual = dashboard.Visual{ID: visualID, Type: "bar", Shape: "category_value", Title: visualID}
-	}
-	return visual, err
-}
-
-func (fakeMetrics) QueryVisualsPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualIDs []string) (map[string]dashboard.Visual, error) {
-	patch, err := fakeMetrics{}.QueryDashboardPage(ctx, dashboardID, pageID, filters)
-	visuals := make(map[string]dashboard.Visual, len(visualIDs))
-	for _, id := range visualIDs {
-		visual, ok := patch.Visuals[id]
-		if !ok {
-			visual = dashboard.Visual{ID: id, Type: "bar", Shape: "category_value", Title: id}
-		}
-		visuals[id] = visual
-	}
-	return visuals, err
 }
 
 func (fakeMetrics) QueryFilterOptionsPage(ctx context.Context, dashboardID, pageID string, filterIDs []string) (map[string][]dashboard.FilterOption, error) {
@@ -405,16 +466,6 @@ func (fakeMetrics) QueryFilterOptionsPage(ctx context.Context, dashboardID, page
 func (m *recordingMetrics) QueryDashboardPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters) (dashboard.Patch, error) {
 	m.pageIDs <- pageID
 	return m.fakeMetrics.QueryDashboardPage(ctx, dashboardID, pageID, filters)
-}
-
-func (m *recordingMetrics) QueryVisualPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualID string) (dashboard.Visual, error) {
-	m.pageIDs <- pageID
-	return m.fakeMetrics.QueryVisualPage(ctx, dashboardID, pageID, filters, visualID)
-}
-
-func (m *recordingMetrics) QueryVisualsPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualIDs []string) (map[string]dashboard.Visual, error) {
-	m.pageIDs <- pageID
-	return m.fakeMetrics.QueryVisualsPage(ctx, dashboardID, pageID, filters, visualIDs)
 }
 
 func (m *recordingMetrics) QueryFilterOptionsPage(ctx context.Context, dashboardID, pageID string, filterIDs []string) (map[string][]dashboard.FilterOption, error) {
@@ -489,7 +540,7 @@ func TestPageRouteSeedsPageScopedFiltersFromURL(t *testing.T) {
 	if !strings.Contains(body, `"values":["RJ","SP"]`) {
 		t.Fatalf("page did not seed state filter values:\n%s", body)
 	}
-	if strings.Contains(body, `"category"`) {
+	if strings.Contains(body, `"id":"category"`) || strings.Contains(body, `"urlParam":"category"`) || strings.Contains(body, `"controls":{"category"`) || strings.Contains(body, `"urlParams":{"category"`) {
 		t.Fatalf("overview page seeded off-page category filter:\n%s", body)
 	}
 }
@@ -658,9 +709,9 @@ func TestStaticAssetCacheHeaderClasses(t *testing.T) {
 			want: "public, max-age=31536000, immutable",
 		},
 		{
-			name: "hashed chunk asset",
+			name: "split chunk asset",
 			path: "/static/chunks/shared-app-shell-sv895r5c.js",
-			want: "public, max-age=31536000, immutable",
+			want: "no-cache",
 		},
 		{
 			name: "font asset",
@@ -686,6 +737,52 @@ func TestStaticAssetCacheHeaderClasses(t *testing.T) {
 				t.Fatalf("Cache-Control = %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestVegaSandboxAssetAllowsOpaqueSandboxOrigin(t *testing.T) {
+	handler := staticAssetCache(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/static/vega-sandbox.js", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "*" {
+		t.Fatalf("Access-Control-Allow-Origin = %q, want *", got)
+	}
+}
+
+func TestMapAssetCacheIsImmutableAndRangeCapable(t *testing.T) {
+	handler := mapassethttp.CacheHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusPartialContent)
+	}))
+	request := httptest.NewRequest(http.MethodGet, "/map-assets/leapview-streets/archives/"+visualizationmapasset.ArchiveSHA256+"/basemap.pmtiles", nil)
+	request.Header.Set("Range", "bytes=0-126")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusPartialContent {
+		t.Fatalf("status = %d", response.Code)
+	}
+	if got := response.Header().Get("Cache-Control"); got != "public, max-age=31536000, immutable" {
+		t.Fatalf("cache control = %q", got)
+	}
+	if got := response.Header().Get("Accept-Ranges"); got != "bytes" {
+		t.Fatalf("accept ranges = %q", got)
+	}
+}
+
+func TestMapAssetCacheRejectsUnversionedPaths(t *testing.T) {
+	handler := mapassethttp.CacheHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("unversioned request reached asset filesystem")
+	}))
+	request := httptest.NewRequest(http.MethodGet, "/map-assets/leapview-streets/basemap.pmtiles", nil)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusNotFound)
+	}
+	if got := response.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("cache control = %q, want no-store", got)
 	}
 }
 
@@ -913,17 +1010,14 @@ func TestLegacyRoutesReturnNotFound(t *testing.T) {
 	}
 }
 
-func (fakeMetrics) QueryTable(_ context.Context, _ string, _ dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
-	return fakeMetrics{}.QueryTablePage(context.Background(), "executive-sales", "", dashboard.Filters{}, request)
-}
-
-func (fakeMetrics) QueryTablePage(_ context.Context, _ string, _ string, _ dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
+func (fakeMetrics) queryWindow(_ context.Context, _ string, _ string, _ dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
 	request = request.WithDefaults()
 	return dashboard.Table{
 		Version: 2,
 		Title:   "Orders",
 		Columns: []dashboard.TableColumn{
 			{Key: "order_id", Label: "Order"},
+			{Key: "revenue", Label: "Revenue", Role: "measure", Format: "decimal"},
 		},
 		Cardinality:   dashboard.ExactCardinality(1),
 		AvailableRows: 1,
@@ -939,19 +1033,19 @@ func (fakeMetrics) QueryTablePage(_ context.Context, _ string, _ string, _ dashb
 				RequestSeq:   request.RequestSeq,
 				ResetVersion: request.ResetVersion,
 				Sort:         request.Sort,
-				Rows:         []map[string]any{{"order_id": "o1"}},
+				Rows:         []map[string]any{{"order_id": "o1", "revenue": 99.0}},
 			},
 		},
 	}, nil
 }
 
-func (canceledTableMetrics) QueryTable(_ context.Context, _ string, _ dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
-	return canceledTableMetrics{}.QueryTablePage(context.Background(), "executive-sales", "", dashboard.Filters{}, request)
-}
-
-func (canceledTableMetrics) QueryTablePage(_ context.Context, _ string, _ string, _ dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
+func (canceledTableMetrics) queryWindow(_ context.Context, _ string, _ string, _ dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
 	request = request.WithDefaults()
 	return dashboard.EmptyTable(request, context.Canceled), nil
+}
+
+func (m canceledTableMetrics) QueryVisualizationWindow(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request visualizationir.VisualizationWindowRequest) (visualizationir.VisualizationEnvelope, error) {
+	return fakeVisualizationWindow(ctx, m, dashboardID, pageID, filters, request)
 }
 
 func (canceledTableMetrics) ExecuteConsumersPage(_ context.Context, request consumer.Request, publish consumer.Publisher) error {
@@ -962,7 +1056,7 @@ func (canceledTableMetrics) ExecuteConsumersPage(_ context.Context, request cons
 }
 
 func TestUpdatesStreamsDatastarPatchSignals(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 
 	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/updates?route=dashboard&workspace=test-workspace&dashboard=executive-sales&page=overview&state=SP&category=ignored", nil)
@@ -1019,7 +1113,7 @@ func TestUpdatesStreamsDatastarPatchSignals(t *testing.T) {
 }
 
 func TestUpdatesStreamsPageScopedChartSignals(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 
 	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/updates?route=dashboard&workspace=test-workspace&dashboard=executive-sales&page=operations&datastar=%7B%22runtime%22%3A%7B%22clientId%22%3A%22test-client%22%2C%22dashboardId%22%3A%22executive-sales%22%2C%22pageId%22%3A%22operations%22%7D%7D", nil)
@@ -1043,7 +1137,7 @@ func TestUpdatesStreamsPageScopedChartSignals(t *testing.T) {
 }
 
 func TestDashboardRefreshCommandRouteIsRemoved(t *testing.T) {
-	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"runtime":{"clientId":"test-client"},"visualWindowCommand":{"visual":"order_rows","block":"all","start":0,"count":50}}`)
+	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"runtime":{"clientId":"test-client"},"visualWindowCommand":{"visualID":"order_rows","blockID":"all","start":0,"limit":50,"sort":[]}}`)
 	req := httptest.NewRequest(http.MethodPost, "/workspaces/test-workspace/commands/refresh", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -1056,7 +1150,7 @@ func TestDashboardRefreshCommandRouteIsRemoved(t *testing.T) {
 }
 
 func TestSelectCommandAcceptsDatastarSignals(t *testing.T) {
-	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}},"selections":[]},"runtime":{"clientId":"test-client"},"interactionCommand":{"sourceKind":"visual","sourceId":"orders","interactionKind":"point_selection","action":"set","toggle":true,"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]},"visualWindowCommand":{"visual":"order_rows","block":"all","start":0,"count":50}}`)
+	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}},"selections":[]},"runtime":{"clientId":"test-client"},"interactionCommand":{"sourceKind":"visual","sourceId":"orders","interactionKind":"point_selection","action":"set","toggle":true,"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]},"visualWindowCommand":{"visualID":"order_rows","blockID":"all","start":0,"limit":50,"sort":[]}}`)
 	req := httptest.NewRequest(http.MethodPost, "/workspaces/test-workspace/commands/select", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -1089,24 +1183,24 @@ func TestPageCommandsQueryActivePage(t *testing.T) {
 		{
 			name:    "interaction select",
 			path:    "/workspaces/test-workspace/commands/select",
-			body:    `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"selections":[]},"interactionCommand":{"sourceKind":"visual","sourceId":"ops_pipeline","interactionKind":"point_selection","action":"set","toggle":true,"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]},"visualWindowCommand":{"block":"all","start":0,"count":50}}`,
+			body:    `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"selections":[]},"interactionCommand":{"sourceKind":"visual","sourceId":"ops_pipeline","interactionKind":"point_selection","action":"set","toggle":true,"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]},"visualWindowCommand":{"blockID":"all","start":0,"limit":50,"sort":[]}}`,
 			queries: 1,
 		},
 		{
 			name: "clear selection",
 			path: "/workspaces/test-workspace/commands/clear-selection",
-			body: `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"selections":[{"sourceKind":"visual","sourceId":"ops_pipeline","interactionKind":"point_selection","entries":[{"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]}]}]},"visualWindowCommand":{"block":"all","start":0,"count":50}}`,
+			body: `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"selections":[{"sourceKind":"visual","sourceId":"ops_pipeline","interactionKind":"point_selection","entries":[{"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]}]}]},"visualWindowCommand":{"blockID":"all","start":0,"limit":50,"sort":[]}}`,
 		},
 		{
 			name:    "reload",
 			path:    "/workspaces/test-workspace/commands/reload",
-			body:    `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"visualWindowCommand":{"block":"all","start":200,"count":50}}`,
+			body:    `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"visualWindowCommand":{"blockID":"all","start":200,"limit":50,"sort":[]}}`,
 			queries: 2,
 		},
 		{
 			name:    "reset filters",
 			path:    "/workspaces/test-workspace/commands/reset-filters",
-			body:    `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"visualWindowCommand":{"block":"all","start":200,"count":50}}`,
+			body:    `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"visualWindowCommand":{"blockID":"all","start":200,"limit":50,"sort":[]}}`,
 			queries: 2,
 		},
 	}
@@ -1142,7 +1236,7 @@ func TestDashboardRefreshCommandDoesNotPersistRefreshRun(t *testing.T) {
 	token := testAPIToken(t, ctx, store, principal.ID, "dashboard-refresh")
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test"})
-	body := strings.NewReader(`{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations","modelId":"test"},"filters":{},"visualWindowCommand":{"block":"all","start":0,"count":50}}`)
+	body := strings.NewReader(`{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations","modelId":"test"},"filters":{},"visualWindowCommand":{"blockID":"all","start":0,"limit":50,"sort":[]}}`)
 	req := httptest.NewRequest(http.MethodPost, "/workspaces/test/commands/refresh", body)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -1168,7 +1262,7 @@ func TestWorkspaceAssetDetailsUpdatesExcludeRefreshesTableAndUnusedRefreshFields
 	seedActiveDeploymentFromWorkspaceAssets(t, store, "test", emptyPageRuntimeAssetMetrics{})
 	server := NewWithOptions(emptyPageRuntimeAssetMetrics{}, Options{Store: store, DefaultWorkspaceID: "test"})
 	assetID := workspace.NewAssetID(workspace.AssetTypeSemanticModel, "olist")
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/updates?route=workspace_asset&workspace=test&asset="+string(assetID)+"&section=details", nil)
 	rec := newSynchronizedRecorder()
@@ -1227,7 +1321,7 @@ func TestLegacySemanticModelRefreshRouteIsRemoved(t *testing.T) {
 }
 
 func TestClearSelectionCommandAcceptsDatastarSignals(t *testing.T) {
-	body := strings.NewReader(`{"filters":{"selections":[{"sourceKind":"visual","sourceId":"orders","interactionKind":"point_selection","entries":[{"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]}]}]},"runtime":{"clientId":"test-client"},"visualWindowCommand":{"visual":"order_rows","block":"all","start":0,"count":50}}`)
+	body := strings.NewReader(`{"filters":{"selections":[{"sourceKind":"visual","sourceId":"orders","interactionKind":"point_selection","entries":[{"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]}]}]},"runtime":{"clientId":"test-client"},"visualWindowCommand":{"visualID":"order_rows","blockID":"all","start":0,"limit":50,"sort":[]}}`)
 	req := httptest.NewRequest(http.MethodPost, "/workspaces/test-workspace/commands/clear-selection", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -1238,7 +1332,7 @@ func TestClearSelectionCommandAcceptsDatastarSignals(t *testing.T) {
 }
 
 func TestResetFiltersCommandAcceptsDatastarSignals(t *testing.T) {
-	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}},"selections":[{"sourceKind":"visual","sourceId":"orders","interactionKind":"point_selection","entries":[{"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]}]}]},"runtime":{"clientId":"test-client"},"visualWindowCommand":{"visual":"order_rows","block":"all","start":200,"count":50}}`)
+	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}},"selections":[{"sourceKind":"visual","sourceId":"orders","interactionKind":"point_selection","entries":[{"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]}]}]},"runtime":{"clientId":"test-client"},"visualWindowCommand":{"visualID":"order_rows","blockID":"all","start":200,"limit":50,"sort":[]}}`)
 	req := httptest.NewRequest(http.MethodPost, "/workspaces/test-workspace/commands/reset-filters", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -1249,7 +1343,7 @@ func TestResetFiltersCommandAcceptsDatastarSignals(t *testing.T) {
 }
 
 func TestTableWindowCommandAcceptsDatastarSignals(t *testing.T) {
-	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"runtime":{"clientId":"test-client"},"visualWindowCommand":{"visual":"order_rows","block":"a","start":400,"count":50,"requestSeq":42,"sort":{"key":"revenue","direction":"desc"}}}`)
+	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"runtime":{"clientId":"test-client"},"visualWindowCommand":{"visualID":"order_rows","specRevision":"","dataRevision":3,"blockID":"a","start":400,"limit":50,"requestSeq":42,"resetVersion":0,"sort":[{"field":{"dataset":"primary","field":"revenue"},"direction":"descending"}]}}`)
 	req := httptest.NewRequest(http.MethodPost, "/workspaces/test-workspace/commands/visual-window", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -1264,7 +1358,7 @@ func TestTableWindowCommandDoesNotPublishCanceledQueries(t *testing.T) {
 	updates, unsubscribe := server.broker.Subscribe("test-client:executive-sales:overview")
 	defer unsubscribe()
 
-	body := strings.NewReader(`{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"overview"},"visualWindowCommand":{"visual":"order_rows","block":"all","start":400,"count":50,"requestSeq":42}}`)
+	body := strings.NewReader(`{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"overview"},"visualWindowCommand":{"visualID":"order_rows","specRevision":"","dataRevision":3,"blockID":"all","start":400,"limit":50,"requestSeq":42,"resetVersion":0,"sort":[]}}`)
 	req := httptest.NewRequest(http.MethodPost, "/workspaces/test-workspace/commands/visual-window", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()

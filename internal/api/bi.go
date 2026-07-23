@@ -1,5 +1,7 @@
 package api
 
+import visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
+
 type DashboardSummary struct {
 	ID            string   `json:"id"`
 	Title         string   `json:"title"`
@@ -113,23 +115,16 @@ type DashboardFilterDescribeResponse struct {
 }
 
 type DashboardVisualDescribeResponse struct {
-	ID          string                       `json:"id"`
-	ComponentID string                       `json:"componentId,omitempty"`
-	Shape       string                       `json:"shape,omitempty"`
-	Renderer    string                       `json:"renderer,omitempty"`
-	Type        string                       `json:"type,omitempty"`
-	Title       string                       `json:"title,omitempty"`
-	Description string                       `json:"description,omitempty"`
-	Query       map[string]any               `json:"query,omitempty"`
-	Extensions  map[string]map[string]any    `json:"extensions,omitempty"`
-	Interaction map[string]any               `json:"interaction,omitempty"`
-	Columns     []DashboardTableColumn       `json:"columns,omitempty"`
-	Cardinality string                       `json:"cardinality,omitempty"`
-	Placement   *DashboardComponentPlacement `json:"placement,omitempty"`
-	X           float64                      `json:"x,omitempty"`
-	Y           float64                      `json:"y,omitempty"`
-	Width       float64                      `json:"width,omitempty"`
-	Height      float64                      `json:"height,omitempty"`
+	ID           string                            `json:"id"`
+	ComponentID  string                            `json:"componentId,omitempty"`
+	RendererID   string                            `json:"rendererID"`
+	SpecRevision string                            `json:"specRevision"`
+	Spec         visualizationir.VisualizationSpec `json:"spec"`
+	Placement    *DashboardComponentPlacement      `json:"placement,omitempty"`
+	X            float64                           `json:"x,omitempty"`
+	Y            float64                           `json:"y,omitempty"`
+	Width        float64                           `json:"width,omitempty"`
+	Height       float64                           `json:"height,omitempty"`
 }
 
 type SemanticModelDescriptionResponse struct {

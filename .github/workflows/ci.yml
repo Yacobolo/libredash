@@ -291,6 +291,10 @@ jobs:
       - name: Install JavaScript dependencies
         run: bun install --frozen-lockfile
 
+      - name: Install pinned documentation basemap
+        if: matrix.name == 'site'
+        run: go run ./internal/tools/mapassets --out .data/map-assets
+
       - name: Install browser dependencies
         run: bunx playwright install --with-deps chromium
 

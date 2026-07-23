@@ -3172,8 +3172,14 @@ paths:
                   - application/json
                 uploadProtocols:
                   - tus
-                visualShapes:
-                  - category_value
+                visualization:
+                  renderers:
+                    - id: echarts
+                      kinds:
+                        - cartesian
+                      schemaVersion: 1
+                      version: example
+                  schemaVersion: 1
         '400':
           description: The server could not understand the request due to invalid syntax.
           content:
@@ -24667,6 +24673,25 @@ paths:
                   key: example
                 selections:
                   - key: example
+                spatialSelections:
+                  - geometry:
+                      bounds:
+                        east: !!float 1
+                        north: !!float 1
+                        south: !!float 1
+                        west: !!float 1
+                      center:
+                        latitude: !!float 1
+                        longitude: !!float 1
+                      kind: example
+                      points:
+                        - latitude: !!float 1
+                          longitude: !!float 1
+                      radiusMeters: !!float 1
+                    gesture: box
+                    interactionID: example
+                    order: 1
+                    visualID: example
       x-apigen-tool:
         confirmation: never
         effect: read
@@ -24736,72 +24761,31 @@ paths:
                   key: example
                 visuals:
                   key:
-                    data:
-                      - binEnd: !!float 1
-                        binStart: !!float 1
-                        close: example
-                        column: example
-                        end: !!float 1
-                        extensions:
-                          key:
-                            key: example
-                        high: example
-                        label: example
-                        low: example
-                        max: !!float 1
-                        median: !!float 1
-                        min: !!float 1
-                        name: example
-                        open: example
-                        path:
-                          - example
-                        positive: true
-                        q1: !!float 1
-                        q3: !!float 1
-                        row: example
-                        selected: true
-                        series: example
-                        source: example
-                        start: !!float 1
-                        target: example
-                        value: example
-                    dimensions:
-                      - example
-                    extensions:
-                      key:
-                        key: example
-                    format: example
-                    id: example
-                    interaction:
-                      kind: example
-                      mappings:
-                        - fact: example
-                          field: example
-                          grain: example
-                          label: example
-                          value: example
-                      targets:
-                        - example
-                      toggle: true
-                    measure: example
-                    measures:
-                      - example
-                    renderer: example
+                    dataRevision: 1
+                    diagnostics:
+                      - code: example
+                        fieldID: example
+                        message: example
+                        severity: info
+                    rendererID: example
+                    schemaVersion: 1
                     selection:
-                      - label: example
-                        mappings:
-                          - fact: example
-                            field: example
-                            grain: example
-                            label: example
-                            value: example
-                    series:
-                      - example
-                    shape: example
-                    title: example
-                    type: example
-                    unit: example
-                    version: 1
+                      - datum:
+                          blockID: example
+                          dataRevision: 1
+                          dataset: example
+                          identity:
+                            key: example
+                          resetVersion: 1
+                        label: example
+                    spatialSelection:
+                      interactionID: example
+                      visualID: example
+                    specRevision: example
+                    status:
+                      kind: idle
+                      message: example
+                    visualID: example
         '400':
           description: The server could not understand the request due to invalid syntax.
           content:
@@ -25050,6 +25034,25 @@ paths:
                   key: example
                 selections:
                   - key: example
+                spatialSelections:
+                  - geometry:
+                      bounds:
+                        east: !!float 1
+                        north: !!float 1
+                        south: !!float 1
+                        west: !!float 1
+                      center:
+                        latitude: !!float 1
+                        longitude: !!float 1
+                      kind: example
+                      points:
+                        - latitude: !!float 1
+                          longitude: !!float 1
+                      radiusMeters: !!float 1
+                    gesture: box
+                    interactionID: example
+                    order: 1
+                    visualID: example
       x-apigen-tool:
         confirmation: never
         effect: read
@@ -25061,22 +25064,7 @@ paths:
               source: path
         name: query_dashboard_page
         output:
-          mode: project
-          select:
-            - select:
-                - source: /id
-                - source: /title
-                - source: /shape
-                - source: /type
-                - source: /unit
-                - source: /format
-                - source: /dimensions
-                - source: /measure
-                - source: /measures
-                - source: /series
-                - count_as: count
-                  source: /data
-              source: /visuals
+          mode: raw
         tags:
           - dashboard
           - query
@@ -25121,69 +25109,16 @@ paths:
               schema:
                 $ref: '#/components/schemas/DashboardVisualDescribeResponse'
               example:
-                cardinality: example
-                columns:
-                  - format: example
-                    key: example
-                    label: example
-                    role: example
                 componentId: example
-                description: example
-                extensions:
-                  key:
-                    key: example
                 height: !!float 1
                 id: example
-                interaction:
-                  pointSelection:
-                    mappings:
-                      - fact: example
-                        field: example
-                        grain: example
-                        label: example
-                        value: example
-                    targets:
-                      - example
-                    toggle: true
-                  rowSelection:
-                    mappings:
-                      - fact: example
-                        field: example
-                        grain: example
-                        label: example
-                        value: example
-                    targets:
-                      - example
-                    toggle: true
                 placement:
                   col: 1
                   colSpan: 1
                   row: 1
                   rowSpan: 1
-                query:
-                  dimensions:
-                    - alias: example
-                      field: example
-                  limit: 1
-                  measures:
-                    - alias: example
-                      field: example
-                  series:
-                    alias: example
-                    field: example
-                  sort:
-                    - direction: example
-                      expr: example
-                      field: example
-                  table: example
-                  time:
-                    alias: example
-                    field: example
-                    grain: example
-                renderer: example
-                shape: example
-                title: example
-                type: example
+                rendererID: example
+                specRevision: example
                 width: !!float 1
                 x: !!float 1
                 'y': !!float 1
@@ -25434,15 +25369,7 @@ paths:
               source: path
         name: describe_dashboard_visual
         output:
-          mode: project
-          select:
-            - source: /id
-            - source: /title
-            - source: /description
-            - source: /shape
-            - source: /type
-            - source: /query
-            - source: /columns
+          mode: raw
         tags:
           - dashboard
           - visual
@@ -25491,7 +25418,33 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DashboardVisualQueryResponse'
+                $ref: '#/components/schemas/VisualizationEnvelope'
+              example:
+                dataRevision: 1
+                diagnostics:
+                  - code: example
+                    fieldID: example
+                    message: example
+                    severity: info
+                rendererID: example
+                schemaVersion: 1
+                selection:
+                  - datum:
+                      blockID: example
+                      dataRevision: 1
+                      dataset: example
+                      identity:
+                        key: example
+                      resetVersion: 1
+                    label: example
+                spatialSelection:
+                  interactionID: example
+                  visualID: example
+                specRevision: example
+                status:
+                  kind: idle
+                  message: example
+                visualID: example
             application/vnd.apache.arrow.stream:
               schema:
                 type: string
@@ -25745,6 +25698,25 @@ paths:
                   key: example
                 selections:
                   - key: example
+                spatialSelections:
+                  - geometry:
+                      bounds:
+                        east: !!float 1
+                        north: !!float 1
+                        south: !!float 1
+                        west: !!float 1
+                      center:
+                        latitude: !!float 1
+                        longitude: !!float 1
+                      kind: example
+                      points:
+                        - latitude: !!float 1
+                          longitude: !!float 1
+                      radiusMeters: !!float 1
+                    gesture: box
+                    interactionID: example
+                    order: 1
+                    visualID: example
               limit: 1
               pageToken: example
       x-apigen-tool:
@@ -39302,20 +39274,6 @@ components:
         startedAt: "2026-01-02T15:04:05Z"
         status: example
         stopReason: example
-    AreaDashboardVisualQueryResponse:
-      type: object
-      allOf:
-        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
-      required:
-        - type
-      properties:
-        type:
-          type: string
-          enum:
-            - area
-          example: example
-      example:
-        type: example
     AssetEdgeListResponse:
       type: object
       required:
@@ -40038,48 +39996,6 @@ components:
         subjectId: example
         subjectType: example
         privilege: example
-    BarDashboardVisualQueryResponse:
-      type: object
-      allOf:
-        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
-      required:
-        - type
-      properties:
-        type:
-          type: string
-          enum:
-            - bar
-          example: example
-      example:
-        type: example
-    BoxplotDashboardVisualQueryResponse:
-      type: object
-      allOf:
-        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
-      required:
-        - type
-      properties:
-        type:
-          type: string
-          enum:
-            - boxplot
-          example: example
-      example:
-        type: example
-    CandlestickDashboardVisualQueryResponse:
-      type: object
-      allOf:
-        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
-      required:
-        - type
-      properties:
-        type:
-          type: string
-          enum:
-            - candlestick
-          example: example
-      example:
-        type: example
     CapabilitiesResponse:
       type: object
       required:
@@ -40089,7 +40005,7 @@ components:
         - authentication
         - queryFormats
         - uploadProtocols
-        - visualShapes
+        - visualization
       properties:
         apiVersion:
           type: string
@@ -40118,12 +40034,8 @@ components:
             $ref: '#/components/schemas/UploadProtocol'
           example:
             - tus
-        visualShapes:
-          type: array
-          items:
-            $ref: '#/components/schemas/VisualShape'
-          example:
-            - category_value
+        visualization:
+          $ref: '#/components/schemas/VisualizationCapabilities'
       example:
         apiVersion: example
         authentication:
@@ -40134,151 +40046,213 @@ components:
           - application/json
         uploadProtocols:
           - tus
-        visualShapes:
-          - category_value
-    ColumnDashboardVisualQueryResponse:
+        visualization:
+          renderers:
+            - id: echarts
+              kinds:
+                - cartesian
+              schemaVersion: 1
+              version: example
+          schemaVersion: 1
+    CartesianVisualizationPresentation:
       type: object
       allOf:
-        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
+        - $ref: '#/components/schemas/VisualizationPresentation'
       required:
-        - type
+        - smooth
+        - stacked
+        - showSymbols
+        - dataZoom
+        - area
+        - step
       properties:
-        type:
+        smooth:
+          type: boolean
+          example: true
+        stacked:
+          type: boolean
+          example: true
+        showSymbols:
+          type: boolean
+          example: true
+        dataZoom:
+          type: boolean
+          example: true
+        area:
+          type: boolean
+          example: true
+        step:
+          type: boolean
+          example: true
+        orientation:
+          $ref: '#/components/schemas/VisualizationOrientation'
+        labelPosition:
+          $ref: '#/components/schemas/VisualizationLabelPosition'
+        symbolSize:
+          type: number
+          format: double
+          example: !!float 1
+        histogramBins:
+          type: integer
+          format: int32
+          example: 1
+        comboSeries:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisualizationComboSeries'
+          example:
+            - axis: primary
+              mark: line
+              seriesValue: example
+      example:
+        area: true
+        comboSeries:
+          - axis: primary
+            mark: line
+            seriesValue: example
+        dataZoom: true
+        histogramBins: 1
+        labelPosition: automatic
+        orientation: horizontal
+        showSymbols: true
+        smooth: true
+        stacked: true
+        step: true
+        symbolSize: !!float 1
+    CartesianVisualizationSpec:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/VisualizationSpecBase'
+      required:
+        - kind
+        - mark
+        - x
+        - 'y'
+        - presentation
+      properties:
+        kind:
           type: string
           enum:
-            - column
+            - cartesian
           example: example
+        mark:
+          $ref: '#/components/schemas/VisualizationCartesianMark'
+        x:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        'y':
+          type: array
+          items:
+            $ref: '#/components/schemas/VisualizationFieldRef'
+          example:
+            - dataset: example
+              field: example
+        series:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        presentation:
+          $ref: '#/components/schemas/CartesianVisualizationPresentation'
       example:
-        type: example
-    ComboDashboardVisualQueryResponse:
+        kind: example
+        mark: line
+        presentation:
+          area: true
+          comboSeries:
+            - axis: primary
+              mark: line
+              seriesValue: example
+          dataZoom: true
+          histogramBins: 1
+          labelPosition: automatic
+          orientation: horizontal
+          showSymbols: true
+          smooth: true
+          stacked: true
+          step: true
+          symbolSize: !!float 1
+        series:
+          dataset: example
+          field: example
+        x:
+          dataset: example
+          field: example
+        'y':
+          - dataset: example
+            field: example
+    CompactVisualizationFormat:
       type: object
       allOf:
-        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
+        - $ref: '#/components/schemas/VisualizationFormatBase'
       required:
-        - type
+        - kind
       properties:
-        type:
+        kind:
           type: string
           enum:
-            - combo
+            - compact
           example: example
+        maximumFractionDigits:
+          type: integer
+          format: int32
+          example: 1
       example:
-        type: example
-    DashboardChartVisualQueryResponseBase:
+        kind: example
+        maximumFractionDigits: 1
+    CurrencyVisualizationFormat:
       type: object
       allOf:
-        - $ref: '#/components/schemas/DashboardVisualQueryResponseBase'
+        - $ref: '#/components/schemas/VisualizationFormatBase'
       required:
-        - shape
-        - data
+        - kind
+        - currency
       properties:
-        shape:
+        kind:
+          type: string
+          enum:
+            - currency
+          example: example
+        currency:
           type: string
           example: example
-        renderer:
-          type: string
-          example: example
-        unit:
-          type: string
-          example: example
-        format:
-          type: string
-          example: example
-        dimensions:
-          type: array
-          items:
-            type: string
-          example:
-            - example
-        measure:
-          type: string
-          example: example
-        measures:
-          type: array
-          items:
-            type: string
-          example:
-            - example
-        series:
-          type: array
-          items:
-            type: string
-          example:
-            - example
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/DashboardVisualDatum'
-          example:
-            - binEnd: !!float 1
-              binStart: !!float 1
-              close: example
-              column: example
-              end: !!float 1
-              extensions:
-                key:
-                  key: example
-              high: example
-              label: example
-              low: example
-              max: !!float 1
-              median: !!float 1
-              min: !!float 1
-              name: example
-              open: example
-              path:
-                - example
-              positive: true
-              q1: !!float 1
-              q3: !!float 1
-              row: example
-              selected: true
-              series: example
-              source: example
-              start: !!float 1
-              target: example
-              value: example
+        minimumFractionDigits:
+          type: integer
+          format: int32
+          example: 1
+        maximumFractionDigits:
+          type: integer
+          format: int32
+          example: 1
       example:
-        data:
-          - binEnd: !!float 1
-            binStart: !!float 1
-            close: example
-            column: example
-            end: !!float 1
-            extensions:
-              key:
-                key: example
-            high: example
-            label: example
-            low: example
-            max: !!float 1
-            median: !!float 1
-            min: !!float 1
-            name: example
-            open: example
-            path:
-              - example
-            positive: true
-            q1: !!float 1
-            q3: !!float 1
-            row: example
-            selected: true
-            series: example
-            source: example
-            start: !!float 1
-            target: example
-            value: example
-        dimensions:
-          - example
-        format: example
-        measure: example
-        measures:
-          - example
-        renderer: example
-        series:
-          - example
-        shape: example
-        unit: example
+        currency: example
+        kind: example
+        maximumFractionDigits: 1
+        minimumFractionDigits: 1
+    CustomVisualizationSpec:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/VisualizationSpecBase'
+      required:
+        - kind
+        - engine
+        - program
+        - programDigest
+      properties:
+        kind:
+          type: string
+          enum:
+            - custom
+          example: example
+        engine:
+          $ref: '#/components/schemas/VisualizationCustomEngine'
+        program:
+          type: string
+          example: example
+        programDigest:
+          type: string
+          example: example
+      example:
+        engine: vega_lite
+        kind: example
+        program: example
+        programDigest: example
     DashboardComponentPlacement:
       type: object
       properties:
@@ -40479,11 +40453,53 @@ components:
             additionalProperties: {}
           example:
             - key: example
+        spatialSelections:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardSpatialInteractionSelection'
+          example:
+            - geometry:
+                bounds:
+                  east: !!float 1
+                  north: !!float 1
+                  south: !!float 1
+                  west: !!float 1
+                center:
+                  latitude: !!float 1
+                  longitude: !!float 1
+                kind: example
+                points:
+                  - latitude: !!float 1
+                    longitude: !!float 1
+                radiusMeters: !!float 1
+              gesture: box
+              interactionID: example
+              order: 1
+              visualID: example
       example:
         controls:
           key: example
         selections:
           - key: example
+        spatialSelections:
+          - geometry:
+              bounds:
+                east: !!float 1
+                north: !!float 1
+                south: !!float 1
+                west: !!float 1
+              center:
+                latitude: !!float 1
+                longitude: !!float 1
+              kind: example
+              points:
+                - latitude: !!float 1
+                  longitude: !!float 1
+              radiusMeters: !!float 1
+            gesture: box
+            interactionID: example
+            order: 1
+            visualID: example
     DashboardHeaderComponentResponse:
       type: object
       allOf:
@@ -40692,6 +40708,25 @@ components:
             key: example
           selections:
             - key: example
+          spatialSelections:
+            - geometry:
+                bounds:
+                  east: !!float 1
+                  north: !!float 1
+                  south: !!float 1
+                  west: !!float 1
+                center:
+                  latitude: !!float 1
+                  longitude: !!float 1
+                kind: example
+                points:
+                  - latitude: !!float 1
+                    longitude: !!float 1
+                radiusMeters: !!float 1
+              gesture: box
+              interactionID: example
+              order: 1
+              visualID: example
     DashboardPageQueryResponse:
       type: object
       required:
@@ -40716,75 +40751,34 @@ components:
         visuals:
           type: object
           additionalProperties:
-            $ref: '#/components/schemas/DashboardVisualDataResponse'
+            $ref: '#/components/schemas/VisualizationEnvelope'
           example:
             key:
-              data:
-                - binEnd: !!float 1
-                  binStart: !!float 1
-                  close: example
-                  column: example
-                  end: !!float 1
-                  extensions:
-                    key:
-                      key: example
-                  high: example
-                  label: example
-                  low: example
-                  max: !!float 1
-                  median: !!float 1
-                  min: !!float 1
-                  name: example
-                  open: example
-                  path:
-                    - example
-                  positive: true
-                  q1: !!float 1
-                  q3: !!float 1
-                  row: example
-                  selected: true
-                  series: example
-                  source: example
-                  start: !!float 1
-                  target: example
-                  value: example
-              dimensions:
-                - example
-              extensions:
-                key:
-                  key: example
-              format: example
-              id: example
-              interaction:
-                kind: example
-                mappings:
-                  - fact: example
-                    field: example
-                    grain: example
-                    label: example
-                    value: example
-                targets:
-                  - example
-                toggle: true
-              measure: example
-              measures:
-                - example
-              renderer: example
+              dataRevision: 1
+              diagnostics:
+                - code: example
+                  fieldID: example
+                  message: example
+                  severity: info
+              rendererID: example
+              schemaVersion: 1
               selection:
-                - label: example
-                  mappings:
-                    - fact: example
-                      field: example
-                      grain: example
-                      label: example
-                      value: example
-              series:
-                - example
-              shape: example
-              title: example
-              type: example
-              unit: example
-              version: 1
+                - datum:
+                    blockID: example
+                    dataRevision: 1
+                    dataset: example
+                    identity:
+                      key: example
+                    resetVersion: 1
+                  label: example
+              spatialSelection:
+                interactionID: example
+                visualID: example
+              specRevision: example
+              status:
+                kind: idle
+                message: example
+              visualID: example
       example:
         filterOptions:
           key: example
@@ -40794,72 +40788,31 @@ components:
           key: example
         visuals:
           key:
-            data:
-              - binEnd: !!float 1
-                binStart: !!float 1
-                close: example
-                column: example
-                end: !!float 1
-                extensions:
-                  key:
-                    key: example
-                high: example
-                label: example
-                low: example
-                max: !!float 1
-                median: !!float 1
-                min: !!float 1
-                name: example
-                open: example
-                path:
-                  - example
-                positive: true
-                q1: !!float 1
-                q3: !!float 1
-                row: example
-                selected: true
-                series: example
-                source: example
-                start: !!float 1
-                target: example
-                value: example
-            dimensions:
-              - example
-            extensions:
-              key:
-                key: example
-            format: example
-            id: example
-            interaction:
-              kind: example
-              mappings:
-                - fact: example
-                  field: example
-                  grain: example
-                  label: example
-                  value: example
-              targets:
-                - example
-              toggle: true
-            measure: example
-            measures:
-              - example
-            renderer: example
+            dataRevision: 1
+            diagnostics:
+              - code: example
+                fieldID: example
+                message: example
+                severity: info
+            rendererID: example
+            schemaVersion: 1
             selection:
-              - label: example
-                mappings:
-                  - fact: example
-                    field: example
-                    grain: example
-                    label: example
-                    value: example
-            series:
-              - example
-            shape: example
-            title: example
-            type: example
-            unit: example
-            version: 1
+              - datum:
+                  blockID: example
+                  dataRevision: 1
+                  dataset: example
+                  identity:
+                    key: example
+                  resetVersion: 1
+                label: example
+            spatialSelection:
+              interactionID: example
+              visualID: example
+            specRevision: example
+            status:
+              kind: idle
+              message: example
+            visualID: example
     DashboardPageResponse:
       type: object
       required:
@@ -41048,65 +41001,89 @@ components:
         - suspended
         - unconfigured
       example: active
-    DashboardSelectionInteractionDefinition:
-      type: object
-      properties:
-        toggle:
-          type: boolean
-          example: true
-        mappings:
-          type: array
-          items:
-            $ref: '#/components/schemas/DashboardSelectionMappingDefinition'
-          example:
-            - fact: example
-              field: example
-              grain: example
-              label: example
-              value: example
-        targets:
-          type: array
-          items:
-            type: string
-          example:
-            - example
-      example:
-        mappings:
-          - fact: example
-            field: example
-            grain: example
-            label: example
-            value: example
-        targets:
-          - example
-        toggle: true
-    DashboardSelectionMappingDefinition:
+    DashboardSpatialInteractionSelection:
       type: object
       required:
-        - field
-        - value
+        - visualID
+        - interactionID
+        - gesture
+        - geometry
+        - order
       properties:
-        field:
+        visualID:
           type: string
           example: example
-        fact:
+        interactionID:
           type: string
           example: example
-        grain:
-          type: string
-          example: example
-        value:
-          type: string
-          example: example
-        label:
-          type: string
-          example: example
+        gesture:
+          $ref: '#/components/schemas/VisualizationSpatialSelectionGesture'
+        geometry:
+          $ref: '#/components/schemas/DashboardSpatialSelectionGeometry'
+        order:
+          type: integer
+          format: int32
+          example: 1
       example:
-        fact: example
-        field: example
-        grain: example
-        label: example
-        value: example
+        geometry:
+          bounds:
+            east: !!float 1
+            north: !!float 1
+            south: !!float 1
+            west: !!float 1
+          center:
+            latitude: !!float 1
+            longitude: !!float 1
+          kind: example
+          points:
+            - latitude: !!float 1
+              longitude: !!float 1
+          radiusMeters: !!float 1
+        gesture: box
+        interactionID: example
+        order: 1
+        visualID: example
+    DashboardSpatialSelectionGeometry:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          enum:
+            - box
+            - lasso
+            - radius
+          example: example
+        bounds:
+          $ref: '#/components/schemas/VisualizationSpatialBounds'
+        points:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisualizationSpatialCoordinate'
+          example:
+            - latitude: !!float 1
+              longitude: !!float 1
+        center:
+          $ref: '#/components/schemas/VisualizationSpatialCoordinate'
+        radiusMeters:
+          type: number
+          format: double
+          example: !!float 1
+      example:
+        bounds:
+          east: !!float 1
+          north: !!float 1
+          south: !!float 1
+          west: !!float 1
+        center:
+          latitude: !!float 1
+          longitude: !!float 1
+        kind: example
+        points:
+          - latitude: !!float 1
+            longitude: !!float 1
+        radiusMeters: !!float 1
     DashboardSummary:
       type: object
       required:
@@ -41147,81 +41124,6 @@ components:
         tags:
           - example
         title: example
-    DashboardTableColumn:
-      type: object
-      required:
-        - key
-        - label
-      properties:
-        key:
-          type: string
-          example: example
-        label:
-          type: string
-          example: example
-        role:
-          type: string
-          example: example
-        format:
-          type: string
-          example: example
-      example:
-        format: example
-        key: example
-        label: example
-        role: example
-    DashboardTabularVisualQueryResponseBase:
-      type: object
-      allOf:
-        - $ref: '#/components/schemas/DashboardVisualQueryResponseBase'
-      required:
-        - queryId
-        - servingSnapshot
-        - columns
-        - rows
-        - availableRows
-        - page
-      properties:
-        queryId:
-          type: string
-          example: example
-        servingSnapshot:
-          type: string
-          example: example
-        columns:
-          type: array
-          items:
-            $ref: '#/components/schemas/QueryColumn'
-          example:
-            - name: example
-              nullable: true
-              type: boolean
-        rows:
-          type: array
-          items:
-            type: array
-            items:
-              type: string
-          example:
-            - - example
-        availableRows:
-          type: integer
-          format: int32
-          example: 1
-        page:
-          $ref: '#/components/schemas/PageInfo'
-      example:
-        availableRows: 1
-        columns:
-          - name: example
-            nullable: true
-            type: boolean
-        page:
-          nextCursor: example
-        queryId: example
-        rows:
-          - - example
-        servingSnapshot: example
     DashboardVisualComponentResponse:
       type: object
       allOf:
@@ -41241,305 +41143,13 @@ components:
       example:
         kind: example
         visualId: example
-    DashboardVisualDataResponse:
-      type: object
-      required:
-        - shape
-        - type
-        - data
-      properties:
-        version:
-          type: integer
-          format: int32
-          example: 1
-        id:
-          type: string
-          example: example
-        shape:
-          type: string
-          example: example
-        renderer:
-          type: string
-          example: example
-        type:
-          type: string
-          example: example
-        title:
-          type: string
-          example: example
-        unit:
-          type: string
-          example: example
-        format:
-          type: string
-          example: example
-        interaction:
-          $ref: '#/components/schemas/DashboardVisualInteractionConfig'
-        dimensions:
-          type: array
-          items:
-            type: string
-          example:
-            - example
-        measure:
-          type: string
-          example: example
-        measures:
-          type: array
-          items:
-            type: string
-          example:
-            - example
-        series:
-          type: array
-          items:
-            type: string
-          example:
-            - example
-        extensions:
-          type: object
-          additionalProperties:
-            type: object
-            additionalProperties: {}
-          example:
-            key:
-              key: example
-        selection:
-          type: array
-          items:
-            $ref: '#/components/schemas/DashboardVisualSelectionEntry'
-          example:
-            - label: example
-              mappings:
-                - fact: example
-                  field: example
-                  grain: example
-                  label: example
-                  value: example
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/DashboardVisualDatum'
-          example:
-            - binEnd: !!float 1
-              binStart: !!float 1
-              close: example
-              column: example
-              end: !!float 1
-              extensions:
-                key:
-                  key: example
-              high: example
-              label: example
-              low: example
-              max: !!float 1
-              median: !!float 1
-              min: !!float 1
-              name: example
-              open: example
-              path:
-                - example
-              positive: true
-              q1: !!float 1
-              q3: !!float 1
-              row: example
-              selected: true
-              series: example
-              source: example
-              start: !!float 1
-              target: example
-              value: example
-      example:
-        data:
-          - binEnd: !!float 1
-            binStart: !!float 1
-            close: example
-            column: example
-            end: !!float 1
-            extensions:
-              key:
-                key: example
-            high: example
-            label: example
-            low: example
-            max: !!float 1
-            median: !!float 1
-            min: !!float 1
-            name: example
-            open: example
-            path:
-              - example
-            positive: true
-            q1: !!float 1
-            q3: !!float 1
-            row: example
-            selected: true
-            series: example
-            source: example
-            start: !!float 1
-            target: example
-            value: example
-        dimensions:
-          - example
-        extensions:
-          key:
-            key: example
-        format: example
-        id: example
-        interaction:
-          kind: example
-          mappings:
-            - fact: example
-              field: example
-              grain: example
-              label: example
-              value: example
-          targets:
-            - example
-          toggle: true
-        measure: example
-        measures:
-          - example
-        renderer: example
-        selection:
-          - label: example
-            mappings:
-              - fact: example
-                field: example
-                grain: example
-                label: example
-                value: example
-        series:
-          - example
-        shape: example
-        title: example
-        type: example
-        unit: example
-        version: 1
-    DashboardVisualDatum:
-      type: object
-      properties:
-        label:
-          type: string
-          example: example
-        series:
-          type: string
-          example: example
-        value:
-          example: example
-        selected:
-          type: boolean
-          example: true
-        start:
-          type: number
-          format: double
-          example: !!float 1
-        end:
-          type: number
-          format: double
-          example: !!float 1
-        positive:
-          type: boolean
-          example: true
-        binStart:
-          type: number
-          format: double
-          example: !!float 1
-        binEnd:
-          type: number
-          format: double
-          example: !!float 1
-        path:
-          type: array
-          items:
-            type: string
-          example:
-            - example
-        row:
-          type: string
-          example: example
-        column:
-          type: string
-          example: example
-        source:
-          type: string
-          example: example
-        target:
-          type: string
-          example: example
-        name:
-          type: string
-          example: example
-        open:
-          example: example
-        close:
-          example: example
-        low:
-          example: example
-        high:
-          example: example
-        min:
-          type: number
-          format: double
-          example: !!float 1
-        q1:
-          type: number
-          format: double
-          example: !!float 1
-        median:
-          type: number
-          format: double
-          example: !!float 1
-        q3:
-          type: number
-          format: double
-          example: !!float 1
-        max:
-          type: number
-          format: double
-          example: !!float 1
-        extensions:
-          type: object
-          additionalProperties:
-            type: object
-            additionalProperties: {}
-          example:
-            key:
-              key: example
-      example:
-        binEnd: !!float 1
-        binStart: !!float 1
-        close: example
-        column: example
-        end: !!float 1
-        extensions:
-          key:
-            key: example
-        high: example
-        label: example
-        low: example
-        max: !!float 1
-        median: !!float 1
-        min: !!float 1
-        name: example
-        open: example
-        path:
-          - example
-        positive: true
-        q1: !!float 1
-        q3: !!float 1
-        row: example
-        selected: true
-        series: example
-        source: example
-        start: !!float 1
-        target: example
-        value: example
     DashboardVisualDescribeResponse:
       type: object
       required:
         - id
-        - type
+        - rendererID
+        - specRevision
+        - spec
       properties:
         id:
           type: string
@@ -41547,45 +41157,14 @@ components:
         componentId:
           type: string
           example: example
-        type:
+        rendererID:
           type: string
           example: example
-        shape:
+        specRevision:
           type: string
           example: example
-        renderer:
-          type: string
-          example: example
-        title:
-          type: string
-          example: example
-        description:
-          type: string
-          example: example
-        query:
-          $ref: '#/components/schemas/DashboardVisualQueryDefinition'
-        extensions:
-          type: object
-          additionalProperties:
-            type: object
-            additionalProperties: {}
-          example:
-            key:
-              key: example
-        interaction:
-          $ref: '#/components/schemas/DashboardVisualInteractionDefinition'
-        columns:
-          type: array
-          items:
-            $ref: '#/components/schemas/DashboardTableColumn'
-          example:
-            - format: example
-              key: example
-              label: example
-              role: example
-        cardinality:
-          type: string
-          example: example
+        spec:
+          $ref: '#/components/schemas/VisualizationSpec'
         placement:
           $ref: '#/components/schemas/DashboardComponentPlacement'
         x:
@@ -41605,212 +41184,19 @@ components:
           format: double
           example: !!float 1
       example:
-        cardinality: example
-        columns:
-          - format: example
-            key: example
-            label: example
-            role: example
         componentId: example
-        description: example
-        extensions:
-          key:
-            key: example
         height: !!float 1
         id: example
-        interaction:
-          pointSelection:
-            mappings:
-              - fact: example
-                field: example
-                grain: example
-                label: example
-                value: example
-            targets:
-              - example
-            toggle: true
-          rowSelection:
-            mappings:
-              - fact: example
-                field: example
-                grain: example
-                label: example
-                value: example
-            targets:
-              - example
-            toggle: true
         placement:
           col: 1
           colSpan: 1
           row: 1
           rowSpan: 1
-        query:
-          dimensions:
-            - alias: example
-              field: example
-          limit: 1
-          measures:
-            - alias: example
-              field: example
-          series:
-            alias: example
-            field: example
-          sort:
-            - direction: example
-              expr: example
-              field: example
-          table: example
-          time:
-            alias: example
-            field: example
-            grain: example
-        renderer: example
-        shape: example
-        title: example
-        type: example
+        rendererID: example
+        specRevision: example
         width: !!float 1
         x: !!float 1
         'y': !!float 1
-    DashboardVisualFieldRef:
-      type: object
-      required:
-        - field
-      properties:
-        field:
-          type: string
-          example: example
-        alias:
-          type: string
-          example: example
-      example:
-        alias: example
-        field: example
-    DashboardVisualInteractionConfig:
-      type: object
-      required:
-        - kind
-        - toggle
-        - mappings
-      properties:
-        kind:
-          type: string
-          example: example
-        toggle:
-          type: boolean
-          example: true
-        mappings:
-          type: array
-          items:
-            $ref: '#/components/schemas/DashboardSelectionMappingDefinition'
-          example:
-            - fact: example
-              field: example
-              grain: example
-              label: example
-              value: example
-        targets:
-          type: array
-          items:
-            type: string
-          example:
-            - example
-      example:
-        kind: example
-        mappings:
-          - fact: example
-            field: example
-            grain: example
-            label: example
-            value: example
-        targets:
-          - example
-        toggle: true
-    DashboardVisualInteractionDefinition:
-      type: object
-      properties:
-        pointSelection:
-          $ref: '#/components/schemas/DashboardSelectionInteractionDefinition'
-        rowSelection:
-          $ref: '#/components/schemas/DashboardSelectionInteractionDefinition'
-      example:
-        pointSelection:
-          mappings:
-            - fact: example
-              field: example
-              grain: example
-              label: example
-              value: example
-          targets:
-            - example
-          toggle: true
-        rowSelection:
-          mappings:
-            - fact: example
-              field: example
-              grain: example
-              label: example
-              value: example
-          targets:
-            - example
-          toggle: true
-    DashboardVisualQueryDefinition:
-      type: object
-      properties:
-        table:
-          type: string
-          example: example
-        dimensions:
-          type: array
-          items:
-            $ref: '#/components/schemas/DashboardVisualFieldRef'
-          example:
-            - alias: example
-              field: example
-        series:
-          $ref: '#/components/schemas/DashboardVisualFieldRef'
-        measures:
-          type: array
-          items:
-            $ref: '#/components/schemas/DashboardVisualFieldRef'
-          example:
-            - alias: example
-              field: example
-        time:
-          $ref: '#/components/schemas/DashboardVisualQueryTime'
-        sort:
-          type: array
-          items:
-            $ref: '#/components/schemas/DashboardVisualQuerySort'
-          example:
-            - direction: example
-              expr: example
-              field: example
-        limit:
-          type: integer
-          format: int32
-          minimum: !!float 1
-          maximum: !!float 1000
-          example: 1
-      example:
-        dimensions:
-          - alias: example
-            field: example
-        limit: 1
-        measures:
-          - alias: example
-            field: example
-        series:
-          alias: example
-          field: example
-        sort:
-          - direction: example
-            expr: example
-            field: example
-        table: example
-        time:
-          alias: example
-          field: example
-          grain: example
     DashboardVisualQueryRequest:
       type: object
       properties:
@@ -41833,173 +41219,27 @@ components:
             key: example
           selections:
             - key: example
+          spatialSelections:
+            - geometry:
+                bounds:
+                  east: !!float 1
+                  north: !!float 1
+                  south: !!float 1
+                  west: !!float 1
+                center:
+                  latitude: !!float 1
+                  longitude: !!float 1
+                kind: example
+                points:
+                  - latitude: !!float 1
+                    longitude: !!float 1
+                radiusMeters: !!float 1
+              gesture: box
+              interactionID: example
+              order: 1
+              visualID: example
         limit: 1
         pageToken: example
-    DashboardVisualQueryResponse:
-      oneOf:
-        - $ref: '#/components/schemas/LineDashboardVisualQueryResponse'
-        - $ref: '#/components/schemas/AreaDashboardVisualQueryResponse'
-        - $ref: '#/components/schemas/BarDashboardVisualQueryResponse'
-        - $ref: '#/components/schemas/ColumnDashboardVisualQueryResponse'
-        - $ref: '#/components/schemas/PieDashboardVisualQueryResponse'
-        - $ref: '#/components/schemas/DonutDashboardVisualQueryResponse'
-        - $ref: '#/components/schemas/ScatterDashboardVisualQueryResponse'
-        - $ref: '#/components/schemas/FunnelDashboardVisualQueryResponse'
-        - $ref: '#/components/schemas/TreemapDashboardVisualQueryResponse'
-        - $ref: '#/components/schemas/GaugeDashboardVisualQueryResponse'
-        - $ref: '#/components/schemas/HeatmapDashboardVisualQueryResponse'
-        - $ref: '#/components/schemas/SankeyDashboardVisualQueryResponse'
-        - $ref: '#/components/schemas/GraphDashboardVisualQueryResponse'
-        - $ref: '#/components/schemas/MapDashboardVisualQueryResponse'
-        - $ref: '#/components/schemas/CandlestickDashboardVisualQueryResponse'
-        - $ref: '#/components/schemas/BoxplotDashboardVisualQueryResponse'
-        - $ref: '#/components/schemas/ComboDashboardVisualQueryResponse'
-        - $ref: '#/components/schemas/WaterfallDashboardVisualQueryResponse'
-        - $ref: '#/components/schemas/HistogramDashboardVisualQueryResponse'
-        - $ref: '#/components/schemas/RadarDashboardVisualQueryResponse'
-        - $ref: '#/components/schemas/TreeDashboardVisualQueryResponse'
-        - $ref: '#/components/schemas/SunburstDashboardVisualQueryResponse'
-        - $ref: '#/components/schemas/KPIDashboardVisualQueryResponse'
-        - $ref: '#/components/schemas/TableDashboardVisualQueryResponse'
-        - $ref: '#/components/schemas/MatrixDashboardVisualQueryResponse'
-        - $ref: '#/components/schemas/PivotDashboardVisualQueryResponse'
-      discriminator:
-        propertyName: type
-        mapping:
-          area: '#/components/schemas/AreaDashboardVisualQueryResponse'
-          bar: '#/components/schemas/BarDashboardVisualQueryResponse'
-          boxplot: '#/components/schemas/BoxplotDashboardVisualQueryResponse'
-          candlestick: '#/components/schemas/CandlestickDashboardVisualQueryResponse'
-          column: '#/components/schemas/ColumnDashboardVisualQueryResponse'
-          combo: '#/components/schemas/ComboDashboardVisualQueryResponse'
-          donut: '#/components/schemas/DonutDashboardVisualQueryResponse'
-          funnel: '#/components/schemas/FunnelDashboardVisualQueryResponse'
-          gauge: '#/components/schemas/GaugeDashboardVisualQueryResponse'
-          graph: '#/components/schemas/GraphDashboardVisualQueryResponse'
-          heatmap: '#/components/schemas/HeatmapDashboardVisualQueryResponse'
-          histogram: '#/components/schemas/HistogramDashboardVisualQueryResponse'
-          kpi: '#/components/schemas/KPIDashboardVisualQueryResponse'
-          line: '#/components/schemas/LineDashboardVisualQueryResponse'
-          map: '#/components/schemas/MapDashboardVisualQueryResponse'
-          matrix: '#/components/schemas/MatrixDashboardVisualQueryResponse'
-          pie: '#/components/schemas/PieDashboardVisualQueryResponse'
-          pivot: '#/components/schemas/PivotDashboardVisualQueryResponse'
-          radar: '#/components/schemas/RadarDashboardVisualQueryResponse'
-          sankey: '#/components/schemas/SankeyDashboardVisualQueryResponse'
-          scatter: '#/components/schemas/ScatterDashboardVisualQueryResponse'
-          sunburst: '#/components/schemas/SunburstDashboardVisualQueryResponse'
-          table: '#/components/schemas/TableDashboardVisualQueryResponse'
-          tree: '#/components/schemas/TreeDashboardVisualQueryResponse'
-          treemap: '#/components/schemas/TreemapDashboardVisualQueryResponse'
-          waterfall: '#/components/schemas/WaterfallDashboardVisualQueryResponse'
-    DashboardVisualQueryResponseBase:
-      type: object
-      required:
-        - type
-      properties:
-        type:
-          type: string
-          example: example
-        id:
-          type: string
-          example: example
-        title:
-          type: string
-          example: example
-      example:
-        id: example
-        title: example
-        type: example
-    DashboardVisualQuerySort:
-      type: object
-      required:
-        - field
-        - direction
-      properties:
-        field:
-          type: string
-          example: example
-        direction:
-          type: string
-          example: example
-        expr:
-          type: string
-          example: example
-      example:
-        direction: example
-        expr: example
-        field: example
-    DashboardVisualQueryTime:
-      type: object
-      required:
-        - field
-        - grain
-      properties:
-        field:
-          type: string
-          example: example
-        grain:
-          type: string
-          example: example
-        alias:
-          type: string
-          example: example
-      example:
-        alias: example
-        field: example
-        grain: example
-    DashboardVisualSelectionEntry:
-      type: object
-      required:
-        - mappings
-      properties:
-        mappings:
-          type: array
-          items:
-            $ref: '#/components/schemas/DashboardVisualSelectionMapping'
-          example:
-            - fact: example
-              field: example
-              grain: example
-              label: example
-              value: example
-        label:
-          type: string
-          example: example
-      example:
-        label: example
-        mappings:
-          - fact: example
-            field: example
-            grain: example
-            label: example
-            value: example
-    DashboardVisualSelectionMapping:
-      type: object
-      required:
-        - field
-        - value
-      properties:
-        field:
-          type: string
-          example: example
-        fact:
-          type: string
-          example: example
-        grain:
-          type: string
-          example: example
-        value:
-          example: example
-        label:
-          type: string
-          example: example
-      example:
-        fact: example
-        field: example
-        grain: example
-        label: example
-        value: example
     DataPolicyListResponse:
       type: object
       required:
@@ -42367,20 +41607,25 @@ components:
         servingStateId: example
         status: example
         workspaceId: example
-    DonutDashboardVisualQueryResponse:
+    DurationVisualizationFormat:
       type: object
       allOf:
-        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
+        - $ref: '#/components/schemas/VisualizationFormatBase'
       required:
-        - type
+        - kind
+        - unit
       properties:
-        type:
+        kind:
           type: string
           enum:
-            - donut
+            - duration
+          example: example
+        unit:
+          type: string
           example: example
       example:
-        type: example
+        kind: example
+        unit: example
     EffectivePrivilegeListResponse:
       type: object
       required:
@@ -42459,34 +41704,159 @@ components:
         privileges:
           - example
         workspaceId: example
-    FunnelDashboardVisualQueryResponse:
+    GeographicVisualizationPresentation:
       type: object
       allOf:
-        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
+        - $ref: '#/components/schemas/VisualizationPresentation'
       required:
-        - type
+        - roam
+        - theme
+        - labelDensity
+        - camera
+        - controls
       properties:
-        type:
-          type: string
-          enum:
-            - funnel
-          example: example
+        roam:
+          type: boolean
+          example: true
+        basemap:
+          $ref: '#/components/schemas/VisualizationMapStyleAsset'
+        theme:
+          $ref: '#/components/schemas/VisualizationMapTheme'
+        labelDensity:
+          $ref: '#/components/schemas/VisualizationMapLabelDensity'
+        camera:
+          $ref: '#/components/schemas/VisualizationMapCamera'
+        controls:
+          $ref: '#/components/schemas/VisualizationMapControls'
       example:
-        type: example
-    GaugeDashboardVisualQueryResponse:
+        basemap:
+          archiveDigest: example
+          archiveUrl: example
+          attribution: example
+          bounds:
+            - !!float 1
+          glyphsUrl: example
+          id: example
+          labelAnchor: example
+          license: example
+          maximumZoom: !!float 1
+          minimumZoom: !!float 1
+          source: example
+          spriteUrl: example
+          styleDigest: example
+          styleUrl: example
+        camera:
+          center:
+            - !!float 1
+          maximumZoom: !!float 1
+          minimumZoom: !!float 1
+          mode: fit_data
+          padding: 1
+          zoom: !!float 1
+        controls:
+          compass: true
+          reset: true
+          zoom: true
+        labelDensity: hidden
+        roam: true
+        theme: auto
+    GeographicVisualizationSpec:
       type: object
       allOf:
-        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
+        - $ref: '#/components/schemas/VisualizationSpecBase'
       required:
-        - type
+        - kind
+        - layers
+        - spatialInteractions
+        - presentation
       properties:
-        type:
+        kind:
           type: string
           enum:
-            - gauge
+            - geographic
           example: example
+        layers:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisualizationGeographicLayer'
+          example: []
+        spatialInteractions:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisualizationSpatialSelectionInteraction'
+          example:
+            - gestures:
+                - box
+              id: example
+              latitude:
+                source:
+                  dataset: example
+                  field: example
+                targetFactID: example
+                targetFieldID: example
+              longitude:
+                source:
+                  dataset: example
+                  field: example
+                targetFactID: example
+                targetFieldID: example
+              targets:
+                - example
+        presentation:
+          $ref: '#/components/schemas/GeographicVisualizationPresentation'
       example:
-        type: example
+        kind: example
+        layers: []
+        presentation:
+          basemap:
+            archiveDigest: example
+            archiveUrl: example
+            attribution: example
+            bounds:
+              - !!float 1
+            glyphsUrl: example
+            id: example
+            labelAnchor: example
+            license: example
+            maximumZoom: !!float 1
+            minimumZoom: !!float 1
+            source: example
+            spriteUrl: example
+            styleDigest: example
+            styleUrl: example
+          camera:
+            center:
+              - !!float 1
+            maximumZoom: !!float 1
+            minimumZoom: !!float 1
+            mode: fit_data
+            padding: 1
+            zoom: !!float 1
+          controls:
+            compass: true
+            reset: true
+            zoom: true
+          labelDensity: hidden
+          roam: true
+          theme: auto
+        spatialInteractions:
+          - gestures:
+              - box
+            id: example
+            latitude:
+              source:
+                dataset: example
+                field: example
+              targetFactID: example
+              targetFieldID: example
+            longitude:
+              source:
+                dataset: example
+                field: example
+              targetFactID: example
+              targetFieldID: example
+            targets:
+              - example
     GrantListResponse:
       type: object
       required:
@@ -42618,20 +41988,27 @@ components:
         subjectType: example
         workspaceId: example
         privilege: example
-    GraphDashboardVisualQueryResponse:
+    GridVisualizationPresentation:
       type: object
-      allOf:
-        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
       required:
-        - type
+        - rowHeight
+        - striped
+        - showHeader
       properties:
-        type:
-          type: string
-          enum:
-            - graph
-          example: example
+        rowHeight:
+          type: integer
+          format: int64
+          example: 1
+        striped:
+          type: boolean
+          example: true
+        showHeader:
+          type: boolean
+          example: true
       example:
-        type: example
+        rowHeight: 1
+        showHeader: true
+        striped: true
     GroupCreateRequest:
       type: object
       required:
@@ -42742,34 +42119,142 @@ components:
         id: example
         name: example
         updatedAt: "2026-01-02T15:04:05Z"
-    HeatmapDashboardVisualQueryResponse:
+    HierarchyVisualizationPresentation:
       type: object
       allOf:
-        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
+        - $ref: '#/components/schemas/VisualizationPresentation'
       required:
-        - type
+        - orientation
+        - roam
       properties:
-        type:
-          type: string
-          enum:
-            - heatmap
-          example: example
+        orientation:
+          $ref: '#/components/schemas/VisualizationOrientation'
+        initialDepth:
+          type: integer
+          format: int32
+          example: 1
+        roam:
+          type: boolean
+          example: true
+        layout:
+          $ref: '#/components/schemas/VisualizationHierarchyLayout'
+        breadcrumb:
+          type: boolean
+          example: true
+        nodeGap:
+          type: number
+          format: double
+          example: !!float 1
+        curveness:
+          type: number
+          format: double
+          example: !!float 1
+        focus:
+          $ref: '#/components/schemas/VisualizationGraphFocus'
       example:
-        type: example
-    HistogramDashboardVisualQueryResponse:
+        breadcrumb: true
+        curveness: !!float 1
+        focus: none
+        initialDepth: 1
+        layout: standard
+        nodeGap: !!float 1
+        orientation: horizontal
+        roam: true
+    HierarchyVisualizationSpec:
       type: object
       allOf:
-        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
+        - $ref: '#/components/schemas/VisualizationSpecBase'
       required:
-        - type
+        - kind
+        - mark
+        - node
+        - presentation
       properties:
-        type:
+        kind:
           type: string
           enum:
-            - histogram
+            - hierarchy
           example: example
+        mark:
+          $ref: '#/components/schemas/VisualizationHierarchyMark'
+        node:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        parent:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        source:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        target:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        value:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        presentation:
+          $ref: '#/components/schemas/HierarchyVisualizationPresentation'
       example:
-        type: example
+        kind: example
+        mark: treemap
+        node:
+          dataset: example
+          field: example
+        parent:
+          dataset: example
+          field: example
+        presentation:
+          breadcrumb: true
+          curveness: !!float 1
+          focus: none
+          initialDepth: 1
+          layout: standard
+          nodeGap: !!float 1
+          orientation: horizontal
+          roam: true
+        source:
+          dataset: example
+          field: example
+        target:
+          dataset: example
+          field: example
+        value:
+          dataset: example
+          field: example
+    InlineVisualizationDataState:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/VisualizationDataStateBase'
+      required:
+        - kind
+        - datasets
+      properties:
+        kind:
+          type: string
+          enum:
+            - inline
+          example: example
+        datasets:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisualizationInlineDataset'
+          example:
+            - columns:
+                - example
+              completeness: complete
+              dataRevision: 1
+              generation: 1
+              id: example
+              rows:
+                - - example
+              specRevision: example
+      example:
+        datasets:
+          - columns:
+              - example
+            completeness: complete
+            dataRevision: 1
+            generation: 1
+            id: example
+            rows:
+              - - example
+            specRevision: example
+        kind: example
     InstanceResponse:
       type: object
       required:
@@ -42780,34 +42265,72 @@ components:
           example: example
       example:
         environment: example
-    KPIDashboardVisualQueryResponse:
+    KPIVisualizationPresentation:
+      type: object
+      required:
+        - trend
+      properties:
+        trend:
+          $ref: '#/components/schemas/VisualizationKPITrend'
+        note:
+          type: string
+          example: example
+        tone:
+          $ref: '#/components/schemas/VisualizationTone'
+        thresholds:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisualizationThreshold'
+          example:
+            - tone: neutral
+              value: !!float 1
+      example:
+        note: example
+        thresholds:
+          - tone: neutral
+            value: !!float 1
+        tone: neutral
+        trend: neutral
+    KPIVisualizationSpec:
       type: object
       allOf:
-        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
+        - $ref: '#/components/schemas/VisualizationSpecBase'
       required:
-        - type
+        - kind
+        - value
+        - presentation
       properties:
-        type:
+        kind:
           type: string
           enum:
             - kpi
           example: example
+        value:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        comparison:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        trend:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        presentation:
+          $ref: '#/components/schemas/KPIVisualizationPresentation'
       example:
-        type: example
-    LineDashboardVisualQueryResponse:
-      type: object
-      allOf:
-        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
-      required:
-        - type
-      properties:
-        type:
-          type: string
-          enum:
-            - line
-          example: example
-      example:
-        type: example
+        comparison:
+          dataset: example
+          field: example
+        kind: example
+        presentation:
+          note: example
+          thresholds:
+            - tone: neutral
+              value: !!float 1
+          tone: neutral
+          trend: neutral
+        trend:
+          dataset: example
+          field: example
+        value:
+          dataset: example
+          field: example
     LocalPasswordResetResponse:
       type: object
       required:
@@ -43628,34 +43151,71 @@ components:
         - failed
         - expired
       example: open
-    MapDashboardVisualQueryResponse:
+    MatrixVisualizationSpec:
       type: object
       allOf:
-        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
+        - $ref: '#/components/schemas/VisualizationSpecBase'
       required:
-        - type
+        - kind
+        - rows
+        - columns
+        - measures
+        - measureFormatting
+        - presentation
       properties:
-        type:
-          type: string
-          enum:
-            - map
-          example: example
-      example:
-        type: example
-    MatrixDashboardVisualQueryResponse:
-      type: object
-      allOf:
-        - $ref: '#/components/schemas/DashboardTabularVisualQueryResponseBase'
-      required:
-        - type
-      properties:
-        type:
+        kind:
           type: string
           enum:
             - matrix
           example: example
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisualizationFieldRef'
+          example:
+            - dataset: example
+              field: example
+        columns:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisualizationFieldRef'
+          example:
+            - dataset: example
+              field: example
+        measures:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisualizationFieldRef'
+          example:
+            - dataset: example
+              field: example
+        measureFormatting:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              $ref: '#/components/schemas/TableVisualizationFormattingRule'
+          example:
+            key: []
+        presentation:
+          $ref: '#/components/schemas/GridVisualizationPresentation'
       example:
-        type: example
+        columns:
+          - dataset: example
+            field: example
+        kind: example
+        measureFormatting:
+          key: []
+        measures:
+          - dataset: example
+            field: example
+        presentation:
+          rowHeight: 1
+          showHeader: true
+          striped: true
+        rows:
+          - dataset: example
+            field: example
     ModelDashboardUsage:
       type: object
       required:
@@ -43697,6 +43257,30 @@ components:
       example:
         id: example
         title: example
+    NumberVisualizationFormat:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/VisualizationFormatBase'
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          enum:
+            - number
+          example: example
+        minimumFractionDigits:
+          type: integer
+          format: int32
+          example: 1
+        maximumFractionDigits:
+          type: integer
+          format: int32
+          example: 1
+      example:
+        kind: example
+        maximumFractionDigits: 1
+        minimumFractionDigits: 1
     OwnershipTransferRequest:
       type: object
       required:
@@ -43723,34 +43307,182 @@ components:
           example: example
       example:
         nextCursor: example
-    PieDashboardVisualQueryResponse:
+    PercentVisualizationFormat:
       type: object
       allOf:
-        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
+        - $ref: '#/components/schemas/VisualizationFormatBase'
       required:
-        - type
+        - kind
       properties:
-        type:
+        kind:
           type: string
           enum:
-            - pie
+            - percent
           example: example
+        minimumFractionDigits:
+          type: integer
+          format: int32
+          example: 1
+        maximumFractionDigits:
+          type: integer
+          format: int32
+          example: 1
       example:
-        type: example
-    PivotDashboardVisualQueryResponse:
+        kind: example
+        maximumFractionDigits: 1
+        minimumFractionDigits: 1
+    PivotVisualizationSpec:
       type: object
       allOf:
-        - $ref: '#/components/schemas/DashboardTabularVisualQueryResponseBase'
+        - $ref: '#/components/schemas/VisualizationSpecBase'
       required:
-        - type
+        - kind
+        - rows
+        - columns
+        - measures
+        - measureFormatting
+        - presentation
       properties:
-        type:
+        kind:
           type: string
           enum:
             - pivot
           example: example
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisualizationFieldRef'
+          example:
+            - dataset: example
+              field: example
+        columns:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisualizationFieldRef'
+          example:
+            - dataset: example
+              field: example
+        measures:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisualizationFieldRef'
+          example:
+            - dataset: example
+              field: example
+        measureFormatting:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              $ref: '#/components/schemas/TableVisualizationFormattingRule'
+          example:
+            key: []
+        presentation:
+          $ref: '#/components/schemas/GridVisualizationPresentation'
       example:
-        type: example
+        columns:
+          - dataset: example
+            field: example
+        kind: example
+        measureFormatting:
+          key: []
+        measures:
+          - dataset: example
+            field: example
+        presentation:
+          rowHeight: 1
+          showHeader: true
+          striped: true
+        rows:
+          - dataset: example
+            field: example
+    PolarVisualizationPresentation:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/VisualizationPresentation'
+      required:
+        - showPointer
+      properties:
+        minimum:
+          type: number
+          format: double
+          example: !!float 1
+        maximum:
+          type: number
+          format: double
+          example: !!float 1
+        showPointer:
+          type: boolean
+          example: true
+        area:
+          type: boolean
+          example: true
+        progressWidth:
+          type: number
+          format: double
+          example: !!float 1
+        thresholds:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisualizationThreshold'
+          example:
+            - tone: neutral
+              value: !!float 1
+      example:
+        area: true
+        maximum: !!float 1
+        minimum: !!float 1
+        progressWidth: !!float 1
+        showPointer: true
+        thresholds:
+          - tone: neutral
+            value: !!float 1
+    PolarVisualizationSpec:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/VisualizationSpecBase'
+      required:
+        - kind
+        - mark
+        - value
+        - presentation
+      properties:
+        kind:
+          type: string
+          enum:
+            - polar
+          example: example
+        mark:
+          $ref: '#/components/schemas/VisualizationPolarMark'
+        category:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        value:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        series:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        presentation:
+          $ref: '#/components/schemas/PolarVisualizationPresentation'
+      example:
+        category:
+          dataset: example
+          field: example
+        kind: example
+        mark: radar
+        presentation:
+          area: true
+          maximum: !!float 1
+          minimum: !!float 1
+          progressWidth: !!float 1
+          showPointer: true
+          thresholds:
+            - tone: neutral
+              value: !!float 1
+        series:
+          dataset: example
+          field: example
+        value:
+          dataset: example
+          field: example
     PrincipalCreateRequest:
       type: object
       required:
@@ -44031,6 +43763,93 @@ components:
         description: example
         id: example
         title: example
+    ProportionalVisualizationPresentation:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/VisualizationPresentation'
+      required:
+        - orientation
+        - rose
+      properties:
+        orientation:
+          $ref: '#/components/schemas/VisualizationOrientation'
+        rose:
+          type: boolean
+          example: true
+        centerLabel:
+          type: string
+          example: example
+        labelPosition:
+          $ref: '#/components/schemas/VisualizationLabelPosition'
+        innerRadius:
+          type: number
+          format: double
+          example: !!float 1
+        outerRadius:
+          type: number
+          format: double
+          example: !!float 1
+        align:
+          type: string
+          example: example
+        sort:
+          $ref: '#/components/schemas/VisualizationSortDirection'
+      example:
+        align: example
+        centerLabel: example
+        innerRadius: !!float 1
+        labelPosition: automatic
+        orientation: horizontal
+        outerRadius: !!float 1
+        rose: true
+        sort: ascending
+    ProportionalVisualizationSpec:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/VisualizationSpecBase'
+      required:
+        - kind
+        - mark
+        - category
+        - value
+        - presentation
+      properties:
+        kind:
+          type: string
+          enum:
+            - proportional
+          example: example
+        mark:
+          $ref: '#/components/schemas/VisualizationProportionalMark'
+        category:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        value:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        series:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        presentation:
+          $ref: '#/components/schemas/ProportionalVisualizationPresentation'
+      example:
+        category:
+          dataset: example
+          field: example
+        kind: example
+        mark: pie
+        presentation:
+          align: example
+          centerLabel: example
+          innerRadius: !!float 1
+          labelPosition: automatic
+          orientation: horizontal
+          outerRadius: !!float 1
+          rose: true
+          sort: ascending
+        series:
+          dataset: example
+          field: example
+        value:
+          dataset: example
+          field: example
     QueryColumn:
       type: object
       required:
@@ -44242,20 +44061,6 @@ components:
         - application/json
         - application/vnd.apache.arrow.stream
       example: application/json
-    RadarDashboardVisualQueryResponse:
-      type: object
-      allOf:
-        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
-      required:
-        - type
-      properties:
-        type:
-          type: string
-          enum:
-            - radar
-          example: example
-      example:
-        type: example
     RefreshRunCreateRequest:
       type: object
       required:
@@ -44736,34 +44541,6 @@ components:
         name: example
         privileges:
           - example
-    SankeyDashboardVisualQueryResponse:
-      type: object
-      allOf:
-        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
-      required:
-        - type
-      properties:
-        type:
-          type: string
-          enum:
-            - sankey
-          example: example
-      example:
-        type: example
-    ScatterDashboardVisualQueryResponse:
-      type: object
-      allOf:
-        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
-      required:
-        - type
-      properties:
-        type:
-          type: string
-          enum:
-            - scatter
-          example: example
-      example:
-        type: example
     SearchContextTag:
       type: string
       enum:
@@ -46137,6 +45914,97 @@ components:
         expiresAt: "2026-01-02T15:04:05Z"
         id: example
         lastSeenAt: "2026-01-02T15:04:05Z"
+    SpatialWindowedVisualizationDataState:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/VisualizationDataStateBase'
+      required:
+        - kind
+        - schema
+        - cardinality
+        - extent
+        - rowCap
+        - featureCap
+        - resetVersion
+      properties:
+        kind:
+          type: string
+          enum:
+            - spatial_windowed
+          example: example
+        schema:
+          $ref: '#/components/schemas/VisualizationDatasetSchema'
+        cardinality:
+          $ref: '#/components/schemas/VisualizationCardinality'
+        extent:
+          $ref: '#/components/schemas/VisualizationSpatialBounds'
+        rowCap:
+          type: integer
+          format: int64
+          example: 1
+        featureCap:
+          type: integer
+          format: int64
+          example: 1
+        resetVersion:
+          type: integer
+          format: int64
+          example: 1
+        window:
+          $ref: '#/components/schemas/VisualizationSpatialWindowBlock'
+      example:
+        cardinality:
+          count: 1
+          kind: unknown
+        extent:
+          east: !!float 1
+          north: !!float 1
+          south: !!float 1
+          west: !!float 1
+        featureCap: 1
+        kind: example
+        resetVersion: 1
+        rowCap: 1
+        schema:
+          fields:
+            - dataType: string
+              geographic:
+                geometryAsset: example
+                identifierSystem: example
+                joinField: example
+                unmatchedPolicy: example
+              grid:
+                columnValue: example
+                formatting: []
+                group: example
+                measure: example
+              id: example
+              label: example
+              nullable: true
+              role: dimension
+              sourceRef: example
+              time:
+                calendar: example
+                grain: example
+                meaning: instant
+                timezone: example
+                weekStart: monday
+          id: example
+        window:
+          bounds:
+            east: !!float 1
+            north: !!float 1
+            south: !!float 1
+            west: !!float 1
+          height: 1
+          id: example
+          precision: raw
+          requestSeq: 1
+          resetVersion: 1
+          rows:
+            - - example
+          width: 1
+          zoom: !!float 1
     StatusResponse:
       type: object
       required:
@@ -46147,98 +46015,2688 @@ components:
           example: example
       example:
         status: example
-    SunburstDashboardVisualQueryResponse:
+    TableBackgroundScaleFormattingRule:
       type: object
       allOf:
-        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
+        - $ref: '#/components/schemas/TableVisualizationFormattingRuleBase'
       required:
-        - type
+        - kind
       properties:
-        type:
+        kind:
           type: string
           enum:
-            - sunburst
+            - background_scale
+          example: example
+        minimum:
+          type: number
+          format: double
+          example: !!float 1
+        maximum:
+          type: number
+          format: double
+          example: !!float 1
+        lowColor:
+          type: string
+          example: example
+        highColor:
+          type: string
           example: example
       example:
-        type: example
-    TableDashboardVisualQueryResponse:
+        highColor: example
+        kind: example
+        lowColor: example
+        maximum: !!float 1
+        minimum: !!float 1
+    TableBadgeFormattingRule:
       type: object
       allOf:
-        - $ref: '#/components/schemas/DashboardTabularVisualQueryResponseBase'
+        - $ref: '#/components/schemas/TableVisualizationFormattingRuleBase'
       required:
-        - type
+        - kind
+        - values
       properties:
-        type:
+        kind:
+          type: string
+          enum:
+            - badge
+          example: example
+        values:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            key: example
+      example:
+        kind: example
+        values:
+          key: example
+    TableDataBarFormattingRule:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/TableVisualizationFormattingRuleBase'
+      required:
+        - kind
+        - color
+      properties:
+        kind:
+          type: string
+          enum:
+            - data_bar
+          example: example
+        minimum:
+          type: number
+          format: double
+          example: !!float 1
+        maximum:
+          type: number
+          format: double
+          example: !!float 1
+        color:
+          type: string
+          example: example
+        background:
+          type: string
+          example: example
+      example:
+        background: example
+        color: example
+        kind: example
+        maximum: !!float 1
+        minimum: !!float 1
+    TableTextColorFormattingRule:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/TableVisualizationFormattingRuleBase'
+      required:
+        - kind
+        - color
+      properties:
+        kind:
+          type: string
+          enum:
+            - text_color
+          example: example
+        color:
+          type: string
+          example: example
+        values:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            key: example
+        minimum:
+          type: number
+          format: double
+          example: !!float 1
+        maximum:
+          type: number
+          format: double
+          example: !!float 1
+      example:
+        color: example
+        kind: example
+        maximum: !!float 1
+        minimum: !!float 1
+        values:
+          key: example
+    TableVisualizationColumn:
+      type: object
+      required:
+        - field
+        - label
+        - formatting
+      properties:
+        field:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        label:
+          type: string
+          example: example
+        width:
+          type: integer
+          format: int64
+          example: 1
+        group:
+          type: string
+          example: example
+        measure:
+          type: string
+          example: example
+        columnValue:
+          type: string
+          example: example
+        formatting:
+          type: array
+          items:
+            $ref: '#/components/schemas/TableVisualizationFormattingRule'
+          example: []
+      example:
+        columnValue: example
+        field:
+          dataset: example
+          field: example
+        formatting: []
+        group: example
+        label: example
+        measure: example
+        width: 1
+    TableVisualizationFormattingRule:
+      oneOf:
+        - $ref: '#/components/schemas/TableBadgeFormattingRule'
+        - $ref: '#/components/schemas/TableTextColorFormattingRule'
+        - $ref: '#/components/schemas/TableBackgroundScaleFormattingRule'
+        - $ref: '#/components/schemas/TableDataBarFormattingRule'
+      discriminator:
+        propertyName: kind
+        mapping:
+          background_scale: '#/components/schemas/TableBackgroundScaleFormattingRule'
+          badge: '#/components/schemas/TableBadgeFormattingRule'
+          data_bar: '#/components/schemas/TableDataBarFormattingRule'
+          text_color: '#/components/schemas/TableTextColorFormattingRule'
+    TableVisualizationFormattingRuleBase:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          example: example
+      example:
+        kind: example
+    TableVisualizationSpec:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/VisualizationSpecBase'
+      required:
+        - kind
+        - columns
+        - presentation
+      properties:
+        kind:
           type: string
           enum:
             - table
           example: example
+        columns:
+          type: array
+          items:
+            $ref: '#/components/schemas/TableVisualizationColumn'
+          example:
+            - columnValue: example
+              field:
+                dataset: example
+                field: example
+              formatting: []
+              group: example
+              label: example
+              measure: example
+              width: 1
+        defaultSort:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisualizationSort'
+          example:
+            - direction: ascending
+              field:
+                dataset: example
+                field: example
+        presentation:
+          $ref: '#/components/schemas/GridVisualizationPresentation'
       example:
-        type: example
-    TreeDashboardVisualQueryResponse:
+        columns:
+          - columnValue: example
+            field:
+              dataset: example
+              field: example
+            formatting: []
+            group: example
+            label: example
+            measure: example
+            width: 1
+        defaultSort:
+          - direction: ascending
+            field:
+              dataset: example
+              field: example
+        kind: example
+        presentation:
+          rowHeight: 1
+          showHeader: true
+          striped: true
+    TemporalVisualizationFormat:
       type: object
       allOf:
-        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
+        - $ref: '#/components/schemas/VisualizationFormatBase'
       required:
-        - type
+        - kind
       properties:
-        type:
+        kind:
           type: string
           enum:
-            - tree
+            - temporal
           example: example
-      example:
-        type: example
-    TreemapDashboardVisualQueryResponse:
-      type: object
-      allOf:
-        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
-      required:
-        - type
-      properties:
-        type:
+        dateStyle:
           type: string
-          enum:
-            - treemap
+          example: example
+        timeStyle:
+          type: string
           example: example
       example:
-        type: example
+        dateStyle: example
+        kind: example
+        timeStyle: example
     UploadProtocol:
       type: string
       enum:
         - tus
         - s3_multipart
       example: tus
-    VisualShape:
+    VisualizationAccessibility:
+      type: object
+      required:
+        - title
+        - description
+      properties:
+        title:
+          type: string
+          example: example
+        description:
+          type: string
+          example: example
+        summary:
+          type: string
+          example: example
+        announceChanges:
+          type: boolean
+          example: true
+      example:
+        announceChanges: true
+        description: example
+        summary: example
+        title: example
+    VisualizationAxis:
       type: string
       enum:
-        - category_value
-        - category_series_value
-        - category_multi_measure
-        - category_delta
-        - binned_measure
-        - hierarchy
-        - single_value
-        - matrix
-        - graph
-        - geo
-        - ohlc
-        - distribution
-      example: category_value
-    WaterfallDashboardVisualQueryResponse:
+        - primary
+        - secondary
+      example: primary
+    VisualizationCapabilities:
+      type: object
+      required:
+        - schemaVersion
+        - renderers
+      properties:
+        schemaVersion:
+          type: integer
+          example: 1
+        renderers:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisualizationRendererCapability'
+          example:
+            - id: echarts
+              kinds:
+                - cartesian
+              schemaVersion: 1
+              version: example
+      example:
+        renderers:
+          - id: echarts
+            kinds:
+              - cartesian
+            schemaVersion: 1
+            version: example
+        schemaVersion: 1
+    VisualizationCardinality:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          $ref: '#/components/schemas/VisualizationCardinalityKind'
+        count:
+          type: integer
+          format: int64
+          example: 1
+      example:
+        count: 1
+        kind: unknown
+    VisualizationCardinalityKind:
+      type: string
+      enum:
+        - unknown
+        - lower_bound
+        - estimated
+        - exact
+      example: unknown
+    VisualizationCartesianMark:
+      type: string
+      enum:
+        - line
+        - area
+        - bar
+        - column
+        - scatter
+        - histogram
+        - combo
+        - waterfall
+        - candlestick
+        - boxplot
+        - heatmap
+      example: line
+    VisualizationChoroplethLayer:
       type: object
       allOf:
-        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
+        - $ref: '#/components/schemas/VisualizationGeographicLayerBase'
       required:
-        - type
+        - kind
+        - geometry
+        - join
+        - color
+        - stroke
+        - opacity
       properties:
-        type:
+        kind:
           type: string
           enum:
-            - waterfall
+            - choropleth
+          example: example
+        geometry:
+          $ref: '#/components/schemas/VisualizationGeometryAsset'
+        join:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        value:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        category:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        color:
+          $ref: '#/components/schemas/VisualizationMapColorScale'
+        stroke:
+          $ref: '#/components/schemas/VisualizationMapStroke'
+        opacity:
+          type: number
+          format: double
+          example: !!float 1
+      example:
+        category:
+          dataset: example
+          field: example
+        color:
+          domainMaximum: !!float 1
+          domainMidpoint: !!float 1
+          domainMinimum: !!float 1
+          kind: sequential
+          nullColor: example
+          palette: example
+          reverse: true
+        geometry:
+          attribution: example
+          digest: example
+          id: example
+          identifierSystem: example
+          license: example
+          source: example
+          url: example
+        join:
+          dataset: example
+          field: example
+        kind: example
+        opacity: !!float 1
+        stroke:
+          color: example
+          opacity: !!float 1
+          width: !!float 1
+        value:
+          dataset: example
+          field: example
+    VisualizationComboSeries:
+      type: object
+      required:
+        - seriesValue
+        - mark
+        - axis
+      properties:
+        seriesValue:
+          type: string
+          example: example
+        mark:
+          $ref: '#/components/schemas/VisualizationCartesianMark'
+        axis:
+          $ref: '#/components/schemas/VisualizationAxis'
+      example:
+        axis: primary
+        mark: line
+        seriesValue: example
+    VisualizationCompleteness:
+      type: string
+      enum:
+        - complete
+        - truncated
+        - partial
+        - empty
+      example: complete
+    VisualizationCustomEngine:
+      type: string
+      enum:
+        - vega_lite
+      example: vega_lite
+    VisualizationDataBudget:
+      type: object
+      required:
+        - maxRows
+        - requiredCompleteness
+      properties:
+        maxRows:
+          type: integer
+          format: int64
+          example: 1
+        requiredCompleteness:
+          $ref: '#/components/schemas/VisualizationCompleteness'
+      example:
+        maxRows: 1
+        requiredCompleteness: complete
+    VisualizationDataState:
+      oneOf:
+        - $ref: '#/components/schemas/InlineVisualizationDataState'
+        - $ref: '#/components/schemas/WindowedVisualizationDataState'
+        - $ref: '#/components/schemas/SpatialWindowedVisualizationDataState'
+      discriminator:
+        propertyName: kind
+        mapping:
+          inline: '#/components/schemas/InlineVisualizationDataState'
+          spatial_windowed: '#/components/schemas/SpatialWindowedVisualizationDataState'
+          windowed: '#/components/schemas/WindowedVisualizationDataState'
+    VisualizationDataStateBase:
+      type: object
+      required:
+        - kind
+        - specRevision
+        - dataRevision
+        - generation
+      properties:
+        kind:
+          type: string
+          example: example
+        specRevision:
+          type: string
+          example: example
+        dataRevision:
+          type: integer
+          format: int64
+          example: 1
+        generation:
+          type: integer
+          format: int64
+          example: 1
+      example:
+        dataRevision: 1
+        generation: 1
+        kind: example
+        specRevision: example
+    VisualizationDataType:
+      type: string
+      enum:
+        - string
+        - boolean
+        - integer
+        - decimal
+        - temporal
+        - date
+        - geographic
+      example: string
+    VisualizationDatasetSchema:
+      type: object
+      required:
+        - id
+        - fields
+      properties:
+        id:
+          type: string
+          example: example
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisualizationField'
+          example:
+            - dataType: string
+              geographic:
+                geometryAsset: example
+                identifierSystem: example
+                joinField: example
+                unmatchedPolicy: example
+              grid:
+                columnValue: example
+                formatting: []
+                group: example
+                measure: example
+              id: example
+              label: example
+              nullable: true
+              role: dimension
+              sourceRef: example
+              time:
+                calendar: example
+                grain: example
+                meaning: instant
+                timezone: example
+                weekStart: monday
+      example:
+        fields:
+          - dataType: string
+            geographic:
+              geometryAsset: example
+              identifierSystem: example
+              joinField: example
+              unmatchedPolicy: example
+            grid:
+              columnValue: example
+              formatting: []
+              group: example
+              measure: example
+            id: example
+            label: example
+            nullable: true
+            role: dimension
+            sourceRef: example
+            time:
+              calendar: example
+              grain: example
+              meaning: instant
+              timezone: example
+              weekStart: monday
+        id: example
+    VisualizationDatumRef:
+      type: object
+      required:
+        - dataset
+        - dataRevision
+        - identity
+      properties:
+        dataset:
+          type: string
+          example: example
+        dataRevision:
+          type: integer
+          format: int64
+          example: 1
+        identity:
+          type: object
+          additionalProperties: {}
+          example:
+            key: example
+        resetVersion:
+          type: integer
+          format: int64
+          example: 1
+        blockID:
+          type: string
           example: example
       example:
-        type: example
+        blockID: example
+        dataRevision: 1
+        dataset: example
+        identity:
+          key: example
+        resetVersion: 1
+    VisualizationDensityLayer:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/VisualizationGeographicLayerBase'
+      required:
+        - kind
+        - latitude
+        - longitude
+        - color
+        - heat
+        - opacity
+      properties:
+        kind:
+          type: string
+          enum:
+            - density
+          example: example
+        latitude:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        longitude:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        value:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        color:
+          $ref: '#/components/schemas/VisualizationMapColorScale'
+        heat:
+          $ref: '#/components/schemas/VisualizationMapHeatStyle'
+        opacity:
+          type: number
+          format: double
+          example: !!float 1
+      example:
+        color:
+          domainMaximum: !!float 1
+          domainMidpoint: !!float 1
+          domainMinimum: !!float 1
+          kind: sequential
+          nullColor: example
+          palette: example
+          reverse: true
+        heat:
+          intensity: !!float 1
+          radius: !!float 1
+        kind: example
+        latitude:
+          dataset: example
+          field: example
+        longitude:
+          dataset: example
+          field: example
+        opacity: !!float 1
+        value:
+          dataset: example
+          field: example
+    VisualizationDiagnostic:
+      type: object
+      required:
+        - code
+        - severity
+        - message
+      properties:
+        code:
+          type: string
+          example: example
+        severity:
+          $ref: '#/components/schemas/VisualizationDiagnosticSeverity'
+        message:
+          type: string
+          example: example
+        fieldID:
+          type: string
+          example: example
+      example:
+        code: example
+        fieldID: example
+        message: example
+        severity: info
+    VisualizationDiagnosticSeverity:
+      type: string
+      enum:
+        - info
+        - warning
+        - error
+      example: info
+    VisualizationEnvelope:
+      type: object
+      required:
+        - schemaVersion
+        - visualID
+        - rendererID
+        - specRevision
+        - spec
+        - dataRevision
+        - dataState
+        - selection
+        - status
+        - diagnostics
+      properties:
+        schemaVersion:
+          type: integer
+          example: 1
+        visualID:
+          type: string
+          example: example
+        rendererID:
+          type: string
+          example: example
+        specRevision:
+          type: string
+          example: example
+        spec:
+          $ref: '#/components/schemas/VisualizationSpec'
+        dataRevision:
+          type: integer
+          format: int64
+          example: 1
+        dataState:
+          $ref: '#/components/schemas/VisualizationDataState'
+        selection:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisualizationSelectionEntry'
+          example:
+            - datum:
+                blockID: example
+                dataRevision: 1
+                dataset: example
+                identity:
+                  key: example
+                resetVersion: 1
+              label: example
+        spatialSelection:
+          $ref: '#/components/schemas/VisualizationSpatialSelectionState'
+        status:
+          $ref: '#/components/schemas/VisualizationStatus'
+        diagnostics:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisualizationDiagnostic'
+          example:
+            - code: example
+              fieldID: example
+              message: example
+              severity: info
+      example:
+        dataRevision: 1
+        diagnostics:
+          - code: example
+            fieldID: example
+            message: example
+            severity: info
+        rendererID: example
+        schemaVersion: 1
+        selection:
+          - datum:
+              blockID: example
+              dataRevision: 1
+              dataset: example
+              identity:
+                key: example
+              resetVersion: 1
+            label: example
+        spatialSelection:
+          interactionID: example
+          visualID: example
+        specRevision: example
+        status:
+          kind: idle
+          message: example
+        visualID: example
+    VisualizationField:
+      type: object
+      required:
+        - id
+        - role
+        - dataType
+        - nullable
+        - label
+      properties:
+        id:
+          type: string
+          example: example
+        sourceRef:
+          type: string
+          example: example
+        role:
+          $ref: '#/components/schemas/VisualizationFieldRole'
+        dataType:
+          $ref: '#/components/schemas/VisualizationDataType'
+        nullable:
+          type: boolean
+          example: true
+        label:
+          type: string
+          example: example
+        format:
+          $ref: '#/components/schemas/VisualizationFormat'
+        time:
+          $ref: '#/components/schemas/VisualizationTemporalMetadata'
+        geographic:
+          $ref: '#/components/schemas/VisualizationGeographicMetadata'
+        grid:
+          $ref: '#/components/schemas/VisualizationGridFieldMetadata'
+      example:
+        dataType: string
+        geographic:
+          geometryAsset: example
+          identifierSystem: example
+          joinField: example
+          unmatchedPolicy: example
+        grid:
+          columnValue: example
+          formatting: []
+          group: example
+          measure: example
+        id: example
+        label: example
+        nullable: true
+        role: dimension
+        sourceRef: example
+        time:
+          calendar: example
+          grain: example
+          meaning: instant
+          timezone: example
+          weekStart: monday
+    VisualizationFieldRef:
+      type: object
+      required:
+        - dataset
+        - field
+      properties:
+        dataset:
+          type: string
+          example: example
+        field:
+          type: string
+          example: example
+      example:
+        dataset: example
+        field: example
+    VisualizationFieldRole:
+      type: string
+      enum:
+        - dimension
+        - measure
+        - metadata
+        - identity
+      example: dimension
+    VisualizationFormat:
+      oneOf:
+        - $ref: '#/components/schemas/NumberVisualizationFormat'
+        - $ref: '#/components/schemas/CurrencyVisualizationFormat'
+        - $ref: '#/components/schemas/PercentVisualizationFormat'
+        - $ref: '#/components/schemas/CompactVisualizationFormat'
+        - $ref: '#/components/schemas/DurationVisualizationFormat'
+        - $ref: '#/components/schemas/TemporalVisualizationFormat'
+      discriminator:
+        propertyName: kind
+        mapping:
+          compact: '#/components/schemas/CompactVisualizationFormat'
+          currency: '#/components/schemas/CurrencyVisualizationFormat'
+          duration: '#/components/schemas/DurationVisualizationFormat'
+          number: '#/components/schemas/NumberVisualizationFormat'
+          percent: '#/components/schemas/PercentVisualizationFormat'
+          temporal: '#/components/schemas/TemporalVisualizationFormat'
+    VisualizationFormatBase:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          example: example
+      example:
+        kind: example
+    VisualizationGeographicLayer:
+      oneOf:
+        - $ref: '#/components/schemas/VisualizationPointLayer'
+        - $ref: '#/components/schemas/VisualizationChoroplethLayer'
+        - $ref: '#/components/schemas/VisualizationHeatLayer'
+        - $ref: '#/components/schemas/VisualizationDensityLayer'
+        - $ref: '#/components/schemas/VisualizationReferenceLayer'
+        - $ref: '#/components/schemas/VisualizationPathLayer'
+      discriminator:
+        propertyName: kind
+        mapping:
+          choropleth: '#/components/schemas/VisualizationChoroplethLayer'
+          density: '#/components/schemas/VisualizationDensityLayer'
+          heat: '#/components/schemas/VisualizationHeatLayer'
+          path: '#/components/schemas/VisualizationPathLayer'
+          point: '#/components/schemas/VisualizationPointLayer'
+          reference: '#/components/schemas/VisualizationReferenceLayer'
+    VisualizationGeographicLayerBase:
+      type: object
+      required:
+        - id
+        - kind
+        - tooltip
+        - position
+        - visibility
+      properties:
+        id:
+          type: string
+          example: example
+        kind:
+          type: string
+          example: example
+        label:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        tooltip:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisualizationFieldRef'
+          example:
+            - dataset: example
+              field: example
+        position:
+          $ref: '#/components/schemas/VisualizationMapLayerPosition'
+        visibility:
+          $ref: '#/components/schemas/VisualizationMapVisibility'
+      example:
+        id: example
+        kind: example
+        label:
+          dataset: example
+          field: example
+        position: below_labels
+        tooltip:
+          - dataset: example
+            field: example
+        visibility:
+          maximumZoom: !!float 1
+          minimumZoom: !!float 1
+    VisualizationGeographicMetadata:
+      type: object
+      required:
+        - identifierSystem
+        - geometryAsset
+        - joinField
+        - unmatchedPolicy
+      properties:
+        identifierSystem:
+          type: string
+          example: example
+        geometryAsset:
+          type: string
+          example: example
+        joinField:
+          type: string
+          example: example
+        unmatchedPolicy:
+          type: string
+          example: example
+      example:
+        geometryAsset: example
+        identifierSystem: example
+        joinField: example
+        unmatchedPolicy: example
+    VisualizationGeometryAsset:
+      type: object
+      required:
+        - id
+        - digest
+        - source
+        - license
+        - attribution
+        - identifierSystem
+        - url
+      properties:
+        id:
+          type: string
+          example: example
+        digest:
+          type: string
+          example: example
+        source:
+          type: string
+          example: example
+        license:
+          type: string
+          example: example
+        attribution:
+          type: string
+          example: example
+        identifierSystem:
+          type: string
+          example: example
+        url:
+          type: string
+          example: example
+      example:
+        attribution: example
+        digest: example
+        id: example
+        identifierSystem: example
+        license: example
+        source: example
+        url: example
+    VisualizationGraphFocus:
+      type: string
+      enum:
+        - none
+        - adjacency
+      example: none
+    VisualizationGridFieldMetadata:
+      type: object
+      required:
+        - formatting
+      properties:
+        group:
+          type: string
+          example: example
+        measure:
+          type: string
+          example: example
+        columnValue:
+          type: string
+          example: example
+        formatting:
+          type: array
+          items:
+            $ref: '#/components/schemas/TableVisualizationFormattingRule'
+          example: []
+      example:
+        columnValue: example
+        formatting: []
+        group: example
+        measure: example
+    VisualizationHeatLayer:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/VisualizationGeographicLayerBase'
+      required:
+        - kind
+        - latitude
+        - longitude
+        - color
+        - heat
+        - opacity
+      properties:
+        kind:
+          type: string
+          enum:
+            - heat
+          example: example
+        latitude:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        longitude:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        value:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        color:
+          $ref: '#/components/schemas/VisualizationMapColorScale'
+        heat:
+          $ref: '#/components/schemas/VisualizationMapHeatStyle'
+        opacity:
+          type: number
+          format: double
+          example: !!float 1
+      example:
+        color:
+          domainMaximum: !!float 1
+          domainMidpoint: !!float 1
+          domainMinimum: !!float 1
+          kind: sequential
+          nullColor: example
+          palette: example
+          reverse: true
+        heat:
+          intensity: !!float 1
+          radius: !!float 1
+        kind: example
+        latitude:
+          dataset: example
+          field: example
+        longitude:
+          dataset: example
+          field: example
+        opacity: !!float 1
+        value:
+          dataset: example
+          field: example
+    VisualizationHierarchyLayout:
+      type: string
+      enum:
+        - standard
+        - circular
+      example: standard
+    VisualizationHierarchyMark:
+      type: string
+      enum:
+        - treemap
+        - sunburst
+        - tree
+        - sankey
+        - graph
+      example: treemap
+    VisualizationInlineDataset:
+      type: object
+      required:
+        - id
+        - specRevision
+        - dataRevision
+        - generation
+        - columns
+        - rows
+        - completeness
+      properties:
+        id:
+          type: string
+          example: example
+        specRevision:
+          type: string
+          example: example
+        dataRevision:
+          type: integer
+          format: int64
+          example: 1
+        generation:
+          type: integer
+          format: int64
+          example: 1
+        columns:
+          type: array
+          items:
+            type: string
+          example:
+            - example
+        rows:
+          type: array
+          items:
+            type: array
+            items: {}
+          example:
+            - - example
+        completeness:
+          $ref: '#/components/schemas/VisualizationCompleteness'
+      example:
+        columns:
+          - example
+        completeness: complete
+        dataRevision: 1
+        generation: 1
+        id: example
+        rows:
+          - - example
+        specRevision: example
+    VisualizationInteraction:
+      type: object
+      required:
+        - id
+        - kind
+        - mappings
+        - targets
+        - mode
+        - requiresStableIdentity
+      properties:
+        id:
+          type: string
+          example: example
+        kind:
+          $ref: '#/components/schemas/VisualizationInteractionKind'
+        mappings:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisualizationInteractionMapping'
+          example:
+            - grain: example
+              label:
+                dataset: example
+                field: example
+              source:
+                dataset: example
+                field: example
+              targetFactID: example
+              targetFieldID: example
+        targets:
+          type: array
+          items:
+            type: string
+          example:
+            - example
+        mode:
+          $ref: '#/components/schemas/VisualizationSelectionMode'
+        requiresStableIdentity:
+          type: boolean
+          example: true
+      example:
+        id: example
+        kind: select
+        mappings:
+          - grain: example
+            label:
+              dataset: example
+              field: example
+            source:
+              dataset: example
+              field: example
+            targetFactID: example
+            targetFieldID: example
+        mode: single
+        requiresStableIdentity: true
+        targets:
+          - example
+    VisualizationInteractionKind:
+      type: string
+      enum:
+        - select
+        - filter
+        - drill
+        - navigate
+      example: select
+    VisualizationInteractionMapping:
+      type: object
+      required:
+        - source
+        - targetFieldID
+      properties:
+        source:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        targetFieldID:
+          type: string
+          example: example
+        targetFactID:
+          type: string
+          example: example
+        grain:
+          type: string
+          example: example
+        label:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+      example:
+        grain: example
+        label:
+          dataset: example
+          field: example
+        source:
+          dataset: example
+          field: example
+        targetFactID: example
+        targetFieldID: example
+    VisualizationKPITrend:
+      type: string
+      enum:
+        - neutral
+        - positive
+        - negative
+      example: neutral
+    VisualizationLabelPosition:
+      type: string
+      enum:
+        - automatic
+        - inside
+        - outside
+        - top
+      example: automatic
+    VisualizationLegendPosition:
+      type: string
+      enum:
+        - hidden
+        - top
+        - right
+        - bottom
+        - left
+      example: hidden
+    VisualizationMapCamera:
+      type: object
+      required:
+        - mode
+        - padding
+        - minimumZoom
+        - maximumZoom
+      properties:
+        mode:
+          $ref: '#/components/schemas/VisualizationMapCameraMode'
+        center:
+          type: array
+          items:
+            type: number
+            format: double
+          example:
+            - !!float 1
+        zoom:
+          type: number
+          format: double
+          example: !!float 1
+        padding:
+          type: integer
+          format: int32
+          example: 1
+        minimumZoom:
+          type: number
+          format: double
+          example: !!float 1
+        maximumZoom:
+          type: number
+          format: double
+          example: !!float 1
+      example:
+        center:
+          - !!float 1
+        maximumZoom: !!float 1
+        minimumZoom: !!float 1
+        mode: fit_data
+        padding: 1
+        zoom: !!float 1
+    VisualizationMapCameraMode:
+      type: string
+      enum:
+        - fit_data
+        - fixed
+        - preserve
+      example: fit_data
+    VisualizationMapCluster:
+      type: object
+      required:
+        - enabled
+        - radius
+        - maximumZoom
+        - minimumPoints
+        - showCount
+      properties:
+        enabled:
+          type: boolean
+          example: true
+        radius:
+          type: integer
+          format: int32
+          example: 1
+        maximumZoom:
+          type: integer
+          format: int32
+          example: 1
+        minimumPoints:
+          type: integer
+          format: int32
+          example: 1
+        showCount:
+          type: boolean
+          example: true
+      example:
+        enabled: true
+        maximumZoom: 1
+        minimumPoints: 1
+        radius: 1
+        showCount: true
+    VisualizationMapColorScale:
+      type: object
+      required:
+        - kind
+        - palette
+        - reverse
+        - nullColor
+      properties:
+        kind:
+          $ref: '#/components/schemas/VisualizationMapColorScaleKind'
+        palette:
+          type: string
+          example: example
+        reverse:
+          type: boolean
+          example: true
+        domainMinimum:
+          type: number
+          format: double
+          example: !!float 1
+        domainMidpoint:
+          type: number
+          format: double
+          example: !!float 1
+        domainMaximum:
+          type: number
+          format: double
+          example: !!float 1
+        nullColor:
+          type: string
+          example: example
+      example:
+        domainMaximum: !!float 1
+        domainMidpoint: !!float 1
+        domainMinimum: !!float 1
+        kind: sequential
+        nullColor: example
+        palette: example
+        reverse: true
+    VisualizationMapColorScaleKind:
+      type: string
+      enum:
+        - sequential
+        - diverging
+        - categorical
+      example: sequential
+    VisualizationMapControls:
+      type: object
+      required:
+        - zoom
+        - reset
+        - compass
+      properties:
+        zoom:
+          type: boolean
+          example: true
+        reset:
+          type: boolean
+          example: true
+        compass:
+          type: boolean
+          example: true
+      example:
+        compass: true
+        reset: true
+        zoom: true
+    VisualizationMapHeatStyle:
+      type: object
+      required:
+        - radius
+        - intensity
+      properties:
+        radius:
+          type: number
+          format: double
+          example: !!float 1
+        intensity:
+          type: number
+          format: double
+          example: !!float 1
+      example:
+        intensity: !!float 1
+        radius: !!float 1
+    VisualizationMapLabelDensity:
+      type: string
+      enum:
+        - hidden
+        - normal
+        - dense
+      example: hidden
+    VisualizationMapLayerPosition:
+      type: string
+      enum:
+        - below_labels
+        - above_labels
+      example: below_labels
+    VisualizationMapLineStyle:
+      type: object
+      required:
+        - width
+        - curvature
+      properties:
+        width:
+          type: number
+          format: double
+          example: !!float 1
+        curvature:
+          type: number
+          format: double
+          example: !!float 1
+      example:
+        curvature: !!float 1
+        width: !!float 1
+    VisualizationMapSizeScale:
+      type: object
+      required:
+        - minimumRadius
+        - maximumRadius
+      properties:
+        minimumRadius:
+          type: number
+          format: double
+          example: !!float 1
+        maximumRadius:
+          type: number
+          format: double
+          example: !!float 1
+        domainMinimum:
+          type: number
+          format: double
+          example: !!float 1
+        domainMaximum:
+          type: number
+          format: double
+          example: !!float 1
+      example:
+        domainMaximum: !!float 1
+        domainMinimum: !!float 1
+        maximumRadius: !!float 1
+        minimumRadius: !!float 1
+    VisualizationMapStroke:
+      type: object
+      required:
+        - color
+        - width
+        - opacity
+      properties:
+        color:
+          type: string
+          example: example
+        width:
+          type: number
+          format: double
+          example: !!float 1
+        opacity:
+          type: number
+          format: double
+          example: !!float 1
+      example:
+        color: example
+        opacity: !!float 1
+        width: !!float 1
+    VisualizationMapStyleAsset:
+      type: object
+      required:
+        - id
+        - styleUrl
+        - styleDigest
+        - archiveUrl
+        - archiveDigest
+        - glyphsUrl
+        - spriteUrl
+        - source
+        - license
+        - attribution
+        - minimumZoom
+        - maximumZoom
+        - bounds
+        - labelAnchor
+      properties:
+        id:
+          type: string
+          example: example
+        styleUrl:
+          type: string
+          example: example
+        styleDigest:
+          type: string
+          example: example
+        archiveUrl:
+          type: string
+          example: example
+        archiveDigest:
+          type: string
+          example: example
+        glyphsUrl:
+          type: string
+          example: example
+        spriteUrl:
+          type: string
+          example: example
+        source:
+          type: string
+          example: example
+        license:
+          type: string
+          example: example
+        attribution:
+          type: string
+          example: example
+        minimumZoom:
+          type: number
+          format: double
+          example: !!float 1
+        maximumZoom:
+          type: number
+          format: double
+          example: !!float 1
+        bounds:
+          type: array
+          items:
+            type: number
+            format: double
+          example:
+            - !!float 1
+        labelAnchor:
+          type: string
+          example: example
+      example:
+        archiveDigest: example
+        archiveUrl: example
+        attribution: example
+        bounds:
+          - !!float 1
+        glyphsUrl: example
+        id: example
+        labelAnchor: example
+        license: example
+        maximumZoom: !!float 1
+        minimumZoom: !!float 1
+        source: example
+        spriteUrl: example
+        styleDigest: example
+        styleUrl: example
+    VisualizationMapTheme:
+      type: string
+      enum:
+        - auto
+        - light
+        - dark
+      example: auto
+    VisualizationMapVisibility:
+      type: object
+      required:
+        - minimumZoom
+        - maximumZoom
+      properties:
+        minimumZoom:
+          type: number
+          format: double
+          example: !!float 1
+        maximumZoom:
+          type: number
+          format: double
+          example: !!float 1
+      example:
+        maximumZoom: !!float 1
+        minimumZoom: !!float 1
+    VisualizationOrientation:
+      type: string
+      enum:
+        - horizontal
+        - vertical
+      example: horizontal
+    VisualizationPathLayer:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/VisualizationGeographicLayerBase'
+      required:
+        - kind
+        - latitude
+        - longitude
+        - path
+        - order
+        - color
+        - stroke
+        - line
+        - opacity
+      properties:
+        kind:
+          type: string
+          enum:
+            - path
+          example: example
+        latitude:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        longitude:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        path:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        order:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        value:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        category:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        color:
+          $ref: '#/components/schemas/VisualizationMapColorScale'
+        stroke:
+          $ref: '#/components/schemas/VisualizationMapStroke'
+        line:
+          $ref: '#/components/schemas/VisualizationMapLineStyle'
+        opacity:
+          type: number
+          format: double
+          example: !!float 1
+      example:
+        category:
+          dataset: example
+          field: example
+        color:
+          domainMaximum: !!float 1
+          domainMidpoint: !!float 1
+          domainMinimum: !!float 1
+          kind: sequential
+          nullColor: example
+          palette: example
+          reverse: true
+        kind: example
+        latitude:
+          dataset: example
+          field: example
+        line:
+          curvature: !!float 1
+          width: !!float 1
+        longitude:
+          dataset: example
+          field: example
+        opacity: !!float 1
+        order:
+          dataset: example
+          field: example
+        path:
+          dataset: example
+          field: example
+        stroke:
+          color: example
+          opacity: !!float 1
+          width: !!float 1
+        value:
+          dataset: example
+          field: example
+    VisualizationPointLayer:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/VisualizationGeographicLayerBase'
+      required:
+        - kind
+        - latitude
+        - longitude
+        - size
+        - color
+        - stroke
+        - cluster
+        - opacity
+      properties:
+        kind:
+          type: string
+          enum:
+            - point
+          example: example
+        latitude:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        longitude:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        value:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        category:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        size:
+          $ref: '#/components/schemas/VisualizationMapSizeScale'
+        color:
+          $ref: '#/components/schemas/VisualizationMapColorScale'
+        stroke:
+          $ref: '#/components/schemas/VisualizationMapStroke'
+        cluster:
+          $ref: '#/components/schemas/VisualizationMapCluster'
+        opacity:
+          type: number
+          format: double
+          example: !!float 1
+      example:
+        category:
+          dataset: example
+          field: example
+        cluster:
+          enabled: true
+          maximumZoom: 1
+          minimumPoints: 1
+          radius: 1
+          showCount: true
+        color:
+          domainMaximum: !!float 1
+          domainMidpoint: !!float 1
+          domainMinimum: !!float 1
+          kind: sequential
+          nullColor: example
+          palette: example
+          reverse: true
+        kind: example
+        latitude:
+          dataset: example
+          field: example
+        longitude:
+          dataset: example
+          field: example
+        opacity: !!float 1
+        size:
+          domainMaximum: !!float 1
+          domainMinimum: !!float 1
+          maximumRadius: !!float 1
+          minimumRadius: !!float 1
+        stroke:
+          color: example
+          opacity: !!float 1
+          width: !!float 1
+        value:
+          dataset: example
+          field: example
+    VisualizationPolarMark:
+      type: string
+      enum:
+        - radar
+        - gauge
+      example: radar
+    VisualizationPresentation:
+      type: object
+      required:
+        - legend
+        - showLabels
+      properties:
+        legend:
+          $ref: '#/components/schemas/VisualizationLegendPosition'
+        showLabels:
+          type: boolean
+          example: true
+      example:
+        legend: hidden
+        showLabels: true
+    VisualizationProportionalMark:
+      type: string
+      enum:
+        - pie
+        - donut
+        - funnel
+      example: pie
+    VisualizationReferenceLayer:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/VisualizationGeographicLayerBase'
+      required:
+        - kind
+        - geometry
+        - color
+        - stroke
+        - opacity
+      properties:
+        kind:
+          type: string
+          enum:
+            - reference
+          example: example
+        geometry:
+          $ref: '#/components/schemas/VisualizationGeometryAsset'
+        color:
+          $ref: '#/components/schemas/VisualizationMapColorScale'
+        stroke:
+          $ref: '#/components/schemas/VisualizationMapStroke'
+        opacity:
+          type: number
+          format: double
+          example: !!float 1
+      example:
+        color:
+          domainMaximum: !!float 1
+          domainMidpoint: !!float 1
+          domainMinimum: !!float 1
+          kind: sequential
+          nullColor: example
+          palette: example
+          reverse: true
+        geometry:
+          attribution: example
+          digest: example
+          id: example
+          identifierSystem: example
+          license: example
+          source: example
+          url: example
+        kind: example
+        opacity: !!float 1
+        stroke:
+          color: example
+          opacity: !!float 1
+          width: !!float 1
+    VisualizationRendererCapability:
+      type: object
+      required:
+        - id
+        - version
+        - schemaVersion
+        - kinds
+      properties:
+        id:
+          $ref: '#/components/schemas/VisualizationRendererID'
+        version:
+          type: string
+          example: example
+        schemaVersion:
+          type: integer
+          example: 1
+        kinds:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisualizationSpecKind'
+          example:
+            - cartesian
+      example:
+        id: echarts
+        kinds:
+          - cartesian
+        schemaVersion: 1
+        version: example
+    VisualizationRendererID:
+      type: string
+      enum:
+        - echarts
+        - tanstack
+        - html
+        - maplibre
+        - vega-lite-sandbox
+      example: echarts
+    VisualizationSelectionEntry:
+      type: object
+      required:
+        - datum
+      properties:
+        datum:
+          $ref: '#/components/schemas/VisualizationDatumRef'
+        label:
+          type: string
+          example: example
+      example:
+        datum:
+          blockID: example
+          dataRevision: 1
+          dataset: example
+          identity:
+            key: example
+          resetVersion: 1
+        label: example
+    VisualizationSelectionMode:
+      type: string
+      enum:
+        - single
+        - multiple
+      example: single
+    VisualizationSort:
+      type: object
+      required:
+        - field
+        - direction
+      properties:
+        field:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        direction:
+          $ref: '#/components/schemas/VisualizationSortDirection'
+      example:
+        direction: ascending
+        field:
+          dataset: example
+          field: example
+    VisualizationSortDirection:
+      type: string
+      enum:
+        - ascending
+        - descending
+      example: ascending
+    VisualizationSpatialBounds:
+      type: object
+      required:
+        - west
+        - south
+        - east
+        - north
+      properties:
+        west:
+          type: number
+          format: double
+          example: !!float 1
+        south:
+          type: number
+          format: double
+          example: !!float 1
+        east:
+          type: number
+          format: double
+          example: !!float 1
+        north:
+          type: number
+          format: double
+          example: !!float 1
+      example:
+        east: !!float 1
+        north: !!float 1
+        south: !!float 1
+        west: !!float 1
+    VisualizationSpatialBoxSelection:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/VisualizationSpatialSelectionGeometryBase'
+      required:
+        - kind
+        - bounds
+      properties:
+        kind:
+          type: string
+          enum:
+            - box
+          example: example
+        bounds:
+          $ref: '#/components/schemas/VisualizationSpatialBounds'
+      example:
+        bounds:
+          east: !!float 1
+          north: !!float 1
+          south: !!float 1
+          west: !!float 1
+        kind: example
+    VisualizationSpatialCoordinate:
+      type: object
+      required:
+        - longitude
+        - latitude
+      properties:
+        longitude:
+          type: number
+          format: double
+          example: !!float 1
+        latitude:
+          type: number
+          format: double
+          example: !!float 1
+      example:
+        latitude: !!float 1
+        longitude: !!float 1
+    VisualizationSpatialFieldMapping:
+      type: object
+      required:
+        - source
+        - targetFieldID
+      properties:
+        source:
+          $ref: '#/components/schemas/VisualizationFieldRef'
+        targetFieldID:
+          type: string
+          example: example
+        targetFactID:
+          type: string
+          example: example
+      example:
+        source:
+          dataset: example
+          field: example
+        targetFactID: example
+        targetFieldID: example
+    VisualizationSpatialLassoSelection:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/VisualizationSpatialSelectionGeometryBase'
+      required:
+        - kind
+        - points
+      properties:
+        kind:
+          type: string
+          enum:
+            - lasso
+          example: example
+        points:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisualizationSpatialCoordinate'
+          example:
+            - latitude: !!float 1
+              longitude: !!float 1
+      example:
+        kind: example
+        points:
+          - latitude: !!float 1
+            longitude: !!float 1
+    VisualizationSpatialPrecision:
+      type: string
+      enum:
+        - raw
+        - aggregated
+      example: raw
+    VisualizationSpatialRadiusSelection:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/VisualizationSpatialSelectionGeometryBase'
+      required:
+        - kind
+        - center
+        - radiusMeters
+      properties:
+        kind:
+          type: string
+          enum:
+            - radius
+          example: example
+        center:
+          $ref: '#/components/schemas/VisualizationSpatialCoordinate'
+        radiusMeters:
+          type: number
+          format: double
+          example: !!float 1
+      example:
+        center:
+          latitude: !!float 1
+          longitude: !!float 1
+        kind: example
+        radiusMeters: !!float 1
+    VisualizationSpatialSelectionGeometry:
+      oneOf:
+        - $ref: '#/components/schemas/VisualizationSpatialBoxSelection'
+        - $ref: '#/components/schemas/VisualizationSpatialLassoSelection'
+        - $ref: '#/components/schemas/VisualizationSpatialRadiusSelection'
+      discriminator:
+        propertyName: kind
+        mapping:
+          box: '#/components/schemas/VisualizationSpatialBoxSelection'
+          lasso: '#/components/schemas/VisualizationSpatialLassoSelection'
+          radius: '#/components/schemas/VisualizationSpatialRadiusSelection'
+    VisualizationSpatialSelectionGeometryBase:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          example: example
+      example:
+        kind: example
+    VisualizationSpatialSelectionGesture:
+      type: string
+      enum:
+        - box
+        - lasso
+        - radius
+      example: box
+    VisualizationSpatialSelectionInteraction:
+      type: object
+      required:
+        - id
+        - gestures
+        - latitude
+        - longitude
+        - targets
+      properties:
+        id:
+          type: string
+          example: example
+        gestures:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisualizationSpatialSelectionGesture'
+          example:
+            - box
+        latitude:
+          $ref: '#/components/schemas/VisualizationSpatialFieldMapping'
+        longitude:
+          $ref: '#/components/schemas/VisualizationSpatialFieldMapping'
+        targets:
+          type: array
+          items:
+            type: string
+          example:
+            - example
+      example:
+        gestures:
+          - box
+        id: example
+        latitude:
+          source:
+            dataset: example
+            field: example
+          targetFactID: example
+          targetFieldID: example
+        longitude:
+          source:
+            dataset: example
+            field: example
+          targetFactID: example
+          targetFieldID: example
+        targets:
+          - example
+    VisualizationSpatialSelectionState:
+      type: object
+      required:
+        - visualID
+        - interactionID
+        - geometry
+      properties:
+        visualID:
+          type: string
+          example: example
+        interactionID:
+          type: string
+          example: example
+        geometry:
+          $ref: '#/components/schemas/VisualizationSpatialSelectionGeometry'
+      example:
+        interactionID: example
+        visualID: example
+    VisualizationSpatialWindowBlock:
+      type: object
+      required:
+        - id
+        - bounds
+        - zoom
+        - width
+        - height
+        - precision
+        - rows
+        - requestSeq
+        - resetVersion
+      properties:
+        id:
+          type: string
+          example: example
+        bounds:
+          $ref: '#/components/schemas/VisualizationSpatialBounds'
+        zoom:
+          type: number
+          format: double
+          example: !!float 1
+        width:
+          type: integer
+          format: int32
+          example: 1
+        height:
+          type: integer
+          format: int32
+          example: 1
+        precision:
+          $ref: '#/components/schemas/VisualizationSpatialPrecision'
+        rows:
+          type: array
+          items:
+            type: array
+            items: {}
+          example:
+            - - example
+        requestSeq:
+          type: integer
+          format: int64
+          example: 1
+        resetVersion:
+          type: integer
+          format: int64
+          example: 1
+      example:
+        bounds:
+          east: !!float 1
+          north: !!float 1
+          south: !!float 1
+          west: !!float 1
+        height: 1
+        id: example
+        precision: raw
+        requestSeq: 1
+        resetVersion: 1
+        rows:
+          - - example
+        width: 1
+        zoom: !!float 1
+    VisualizationSpec:
+      oneOf:
+        - $ref: '#/components/schemas/CartesianVisualizationSpec'
+        - $ref: '#/components/schemas/ProportionalVisualizationSpec'
+        - $ref: '#/components/schemas/HierarchyVisualizationSpec'
+        - $ref: '#/components/schemas/PolarVisualizationSpec'
+        - $ref: '#/components/schemas/TableVisualizationSpec'
+        - $ref: '#/components/schemas/MatrixVisualizationSpec'
+        - $ref: '#/components/schemas/PivotVisualizationSpec'
+        - $ref: '#/components/schemas/KPIVisualizationSpec'
+        - $ref: '#/components/schemas/GeographicVisualizationSpec'
+        - $ref: '#/components/schemas/CustomVisualizationSpec'
+      discriminator:
+        propertyName: kind
+        mapping:
+          cartesian: '#/components/schemas/CartesianVisualizationSpec'
+          custom: '#/components/schemas/CustomVisualizationSpec'
+          geographic: '#/components/schemas/GeographicVisualizationSpec'
+          hierarchy: '#/components/schemas/HierarchyVisualizationSpec'
+          kpi: '#/components/schemas/KPIVisualizationSpec'
+          matrix: '#/components/schemas/MatrixVisualizationSpec'
+          pivot: '#/components/schemas/PivotVisualizationSpec'
+          polar: '#/components/schemas/PolarVisualizationSpec'
+          proportional: '#/components/schemas/ProportionalVisualizationSpec'
+          table: '#/components/schemas/TableVisualizationSpec'
+    VisualizationSpecBase:
+      type: object
+      required:
+        - kind
+        - title
+        - datasets
+        - dataBudget
+        - accessibility
+        - interactions
+      properties:
+        kind:
+          type: string
+          example: example
+        title:
+          type: string
+          example: example
+        datasets:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisualizationDatasetSchema'
+          example:
+            - fields:
+                - dataType: string
+                  geographic:
+                    geometryAsset: example
+                    identifierSystem: example
+                    joinField: example
+                    unmatchedPolicy: example
+                  grid:
+                    columnValue: example
+                    formatting: []
+                    group: example
+                    measure: example
+                  id: example
+                  label: example
+                  nullable: true
+                  role: dimension
+                  sourceRef: example
+                  time:
+                    calendar: example
+                    grain: example
+                    meaning: instant
+                    timezone: example
+                    weekStart: monday
+              id: example
+        dataBudget:
+          $ref: '#/components/schemas/VisualizationDataBudget'
+        accessibility:
+          $ref: '#/components/schemas/VisualizationAccessibility'
+        interactions:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisualizationInteraction'
+          example:
+            - id: example
+              kind: select
+              mappings:
+                - grain: example
+                  label:
+                    dataset: example
+                    field: example
+                  source:
+                    dataset: example
+                    field: example
+                  targetFactID: example
+                  targetFieldID: example
+              mode: single
+              requiresStableIdentity: true
+              targets:
+                - example
+      example:
+        accessibility:
+          announceChanges: true
+          description: example
+          summary: example
+          title: example
+        dataBudget:
+          maxRows: 1
+          requiredCompleteness: complete
+        datasets:
+          - fields:
+              - dataType: string
+                geographic:
+                  geometryAsset: example
+                  identifierSystem: example
+                  joinField: example
+                  unmatchedPolicy: example
+                grid:
+                  columnValue: example
+                  formatting: []
+                  group: example
+                  measure: example
+                id: example
+                label: example
+                nullable: true
+                role: dimension
+                sourceRef: example
+                time:
+                  calendar: example
+                  grain: example
+                  meaning: instant
+                  timezone: example
+                  weekStart: monday
+            id: example
+        interactions:
+          - id: example
+            kind: select
+            mappings:
+              - grain: example
+                label:
+                  dataset: example
+                  field: example
+                source:
+                  dataset: example
+                  field: example
+                targetFactID: example
+                targetFieldID: example
+            mode: single
+            requiresStableIdentity: true
+            targets:
+              - example
+        kind: example
+        title: example
+    VisualizationSpecKind:
+      type: string
+      enum:
+        - cartesian
+        - proportional
+        - hierarchy
+        - polar
+        - table
+        - matrix
+        - pivot
+        - kpi
+        - geographic
+        - custom
+      example: cartesian
+    VisualizationStatus:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          $ref: '#/components/schemas/VisualizationStatusKind'
+        message:
+          type: string
+          example: example
+      example:
+        kind: idle
+        message: example
+    VisualizationStatusKind:
+      type: string
+      enum:
+        - idle
+        - loading
+        - ready
+        - no_data
+        - partial
+        - error
+      example: idle
+    VisualizationTemporalMeaning:
+      type: string
+      enum:
+        - instant
+        - bucket
+      example: instant
+    VisualizationTemporalMetadata:
+      type: object
+      required:
+        - grain
+        - timezone
+        - calendar
+        - weekStart
+        - meaning
+      properties:
+        grain:
+          type: string
+          example: example
+        timezone:
+          type: string
+          example: example
+        calendar:
+          type: string
+          example: example
+        weekStart:
+          $ref: '#/components/schemas/VisualizationWeekStart'
+        meaning:
+          $ref: '#/components/schemas/VisualizationTemporalMeaning'
+      example:
+        calendar: example
+        grain: example
+        meaning: instant
+        timezone: example
+        weekStart: monday
+    VisualizationThreshold:
+      type: object
+      required:
+        - value
+        - tone
+      properties:
+        value:
+          type: number
+          format: double
+          example: !!float 1
+        tone:
+          $ref: '#/components/schemas/VisualizationTone'
+      example:
+        tone: neutral
+        value: !!float 1
+    VisualizationTone:
+      type: string
+      enum:
+        - neutral
+        - ink
+        - success
+        - warning
+        - danger
+      example: neutral
+    VisualizationWeekStart:
+      type: string
+      enum:
+        - monday
+        - tuesday
+        - wednesday
+        - thursday
+        - friday
+        - saturday
+        - sunday
+      example: monday
+    VisualizationWindowBlock:
+      type: object
+      required:
+        - id
+        - start
+        - rows
+        - requestSeq
+        - resetVersion
+        - sort
+      properties:
+        id:
+          type: string
+          example: example
+        start:
+          type: integer
+          format: int64
+          example: 1
+        rows:
+          type: array
+          items:
+            type: array
+            items: {}
+          example:
+            - - example
+        requestSeq:
+          type: integer
+          format: int64
+          example: 1
+        resetVersion:
+          type: integer
+          format: int64
+          example: 1
+        sort:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisualizationSort'
+          example:
+            - direction: ascending
+              field:
+                dataset: example
+                field: example
+      example:
+        id: example
+        requestSeq: 1
+        resetVersion: 1
+        rows:
+          - - example
+        sort:
+          - direction: ascending
+            field:
+              dataset: example
+              field: example
+        start: 1
+    WindowedVisualizationDataState:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/VisualizationDataStateBase'
+      required:
+        - kind
+        - schema
+        - cardinality
+        - availableRows
+        - rowCap
+        - chunkSize
+        - resetVersion
+        - sort
+        - blocks
+      properties:
+        kind:
+          type: string
+          enum:
+            - windowed
+          example: example
+        schema:
+          $ref: '#/components/schemas/VisualizationDatasetSchema'
+        cardinality:
+          $ref: '#/components/schemas/VisualizationCardinality'
+        availableRows:
+          type: integer
+          format: int64
+          example: 1
+        rowCap:
+          type: integer
+          format: int64
+          example: 1
+        chunkSize:
+          type: integer
+          format: int64
+          example: 1
+        resetVersion:
+          type: integer
+          format: int64
+          example: 1
+        sort:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisualizationSort'
+          example:
+            - direction: ascending
+              field:
+                dataset: example
+                field: example
+        blocks:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/VisualizationWindowBlock'
+          example:
+            key:
+              id: example
+              requestSeq: 1
+              resetVersion: 1
+              rows:
+                - - example
+              sort:
+                - direction: ascending
+                  field:
+                    dataset: example
+                    field: example
+              start: 1
+      example:
+        availableRows: 1
+        blocks:
+          key:
+            id: example
+            requestSeq: 1
+            resetVersion: 1
+            rows:
+              - - example
+            sort:
+              - direction: ascending
+                field:
+                  dataset: example
+                  field: example
+            start: 1
+        cardinality:
+          count: 1
+          kind: unknown
+        chunkSize: 1
+        kind: example
+        resetVersion: 1
+        rowCap: 1
+        schema:
+          fields:
+            - dataType: string
+              geographic:
+                geometryAsset: example
+                identifierSystem: example
+                joinField: example
+                unmatchedPolicy: example
+              grid:
+                columnValue: example
+                formatting: []
+                group: example
+                measure: example
+              id: example
+              label: example
+              nullable: true
+              role: dimension
+              sourceRef: example
+              time:
+                calendar: example
+                grain: example
+                meaning: instant
+                timezone: example
+                weekStart: monday
+          id: example
+        sort:
+          - direction: ascending
+            field:
+              dataset: example
+              field: example
     WorkspaceAssetGraphResponse:
       type: object
       required:

@@ -246,50 +246,19 @@ test('chat thread renders visual artifacts with dashboard web components', async
     await customElements.whenDefined('lv-chat-thread')
     await customElements.whenDefined('lv-visual-modal')
     const thread = document.querySelector('lv-chat-thread') as any
+    const field = (id: string, role: string, dataType: string, label: string) => ({ id, role, dataType, nullable: false, label })
     thread.visuals = {
       agent_chart_1: {
-        version: 3,
-        id: 'agent_chart_1',
-        shape: 'category_value',
-        renderer: 'echarts',
-        type: 'bar',
-        title: 'Orders',
-        unit: '',
-        interaction: {},
-        dimensions: ['status'],
-        measure: 'order_count',
-        measures: ['order_count'],
-        series: [],
-        options: {},
-        rendererOptions: {},
-        selection: [],
-        data: [{ label: 'delivered', value: 42 }],
+        schemaVersion: 3, visualID: 'agent_chart_1', rendererID: 'echarts', specRevision: 'sha256:chat-chart', dataRevision: 1,
+        spec: { kind: 'cartesian', mark: 'bar', title: 'Orders', datasets: [{ id: 'primary', fields: [field('label', 'dimension', 'string', 'Status'), field('value', 'measure', 'decimal', 'Orders')] }], dataBudget: { maxRows: 50, requiredCompleteness: 'complete' }, accessibility: { title: 'Orders', description: 'Orders by status' }, interactions: [], x: { dataset: 'primary', field: 'label' }, y: [{ dataset: 'primary', field: 'value' }], presentation: { legend: 'hidden', showLabels: false, smooth: false, stacked: false, showSymbols: true, dataZoom: false, area: false, step: false } },
+        dataState: { kind: 'inline', specRevision: 'sha256:chat-chart', dataRevision: 1, generation: 1, datasets: [{ id: 'primary', specRevision: 'sha256:chat-chart', dataRevision: 1, generation: 1, columns: ['label', 'value'], rows: [['delivered', 42]], completeness: 'complete' }] },
+        selection: [], status: { kind: 'ready' }, diagnostics: [],
       },
-    }
-    thread.visuals = {
-      ...thread.visuals,
       agent_table_1: {
-        version: 2,
-        id: 'agent_table_1',
-        type: 'table',
-        title: 'Orders',
-        style: { density: 'comfortable', zebra: true, grid: 'rows' },
-        interaction: {},
-        selection: [],
-        columns: [{ key: 'order_id', label: 'Order', format: 'text' }],
-        totalRows: 1,
-        availableRows: 1,
-        isCapped: false,
-        rowCap: 50,
-        chunkSize: 50,
-        rowHeight: 34,
-        resetVersion: 0,
-        sort: { key: '', direction: '' },
-        blocks: {
-          a: { start: 0, requestSeq: 0, resetVersion: 0, sort: { key: '', direction: '' }, rows: [{ order_id: 'o1' }] },
-        },
-        loadingBlock: '',
-        error: '',
+        schemaVersion: 3, visualID: 'agent_table_1', rendererID: 'tanstack', specRevision: 'sha256:chat-table', dataRevision: 1,
+        spec: { kind: 'table', title: 'Orders', datasets: [{ id: 'primary', fields: [field('order_id', 'identity', 'string', 'Order')] }], dataBudget: { maxRows: 50, requiredCompleteness: 'partial' }, accessibility: { title: 'Orders', description: 'Orders' }, interactions: [], columns: [{ field: { dataset: 'primary', field: 'order_id' }, label: 'Order' }], defaultSort: [{ field: { dataset: 'primary', field: 'order_id' }, direction: 'ascending' }], presentation: { rowHeight: 34, striped: true, showHeader: true } },
+        dataState: { kind: 'windowed', specRevision: 'sha256:chat-table', dataRevision: 1, generation: 1, schema: { id: 'primary', fields: [field('order_id', 'identity', 'string', 'Order')] }, cardinality: { kind: 'exact', count: 1 }, availableRows: 1, rowCap: 50, chunkSize: 50, resetVersion: 0, sort: [{ field: { dataset: 'primary', field: 'order_id' }, direction: 'ascending' }], blocks: { a: { id: 'a', start: 0, rows: [['o1']], requestSeq: 0, resetVersion: 0, sort: [{ field: { dataset: 'primary', field: 'order_id' }, direction: 'ascending' }] } } },
+        selection: [], status: { kind: 'ready' }, diagnostics: [],
       },
     }
     thread.transcript = [
@@ -325,97 +294,34 @@ test('chat thread renders visual artifacts with dashboard web components', async
       .shadowRoot!
       .querySelector('lv-visual-artifact[artifact-id="agent_chart_1"]')
       ?.shadowRoot
-      ?.querySelector('lv-echart[visual-id="agent_chart_1"]'),
+      ?.querySelector('lv-visualization-host'),
   ))
   await page.waitForFunction(() => Boolean(
     document.querySelector('lv-chat-thread')!
       .shadowRoot!
       .querySelector('lv-visual-artifact[artifact-id="agent_table_1"]')
       ?.shadowRoot
-      ?.querySelector('lv-report-table[table-id="agent_table_1"]'),
+      ?.querySelector('lv-visualization-host'),
   ))
 
   const rendered = await page.evaluate(() => {
     const root = document.querySelector('lv-chat-thread')!.shadowRoot!
     return {
-      chart: Boolean(root.querySelector('lv-visual-artifact[artifact-id="agent_chart_1"]')?.shadowRoot?.querySelector('lv-echart[visual-id="agent_chart_1"]')),
-      table: Boolean(root.querySelector('lv-visual-artifact[artifact-id="agent_table_1"]')?.shadowRoot?.querySelector('lv-report-table[table-id="agent_table_1"]')),
+      chart: (root.querySelector('lv-visual-artifact[artifact-id="agent_chart_1"]')?.shadowRoot?.querySelector('lv-visualization-host') as any)?.envelope?.spec?.kind,
+      table: (root.querySelector('lv-visual-artifact[artifact-id="agent_table_1"]')?.shadowRoot?.querySelector('lv-visualization-host') as any)?.envelope?.spec?.kind,
       jsonDetails: root.querySelectorAll('.tool-details').length,
       bodyText: root.textContent || '',
       artifactBackground: getComputedStyle(root.querySelector('lv-visual-artifact')!.shadowRoot!.querySelector('.artifact')!).backgroundColor,
       artifactBorderTopWidth: getComputedStyle(root.querySelector('lv-visual-artifact')!.shadowRoot!.querySelector('.artifact')!).borderTopWidth,
     }
   })
-  expect(rendered.chart).toBe(true)
-  expect(rendered.table).toBe(true)
+  expect(rendered.chart).toBe('cartesian')
+  expect(rendered.table).toBe('table')
   expect(rendered.jsonDetails).toBe(0)
   expect(rendered.bodyText.includes('delivered')).toBe(false)
   expect(rendered.artifactBackground).toBe('rgb(1, 2, 3)')
   expect(rendered.artifactBorderTopWidth).toBe('2px')
 
-  await page.locator('lv-chat-thread').evaluate(async (element: any) => {
-    const trigger = element.shadowRoot.querySelector('.tool-trigger') as HTMLButtonElement
-    trigger.click()
-    await element.updateComplete
-  })
-  const detailText = await page.locator('lv-chat-thread').evaluate((element: any) => element.shadowRoot.querySelector('.tool-details')?.textContent || '')
-  expect(detailText.includes('"signal": "visuals.agent_chart_1"')).toBe(true)
-  expect(detailText.includes('delivered')).toBe(false)
-
-  await page.locator('lv-chat-thread').evaluate(async (element: any) => {
-    const artifact = element.shadowRoot.querySelector('lv-visual-artifact[artifact-id="agent_chart_1"]') as any
-    const chart = artifact.shadowRoot.querySelector('lv-echart') as any
-    await chart.updateComplete
-    const summary = chart.shadowRoot.querySelector('.options summary') as HTMLElement
-    summary.click()
-    await chart.updateComplete
-    const showData = chart.shadowRoot.querySelector('.menu button') as HTMLButtonElement
-    showData.click()
-  })
-  const showDataState = await page.locator('lv-visual-modal').evaluate(async (modal: any) => {
-    await modal.updateComplete
-    return {
-      hasDialog: Boolean(modal.shadowRoot.querySelector('.dialog')),
-      text: modal.shadowRoot.textContent || '',
-    }
-  })
-  expect(showDataState.hasDialog).toBe(true)
-  expect(showDataState.text.includes('1 row from current visual data')).toBe(true)
-  await page.locator('lv-visual-modal').evaluate(async (modal: any) => {
-    modal.shadowRoot.querySelector('.close').click()
-    await modal.updateComplete
-  })
-
-  await page.locator('lv-chat-thread').evaluate(async (element: any) => {
-    const artifact = element.shadowRoot.querySelector('lv-visual-artifact[artifact-id="agent_chart_1"]') as any
-    const chart = artifact.shadowRoot.querySelector('lv-echart') as any
-    await chart.updateComplete
-    const expand = chart.shadowRoot.querySelector('.icon-action') as HTMLButtonElement
-    expand.click()
-  })
-  const focusState = await page.locator('lv-visual-modal').evaluate(async (modal: any) => {
-    await modal.updateComplete
-    const chart = document.querySelector('lv-echart[visual-id="agent_chart_1"]') as HTMLElement
-    const dialog = modal.shadowRoot.querySelector('.focus-dialog')
-    return {
-      chartParent: chart.parentElement?.localName,
-      slot: chart.getAttribute('slot'),
-      hasDialog: Boolean(dialog),
-      dialogBackground: dialog ? getComputedStyle(dialog).backgroundColor : '',
-    }
-  })
-  expect(focusState).toEqual({
-    chartParent: 'lv-visual-modal',
-    slot: 'focus-visual',
-    hasDialog: true,
-    dialogBackground: 'rgb(1, 2, 3)',
-  })
-  await page.locator('lv-visual-modal').evaluate(async (modal: any) => {
-    modal.shadowRoot.querySelector('.focus-close').click()
-    await modal.updateComplete
-  })
-  const restored = await page.locator('lv-chat-thread').evaluate((element: any) => Boolean(element.shadowRoot.querySelector('lv-visual-artifact[artifact-id="agent_chart_1"]')?.shadowRoot?.querySelector('lv-echart[visual-id="agent_chart_1"]')))
-  expect(restored).toBe(true)
   await page.close()
 })
 

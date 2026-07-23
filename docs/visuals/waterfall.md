@@ -6,7 +6,7 @@ Every preview on this page is generated from the YAML shown below it using a fix
 
 ## Basic
 
-Use an ordered dimension and one measure with `shape: category_delta` to show how each period contributes to the running total.
+Use an ordered dimension and one measure with `type: waterfall`; the compiler derives the cumulative fields needed to show how each period contributes to the running total.
 
 {{< visual id="revenue_waterfall" >}}
 
@@ -15,8 +15,6 @@ visuals:
   revenue_waterfall:
     title: Monthly revenue contribution
     description: Shows each month contribution to total revenue.
-    shape: category_delta
-    renderer: echarts
     type: waterfall
     query:
       dimensions:
@@ -39,8 +37,6 @@ Replace revenue with order count to reuse the same running-contribution structur
 visuals:
   orders_waterfall:
     title: Monthly order contribution
-    shape: category_delta
-    renderer: echarts
     type: waterfall
     query:
       dimensions:
@@ -63,10 +59,8 @@ Enable `show_labels` for exact contributions and `data_zoom` when many categorie
 visuals:
   revenue_waterfall_labeled:
     title: Labeled revenue waterfall
-    shape: category_delta
-    renderer: echarts
     type: waterfall
-    options:
+    presentation:
       show_labels: true
       data_zoom: true
     query:

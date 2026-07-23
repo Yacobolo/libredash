@@ -15,8 +15,6 @@ visuals:
   status_delivery_flow:
     title: Status to delivery speed
     description: Shows flow from order status to delivery-speed bucket.
-    shape: graph
-    renderer: echarts
     type: sankey
     query:
       dimensions:
@@ -40,8 +38,6 @@ Replace the source and target dimensions to inspect category-to-status flow with
 visuals:
   category_status_flow:
     title: Category to status flow
-    shape: graph
-    renderer: echarts
     type: sankey
     query:
       dimensions:
@@ -57,7 +53,7 @@ visuals:
 
 ## Spacious nodes
 
-Increase `options.node_gap` when labels or links feel crowded, and tune `curveness` to keep parallel flows visually distinct.
+Increase `presentation.node_gap` when labels or links feel crowded, and tune `curveness` to keep parallel flows visually distinct.
 
 {{< visual id="category_status_flow_spacious" >}}
 
@@ -65,10 +61,8 @@ Increase `options.node_gap` when labels or links feel crowded, and tune `curvene
 visuals:
   category_status_flow_spacious:
     title: Spacious category to status flow
-    shape: graph
-    renderer: echarts
     type: sankey
-    options:
+    presentation:
       node_gap: 18
       curveness: 0.32
     query:

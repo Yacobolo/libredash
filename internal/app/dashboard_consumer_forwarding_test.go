@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	queryauthz "github.com/Yacobolo/leapview/internal/analytics/query/authz"
-	"github.com/Yacobolo/leapview/internal/dashboard"
 	"github.com/Yacobolo/leapview/internal/dashboard/command"
 	"github.com/Yacobolo/leapview/internal/dashboard/consumer"
 	dashboardstream "github.com/Yacobolo/leapview/internal/dashboard/stream"
@@ -26,7 +25,7 @@ func (m *consumerForwardingMetrics) ExecuteConsumersPage(ctx context.Context, re
 	_, m.admitter = workload.FromContext(ctx)
 	dataquery.ObservePhysicalQuery(ctx, dataquery.PhysicalQueryObservation{Count: 1})
 	for _, target := range request.Targets {
-		publish(consumer.Result{Target: target, Visual: dashboard.Visual{ID: target.ID}, Queries: 1})
+		publish(consumer.Result{Target: target, Queries: 1})
 	}
 	return nil
 }

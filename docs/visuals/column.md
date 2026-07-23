@@ -28,7 +28,7 @@ visuals:
 
 ## Stacked series
 
-Map status through `query.series` and enable `options.stacked` to show both the monthly total and each status contribution.
+Map status through `query.series` and enable `presentation.stacked` to show both the monthly total and each status contribution.
 
 {{< visual id="orders_by_month_status" >}}
 
@@ -37,10 +37,8 @@ visuals:
   orders_by_month_status:
     title: Orders by month and status
     description: Compares monthly order volume split by status.
-    shape: category_series_value
-    renderer: echarts
     type: column
-    options:
+    presentation:
       stacked: true
     query:
       dimensions:
@@ -58,7 +56,7 @@ visuals:
 
 ## Grouped series
 
-Keep the series unstacked to place statuses side by side, and use `options.legend` to position the series key above the plot.
+Keep the series unstacked to place statuses side by side, and use `presentation.legend` to position the series key above the plot.
 
 {{< visual id="orders_by_month_status_grouped" >}}
 
@@ -66,11 +64,9 @@ Keep the series unstacked to place statuses side by side, and use `options.legen
 visuals:
   orders_by_month_status_grouped:
     title: Orders by month and status grouped
-    shape: category_series_value
-    renderer: echarts
     type: column
-    options:
-      legend: true
+    presentation:
+      legend: bottom
     query:
       dimensions:
         purchase_month: orders.purchase_month

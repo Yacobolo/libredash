@@ -17,6 +17,26 @@ type QueryFilter struct {
 	Operator string
 	Values   []any
 	Groups   []QueryFilterGroup
+	Spatial  *SpatialFilter
+}
+
+type SpatialFilter struct {
+	Kind           string
+	LatitudeField  string
+	LongitudeField string
+	Fact           string
+	West           float64
+	South          float64
+	East           float64
+	North          float64
+	Points         []SpatialPoint
+	Center         SpatialPoint
+	RadiusMeters   float64
+}
+
+type SpatialPoint struct {
+	Longitude float64
+	Latitude  float64
 }
 
 type QueryFilterGroup struct {
@@ -137,9 +157,25 @@ func queryFilters(filters []QueryFilter) []semanticquery.Filter {
 			Operator: filter.Operator,
 			Values:   append([]any{}, filter.Values...),
 			Groups:   queryFilterGroups(filter.Groups),
+			Spatial:  semanticSpatialFilter(filter.Spatial),
 		}
 	}
 	return result
+}
+
+func semanticSpatialFilter(value *SpatialFilter) *semanticquery.SpatialFilter {
+	if value == nil {
+		return nil
+	}
+	points := make([]semanticquery.SpatialPoint, len(value.Points))
+	for index, point := range value.Points {
+		points[index] = semanticquery.SpatialPoint{Longitude: point.Longitude, Latitude: point.Latitude}
+	}
+	return &semanticquery.SpatialFilter{
+		Kind: value.Kind, LatitudeField: value.LatitudeField, LongitudeField: value.LongitudeField, Fact: value.Fact,
+		West: value.West, South: value.South, East: value.East, North: value.North, Points: points,
+		Center: semanticquery.SpatialPoint{Longitude: value.Center.Longitude, Latitude: value.Center.Latitude}, RadiusMeters: value.RadiusMeters,
+	}
 }
 
 func queryFilterGroups(groups []QueryFilterGroup) []semanticquery.FilterGroup {

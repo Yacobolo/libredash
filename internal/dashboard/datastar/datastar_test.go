@@ -1,40 +1,74 @@
 package datastar
 
 import (
+	"encoding/json"
 	"errors"
 	"slices"
 	"testing"
 
 	"github.com/Yacobolo/leapview/internal/dashboard"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 	dashboardstream "github.com/Yacobolo/leapview/internal/dashboard/stream"
+	uisignals "github.com/Yacobolo/leapview/internal/ui/signals"
+	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
+	visualizationruntime "github.com/Yacobolo/leapview/internal/visualization/runtime"
+	workspacecompiler "github.com/Yacobolo/leapview/internal/workspace/compiler"
 )
 
-func TestPatchKeys(t *testing.T) {
-	patch := DashboardPatch(dashboard.Patch{
-		Filters:       dashboard.Filters{}.WithDefaults(),
-		FilterOptions: map[string][]dashboard.FilterOption{"state": {{Value: "SP", Label: "SP"}}},
-		Status:        dashboard.Status{Loading: false},
-		Visuals:       map[string]dashboard.Visual{"orders": {ID: "orders", Type: "bar", Title: "Orders"}},
+func testVisualDefinition(t *testing.T, id string) visualizationdefinition.Definition {
+	t.Helper()
+	definitions, err := workspacecompiler.CompileVisualizationDefinitions(&reportdef.Dashboard{
+		ID: "test", SemanticModel: "model",
+		Visuals: reportdef.ChartVisualizations(map[string]reportdef.Visual{id: {Type: "bar", Title: id, Query: reportdef.VisualQuery{Table: "table", Measures: []reportdef.FieldRef{{Field: "measure"}}}}}),
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return definitions[id]
+}
 
-	for _, key := range []string{"filters", "filterOptions", "status", "visuals"} {
-		if _, ok := patch[key]; !ok {
-			t.Fatalf("dashboard patch missing key %q: %#v", key, patch)
-		}
+func testTableDefinition(t *testing.T, id string, table dashboard.Table) visualizationdefinition.Definition {
+	t.Helper()
+	if len(table.Columns) == 0 {
+		table.Columns = []dashboard.TableColumn{{Key: "value", Label: "Value"}}
 	}
-	if _, ok := patch["tables"]; ok {
-		t.Fatalf("dashboard patch should not include tables: %#v", patch)
+	fields := make([]string, len(table.Columns))
+	for index, column := range table.Columns {
+		fields[index] = column.Key
 	}
-	if _, ok := patch["kpis"]; ok {
-		t.Fatalf("dashboard patch should not include legacy kpis: %#v", patch)
+	definitions, err := workspacecompiler.CompileVisualizationDefinitions(&reportdef.Dashboard{
+		ID: "test", SemanticModel: "model",
+		Visuals: reportdef.TabularVisualizations("table", map[string]reportdef.TableVisual{id: {
+			Title: table.Title, Columns: table.Columns, DefaultSort: table.Sort, Style: table.Style,
+			Query: reportdef.TableQuery{Table: "table", Fields: fields},
+		}}),
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
+	return definitions[id]
+}
 
-	tablePatch := TablePatch("orders", dashboard.Table{Title: "Orders"})
-	visuals, ok := tablePatch["visuals"].(map[string]dashboard.TabularVisual)
-	if !ok || visuals["orders"].Title != "Orders" || visuals["orders"].Type != "table" {
-		t.Fatalf("table patch = %#v", tablePatch)
+func testVisualEnvelope(t *testing.T, id string, dataRevision, generation int64) visualizationir.VisualizationEnvelope {
+	t.Helper()
+	envelope, err := visualizationruntime.EnvelopeFromFrame(testVisualDefinition(t, id), visualizationruntime.Frame{Columns: []string{"label", "value"}, Rows: [][]any{}}, nil, dataRevision, generation)
+	if err != nil {
+		t.Fatal(err)
 	}
+	return envelope
+}
 
+func testTableEnvelope(t *testing.T, id string, table dashboard.Table, dataRevision, generation int64) visualizationir.VisualizationEnvelope {
+	t.Helper()
+	envelope, err := visualizationruntime.WindowEnvelopeFromDefinition(testTableDefinition(t, id, table), table, dataRevision, generation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return envelope
+}
+
+func TestLoadingPatch(t *testing.T) {
 	status, ok := LoadingPatch()["status"].(map[string]any)
 	if !ok || status["loading"] != true {
 		t.Fatalf("loading patch = %#v", LoadingPatch())
@@ -129,7 +163,7 @@ func TestRefreshEventEnvelopeCarriesExplicitDeliveryMetadata(t *testing.T) {
 		{
 			name: "visual result batch",
 			event: dashboardstream.RefreshEvent{
-				Type: dashboardstream.RefreshEventVisual, RefreshID: "refresh-9", Generation: 9, Target: "rating_count", Value: dashboard.Visual{ID: "rating_count", Type: "bar"},
+				Type: dashboardstream.RefreshEventVisual, RefreshID: "refresh-9", Generation: 9, Target: "rating_count", Value: testVisualEnvelope(t, "rating_count", 1, 9),
 			},
 			wantGroup:     "dashboard-results",
 			wantMergeRoot: "visuals",
@@ -151,18 +185,55 @@ func TestRefreshEventEnvelopeCarriesExplicitDeliveryMetadata(t *testing.T) {
 	}
 }
 
-func TestTableMetadataUpdatesDataWithoutChangingComponentStatus(t *testing.T) {
+func TestVisualMetadataUpdatesDataWithoutChangingComponentStatus(t *testing.T) {
 	table := dashboard.Table{Title: "Orders", Cardinality: dashboard.ExactCardinality(42)}
 	patch := RefreshEventPatch(dashboardstream.RefreshEvent{
-		Type: dashboardstream.RefreshEventTableMetadata, Target: "orders", Value: table,
+		Type: dashboardstream.RefreshEventVisualMetadata, Target: "orders", Value: testTableEnvelope(t, "orders", table, 1, 1),
 	})
-	visuals, ok := patch["visuals"].(map[string]dashboard.TabularVisual)
-	total, exact := visuals["orders"].Cardinality.ExactValue()
-	if !ok || total != 42 || !exact {
+	visuals, ok := patch["visuals"].(map[string]uisignals.DashboardVisualizationSignal)
+	var dataState visualizationir.VisualizationDataState
+	if ok {
+		if err := json.Unmarshal([]byte(visuals["orders"].DataState.Payload), &dataState); err != nil {
+			t.Fatal(err)
+		}
+	}
+	state, stateOK := dataState.Value.(*visualizationir.WindowedVisualizationDataState)
+	if !ok || !stateOK || state.Cardinality.Count == nil || *state.Cardinality.Count != 42 || state.Cardinality.Kind != visualizationir.VisualizationCardinalityKindExact {
 		t.Fatalf("metadata patch = %#v", patch)
 	}
 	if _, ok := patch["componentStatus"]; ok {
 		t.Fatalf("metadata patch changed target status: %#v", patch)
+	}
+}
+
+func TestVisualizationEnvelopeUsesStreamOwnedRevisionAndStatus(t *testing.T) {
+	patch := RefreshEventPatch(dashboardstream.RefreshEvent{
+		Type: dashboardstream.RefreshEventVisual, Target: "orders", Generation: 7, DataRevision: 11,
+		Value: testVisualEnvelope(t, "orders", 11, 7),
+	})
+	visuals, ok := patch["visuals"].(map[string]uisignals.DashboardVisualizationSignal)
+	if !ok {
+		t.Fatalf("visual patch = %#v", patch)
+	}
+	envelope := visuals["orders"]
+	if envelope.DataRevision != 11 || envelope.Status.Kind != visualizationir.VisualizationStatusKindNoData {
+		t.Fatalf("visual envelope = %#v", envelope)
+	}
+	if _, legacy := patch["componentStatus"]; legacy {
+		t.Fatalf("visual patch retains component status: %#v", patch)
+	}
+
+	loading := RefreshEventPatch(dashboardstream.RefreshEvent{Type: dashboardstream.RefreshEventStart, Generation: 8, Targets: []string{"visual:orders"}})
+	loadingVisuals, ok := loading["visuals"].(map[string]any)
+	if !ok {
+		t.Fatalf("loading patch = %#v", loading)
+	}
+	orders, ok := loadingVisuals["orders"].(map[string]any)
+	if !ok || orders["status"].(map[string]any)["kind"] != "loading" {
+		t.Fatalf("loading visualization status = %#v", loadingVisuals)
+	}
+	if _, legacy := loading["componentStatus"]; legacy {
+		t.Fatalf("loading patch retains component status: %#v", loading)
 	}
 }
 

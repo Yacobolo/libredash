@@ -94,10 +94,16 @@ try {
             shadowRoot: ShadowRoot
           }
           if (!dashboard?.shadowRoot || dashboard.signals?.status?.loading !== false) return false
-          const charts = Array.from(dashboard.shadowRoot.querySelectorAll('lv-echart')) as Array<HTMLElement & {
-            chart?: { data?: unknown[] }
+          const charts = Array.from(dashboard.shadowRoot.querySelectorAll('lv-visualization-host')) as Array<HTMLElement & {
+            envelope?: { status?: { kind?: string }; dataState?: { kind?: string; datasets?: Array<{ rows?: unknown[] }>; availableRows?: number } }
           }>
-          return charts.length >= 4 && charts.every((chart) => (chart.chart?.data?.length ?? 0) > 0)
+          return charts.length >= 4 && charts.every((chart) => {
+            const envelope = chart.envelope
+            if (!envelope || (envelope.status?.kind !== 'ready' && envelope.status?.kind !== 'partial')) return false
+            return envelope.dataState?.kind === 'windowed'
+              ? (envelope.dataState.availableRows ?? 0) > 0
+              : (envelope.dataState?.datasets?.[0]?.rows?.length ?? 0) > 0
+          })
         })
         await page.waitForTimeout(250)
         await page.screenshot({

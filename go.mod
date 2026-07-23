@@ -4,13 +4,14 @@ go 1.25.12
 
 require (
 	cuelang.org/go v0.16.1
-	github.com/Yacobolo/toolbelt/apigen v0.5.3
+	github.com/Yacobolo/toolbelt/apigen v0.6.5
 	github.com/alexedwards/argon2id v1.0.0
 	github.com/apache/arrow-go/v18 v18.5.1
 	github.com/aws/aws-sdk-go-v2 v1.42.1
 	github.com/aws/aws-sdk-go-v2/config v1.32.30
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.29
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.105.1
+	github.com/aws/smithy-go v1.27.3
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/coreos/go-oidc/v3 v3.19.0
 	github.com/cyphar/filepath-securejoin v0.7.0
@@ -62,7 +63,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sso v1.32.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.37.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.44.1 // indirect
-	github.com/aws/smithy-go v1.27.3 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect

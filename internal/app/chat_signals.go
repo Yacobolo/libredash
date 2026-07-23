@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 
 	"github.com/Yacobolo/leapview/internal/agent"
-	"github.com/Yacobolo/leapview/internal/dashboard"
 	"github.com/Yacobolo/leapview/internal/ui"
 	uisignals "github.com/Yacobolo/leapview/internal/ui/signals"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 )
 
 func chatSignalWithConversations(conversations []ui.ChatConversationSummary, activeID string, transcript []agent.ChatTranscriptItem, artifacts agent.ChatArtifactSignals, statusErr string, running, enabled bool) ui.ChatViewState {
@@ -84,44 +84,26 @@ func normalizeChatArtifacts(artifacts agent.ChatArtifactSignals) agent.ChatArtif
 	return artifacts
 }
 
-func typedChatArtifacts(artifacts agent.ChatArtifactSignals) map[string]uisignals.DashboardVisual {
-	visuals := map[string]uisignals.DashboardVisual{}
+func typedChatArtifacts(artifacts agent.ChatArtifactSignals) map[string]visualizationir.VisualizationEnvelope {
+	visuals := map[string]visualizationir.VisualizationEnvelope{}
 	for key, value := range artifacts.Visuals {
 		raw, err := json.Marshal(value)
 		if err != nil {
 			continue
 		}
-		var discriminator struct {
-			Type string `json:"type"`
-		}
-		if err := json.Unmarshal(raw, &discriminator); err != nil {
+		var envelope visualizationir.VisualizationEnvelope
+		if err := json.Unmarshal(raw, &envelope); err != nil || envelope.VisualID != key || visualizationir.ValidateEnvelope(envelope) != nil {
 			continue
 		}
-		if !isChatVisualType(discriminator.Type) {
-			continue
-		}
-		if discriminator.Type == "table" || discriminator.Type == "matrix" || discriminator.Type == "pivot" {
-			var tabular dashboard.TabularVisual
-			if err := json.Unmarshal(raw, &tabular); err == nil {
-				tabular.Table.Kind = map[string]string{"table": "data_table", "matrix": "matrix_table", "pivot": "pivot_table"}[discriminator.Type]
-				visuals[key] = uisignals.DashboardTabularVisualFromDashboard(key, tabular.Table)
-			}
-			continue
-		}
-		var visual dashboard.Visual
-		if err := json.Unmarshal(raw, &visual); err == nil {
-			visuals[key] = uisignals.DashboardVisualFromDashboard(visual)
-		}
+		visuals[key] = envelope
 	}
 	return visuals
 }
 
-func isChatVisualType(value string) bool {
-	switch value {
-	case "line", "area", "bar", "column", "pie", "donut", "scatter", "funnel", "treemap", "gauge", "heatmap", "sankey", "graph", "map", "candlestick", "boxplot", "combo", "waterfall", "histogram", "radar", "tree", "sunburst", "kpi", "table", "matrix", "pivot":
-		return true
-	default:
-		return false
+func chatSignalPatch(signal ui.ChatViewState) map[string]any {
+	return map[string]any{
+		"agent":   signal.Agent,
+		"visuals": signal.Visuals,
 	}
 }
 

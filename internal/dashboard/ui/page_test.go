@@ -9,6 +9,9 @@ import (
 	"testing"
 
 	"github.com/Yacobolo/leapview/internal/dashboard"
+	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
+	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
+	workspacecompiler "github.com/Yacobolo/leapview/internal/workspace/compiler"
 )
 
 func fieldRefs(fields ...string) []reportdef.FieldRef {
@@ -28,26 +31,27 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 			"state":    {Type: "multi_select", Label: "State", Dimension: "orders.state", URLParam: "state", Operator: "in"},
 			"category": {Type: "text", Label: "Category", Dimension: "orders.category", URLParam: "category", DefaultOperator: "contains"},
 		},
-		Visuals: map[string]reportdef.Visual{
+		Visuals: reportdef.MergeVisualizations(reportdef.ChartVisualizations(map[string]reportdef.Visual{
 			"active_chart":   {Title: "Active", Type: "bar", Query: reportdef.VisualQuery{Dimensions: fieldRefs("orders.status"), Measures: fieldRefs("order_count")}, Interaction: reportdef.Interaction{PointSelection: reportdef.SelectionInteraction{Mappings: []reportdef.SelectionMapping{{Field: "orders.status", Fact: "orders", Value: "label"}}, Targets: []string{"orders"}}}},
-			"active_kpi":     {Kind: "kpi", Shape: "single_value", Query: reportdef.VisualQuery{Measures: fieldRefs("order_count")}, Options: map[string]any{"note": "Filtered", "tone": "ink"}},
+			"active_kpi":     {Type: "kpi", Query: reportdef.VisualQuery{Measures: fieldRefs("order_count")}, Presentation: reportdef.VisualPresentation{Note: "Filtered", Tone: "ink"}},
 			"off_page_chart": {Title: "Off Page", Type: "bar", Query: reportdef.VisualQuery{Dimensions: fieldRefs("orders.status"), Measures: fieldRefs("order_count")}},
-		},
-		Tables: map[string]reportdef.TableVisual{
+		}), reportdef.TabularVisualizations("table", map[string]reportdef.TableVisual{
 			"orders":   {Title: "Orders", Query: reportdef.TableQuery{Table: "orders", Fields: []string{"orders.order_id"}}, Interaction: reportdef.Interaction{RowSelection: reportdef.SelectionInteraction{Mappings: []reportdef.SelectionMapping{{Field: "orders.order_id", Fact: "orders", Value: "order_id"}}, Targets: []string{"active_chart"}}}, Style: dashboard.TableStyle{Density: "compact", Grid: "full"}, Columns: []dashboard.TableColumn{{Key: "order_id", Label: "Order", Width: 220, Format: "text"}}},
-			"matrix":   {Title: "Matrix", Kind: "matrix_table", Query: reportdef.TableQuery{Rows: fieldRefs("orders.status"), Measures: fieldRefs("order_count")}, Columns: []dashboard.TableColumn{{Key: "status", Label: "Status"}}},
-			"pivot":    {Title: "Pivot", Kind: "pivot_table", Query: reportdef.TableQuery{Rows: fieldRefs("orders.status"), Columns: fieldRefs("orders.category"), Measures: fieldRefs("order_count")}, Columns: []dashboard.TableColumn{{Key: "status", Label: "Status"}}},
 			"off_page": {Title: "Off Page", Query: reportdef.TableQuery{Table: "orders", Fields: []string{"orders.order_id"}}, Columns: []dashboard.TableColumn{{Key: "order_id", Label: "Order"}}},
-		},
+		}), reportdef.TabularVisualizations("matrix", map[string]reportdef.TableVisual{
+			"matrix": {Title: "Matrix", Query: reportdef.TableQuery{Rows: fieldRefs("orders.status"), Measures: fieldRefs("order_count")}, Columns: []dashboard.TableColumn{{Key: "status", Label: "Status"}}},
+		}), reportdef.TabularVisualizations("pivot", map[string]reportdef.TableVisual{
+			"pivot": {Title: "Pivot", Query: reportdef.TableQuery{Rows: fieldRefs("orders.status"), Columns: fieldRefs("orders.category"), Measures: fieldRefs("order_count")}, Columns: []dashboard.TableColumn{{Key: "status", Label: "Status"}}},
+		})),
 		Pages: []dashboard.Page{
 			{
 				ID:     "showcase",
 				Title:  "Showcase",
 				Canvas: dashboard.PageCanvas{Width: 1200, Height: 800},
 				Visuals: []dashboard.PageVisual{
-					{ID: "state-filter", Kind: "filter_card", Filter: "state", X: 0, Y: 0, Width: 100, Height: 40},
-					{ID: "kpi", Kind: "kpi_card", Visual: "active_kpi", X: 0, Y: 0, Width: 100, Height: 100},
-					{ID: "chart", Kind: "bar_chart", Visual: "active_chart", X: 0, Y: 0, Width: 100, Height: 100},
+					{ID: "state-filter", Kind: "filter", Filter: "state", X: 0, Y: 0, Width: 100, Height: 40},
+					{ID: "kpi", Kind: "visual", Visual: "active_kpi", X: 0, Y: 0, Width: 100, Height: 100},
+					{ID: "chart", Kind: "visual", Visual: "active_chart", X: 0, Y: 0, Width: 100, Height: 100},
 				},
 			},
 			{
@@ -55,9 +59,9 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 				Title:  "Tables",
 				Canvas: dashboard.PageCanvas{Width: 1200, Height: 800},
 				Visuals: []dashboard.PageVisual{
-					{ID: "orders", Kind: "table", Table: "orders", X: 0, Y: 0, Width: 100, Height: 100},
-					{ID: "matrix", Kind: "table", Table: "matrix", X: 0, Y: 120, Width: 100, Height: 100},
-					{ID: "pivot", Kind: "table", Table: "pivot", X: 120, Y: 120, Width: 100, Height: 100},
+					{ID: "orders", Kind: "visual", Visual: "orders", X: 0, Y: 0, Width: 100, Height: 100},
+					{ID: "matrix", Kind: "visual", Visual: "matrix", X: 0, Y: 120, Width: 100, Height: 100},
+					{ID: "pivot", Kind: "visual", Visual: "pivot", X: 120, Y: 120, Width: 100, Height: 100},
 				},
 			},
 		},
@@ -73,8 +77,16 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 		},
 		Measures: map[string]semanticmodel.MetricMeasure{"order_count": {Fact: "orders", Aggregation: "count", Empty: "zero", Label: "Orders"}},
 	}
+	definitions, err := workspacecompiler.CompileVisualizationDefinitions(&report, model)
+	if err != nil {
+		t.Fatal(err)
+	}
+	compiled, err := workspacecompiler.CompileDashboardDefinition(&report, definitions)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	showcase := renderPageForTest(t, report, model, report.Pages[0])
+	showcase := renderPageForTest(t, compiled, model, report.Pages[0])
 	if !strings.Contains(showcase, `<lv-dashboard-page`) || !strings.Contains(showcase, `data-on:lv-filters-change`) || !strings.Contains(showcase, `data-on:lv-interaction-select`) {
 		t.Fatalf("showcase page did not mount dashboard route root with command bridge:\n%s", showcase)
 	}
@@ -99,10 +111,12 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 		}
 	}
 	commandSignalFilters := map[string][]string{
-		"data-on:lv-interaction-select":   {"runtime", "interactionCommand"},
-		"data-on:lv-visual-window-change": {"runtime", "visualWindowCommand"},
-		"data-on:lv-filters-change":       {"runtime", "filters[.]controls"},
-		"data-on:lv-selection-clear":      {"runtime"},
+		"data-on:lv-interaction-select":           {"runtime", "interactionCommand"},
+		"data-on:lv-interaction-spatial-select":   {"runtime", "spatialInteractionCommand"},
+		"data-on:lv-visualization-window-request": {"runtime", "visualWindowCommand"},
+		"data-on:lv-visual-spatial-window-change": {"runtime", "visualSpatialWindowCommand"},
+		"data-on:lv-filters-change":               {"runtime", "filters[.]controls"},
+		"data-on:lv-selection-clear":              {"runtime"},
 	}
 	for attr, signalPaths := range commandSignalFilters {
 		segment := renderedAttrSegment(showcase, attr)
@@ -119,6 +133,9 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 				t.Fatalf("%s segment = %q, must not post heavy signal %q", attr, segment, forbidden)
 			}
 		}
+	}
+	if strings.Contains(showcase, "data-on:lv-visual-window-change") {
+		t.Fatalf("showcase page retained the retired table-specific window event:\n%s", showcase)
 	}
 	agentSegment := renderedAttrSegment(showcase, "data-on:lv-chat-submit")
 	for _, expected := range []string{"/chats/turns", "filterSignals", "agent", "agentContext"} {
@@ -142,7 +159,7 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 			t.Fatalf("agent restore segment = %q, must not send unrelated signal %q", agentRestoreSegment, forbidden)
 		}
 	}
-	showcaseSignals := html.UnescapeString(jsonString(BootstrapSignals("client", "stream-instance", dashboard.Catalog{}, report, model, report.Pages, report.Pages[0], dashboard.Filters{})))
+	showcaseSignals := html.UnescapeString(jsonString(BootstrapSignals("client", "stream-instance", dashboard.Catalog{}, compiled, model, definitions, report.Pages, report.Pages[0], dashboard.Filters{})))
 	for _, expected := range []string{`"agent":{`, `"agentContext":{`, `"surface":"dashboard"`, `"agentVisuals":{}`} {
 		if !strings.Contains(showcaseSignals, expected) {
 			t.Fatalf("showcase bootstrap missing dashboard agent signal %s:\n%s", expected, showcaseSignals)
@@ -176,29 +193,29 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 		t.Fatalf("showcase bootstrap included off-page category filter:\n%s", showcaseSignals)
 	}
 
-	tables := renderPageForTest(t, report, model, report.Pages[1])
-	tableSignals := html.UnescapeString(jsonString(BootstrapSignals("client", "stream-instance", dashboard.Catalog{}, report, model, report.Pages, report.Pages[1], dashboard.Filters{})))
+	tables := renderPageForTest(t, compiled, model, report.Pages[1])
+	tableSignals := html.UnescapeString(jsonString(BootstrapSignals("client", "stream-instance", dashboard.Catalog{}, compiled, model, definitions, report.Pages, report.Pages[1], dashboard.Filters{})))
 	for tableID, visualType := range map[string]string{"orders": "table", "matrix": "matrix", "pivot": "pivot"} {
-		if !strings.Contains(tableSignals, `"`+tableID+`":{`) || !strings.Contains(tableSignals, `"type":"`+visualType+`"`) {
+		if !strings.Contains(tableSignals, `"`+tableID+`":{`) || !strings.Contains(tableSignals, `"kind":"`+visualType+`"`) {
 			t.Fatalf("visual bootstrap did not include tabular visual %q with type %q:\n%s", tableID, visualType, tableSignals)
 		}
 	}
-	if !strings.Contains(tableSignals, `"style":{"density":"compact"`) || !strings.Contains(tableSignals, `"rowHeight":28`) || !strings.Contains(tableSignals, `"width":220`) {
+	if !strings.Contains(tableSignals, `"presentation":{"rowHeight":28,"striped":true,"showHeader":true}`) || !strings.Contains(tableSignals, `"width":220`) {
 		t.Fatalf("tables bootstrap did not include table style and column display metadata:\n%s", tableSignals)
 	}
 	assertNoDashboardProductDOM(t, tables)
-	if !strings.Contains(showcaseSignals, `"interaction":{"kind":"point_selection","mappings":[{"fact":"orders","field":"orders.status","value":"label"}],"targets":["orders"],"toggle":false}`) || strings.Contains(showcaseSignals, `"mode":"multi"`) {
-		t.Fatalf("showcase bootstrap did not include point selection without mode:\n%s", showcaseSignals)
+	if !strings.Contains(showcaseSignals, `"interactions":[{"id":"point_selection","kind":"select","mappings":[{"source":{"dataset":"primary","field":"label"},"targetFieldID":"orders.status","targetFactID":"orders"}],"targets":["orders"],"mode":"single","requiresStableIdentity":true}]`) {
+		t.Fatalf("showcase bootstrap did not include the compiled point selection:\n%s", showcaseSignals)
 	}
-	if !strings.Contains(tableSignals, `"interaction":{"kind":"row_selection","mappings":[{"fact":"orders","field":"orders.order_id","value":"order_id"}],"targets":["active_chart"],"toggle":false}`) || strings.Contains(tableSignals, `"mode":"multi"`) {
-		t.Fatalf("tables bootstrap did not include row selection without mode:\n%s", tableSignals)
+	if !strings.Contains(tableSignals, `"interactions":[{"id":"row_selection","kind":"select","mappings":[{"source":{"dataset":"primary","field":"order_id"},"targetFieldID":"orders.order_id","targetFactID":"orders"}],"targets":["active_chart"],"mode":"single","requiresStableIdentity":true}]`) {
+		t.Fatalf("tables bootstrap did not include the compiled row selection:\n%s", tableSignals)
 	}
 	if strings.Contains(tableSignals, `"off_page"`) {
 		t.Fatalf("tables bootstrap included off-page table:\n%s", tableSignals)
 	}
 }
 
-func renderPageForTest(t *testing.T, report reportdef.Dashboard, model *semanticmodel.Model, activePage dashboard.Page) string {
+func renderPageForTest(t *testing.T, report dashboarddefinition.Definition, model *semanticmodel.Model, activePage dashboard.Page) string {
 	t.Helper()
 	var out strings.Builder
 	err := Page("client", "", dashboard.Catalog{}, report, model, report.Pages, activePage, dashboard.Filters{}).Render(&out)
@@ -209,7 +226,7 @@ func renderPageForTest(t *testing.T, report reportdef.Dashboard, model *semantic
 }
 
 func TestPageCreatesUniqueStreamInstancePerRender(t *testing.T) {
-	report := reportdef.Dashboard{ID: "report", SemanticModel: "model", Pages: []dashboard.Page{{ID: "overview"}}}
+	report := dashboarddefinition.Definition{ID: "report", SemanticModel: "model", Pages: []dashboard.Page{{ID: "overview"}}, Filters: map[string]dashboarddefinition.FilterDefinition{}, Visualizations: map[string]visualizationdefinition.Definition{}}
 	model := &semanticmodel.Model{Name: "model"}
 
 	first := renderPageForTest(t, report, model, report.Pages[0])

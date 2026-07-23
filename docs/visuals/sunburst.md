@@ -15,8 +15,6 @@ visuals:
   category_status_sunburst:
     title: Category and status hierarchy
     description: Shows category and status hierarchy by order count.
-    shape: hierarchy
-    renderer: echarts
     type: sunburst
     query:
       dimensions:
@@ -40,8 +38,6 @@ Replace the parent dimension with state to reuse the hierarchy contract for a ge
 visuals:
   state_status_sunburst:
     title: State and status sunburst
-    shape: hierarchy
-    renderer: echarts
     type: sunburst
     query:
       dimensions:
@@ -65,10 +61,8 @@ Add a third ordered dimension for deeper nesting, set `initial_depth` to control
 visuals:
   category_state_status_sunburst:
     title: Category, state, and status sunburst
-    shape: hierarchy
-    renderer: echarts
     type: sunburst
-    options:
+    presentation:
       initial_depth: 2
       roam: true
     query:

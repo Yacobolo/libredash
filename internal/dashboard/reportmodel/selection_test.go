@@ -218,15 +218,15 @@ func selectionFixture() (*report.Dashboard, *semanticmodel.Model) {
 			"tag_count":    {Fact: "tags"},
 		},
 	}
-	dashboard := &report.Dashboard{Visuals: map[string]report.Visual{
+	dashboard := &report.Dashboard{Visuals: map[string]report.AuthoringVisualization{
 		"cross_fact": selectionVisual(refs("release_decade"), []report.FieldRef{{Field: "rating_count"}, {Field: "tag_count"}}, report.QueryTime{}, report.SelectionInteraction{}),
 		"tags_only":  selectionVisual(refs("tags.tag"), []report.FieldRef{{Field: "tag_count"}}, report.QueryTime{}, report.SelectionInteraction{}),
 	}}
 	return dashboard, model
 }
 
-func selectionVisual(dimensions, measures []report.FieldRef, time report.QueryTime, selection report.SelectionInteraction) report.Visual {
-	return report.Visual{Query: report.VisualQuery{Dimensions: dimensions, Measures: measures, Time: time}, Interaction: report.Interaction{PointSelection: selection}}
+func selectionVisual(dimensions, measures []report.FieldRef, time report.QueryTime, selection report.SelectionInteraction) report.AuthoringVisualization {
+	return report.ChartVisualization(report.Visual{Type: "bar", Query: report.VisualQuery{Dimensions: dimensions, Measures: measures, Time: time}, Interaction: report.Interaction{PointSelection: selection}})
 }
 
 func refs(fields ...string) []report.FieldRef {

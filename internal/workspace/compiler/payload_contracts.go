@@ -233,89 +233,6 @@ type filterTargetsPayloadV1 struct {
 	Visuals []string `json:"visuals,omitempty"`
 }
 
-type visualPayloadV1 struct {
-	Title           string               `json:"Title"`
-	Description     string               `json:"Description"`
-	Shape           string               `json:"Shape"`
-	Renderer        string               `json:"Renderer"`
-	Type            string               `json:"Type"`
-	Query           visualQueryPayloadV1 `json:"Query"`
-	Options         map[string]any       `json:"Options"`
-	RendererOptions map[string]any       `json:"RendererOptions"`
-	Encode          map[string]string    `json:"Encode"`
-	Interaction     selectionPayloadV1   `json:"Interaction"`
-}
-
-type selectionPayloadV1 struct {
-	Toggle   bool                        `json:"Toggle"`
-	Mappings []selectionMappingPayloadV1 `json:"Mappings"`
-	Targets  []string                    `json:"Targets"`
-}
-
-type selectionMappingPayloadV1 struct {
-	Field string `json:"Field"`
-	Fact  string `json:"Fact"`
-	Grain string `json:"Grain"`
-	Value string `json:"Value"`
-	Label string `json:"Label"`
-}
-
-type visualQueryPayloadV1 struct {
-	Table      string             `json:"Table"`
-	Dimensions []string           `json:"Dimensions"`
-	Series     string             `json:"Series"`
-	Measures   []string           `json:"Measures"`
-	Time       queryTimePayloadV1 `json:"Time"`
-	Sort       []sortPayloadV1    `json:"Sort"`
-	Limit      int                `json:"Limit"`
-}
-
-type queryTimePayloadV1 struct {
-	Field string `json:"field"`
-	Grain string `json:"grain"`
-	Alias string `json:"alias,omitempty"`
-}
-
-type sortPayloadV1 struct {
-	Field     string `json:"Field"`
-	Direction string `json:"Direction"`
-	Expr      string `json:"Expr"`
-}
-
-type tablePayloadV1 struct {
-	Title       string              `json:"Title"`
-	Description string              `json:"Description"`
-	Type        string              `json:"Type"`
-	Query       tableQueryPayloadV1 `json:"Query"`
-	Rows        []string            `json:"Rows"`
-	ColumnDims  []string            `json:"ColumnDims"`
-	DataColumns []fieldRefPayloadV1 `json:"DataColumns"`
-	Style       tableStylePayloadV1 `json:"Style"`
-	DefaultSort tableSortPayloadV1  `json:"DefaultSort"`
-	Interaction selectionPayloadV1  `json:"Interaction"`
-}
-
-type tableQueryPayloadV1 struct {
-	Table    string   `json:"Table"`
-	Measures []string `json:"Measures"`
-}
-
-type fieldRefPayloadV1 struct {
-	Field string `json:"field"`
-	Alias string `json:"alias,omitempty"`
-}
-
-type tableStylePayloadV1 struct {
-	Density string `json:"density"`
-	Zebra   *bool  `json:"zebra"`
-	Grid    string `json:"grid"`
-}
-
-type tableSortPayloadV1 struct {
-	Key       string `json:"key"`
-	Direction string `json:"direction"`
-}
-
 type pagePayloadV1 struct {
 	ID          string       `json:"ID"`
 	Title       string       `json:"Title"`
@@ -367,7 +284,6 @@ type pageItemPayloadV1 struct {
 	ID          string          `json:"ID"`
 	Kind        string          `json:"Kind"`
 	Visual      string          `json:"Visual"`
-	Table       string          `json:"Table"`
 	Filter      string          `json:"Filter"`
 	Description string          `json:"Description"`
 	Placement   pagePlacementV1 `json:"Placement"`

@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/leapview/internal/dashboard"
 	"github.com/Yacobolo/leapview/internal/dashboard/command"
 	"github.com/Yacobolo/leapview/internal/dashboard/consumer"
 	"github.com/Yacobolo/leapview/internal/dataquery"
@@ -35,20 +34,20 @@ func TestTargetWorkPublishesProgressiveConsumerResultsWithoutPresentationKnowled
 			t.Fatalf("concurrency = %d", request.Concurrency)
 		}
 		request.Progress(consumer.Progress{Total: 2})
-		publish(consumer.Result{Target: request.Targets[1], Table: dashboard.Table{Title: "Orders"}})
-		publish(consumer.Result{Target: request.Targets[1], Table: dashboard.Table{Title: "Orders", Cardinality: dashboard.ExactCardinality(42)}, TableMetadata: true})
+		publish(consumer.Result{Target: request.Targets[1]})
+		publish(consumer.Result{Target: request.Targets[1], Metadata: true})
 		request.Progress(consumer.Progress{Completed: 1, Total: 2, WorkDuration: 20 * time.Millisecond})
-		publish(consumer.Result{Target: request.Targets[0], Visual: dashboard.Visual{ID: "revenue"}})
+		publish(consumer.Result{Target: request.Targets[0]})
 		request.Progress(consumer.Progress{Completed: 2, Total: 2, WorkDuration: 30 * time.Millisecond, CriticalPathDuration: 40 * time.Millisecond})
 		return nil
 	}}
 	events := runTargetWork(t, executor, command.RefreshPlan{Targets: []command.Target{
 		{Kind: command.TargetVisual, ID: "revenue"},
-		{Kind: command.TargetTable, ID: "orders"},
+		{Kind: command.TargetWindow, ID: "orders"},
 	}})
 	if len(events) != 6 ||
 		events[0].Type != RefreshEventProgress || events[0].ProgressPercent == nil || *events[0].ProgressPercent != 0 ||
-		events[1].Type != RefreshEventTable || events[2].Type != RefreshEventTableMetadata ||
+		events[1].Type != RefreshEventVisual || events[2].Type != RefreshEventVisualMetadata ||
 		events[3].Type != RefreshEventProgress || events[3].ProgressPercent == nil || *events[3].ProgressPercent != 50 ||
 		events[4].Type != RefreshEventVisual ||
 		events[5].Type != RefreshEventProgress || events[5].ProgressPercent == nil || *events[5].ProgressPercent != 100 {

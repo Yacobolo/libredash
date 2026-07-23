@@ -62,6 +62,20 @@ const builds: AssetBuild[] = [
       naming: { entry: '[name].[ext]', chunk: 'chunks/shared-[name]-[hash].[ext]' },
     },
   },
+  {
+    label: 'Vega-Lite sandbox',
+    clean: ['static/vega-sandbox.js'],
+    options: {
+      entrypoints: ['web/components/dashboard/visualization/vega-sandbox.ts'],
+      target: 'browser',
+      format: 'esm',
+      splitting: false,
+      minify: true,
+      define: { 'process.env.NODE_ENV': '"production"' },
+      outdir: 'static',
+      naming: { entry: '[name].[ext]' },
+    },
+  },
 ]
 
 for (const build of builds) {

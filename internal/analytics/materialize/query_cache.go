@@ -170,7 +170,27 @@ func (c *queryResultCache) lookupArrow(ctx context.Context, request dataquery.Qu
 }
 
 func (c *queryResultCache) cacheKey(request dataquery.Query) (string, uint64, error) {
-	keyBytes, err := json.Marshal(queryResultCacheKey{Namespace: c.namespace, WorkspaceID: request.WorkspaceID, Operation: request.Operation, ModelID: request.ModelID, Kind: request.Kind, Target: request.Target, Fields: request.Fields, Measures: request.Measures, AuthorizationFields: request.AuthorizationFields, Value: request.Value, Time: request.Time, Filters: request.Filters, Sort: request.Sort, ColumnMasks: request.ColumnMasks, Offset: request.Offset, Limit: request.Limit, BinCount: request.BinCount, IncludeTotal: request.IncludeTotal})
+	keyBytes, err := json.Marshal(queryResultCacheKey{
+		Namespace:           c.namespace,
+		WorkspaceID:         request.WorkspaceID,
+		Operation:           request.Operation,
+		ModelID:             request.ModelID,
+		Kind:                request.Kind,
+		Target:              request.Target,
+		Fields:              request.Fields,
+		Measures:            request.Measures,
+		AuthorizationFields: request.AuthorizationFields,
+		Value:               request.Value,
+		Time:                request.Time,
+		Filters:             request.Filters,
+		Sort:                request.Sort,
+		ColumnMasks:         request.ColumnMasks,
+		Offset:              request.Offset,
+		Limit:               request.Limit,
+		BinCount:            request.BinCount,
+		IncludeTotal:        request.IncludeTotal,
+		Spatial:             request.Spatial,
+	})
 	if err != nil {
 		return "", 0, fmt.Errorf("encode governed query cache key: %w", err)
 	}
@@ -205,6 +225,7 @@ type queryResultCacheKey struct {
 	Limit               int
 	BinCount            int
 	IncludeTotal        bool
+	Spatial             *dataquery.SpatialWindow
 }
 
 func (c *queryResultCache) clear() {

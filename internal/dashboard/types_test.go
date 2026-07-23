@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 	"testing"
+
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 )
 
 func TestNormalizeProgressPercentKeepsThePublicSignalBounded(t *testing.T) {
@@ -383,6 +385,27 @@ func TestInteractionCommandMappingDistinguishesOmittedValueFromExplicitNull(t *t
 	}
 	if !command.Mappings[1].HasValue() || command.Mappings[1].Value != nil {
 		t.Fatalf("explicit null mapping = %#v, want present null", command.Mappings[1])
+	}
+}
+
+func TestFiltersApplySpatialInteractionReplacesAndClearsOnlyItsSource(t *testing.T) {
+	box := visualizationir.VisualizationSpatialSelectionGeometry{Value: &visualizationir.VisualizationSpatialBoxSelection{
+		VisualizationSpatialSelectionGeometryBase: visualizationir.VisualizationSpatialSelectionGeometryBase{Kind: "box"}, Kind: "box",
+		Bounds: visualizationir.VisualizationSpatialBounds{West: -50, South: -25, East: -40, North: -15},
+	}}
+	radius := visualizationir.VisualizationSpatialSelectionGeometry{Value: &visualizationir.VisualizationSpatialRadiusSelection{
+		VisualizationSpatialSelectionGeometryBase: visualizationir.VisualizationSpatialSelectionGeometryBase{Kind: "radius"}, Kind: "radius",
+		Center: visualizationir.VisualizationSpatialCoordinate{Longitude: -46, Latitude: -23}, RadiusMeters: 10_000,
+	}}
+	filters := Filters{}.ApplySpatialInteraction(SpatialSelectionCommand{VisualID: "map-a", InteractionID: "spatial_selection", Action: "set", Geometry: box})
+	filters = filters.ApplySpatialInteraction(SpatialSelectionCommand{VisualID: "map-b", InteractionID: "spatial_selection", Action: "set", Geometry: radius})
+	filters = filters.ApplySpatialInteraction(SpatialSelectionCommand{VisualID: "map-a", InteractionID: "spatial_selection", Action: "set", Geometry: radius})
+	if len(filters.SpatialSelections) != 2 || filters.SpatialSelections[0].VisualID != "map-b" || filters.SpatialSelections[1].VisualID != "map-a" {
+		t.Fatalf("spatial selections = %#v", filters.SpatialSelections)
+	}
+	filters = filters.ApplySpatialInteraction(SpatialSelectionCommand{VisualID: "map-a", InteractionID: "spatial_selection", Action: "clear"})
+	if len(filters.SpatialSelections) != 1 || filters.SpatialSelections[0].VisualID != "map-b" {
+		t.Fatalf("spatial selection clear = %#v", filters.SpatialSelections)
 	}
 }
 

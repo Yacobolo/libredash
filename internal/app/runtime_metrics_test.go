@@ -100,7 +100,7 @@ func (r *targetLeaseRuntime) Close() error { return nil }
 func (r *targetLeaseRuntime) ExecuteConsumersPage(_ context.Context, request consumer.Request, publish consumer.Publisher) error {
 	for _, target := range request.Targets {
 		r.calls++
-		publish(consumer.Result{Target: target, Visual: dashboard.Visual{ID: r.id}})
+		publish(consumer.Result{Target: target})
 	}
 	return nil
 }

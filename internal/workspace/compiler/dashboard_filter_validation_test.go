@@ -33,13 +33,12 @@ func TestValidateDashboardPreservesFactOnLocalFilterForMultiFactTarget(t *testin
 				Fact: "ratings", Operator: "in",
 			},
 		},
-		Visuals: map[string]report.Visual{
+		Visuals: report.ChartVisualizations(map[string]report.Visual{
 			"target": {
-				Kind:  "kpi",
-				Shape: "single_value",
+				Type:  "kpi",
 				Query: report.VisualQuery{Measures: []report.FieldRef{{Field: "tags_per_rating"}}},
 			},
-		},
+		}),
 		Pages: []dashboard.Page{{ID: "overview", Title: "Overview"}},
 	}
 

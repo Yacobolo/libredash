@@ -200,7 +200,7 @@ function columnVisibilityHandler(column: any, fallback: (checked: boolean) => vo
   }
 }
 
-class ReportTable extends LitElement {
+export class ReportTable extends LitElement {
   static properties = {
     tableId: { attribute: 'table-id' },
     table: { attribute: 'table', converter: tableConverter },
@@ -1865,4 +1865,4 @@ function cardinalityLabel(cardinality: TableSignal['cardinality']): string {
   }
 }
 
-customElements.define('lv-report-table', ReportTable)
+if (!customElements.get('lv-report-table')) customElements.define('lv-report-table', ReportTable)

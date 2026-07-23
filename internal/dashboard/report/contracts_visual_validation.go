@@ -11,7 +11,7 @@ func validateVisualQueryShape(name string, visual Visual) error {
 		dimensionCount++
 	}
 	if visual.KindOrDefault() == "kpi" {
-		if visual.ShapeOrDefault() != "single_value" {
+		if visual.ResultShape() != "single_value" {
 			return fmt.Errorf("visual %q kind kpi requires shape single_value", name)
 		}
 		if len(visual.Query.Measures) != 1 {
@@ -25,7 +25,10 @@ func validateVisualQueryShape(name string, visual Visual) error {
 		}
 		return nil
 	}
-	shape := visual.ShapeOrDefault()
+	shape := visual.ResultShape()
+	if (shape == "binned_measure" || shape == "distribution") && strings.TrimSpace(visual.Query.Table) == "" {
+		return fmt.Errorf("visual %q shape %s requires query.table", name, shape)
+	}
 	switch shape {
 	case "ohlc":
 		if len(visual.Query.Measures) != 4 {
@@ -108,8 +111,8 @@ func validateVisualQueryShape(name string, visual Visual) error {
 			return fmt.Errorf("visual %q shape graph does not support series", name)
 		}
 	case "geo":
-		if len(visual.Query.Dimensions) != 1 {
-			return fmt.Errorf("visual %q shape geo requires exactly one query dimension", name)
+		if len(visual.Query.Dimensions) == 0 {
+			return fmt.Errorf("visual %q shape geo requires query dimensions", name)
 		}
 		if !visual.Query.Series.IsZero() {
 			return fmt.Errorf("visual %q shape geo does not support series", name)
@@ -134,16 +137,116 @@ func validateVisualQueryShape(name string, visual Visual) error {
 
 func ValidateVisualPointSelectionMappingKeys(name string, visual Visual) error {
 	if !supportsPointSelection(visual) {
-		return fmt.Errorf("visual %q type %q shape %q does not support point_selection", name, visual.Type, visual.ShapeOrDefault())
+		return fmt.Errorf("visual %q type %q shape %q does not support point_selection", name, visual.Type, visual.ResultShape())
+	}
+	if visual.ResultShape() == "geo" {
+		return validateGeographicPointSelectionMappingKeys(name, visual)
 	}
 	keys := visualPayloadKeys(visual)
 	for index, mapping := range visual.Interaction.PointSelection.Mappings {
 		if !keys.Contains(mapping.Value) {
-			return fmt.Errorf("visual %q interaction mapping %d references unknown value key %q for shape %q", name, index, mapping.Value, visual.ShapeOrDefault())
+			return fmt.Errorf("visual %q interaction mapping %d references unknown value key %q for shape %q", name, index, mapping.Value, visual.ResultShape())
 		}
 		if mapping.Label != "" && !keys.Contains(mapping.Label) {
-			return fmt.Errorf("visual %q interaction mapping %d references unknown label key %q for shape %q", name, index, mapping.Label, visual.ShapeOrDefault())
+			return fmt.Errorf("visual %q interaction mapping %d references unknown label key %q for shape %q", name, index, mapping.Label, visual.ResultShape())
 		}
+	}
+	return nil
+}
+
+func validateGeographicPointSelectionMappingKeys(name string, visual Visual) error {
+	selectable := false
+	for _, layer := range visual.Geo.Layers {
+		if layer.Kind == "point" || layer.Kind == "choropleth" {
+			selectable = true
+			break
+		}
+	}
+	if !selectable {
+		return fmt.Errorf("visual %q geographic point_selection requires at least one point or choropleth layer", name)
+	}
+
+	stableAliases := payloadKeySet{}
+	allAliases := payloadKeySet{}
+	add := func(keys payloadKeySet, field, alias string) {
+		if field != "" {
+			keys[defaultString(alias, fieldRefAlias(field))] = struct{}{}
+		}
+	}
+	for _, field := range visual.Query.Dimensions {
+		add(stableAliases, field.Field, field.Alias)
+		add(allAliases, field.Field, field.Alias)
+	}
+	add(stableAliases, visual.Query.Time.Field, visual.Query.Time.Alias)
+	add(allAliases, visual.Query.Time.Field, visual.Query.Time.Alias)
+	for _, field := range visual.Query.Measures {
+		add(allAliases, field.Field, field.Alias)
+	}
+	for index, mapping := range visual.Interaction.PointSelection.Mappings {
+		if !allAliases.Contains(mapping.Value) {
+			return fmt.Errorf("visual %q interaction mapping %d references unknown value query alias %q for shape %q", name, index, mapping.Value, visual.ResultShape())
+		}
+		if !stableAliases.Contains(mapping.Value) {
+			return fmt.Errorf("visual %q interaction mapping %d value query alias %q must reference a dimension or time field", name, index, mapping.Value)
+		}
+		if mapping.Label != "" && !allAliases.Contains(mapping.Label) {
+			return fmt.Errorf("visual %q interaction mapping %d references unknown label query alias %q for shape %q", name, index, mapping.Label, visual.ResultShape())
+		}
+	}
+	return nil
+}
+
+func validateSpatialSelectionInteraction(name string, visual Visual) error {
+	selection := visual.Interaction.SpatialSelection
+	if len(selection.Gestures) == 0 {
+		return fmt.Errorf("visual %q spatial_selection requires gestures", name)
+	}
+	seen := map[string]struct{}{}
+	for _, gesture := range selection.Gestures {
+		if gesture != "box" && gesture != "lasso" && gesture != "radius" {
+			return fmt.Errorf("visual %q spatial_selection has unsupported gesture %q", name, gesture)
+		}
+		if _, ok := seen[gesture]; ok {
+			return fmt.Errorf("visual %q spatial_selection has duplicate gesture %q", name, gesture)
+		}
+		seen[gesture] = struct{}{}
+	}
+	if len(selection.Targets) == 0 {
+		return fmt.Errorf("visual %q spatial_selection requires targets", name)
+	}
+	if selection.Latitude.Source == "" || selection.Latitude.Field == "" || selection.Longitude.Source == "" || selection.Longitude.Field == "" {
+		return fmt.Errorf("visual %q spatial_selection latitude and longitude require source and field", name)
+	}
+	if selection.Latitude.Field == selection.Longitude.Field && selection.Latitude.Fact == selection.Longitude.Fact {
+		return fmt.Errorf("visual %q spatial_selection latitude and longitude target fields must differ", name)
+	}
+	stableAliases := payloadKeySet{}
+	for _, field := range visual.Query.Dimensions {
+		stableAliases[defaultString(field.Alias, fieldRefAlias(field.Field))] = struct{}{}
+	}
+	if visual.Query.Time.Field != "" {
+		stableAliases[defaultString(visual.Query.Time.Alias, fieldRefAlias(visual.Query.Time.Field))] = struct{}{}
+	}
+	for axis, mapping := range map[string]SpatialSelectionMapping{"latitude": selection.Latitude, "longitude": selection.Longitude} {
+		if !stableAliases.Contains(mapping.Source) {
+			return fmt.Errorf("visual %q spatial_selection %s references unknown stable query alias %q", name, axis, mapping.Source)
+		}
+		if strings.Contains(mapping.Field, ".") && mapping.Fact == "" {
+			return fmt.Errorf("visual %q spatial_selection %s physical field %q requires fact", name, axis, mapping.Field)
+		}
+		if !strings.Contains(mapping.Field, ".") && mapping.Fact != "" {
+			return fmt.Errorf("visual %q spatial_selection %s semantic field %q must not specify fact", name, axis, mapping.Field)
+		}
+	}
+	coordinateLayer := false
+	for _, layer := range visual.Geo.Layers {
+		if layer.Latitude == selection.Latitude.Source && layer.Longitude == selection.Longitude.Source && oneOf(layer.Kind, "point", "heat", "density", "path") {
+			coordinateLayer = true
+			break
+		}
+	}
+	if !coordinateLayer {
+		return fmt.Errorf("visual %q spatial_selection source coordinates must match one coordinate layer", name)
 	}
 	return nil
 }
@@ -153,12 +256,7 @@ func supportsPointSelection(visual Visual) bool {
 	case "radar":
 		return false
 	}
-	switch visual.ShapeOrDefault() {
-	case "graph", "hierarchy":
-		return false
-	default:
-		return true
-	}
+	return true
 }
 
 type payloadKeySet map[string]struct{}
@@ -169,7 +267,7 @@ func (keys payloadKeySet) Contains(key string) bool {
 }
 
 func visualPayloadKeys(visual Visual) payloadKeySet {
-	switch visual.ShapeOrDefault() {
+	switch visual.ResultShape() {
 	case "category_series_value", "category_multi_measure":
 		return payloadKeys("label", "series", "value", "selected")
 	case "category_delta":
@@ -177,7 +275,14 @@ func visualPayloadKeys(visual Visual) payloadKeySet {
 	case "binned_measure":
 		return payloadKeys("label", "binStart", "binEnd", "value")
 	case "hierarchy":
-		return payloadKeys("path", "value")
+		keys := payloadKeys("node", "parent", "value")
+		for _, field := range visual.Query.Dimensions {
+			keys[defaultString(field.Alias, fieldRefAlias(field.Field))] = struct{}{}
+		}
+		if visual.Query.Time.Field != "" {
+			keys[defaultString(visual.Query.Time.Alias, fieldRefAlias(visual.Query.Time.Field))] = struct{}{}
+		}
+		return keys
 	case "single_value":
 		return payloadKeys("label", "value", "series", "selected")
 	case "matrix":
@@ -201,46 +306,4 @@ func payloadKeys(values ...string) payloadKeySet {
 		keys[value] = struct{}{}
 	}
 	return keys
-}
-
-func validateRendererOptions(name string, options map[string]any) error {
-	for renderer, value := range options {
-		if !supportsRenderer(renderer) {
-			return fmt.Errorf("visual %q has renderer_options for unsupported renderer %q", name, renderer)
-		}
-		option, ok := value.(map[string]any)
-		if !ok {
-			return fmt.Errorf("visual %q renderer_options.%s must be an object", name, renderer)
-		}
-		if err := validateSafeRendererOption(name, "renderer_options."+renderer, option); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func validateSafeRendererOption(name, path string, value any) error {
-	switch typed := value.(type) {
-	case map[string]any:
-		for key, item := range typed {
-			nextPath := path + "." + key
-			if key == "renderItem" {
-				return fmt.Errorf("visual %q has unsafe renderer option %q", name, nextPath)
-			}
-			if err := validateSafeRendererOption(name, nextPath, item); err != nil {
-				return err
-			}
-		}
-	case []any:
-		for index, item := range typed {
-			if err := validateSafeRendererOption(name, fmt.Sprintf("%s[%d]", path, index), item); err != nil {
-				return err
-			}
-		}
-	case string:
-		if strings.Contains(typed, "function(") || strings.Contains(typed, "=>") {
-			return fmt.Errorf("visual %q has unsafe renderer option %q", name, path)
-		}
-	}
-	return nil
 }

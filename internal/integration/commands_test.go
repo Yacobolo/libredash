@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/leapview/internal/dashboard"
 	"github.com/Yacobolo/leapview/internal/dashboard/consumer"
 	dashboardruntime "github.com/Yacobolo/leapview/internal/dashboard/runtime"
 )
@@ -143,7 +142,7 @@ func TestVisualWindowCommandDoesNotPublishCanceledVisualPatch(t *testing.T) {
 
 	patches := nextRefreshPatches(t, stream)
 	for _, patch := range patches {
-		if hasKey(mapAt(patch, "visuals"), "orders_table") {
+		if hasKey(mapAt(patch, "visuals", "orders_table"), "dataState") {
 			t.Fatalf("canceled visual-window command streamed visual data: %#v", patch)
 		}
 	}
@@ -208,22 +207,13 @@ func (m canceledVisualWindowMetrics) ExecuteConsumersPage(ctx context.Context, r
 	return nil
 }
 
-func (m canceledVisualWindowMetrics) QueryTable(_ context.Context, dashboardID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
-	return m.QueryTablePage(context.Background(), dashboardID, "", filters, request)
-}
-
-func (m canceledVisualWindowMetrics) QueryTablePage(_ context.Context, _ string, _ string, _ dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
-	return dashboard.EmptyTable(request.WithDefaults(), context.Canceled), nil
-}
-
 func drainInitialSnapshot(t *testing.T, stream *streamClient) []map[string]any {
 	t.Helper()
 	patches := []map[string]any{}
-	quiet := time.NewTimer(150 * time.Millisecond)
-	defer quiet.Stop()
 	deadline := time.NewTimer(3 * time.Second)
 	defer deadline.Stop()
 	seenSnapshotTable := false
+	var generation float64
 	for {
 		select {
 		case patch, ok := <-stream.patches:
@@ -234,31 +224,28 @@ func drainInitialSnapshot(t *testing.T, stream *streamClient) []map[string]any {
 			if tableHasSnapshot(patch, "orders_table") {
 				seenSnapshotTable = true
 			}
-			if !quiet.Stop() {
-				select {
-				case <-quiet.C:
-				default:
-				}
+			status := mapAt(patch, "status")
+			loading, hasLoading := status["loading"].(bool)
+			currentGeneration, _ := status["generation"].(float64)
+			if hasLoading && loading && currentGeneration > 0 && generation == 0 {
+				generation = currentGeneration
 			}
-			quiet.Reset(150 * time.Millisecond)
+			if seenSnapshotTable && hasLoading && !loading && generation > 0 && currentGeneration == generation {
+				return patches
+			}
 		case err := <-stream.errs:
 			if err != nil {
 				t.Fatalf("read initial updates stream: %v", err)
 			}
 			return patches
-		case <-quiet.C:
-			if seenSnapshotTable {
-				return patches
-			}
-			quiet.Reset(150 * time.Millisecond)
 		case <-deadline.C:
-			t.Fatalf("initial stream did not include populated tables patch: %#v", patches)
+			t.Fatalf("initial stream did not complete with populated tables: %#v", patches)
 		}
 	}
 }
 
 func tableHasSnapshot(patch map[string]any, tableID string) bool {
-	table := mapAt(patch, "visuals", tableID)
+	table := visualizationDataState(patch, tableID)
 	if _, ok := table["availableRows"]; !ok {
 		return false
 	}
@@ -356,12 +343,15 @@ func selectionSignal(sourceID, field, value string) map[string]any {
 
 func visualWindowCommand(visual, block string, start, count, requestSeq, resetVersion int) map[string]any {
 	return map[string]any{
-		"visual":       visual,
-		"block":        block,
+		"visualID":     visual,
+		"specRevision": "",
+		"dataRevision": 0,
+		"blockID":      block,
 		"start":        start,
-		"count":        count,
+		"limit":        count,
 		"requestSeq":   requestSeq,
 		"resetVersion": resetVersion,
+		"sort":         []map[string]any{},
 	}
 }
 

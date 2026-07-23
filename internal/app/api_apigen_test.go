@@ -50,15 +50,17 @@ func (r apiSnapshotWorkspaceRepository) AssetVersions(context.Context, workspace
 	return nil, nil
 }
 
-func TestAPIGenUsesTypeSpecV053(t *testing.T) {
+func TestAPIGenUsesTypeSpecV065(t *testing.T) {
 	root := projectRoot(t)
 	manifest, err := os.ReadFile(filepath.Join(root, "api", "apigen.yaml"))
 	if err != nil {
 		t.Fatalf("read manifest: %v", err)
 	}
 	manifestText := string(manifest)
-	if !strings.Contains(manifestText, "typespec_dir: typespec") {
-		t.Fatalf("manifest should use TypeSpec source, got:\n%s", manifestText)
+	for _, source := range []string{"typespec_entrypoint: typespec/main.tsp", "typespec_entrypoint: signals/main.tsp", "typespec_entrypoint: visualization/main.tsp"} {
+		if !strings.Contains(manifestText, source) {
+			t.Fatalf("manifest should select shared-root TypeSpec source %q, got:\n%s", source, manifestText)
+		}
 	}
 	if strings.Contains(manifestText, "cue_dir:") {
 		t.Fatalf("manifest should not use cue_dir after APIGen v0.3.0 migration")
@@ -78,16 +80,16 @@ func TestAPIGenUsesTypeSpecV053(t *testing.T) {
 		}
 	}
 	for _, want := range []string{
-		"github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3 typespec-compile",
-		"github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3 all",
+		"github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.6.5 typespec-compile",
+		"github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.6.5 all",
 	} {
 		if !strings.Contains(taskText, want) {
 			t.Fatalf("Taskfile.yml missing generation command %q", want)
 		}
 	}
-	for _, forbidden := range []string{"cue-compile", "apigen@v0.2.0", "apigen@v0.3.0", "apigen@v0.3.2", "apigen@v0.3.3", "apigen@v0.4.0", "apigen@v0.5.0", "apigen@v0.5.1", "apigen@v0.5.2", "apigenpostprocess"} {
+	for _, forbidden := range []string{"cue-compile", "apigen@v0.2.0", "apigen@v0.3.0", "apigen@v0.3.2", "apigen@v0.3.3", "apigen@v0.4.0", "apigen@v0.5.0", "apigen@v0.5.1", "apigen@v0.5.2", "apigen@v0.5.3", "apigen@v0.6.0", "apigen@v0.6.1", "apigen@v0.6.2", "apigen@v0.6.3", "apigen@v0.6.4", "apigenpostprocess"} {
 		if strings.Contains(taskText, forbidden) {
-			t.Fatalf("Taskfile.yml should not contain %q after APIGen v0.5.3 migration", forbidden)
+			t.Fatalf("Taskfile.yml should not contain %q after APIGen v0.6.5 migration", forbidden)
 		}
 	}
 
@@ -104,7 +106,7 @@ func TestAPIGenUsesTypeSpecV053(t *testing.T) {
 	}
 
 	if _, err := os.Stat(filepath.Join(root, "internal", "tools", "apigenpostprocess")); !os.IsNotExist(err) {
-		t.Fatalf("APIGen v0.5.3 should not require a postprocessor, stat error = %v", err)
+		t.Fatalf("APIGen v0.6.5 should not require a postprocessor, stat error = %v", err)
 	}
 	for path, forbidden := range map[string]string{
 		filepath.Join(root, "api", "typespec", "bi.tsp"):                        "toolbelt#34",
@@ -115,7 +117,7 @@ func TestAPIGenUsesTypeSpecV053(t *testing.T) {
 			t.Fatalf("read %s: %v", path, err)
 		}
 		if strings.Contains(string(content), forbidden) {
-			t.Fatalf("APIGen v0.5.3 superseded workaround %q in %s", forbidden, path)
+			t.Fatalf("APIGen v0.6.5 superseded workaround %q in %s", forbidden, path)
 		}
 	}
 }
@@ -131,7 +133,8 @@ func TestAPIGenOwnsUISignalContracts(t *testing.T) {
 	for _, want := range []string{
 		"name: ui-signals",
 		"kind: contracts",
-		"typespec_dir: signals",
+		"typespec_dir: .",
+		"typespec_entrypoint: signals/main.tsp",
 		"go_models_out: ../internal/ui/signals/models.gen.go",
 		"ts_out: ../web/generated/signals/index.ts",
 	} {
@@ -212,7 +215,10 @@ func TestAPIGenOwnsUISignalContracts(t *testing.T) {
 	}
 	var irDoc struct {
 		SchemaVersion string `json:"schema_version"`
-		Contracts     []struct {
+		Schemas       map[string]struct {
+			Namespace string `json:"namespace"`
+		} `json:"schemas"`
+		Contracts []struct {
 			Name       string         `json:"name"`
 			Kind       string         `json:"kind"`
 			Extensions map[string]any `json:"extensions"`
@@ -224,18 +230,34 @@ func TestAPIGenOwnsUISignalContracts(t *testing.T) {
 	if irDoc.SchemaVersion != "v4" {
 		t.Fatalf("UI signal IR schema_version = %q, want v4", irDoc.SchemaVersion)
 	}
-	if len(irDoc.Contracts) != 79 {
-		t.Fatalf("UI signal IR contracts = %d, want 79", len(irDoc.Contracts))
+	if len(irDoc.Contracts) != 80 {
+		t.Fatalf("UI signal IR contracts = %d, want 80", len(irDoc.Contracts))
 	}
 	foundEnvelopeMetadata := false
+	foundImportedVisualizationRoot := false
+	foundDashboardVisualizationSignal := false
 	for _, contract := range irDoc.Contracts {
 		if contract.Name == "DashboardEnvelope" && contract.Kind == "ui-envelope" && contract.Extensions["x-leapview-contract-role"] == "envelope" {
 			foundEnvelopeMetadata = true
-			break
+		}
+		if contract.Name == "VisualizationEnvelope" {
+			foundImportedVisualizationRoot = true
+		}
+		if contract.Name == "DashboardVisualizationSignal" && contract.Kind == "ui-signal" {
+			foundDashboardVisualizationSignal = true
 		}
 	}
 	if !foundEnvelopeMetadata {
 		t.Fatal("DashboardEnvelope contract metadata was not preserved in IR")
+	}
+	if foundImportedVisualizationRoot {
+		t.Fatal("UI signal contract roots must not duplicate imported visualization contracts")
+	}
+	if schema, ok := irDoc.Schemas["VisualizationEnvelope"]; !ok || schema.Namespace != "LeapViewVisualization" {
+		t.Fatalf("UI signals do not retain the canonical visualization schema ownership: %#v", schema)
+	}
+	if !foundDashboardVisualizationSignal {
+		t.Fatal("UI signals do not emit the dashboard visualization transport")
 	}
 }
 

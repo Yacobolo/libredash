@@ -12,6 +12,7 @@ import (
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	"github.com/Yacobolo/leapview/internal/dashboard/command"
 	lddatastar "github.com/Yacobolo/leapview/internal/dashboard/datastar"
+	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
 	dashboardhttp "github.com/Yacobolo/leapview/internal/dashboard/http"
 	"github.com/Yacobolo/leapview/internal/dashboard/publication"
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
@@ -23,7 +24,7 @@ import (
 type resolvedPublicDashboard struct {
 	publication publication.Publication
 	metrics     dashboardhttp.Metrics
-	report      reportdef.Dashboard
+	report      dashboarddefinition.Definition
 	modelID     string
 }
 

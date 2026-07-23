@@ -131,25 +131,42 @@ func TestIdealQueryAndEventRepresentations(t *testing.T) {
 	}
 }
 
-func TestDashboardVisualResponsesUseTypeAsSoleDiscriminator(t *testing.T) {
+func TestDashboardVisualResponsesUseVersionedVisualizationEnvelope(t *testing.T) {
 	spec := managedDataOpenAPISpec(t)
 	schemas := openAPIMap(t, openAPIMap(t, spec, "components"), "schemas")
-	data := openAPISchema(t, schemas, "DashboardVisualDataResponse")
-	if discriminator, ok := data["discriminator"]; ok {
-		t.Fatalf("chart result shape must remain metadata, got discriminator %#v", discriminator)
+	envelope := openAPISchema(t, schemas, "VisualizationEnvelope")
+	properties := openAPIMap(t, envelope, "properties")
+	for _, name := range []string{"schemaVersion", "rendererID", "specRevision", "dataRevision", "spec", "dataState", "selection", "status", "diagnostics"} {
+		if _, ok := properties[name]; !ok {
+			t.Errorf("visualization envelope is missing %q: %#v", name, envelope)
+		}
 	}
-	visual := openAPISchema(t, schemas, "DashboardVisualQueryResponse")
+	visual := openAPISchema(t, schemas, "VisualizationSpec")
 	discriminator, _ := visual["discriminator"].(map[string]any)
-	if discriminator["propertyName"] != "type" {
-		t.Fatalf("visual query response discriminator = %#v", discriminator)
+	if discriminator["propertyName"] != "kind" {
+		t.Fatalf("visualization spec discriminator = %#v", discriminator)
 	}
 	variants, _ := visual["oneOf"].([]any)
-	if len(variants) != 26 {
-		t.Fatalf("visual query response variants = %d, want 26: %#v", len(variants), visual)
+	if len(variants) != 10 {
+		t.Fatalf("visualization spec variants = %d, want 10: %#v", len(variants), visual)
 	}
-	datum := openAPISchema(t, schemas, "DashboardVisualDatum")
-	if len(openAPIMap(t, datum, "properties")) == 0 {
-		t.Fatalf("visual datum has no explicit result-shape fields: %#v", datum)
+	dataState := openAPISchema(t, schemas, "VisualizationDataState")
+	stateDiscriminator, _ := dataState["discriminator"].(map[string]any)
+	if stateDiscriminator["propertyName"] != "kind" {
+		t.Fatalf("visualization data-state discriminator = %#v", stateDiscriminator)
+	}
+}
+
+func TestDashboardFiltersExposeSpatialSelections(t *testing.T) {
+	spec := managedDataOpenAPISpec(t)
+	schemas := openAPIMap(t, openAPIMap(t, spec, "components"), "schemas")
+	spatialSelections := schemaProperty(t, openAPISchema(t, schemas, "DashboardFilters"), "spatialSelections")
+	if spatialSelections["type"] != "array" {
+		t.Fatalf("dashboard spatial selections are not an array: %#v", spatialSelections)
+	}
+	items, _ := spatialSelections["items"].(map[string]any)
+	if items["$ref"] != "#/components/schemas/DashboardSpatialInteractionSelection" {
+		t.Fatalf("dashboard spatial selection items are not typed: %#v", spatialSelections)
 	}
 }
 
@@ -181,9 +198,8 @@ func TestCapabilitiesUseCanonicalEnums(t *testing.T) {
 	assertEnum(t, openAPISchema(t, schemas, "AuthenticationMode"), "bearer")
 	assertEnum(t, openAPISchema(t, schemas, "QueryFormat"), "application/json", "application/vnd.apache.arrow.stream")
 	assertEnum(t, openAPISchema(t, schemas, "UploadProtocol"), "tus", "s3_multipart")
-	assertEnum(t, openAPISchema(t, schemas, "VisualShape"),
-		"category_value", "category_series_value", "category_multi_measure", "category_delta",
-		"binned_measure", "hierarchy", "single_value", "matrix", "graph", "geo", "ohlc", "distribution")
+	assertEnum(t, openAPISchema(t, schemas, "VisualizationRendererID"), "echarts", "tanstack", "html", "maplibre", "vega-lite-sandbox")
+	assertEnum(t, openAPISchema(t, schemas, "VisualizationSpecKind"), "cartesian", "proportional", "hierarchy", "polar", "table", "matrix", "pivot", "kpi", "geographic", "custom")
 }
 
 func operationHasResponseMedia(operation map[string]any, status, media string) bool {
@@ -271,7 +287,7 @@ func TestIdealAPIUsesBoundedInputsAndBodylessDeletes(t *testing.T) {
 	if queryLimit["minimum"] != float64(1) || queryLimit["maximum"] != float64(1000) {
 		t.Fatalf("query limit schema = %#v", queryLimit)
 	}
-	visual := openAPISchema(t, schemas, "DashboardVisualDataResponse")
+	visual := openAPISchema(t, schemas, "VisualizationEnvelope")
 	properties := openAPIMap(t, visual, "properties")
 	if _, ok := properties["rendererOptions"]; ok {
 		t.Fatalf("renderer-specific options leaked at the top level: %#v", properties)
@@ -279,10 +295,14 @@ func TestIdealAPIUsesBoundedInputsAndBodylessDeletes(t *testing.T) {
 	if _, ok := properties["options"]; ok {
 		t.Fatalf("unrestricted visual options leaked at the top level: %#v", properties)
 	}
-	_ = schemaProperty(t, visual, "extensions")
-	interaction := schemaProperty(t, visual, "interaction")
-	if interaction["$ref"] != "#/components/schemas/DashboardVisualInteractionConfig" {
-		t.Fatalf("visual interaction is not explicitly typed: %#v", interaction)
+	for _, forbidden := range []string{"shape", "renderer", "extensions", "interaction"} {
+		if _, ok := properties[forbidden]; ok {
+			t.Fatalf("legacy visual field %q leaked at the top level: %#v", forbidden, properties)
+		}
+	}
+	specProperty := schemaProperty(t, visual, "spec")
+	if specProperty["$ref"] != "#/components/schemas/VisualizationSpec" {
+		t.Fatalf("visual specification is not the canonical typed IR: %#v", specProperty)
 	}
 }
 

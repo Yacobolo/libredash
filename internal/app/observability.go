@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	dashboardstream "github.com/Yacobolo/leapview/internal/dashboard/stream"
 	"github.com/Yacobolo/leapview/internal/secret"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 	"github.com/Yacobolo/leapview/internal/workload"
 	"github.com/go-chi/chi/v5"
 	"github.com/prometheus/client_golang/prometheus"
@@ -27,6 +29,9 @@ type httpTelemetry struct {
 	dashboardRefreshCancellations *prometheus.CounterVec
 	dashboardCacheOutcomes        *prometheus.CounterVec
 	dashboardTargetOutcomes       *prometheus.CounterVec
+	visualizationFrameRows        *prometheus.HistogramVec
+	visualizationFrameBytes       *prometheus.HistogramVec
+	visualizationCardinality      *prometheus.HistogramVec
 	workloadRunning               *prometheus.GaugeVec
 	workloadQueued                *prometheus.GaugeVec
 	workloadBorrowed              *prometheus.GaugeVec
@@ -90,6 +95,18 @@ func newHTTPTelemetry() *httpTelemetry {
 			Name: "leapview_dashboard_target_outcomes_total",
 			Help: "Dashboard refresh target outcomes.",
 		}, []string{"kind", "outcome"}),
+		visualizationFrameRows: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name: "leapview_visualization_frame_rows", Help: "Rows shaped for a visualization envelope without recording governed values.",
+			Buckets: prometheus.ExponentialBuckets(1, 4, 10),
+		}, []string{"kind"}),
+		visualizationFrameBytes: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name: "leapview_visualization_frame_size_bytes", Help: "Encoded visualization frame size without recording governed values.",
+			Buckets: prometheus.ExponentialBuckets(256, 4, 10),
+		}, []string{"kind"}),
+		visualizationCardinality: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name: "leapview_visualization_cardinality", Help: "Known visualization result cardinality.",
+			Buckets: prometheus.ExponentialBuckets(1, 4, 10),
+		}, []string{"kind"}),
 		workloadRunning:    prometheus.NewGaugeVec(prometheus.GaugeOpts{Name: "leapview_workload_running", Help: "Currently running workload operations."}, []string{"class", "workspace"}),
 		workloadQueued:     prometheus.NewGaugeVec(prometheus.GaugeOpts{Name: "leapview_workload_queued", Help: "Currently queued workload operations."}, []string{"class", "workspace"}),
 		workloadBorrowed:   prometheus.NewGaugeVec(prometheus.GaugeOpts{Name: "leapview_workload_borrowed", Help: "Capacity currently borrowed above each class reservation."}, []string{"class"}),
@@ -126,6 +143,9 @@ func newHTTPTelemetry() *httpTelemetry {
 		telemetry.dashboardRefreshCancellations,
 		telemetry.dashboardCacheOutcomes,
 		telemetry.dashboardTargetOutcomes,
+		telemetry.visualizationFrameRows,
+		telemetry.visualizationFrameBytes,
+		telemetry.visualizationCardinality,
 		telemetry.workloadRunning,
 		telemetry.workloadQueued,
 		telemetry.workloadBorrowed,
@@ -239,16 +259,60 @@ func (t *httpTelemetry) dashboardRefreshEventObserved(event dashboardstream.Refr
 		t.dashboardTargetObserved("filter_options", "success")
 	case dashboardstream.RefreshEventVisual:
 		t.dashboardTargetObserved("visual", "success")
-	case dashboardstream.RefreshEventTable:
-		t.dashboardTargetObserved("visual", "success")
-	case dashboardstream.RefreshEventTableCountErr:
-		t.dashboardTargetObserved("visual_count", "error")
+		t.observeVisualizationEnvelope(event.Value)
+	case dashboardstream.RefreshEventVisualMetadata:
+		t.observeVisualizationEnvelope(event.Value)
 	case dashboardstream.RefreshEventTargetError:
 		kind := event.Target
 		if prefix, _, ok := strings.Cut(kind, ":"); ok {
 			kind = prefix
 		}
 		t.dashboardTargetObserved(kind, "error")
+	}
+}
+
+func (t *httpTelemetry) observeVisualizationEnvelope(value any) {
+	envelope, ok := value.(visualizationir.VisualizationEnvelope)
+	if !ok {
+		return
+	}
+	switch state := envelope.DataState.Value.(type) {
+	case *visualizationir.InlineVisualizationDataState:
+		rows := 0
+		for _, dataset := range state.Datasets {
+			rows += len(dataset.Rows)
+		}
+		t.observeVisualizationFrame("inline", rows, rows, envelope)
+	case *visualizationir.WindowedVisualizationDataState:
+		rows := 0
+		for _, block := range state.Blocks {
+			rows += len(block.Rows)
+		}
+		t.observeVisualizationFrame("windowed", rows, visualizationCardinality(state.Cardinality, state.AvailableRows), envelope)
+	case *visualizationir.SpatialWindowedVisualizationDataState:
+		rows := 0
+		if state.Window != nil {
+			rows = len(state.Window.Rows)
+		}
+		t.observeVisualizationFrame("spatial_windowed", rows, visualizationCardinality(state.Cardinality, int64(rows)), envelope)
+	}
+}
+
+func visualizationCardinality(cardinality visualizationir.VisualizationCardinality, fallback int64) int {
+	if cardinality.Count != nil {
+		return int(*cardinality.Count)
+	}
+	return int(fallback)
+}
+
+func (t *httpTelemetry) observeVisualizationFrame(kind string, rows, cardinality int, value any) {
+	if t == nil {
+		return
+	}
+	t.visualizationFrameRows.WithLabelValues(kind).Observe(float64(max(rows, 0)))
+	t.visualizationCardinality.WithLabelValues(kind).Observe(float64(max(cardinality, 0)))
+	if encoded, err := json.Marshal(value); err == nil {
+		t.visualizationFrameBytes.WithLabelValues(kind).Observe(float64(len(encoded)))
 	}
 }
 

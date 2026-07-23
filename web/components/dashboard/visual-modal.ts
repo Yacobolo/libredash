@@ -15,9 +15,9 @@ type VisualColumn = {
 
 type VisualRow = Record<string, unknown>
 
-type VisualActionDetail = {
+export type VisualActionDetail = {
   action: VisualActionName
-  visualType: 'chart' | 'table'
+  visualType: 'chart' | 'map' | 'table' | 'visualization'
   visualId: string
   title: string
   columns: VisualColumn[]
@@ -29,13 +29,14 @@ type VisualActionDetail = {
 
 type ModalMode = 'focus' | 'show-data'
 
-class VisualModal extends LitElement {
+export class VisualModal extends LitElement {
   @state() private mode: ModalMode | '' = ''
   @state() private detail: VisualActionDetail | null = null
   @state() private notice = ''
   private focusMount: VisualFocusMount<HTMLElement> | null = null
   private focusSource: HTMLElement | null = null
   private restoreFocusTo: HTMLElement | null = null
+  private actionEventTarget: Node | null = null
 
   static styles = css`
     :host {
@@ -144,7 +145,7 @@ class VisualModal extends LitElement {
       position: absolute;
       top: var(--lv-space-md);
       right: var(--lv-space-md);
-      z-index: var(--zIndex-popover);
+      z-index: var(--zIndex-popover, 300);
       display: grid;
       place-items: center;
       background: var(--lv-bg-overlay);
@@ -237,12 +238,14 @@ class VisualModal extends LitElement {
 
   connectedCallback(): void {
     super.connectedCallback()
-    window.addEventListener('lv-visual-action', this.handleVisualAction as EventListener)
+    this.actionEventTarget = this.getRootNode()
+    this.actionEventTarget.addEventListener('lv-visual-action', this.handleVisualAction as EventListener, { capture: true })
     window.addEventListener('keydown', this.handleKeydown)
   }
 
   disconnectedCallback(): void {
-    window.removeEventListener('lv-visual-action', this.handleVisualAction as EventListener)
+    this.actionEventTarget?.removeEventListener('lv-visual-action', this.handleVisualAction as EventListener, { capture: true })
+    this.actionEventTarget = null
     window.removeEventListener('keydown', this.handleKeydown)
     this.restoreFocusedVisual(false)
     super.disconnectedCallback()
@@ -358,6 +361,11 @@ class VisualModal extends LitElement {
   private openFocus(detail: VisualActionDetail, event: Event): void {
     const source = visualSourceFromEvent(event)
     if (!source) return
+    this.openVisualFocus(source, detail)
+  }
+
+  openVisualFocus(source: HTMLElement, detail: VisualActionDetail): void {
+    if (detail.action !== 'focus') return
     if (this.mode === 'focus' && this.focusMount?.element === source) return
 
     const focusToRestore = this.deepActiveElement()
@@ -373,17 +381,13 @@ class VisualModal extends LitElement {
   }
 
   private mountFocusedVisual(source: HTMLElement): void {
-    if (this.mode !== 'focus' || this.focusSource !== source || this.focusMount?.element === source) return
-    const mount = mountVisualFocus(source, this, { slot: 'focus-visual' })
-    if (!mount) return
-    this.focusMount = mount
+    if (this.mode !== 'focus' || this.focusSource !== source || this.focusMount) return
+    this.focusMount = mountVisualFocus(source, this, { slot: 'focus-visual' })
   }
 
   private restoreFocusedVisual(restoreFocus: boolean): void {
     const focusToRestore = this.restoreFocusTo
-    if (this.focusMount) {
-      restoreVisualFocus(this.focusMount)
-    }
+    if (this.focusMount) restoreVisualFocus(this.focusMount)
     this.focusMount = null
     this.focusSource = null
     this.restoreFocusTo = null
@@ -522,3 +526,5 @@ function slug(value: string): string {
 }
 
 customElements.define('lv-visual-modal', VisualModal)
+
+declare global { interface HTMLElementTagNameMap { 'lv-visual-modal': VisualModal } }

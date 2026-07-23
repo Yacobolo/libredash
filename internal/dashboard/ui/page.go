@@ -10,10 +10,11 @@ import (
 
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	"github.com/Yacobolo/leapview/internal/brand"
-	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
 	"github.com/Yacobolo/leapview/internal/staticasset"
 	uiactions "github.com/Yacobolo/leapview/internal/ui/actions"
 	uisignals "github.com/Yacobolo/leapview/internal/ui/signals"
+	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
 	"github.com/Yacobolo/leapview/pkg/pagestream"
 
 	"github.com/Yacobolo/leapview/internal/dashboard"
@@ -107,7 +108,7 @@ func csrfMeta(token string) g.Node {
 	return h.Meta(h.Name("csrf-token"), h.Content(token))
 }
 
-func Page(clientID, csrfToken string, catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model, pages []dashboard.Page, activePage dashboard.Page, initialFilters dashboard.Filters, chromeDecorators ...ChromeDecorator) g.Node {
+func Page(clientID, csrfToken string, catalog dashboard.Catalog, report dashboarddefinition.Definition, model *semanticmodel.Model, pages []dashboard.Page, activePage dashboard.Page, initialFilters dashboard.Filters, chromeDecorators ...ChromeDecorator) g.Node {
 	if activePage.ID == "" {
 		activePage = defaultPage()
 	}
@@ -158,7 +159,9 @@ func Page(clientID, csrfToken string, catalog dashboard.Catalog, report reportde
 					g.Attr("data-on:lv-filters-refresh", reloadAction),
 					g.Attr("data-on:lv-selection-clear", "$filters.selections = []; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/clear-selection", "runtime")),
 					g.Attr("data-on:lv-interaction-select", "$interactionCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/select", "runtime", "interactionCommand")),
-					g.Attr("data-on:lv-visual-window-change", "$visualWindowCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/visual-window", "runtime", "visualWindowCommand")),
+					g.Attr("data-on:lv-interaction-spatial-select", "$spatialInteractionCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/spatial-select", "runtime", "spatialInteractionCommand")),
+					g.Attr("data-on:lv-visualization-window-request", "$visualWindowCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/visual-window", "runtime", "visualWindowCommand")),
+					g.Attr("data-on:lv-visual-spatial-window-change", "$visualSpatialWindowCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/visual-spatial-window", "runtime", "visualSpatialWindowCommand")),
 				),
 			),
 			inspectorElement(),
@@ -169,7 +172,7 @@ func Page(clientID, csrfToken string, catalog dashboard.Catalog, report reportde
 // PublicPage renders the report component without authenticated application
 // chrome or cookies. Every command is scoped beneath the opaque publication
 // route and carries the document-generated client and stream identities.
-func PublicPage(options PublicPageOptions, catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model, pages []dashboard.Page, activePage dashboard.Page, initialFilters dashboard.Filters) g.Node {
+func PublicPage(options PublicPageOptions, catalog dashboard.Catalog, report dashboarddefinition.Definition, model *semanticmodel.Model, pages []dashboard.Page, activePage dashboard.Page, initialFilters dashboard.Filters) g.Node {
 	presentation := options.Presentation
 	if presentation != PresentationEmbed {
 		presentation = PresentationPublic
@@ -222,7 +225,9 @@ func PublicPage(options PublicPageOptions, catalog dashboard.Catalog, report rep
 				g.Attr("data-on:lv-filters-refresh", reloadAction),
 				g.Attr("data-on:lv-selection-clear", "$filters.selections = []; "+uiactions.Post(commandBase+"clear-selection", "runtime")),
 				g.Attr("data-on:lv-interaction-select", "$interactionCommand = evt.detail; "+uiactions.Post(commandBase+"select", "runtime", "interactionCommand")),
-				g.Attr("data-on:lv-visual-window-change", "$visualWindowCommand = evt.detail; "+uiactions.Post(commandBase+"visual-window", "runtime", "visualWindowCommand")),
+				g.Attr("data-on:lv-interaction-spatial-select", "$spatialInteractionCommand = evt.detail; "+uiactions.Post(commandBase+"spatial-select", "runtime", "spatialInteractionCommand")),
+				g.Attr("data-on:lv-visualization-window-request", "$visualWindowCommand = evt.detail; "+uiactions.Post(commandBase+"visual-window", "runtime", "visualWindowCommand")),
+				g.Attr("data-on:lv-visual-spatial-window-change", "$visualSpatialWindowCommand = evt.detail; "+uiactions.Post(commandBase+"visual-spatial-window", "runtime", "visualSpatialWindowCommand")),
 			),
 		},
 	})
@@ -237,8 +242,8 @@ func defaultPage() dashboard.Page {
 	}
 }
 
-func BootstrapSignals(clientID, streamInstanceID string, catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model, pages []dashboard.Page, activePage dashboard.Page, initialFilters dashboard.Filters, chromeDecorators ...ChromeDecorator) map[string]any {
-	envelope := uisignals.DashboardInitialEnvelope(clientID, streamInstanceID, catalog, report, model, pages, activePage, initialFilters)
+func BootstrapSignals(clientID, streamInstanceID string, catalog dashboard.Catalog, report dashboarddefinition.Definition, model *semanticmodel.Model, definitions map[string]visualizationdefinition.Definition, pages []dashboard.Page, activePage dashboard.Page, initialFilters dashboard.Filters, chromeDecorators ...ChromeDecorator) map[string]any {
+	envelope := uisignals.DashboardInitialEnvelope(clientID, streamInstanceID, catalog, report, model, definitions, pages, activePage, initialFilters)
 	envelope.Runtime.WorkspaceID = uisignals.Optional(catalog.Workspace.ID)
 	for _, decorate := range chromeDecorators {
 		if decorate != nil {
@@ -246,28 +251,29 @@ func BootstrapSignals(clientID, streamInstanceID string, catalog dashboard.Catal
 		}
 	}
 	return map[string]any{
-		"agent":                envelope.Agent,
-		"agentContext":         envelope.AgentContext,
-		"agentReferenceSearch": envelope.AgentReferenceSearch,
-		"agentVisuals":         envelope.AgentVisuals,
-		"chrome":               envelope.Chrome,
-		"componentStatus":      envelope.ComponentStatus,
-		"page":                 envelope.Page,
-		"runtime":              envelope.Runtime,
-		"filterConfig":         envelope.FilterConfig,
-		"filters":              envelope.Filters,
-		"urlParams":            envelope.URLParams,
-		"urlParamShape":        envelope.URLParamShape,
-		"filterOptions":        envelope.FilterOptions,
-		"interactionCommand":   envelope.InteractionCommand,
-		"visualWindowCommand":  envelope.VisualWindowCommand,
-		"visuals":              envelope.Visuals,
-		"status":               envelope.Status,
+		"agent":                      envelope.Agent,
+		"agentContext":               envelope.AgentContext,
+		"agentReferenceSearch":       envelope.AgentReferenceSearch,
+		"agentVisuals":               envelope.AgentVisuals,
+		"chrome":                     envelope.Chrome,
+		"page":                       envelope.Page,
+		"runtime":                    envelope.Runtime,
+		"filterConfig":               envelope.FilterConfig,
+		"filters":                    envelope.Filters,
+		"urlParams":                  envelope.URLParams,
+		"urlParamShape":              envelope.URLParamShape,
+		"filterOptions":              envelope.FilterOptions,
+		"interactionCommand":         envelope.InteractionCommand,
+		"spatialInteractionCommand":  envelope.SpatialInteractionCommand,
+		"visualWindowCommand":        envelope.VisualWindowCommand,
+		"visualSpatialWindowCommand": envelope.VisualSpatialWindowCommand,
+		"visuals":                    envelope.Visuals,
+		"status":                     envelope.Status,
 	}
 }
 
-func PublicBootstrapSignals(clientID, streamInstanceID, publicID, presentation string, catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model, pages []dashboard.Page, activePage dashboard.Page, initialFilters dashboard.Filters) map[string]any {
-	envelope := uisignals.DashboardInitialEnvelope(clientID, streamInstanceID, catalog, report, model, pages, activePage, initialFilters)
+func PublicBootstrapSignals(clientID, streamInstanceID, publicID, presentation string, catalog dashboard.Catalog, report dashboarddefinition.Definition, model *semanticmodel.Model, definitions map[string]visualizationdefinition.Definition, pages []dashboard.Page, activePage dashboard.Page, initialFilters dashboard.Filters) map[string]any {
+	envelope := uisignals.DashboardInitialEnvelope(clientID, streamInstanceID, catalog, report, model, definitions, pages, activePage, initialFilters)
 	family := "public"
 	if presentation == PresentationEmbed {
 		family = "embed"
@@ -277,10 +283,20 @@ func PublicBootstrapSignals(clientID, streamInstanceID, publicID, presentation s
 	}
 	envelope.Page.Presentation = presentation
 	return map[string]any{
-		"chrome":       envelope.Chrome, "componentStatus": envelope.ComponentStatus, "page": envelope.Page, "runtime": envelope.Runtime,
-		"filterConfig": envelope.FilterConfig, "filters": envelope.Filters, "urlParams": envelope.URLParams, "urlParamShape": envelope.URLParamShape,
-		"filterOptions": envelope.FilterOptions, "interactionCommand": envelope.InteractionCommand, "visualWindowCommand": envelope.VisualWindowCommand,
-		"visuals": envelope.Visuals, "status": envelope.Status,
+		"chrome":                     envelope.Chrome,
+		"page":                       envelope.Page,
+		"runtime":                    envelope.Runtime,
+		"filterConfig":               envelope.FilterConfig,
+		"filters":                    envelope.Filters,
+		"urlParams":                  envelope.URLParams,
+		"urlParamShape":              envelope.URLParamShape,
+		"filterOptions":              envelope.FilterOptions,
+		"interactionCommand":         envelope.InteractionCommand,
+		"spatialInteractionCommand":  envelope.SpatialInteractionCommand,
+		"visualWindowCommand":        envelope.VisualWindowCommand,
+		"visualSpatialWindowCommand": envelope.VisualSpatialWindowCommand,
+		"visuals":                    envelope.Visuals,
+		"status":                     envelope.Status,
 	}
 }
 
@@ -294,5 +310,5 @@ func newStreamInstanceID() string {
 
 func visualResetExpression() string {
 	count := strconv.Itoa(dashboard.TableChunkSize)
-	return "$visualWindowCommand.block = 'all'; $visualWindowCommand.start = 0; $visualWindowCommand.count = " + count + "; $visualWindowCommand.resetVersion = ($visualWindowCommand.resetVersion || 0) + 1; "
+	return "$visualWindowCommand.blockID = 'all'; $visualWindowCommand.start = 0; $visualWindowCommand.limit = " + count + "; $visualWindowCommand.resetVersion = ($visualWindowCommand.resetVersion || 0) + 1; "
 }

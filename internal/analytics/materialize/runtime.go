@@ -740,7 +740,8 @@ func dashboardQueryResultCacheable(request dataquery.Query) bool {
 		dataquery.OperationDashboardCount,
 		dataquery.OperationDashboardHistogram,
 		dataquery.OperationDashboardDistribution,
-		dataquery.OperationDashboardFilterOptions:
+		dataquery.OperationDashboardFilterOptions,
+		dataquery.OperationDashboardSpatial:
 		return true
 	default:
 		return false

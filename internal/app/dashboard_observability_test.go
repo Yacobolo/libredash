@@ -6,6 +6,7 @@ import (
 	"time"
 
 	dashboardstream "github.com/Yacobolo/leapview/internal/dashboard/stream"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 	"github.com/Yacobolo/leapview/internal/workload"
 )
 
@@ -61,9 +62,14 @@ func TestWorkloadTelemetryUsesBoundedLabelsAndBalancesGauges(t *testing.T) {
 func TestDashboardTelemetryObservesAcceptedProgressiveTargetEvents(t *testing.T) {
 	telemetry := newHTTPTelemetry()
 	for _, event := range []dashboardstream.RefreshEvent{
-		{Type: dashboardstream.RefreshEventVisual, Target: "revenue"},
-		{Type: dashboardstream.RefreshEventTable, Target: "orders"},
-		{Type: dashboardstream.RefreshEventTableCountErr, Target: "orders"},
+		{Type: dashboardstream.RefreshEventVisual, Target: "revenue", Value: visualizationir.VisualizationEnvelope{
+			Spec:      visualizationir.VisualizationSpec{Value: &visualizationir.KPIVisualizationSpec{}},
+			DataState: visualizationir.VisualizationDataState{Value: &visualizationir.InlineVisualizationDataState{Kind: "inline", Datasets: []visualizationir.VisualizationInlineDataset{{Rows: [][]any{{1}}}}}},
+		}},
+		{Type: dashboardstream.RefreshEventVisual, Target: "orders", Value: visualizationir.VisualizationEnvelope{
+			Spec:      visualizationir.VisualizationSpec{Value: &visualizationir.TableVisualizationSpec{Kind: "table"}},
+			DataState: visualizationir.VisualizationDataState{Value: &visualizationir.WindowedVisualizationDataState{Kind: "windowed", AvailableRows: 1, Cardinality: visualizationir.VisualizationCardinality{Kind: visualizationir.VisualizationCardinalityKindExact, Count: int64Pointer(1)}, Blocks: map[string]visualizationir.VisualizationWindowBlock{"a": {Rows: [][]any{{"o1"}}}}}},
+		}},
 		{Type: dashboardstream.RefreshEventFilterOptions, Target: "state"},
 		{Type: dashboardstream.RefreshEventTargetError, Target: "visual:broken"},
 		{Type: dashboardstream.RefreshEventTargetError, Target: "refresh"},
@@ -75,7 +81,6 @@ func TestDashboardTelemetryObservesAcceptedProgressiveTargetEvents(t *testing.T)
 	want := map[string]float64{
 		"filter_options:success": 1,
 		"refresh:error":          1,
-		"visual_count:error":     1,
 		"visual:error":           1,
 		"visual:success":         2,
 	}
@@ -88,6 +93,31 @@ func TestDashboardTelemetryObservesAcceptedProgressiveTargetEvents(t *testing.T)
 			t.Fatalf("target outcome %s = %v, want %v (all %#v)", labels, got[labels], count, got)
 		}
 	}
+	for _, name := range []string{"leapview_visualization_frame_rows", "leapview_visualization_frame_size_bytes", "leapview_visualization_cardinality"} {
+		if got := histogramSampleCount(t, telemetry, name); got != 2 {
+			t.Fatalf("%s sample count = %d, want 2", name, got)
+		}
+	}
+}
+
+func int64Pointer(value int64) *int64 { return &value }
+
+func histogramSampleCount(t *testing.T, telemetry *httpTelemetry, name string) uint64 {
+	t.Helper()
+	families, err := telemetry.registry.Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var count uint64
+	for _, family := range families {
+		if family.GetName() != name {
+			continue
+		}
+		for _, metric := range family.Metric {
+			count += metric.Histogram.GetSampleCount()
+		}
+	}
+	return count
 }
 
 func TestDashboardHTTPWiresProgressiveObservers(t *testing.T) {

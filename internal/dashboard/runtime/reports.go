@@ -8,8 +8,10 @@ import (
 	"github.com/Yacobolo/leapview/internal/analytics/arrowquery"
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	"github.com/Yacobolo/leapview/internal/dashboard"
+	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 	"github.com/Yacobolo/leapview/internal/dataquery"
+	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
 	"github.com/Yacobolo/leapview/internal/workspace"
 )
 
@@ -26,8 +28,12 @@ func (m *Service) ModelIDForDashboard(dashboardID string) string {
 	return m.reports.ModelIDForDashboard(dashboardID)
 }
 
-func (m *Service) Report(dashboardID string) (reportdef.Dashboard, *semanticmodel.Model, bool) {
+func (m *Service) Report(dashboardID string) (dashboarddefinition.Definition, *semanticmodel.Model, bool) {
 	return m.reports.Report(dashboardID)
+}
+
+func (m *Service) VisualizationDefinition(dashboardID, visualID string) (visualizationdefinition.Definition, bool) {
+	return m.reports.VisualizationDefinition(dashboardID, visualID)
 }
 
 func (m *Service) SemanticModel(modelID string) (*semanticmodel.Model, bool) {
@@ -78,8 +84,8 @@ func (m *Service) ExecuteDataQueryArrow(ctx context.Context, request dataquery.Q
 	})
 }
 
-func (m *Service) NormalizeTableRequest(dashboardID string, request dashboard.TableRequest) dashboard.TableRequest {
-	return m.reports.NormalizeTableRequest(dashboardID, request)
+func (m *Service) NormalizeVisualizationWindow(dashboardID string, request dashboard.TableRequest) dashboard.TableRequest {
+	return m.reports.NormalizeVisualizationWindow(dashboardID, request)
 }
 
 func (m *Service) DefaultFilters(dashboardID string) dashboard.Filters {
@@ -95,7 +101,7 @@ func (s *ReportService) DefaultDashboardID() string {
 }
 
 func (s *ReportService) ModelIDForDashboard(dashboardID string) string {
-	report, ok := s.workspace.Dashboards[dashboardID]
+	report, ok := s.compiledDashboard(dashboardID)
 	if !ok {
 		return ""
 	}
@@ -105,19 +111,28 @@ func (s *ReportService) ModelIDForDashboard(dashboardID string) string {
 	return ""
 }
 
-func (s *ReportService) Report(dashboardID string) (reportdef.Dashboard, *semanticmodel.Model, bool) {
-	report, ok := s.workspace.Dashboards[dashboardID]
+func (s *ReportService) Report(dashboardID string) (dashboarddefinition.Definition, *semanticmodel.Model, bool) {
+	report, ok := s.compiledDashboard(dashboardID)
 	if !ok {
-		return reportdef.Dashboard{}, nil, false
+		return dashboarddefinition.Definition{}, nil, false
 	}
 	if report.SemanticModel != "" {
 		model, ok := s.workspace.Models[report.SemanticModel]
 		if !ok {
-			return reportdef.Dashboard{}, nil, false
+			return dashboarddefinition.Definition{}, nil, false
 		}
 		return *report, model, true
 	}
-	return reportdef.Dashboard{}, nil, false
+	return dashboarddefinition.Definition{}, nil, false
+}
+
+func (s *ReportService) VisualizationDefinition(dashboardID, visualID string) (visualizationdefinition.Definition, bool) {
+	dashboard, ok := s.workspace.Dashboards[dashboardID]
+	if !ok {
+		return visualizationdefinition.Definition{}, false
+	}
+	definition, ok := dashboard.Visualizations[visualID]
+	return definition, ok
 }
 
 func (s *ReportService) SemanticModel(modelID string) (*semanticmodel.Model, bool) {
@@ -125,23 +140,23 @@ func (s *ReportService) SemanticModel(modelID string) (*semanticmodel.Model, boo
 	return model, ok
 }
 
-func (s *ReportService) NormalizeTableRequest(dashboardID string, request dashboard.TableRequest) dashboard.TableRequest {
-	report, ok := s.workspace.Dashboards[dashboardID]
+func (s *ReportService) NormalizeVisualizationWindow(dashboardID string, request dashboard.TableRequest) dashboard.TableRequest {
+	report, ok := s.compiledDashboard(dashboardID)
 	if !ok {
 		return request.WithDefaults()
 	}
 	defaults := dashboard.TableRequest{Block: "all", Start: 0, Count: dashboard.TableChunkSize}
-	if table, ok := report.Tables["orders"]; ok && table.KindOrDefault() == "data_table" {
+	if table, ok := report.Visualizations["orders"]; ok && table.Query.Kind == visualizationdefinition.QueryDetail {
 		defaults.Table = "orders"
-		defaults.Sort = table.DefaultSort
+		defaults.Sort = defaultTableSort(table)
 	} else {
-		for _, name := range sortedKeys(report.Tables) {
-			table := report.Tables[name]
-			if table.KindOrDefault() != "data_table" {
+		for _, name := range sortedKeys(report.Visualizations) {
+			table := report.Visualizations[name]
+			if table.Query.Kind != visualizationdefinition.QueryDetail {
 				continue
 			}
 			defaults.Table = name
-			defaults.Sort = table.DefaultSort
+			defaults.Sort = defaultTableSort(table)
 			break
 		}
 	}
@@ -180,7 +195,7 @@ func (s *ReportService) NormalizeTableRequest(dashboardID string, request dashbo
 }
 
 func (s *ReportService) DefaultFilters(dashboardID string) dashboard.Filters {
-	report, ok := s.workspace.Dashboards[dashboardID]
+	report, ok := s.compiledDashboard(dashboardID)
 	if !ok {
 		return dashboard.Filters{}.WithDefaults()
 	}
@@ -188,7 +203,7 @@ func (s *ReportService) DefaultFilters(dashboardID string) dashboard.Filters {
 }
 
 func (s *ReportService) Pages(dashboardID string) []dashboard.Page {
-	report, ok := s.workspace.Dashboards[dashboardID]
+	report, ok := s.compiledDashboard(dashboardID)
 	if !ok {
 		return nil
 	}
@@ -199,8 +214,8 @@ func (s *ReportService) Pages(dashboardID string) []dashboard.Page {
 	return pages
 }
 
-func (s *ReportService) reportRuntime(dashboardID string, runtimes map[string]*modelRuntime) (*reportdef.Dashboard, *modelRuntime, error) {
-	report, ok := s.workspace.Dashboards[dashboardID]
+func (s *ReportService) reportRuntime(dashboardID string, runtimes map[string]*modelRuntime) (*dashboarddefinition.Definition, *modelRuntime, error) {
+	report, ok := s.compiledDashboard(dashboardID)
 	if !ok {
 		return nil, nil, fmt.Errorf("unknown dashboard %q", dashboardID)
 	}
@@ -212,6 +227,22 @@ func (s *ReportService) reportRuntime(dashboardID string, runtimes map[string]*m
 		return nil, nil, fmt.Errorf("unknown semantic model %q", report.SemanticModel)
 	}
 	return report, runtime, nil
+}
+
+func (s *ReportService) compiledDashboard(dashboardID string) (*dashboarddefinition.Definition, bool) {
+	definition, ok := s.workspace.Dashboards[dashboardID]
+	if !ok {
+		return nil, false
+	}
+	return &definition, true
+}
+
+func defaultTableSort(definition visualizationdefinition.Definition) dashboard.TableSort {
+	if definition.Query.Detail == nil || len(definition.Query.Detail.DefaultSort) == 0 {
+		return dashboard.TableSort{}
+	}
+	sort := definition.Query.Detail.DefaultSort[0]
+	return dashboard.TableSort{Key: sort.FieldID, Direction: sort.Direction}
 }
 
 func (m *Service) semanticRuntime(modelID string) (*modelRuntime, error) {

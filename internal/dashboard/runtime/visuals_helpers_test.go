@@ -6,7 +6,7 @@ import (
 
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	"github.com/Yacobolo/leapview/internal/dashboard"
-	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
 )
 
 func TestAggregateMemberMetadataResolvesMetricPresentation(t *testing.T) {
@@ -24,7 +24,7 @@ func TestCategoryMultiMeasureDatumsDecodesBundledWideRows(t *testing.T) {
 		"rating_count": {Label: "Ratings"},
 		"tag_count":    {Label: "Tags"},
 	}}}
-	visual := reportdef.Visual{Query: reportdef.VisualQuery{Measures: []reportdef.FieldRef{{Field: "rating_count"}, {Field: "tag_count"}}}}
+	visual := visualPlan{Measures: []visualizationdefinition.FieldBinding{{FieldID: "rating_count"}, {FieldID: "tag_count"}}}
 	rows := []dashboard.Datum{{"label": "2024-01-01", "value_0": int64(8), "value_1": int64(3)}}
 	got := categoryMultiMeasureDatums(runtime, visual, rows)
 	want := []dashboard.Datum{

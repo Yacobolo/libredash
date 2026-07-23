@@ -11,6 +11,7 @@ import (
 	"github.com/Yacobolo/leapview/internal/agent"
 	"github.com/Yacobolo/leapview/internal/ui"
 	uisignals "github.com/Yacobolo/leapview/internal/ui/signals"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 )
 
 func TestChatReferenceSearchUsesGlobalScopeAndEchoesRequestIdentity(t *testing.T) {
@@ -72,7 +73,7 @@ func TestChatReferenceSearchUsesGlobalScopeAndEchoesRequestIdentity(t *testing.T
 func TestChatSignalPatchKeepsEmbeddedArtifactsSeparateFromDashboardVisuals(t *testing.T) {
 	state := ui.ChatViewState{
 		Agent:   ui.ChatSignal{Conversations: []ui.ChatConversationSummary{}, Transcript: []ui.ChatTranscriptItemSignal{}},
-		Visuals: map[string]uisignals.DashboardVisual{},
+		Visuals: map[string]visualizationir.VisualizationEnvelope{},
 	}
 	embedded := chatSignalPatch(state, true)
 	if _, ok := embedded["agentVisuals"]; !ok {

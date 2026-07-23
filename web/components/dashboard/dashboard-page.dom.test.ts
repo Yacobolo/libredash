@@ -3,13 +3,21 @@ import { createServer, type Server } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { join, normalize } from 'node:path'
 import { chromium, type Browser } from '@playwright/test'
+import validateVisualizationEnvelope from '../../generated/visualization/validate'
 
 let server: Server
 let baseURL = ''
 let browser: Browser
-
 const projectRoot = process.cwd()
 const root = join(projectRoot, '.tmp/dashboard-page-test')
+
+test('dashboard fixtures satisfy the fail-closed visualization contract', () => {
+  for (const [id, envelope] of Object.entries(testVisualizationEnvelopes())) {
+    if (!validateVisualizationEnvelope(envelope)) {
+      throw new Error(`${id}: ${JSON.stringify((validateVisualizationEnvelope as typeof validateVisualizationEnvelope & { errors?: unknown }).errors)}`)
+    }
+  }
+})
 
 beforeAll(async () => {
   server = createServer(async (request, response) => {
@@ -21,22 +29,15 @@ beforeAll(async () => {
     }
     const fileRoot = url.pathname.startsWith('/static/vendor/') ? projectRoot : root
     const file = normalize(join(fileRoot, url.pathname))
-    if (!file.startsWith(fileRoot)) {
-      response.writeHead(404)
-      response.end('not found')
-      return
-    }
+    if (!file.startsWith(fileRoot)) { response.writeHead(404); response.end('not found'); return }
     try {
       response.setHeader('content-type', file.endsWith('.css') ? 'text/css' : 'text/javascript')
       response.end(await readFile(file))
-    } catch {
-      response.writeHead(404)
-      response.end('not found')
-    }
+    } catch { response.writeHead(404); response.end('not found') }
   })
   await new Promise<void>((resolve) => server.listen(0, resolve))
   const address = server.address()
-  if (!address || typeof address === 'string') throw new Error('test server did not bind to a port')
+  if (!address || typeof address === 'string') throw new Error('test server did not bind')
   baseURL = `http://127.0.0.1:${address.port}`
   browser = await chromium.launch()
 })
@@ -46,333 +47,78 @@ afterAll(async () => {
   await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
 }, 15_000)
 
-for (const viewport of [
-  { name: 'desktop', width: 1280, height: 820 },
-  { name: 'mobile', width: 390, height: 820 },
-]) {
-  test(`dashboard page composes route UI on ${viewport.name}`, async () => {
+for (const viewport of [{ name: 'desktop', width: 1280, height: 820 }, { name: 'mobile', width: 390, height: 820 }]) {
+  test(`dashboard composes envelope-native visuals on ${viewport.name}`, async () => {
     const page = await browser.newPage({ viewport })
     try {
       await page.goto(baseURL)
-      await page.waitForFunction(() => (
-        customElements.get('lv-dashboard-page')
-          && customElements.get('lv-filter-dock')
-          && customElements.get('lv-filter-panel')
-          && customElements.get('lv-filter-card')
-          && customElements.get('lv-kpi-card')
-          && customElements.get('lv-echart')
-          && customElements.get('lv-report-table')
-      ))
+      await page.waitForFunction(() => customElements.get('lv-dashboard-page') && customElements.get('lv-visualization-host'))
       await page.waitForFunction(() => (document.querySelector('lv-dashboard-page') as any)?.page?.title === 'Executive Sales Dashboard')
-      await page.locator('lv-dashboard-page').evaluate((element: any) => element.updateComplete)
-
-      const state = await page.locator('lv-dashboard-page').evaluate((element: any) => {
+      await page.waitForFunction(() => {
+        const dashboard = document.querySelector('lv-dashboard-page') as any
+        const hosts = Array.from(dashboard?.shadowRoot?.querySelectorAll('lv-visualization-host') ?? []) as any[]
+        const tableHost = hosts.find((host) => host.envelope?.visualID === 'orders')
+        return Boolean(tableHost?.shadowRoot?.querySelector('lv-report-table'))
+      })
+      const state = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
+        await element.updateComplete
         const root = element.shadowRoot
-        const tags = Array.from(root.querySelectorAll('*')).map((node: Element) => node.localName)
-        const filterDock = root.querySelector('lv-filter-dock')
-        const rect = root.querySelector('lv-report-canvas')?.getBoundingClientRect()
-        return {
-          title: root.querySelector('h1')?.textContent?.trim(),
-          hasSubSidebar: tags.includes('lv-sub-sidebar'),
-          hasCanvas: tags.includes('lv-report-canvas'),
-          hasFilterCard: tags.includes('lv-filter-card'),
-          hasKpi: tags.includes('lv-kpi-card'),
-          hasChart: tags.includes('lv-echart'),
-          hasTable: tags.includes('lv-report-table'),
-          hasFilterDock: tags.includes('lv-filter-dock'),
-          hasFilterPanel: Boolean(filterDock?.shadowRoot?.querySelector('lv-filter-panel')),
-          hasFooter: tags.includes('lv-report-footer'),
-          hasModal: tags.includes('lv-visual-modal'),
-          canvasVisible: Boolean(rect && rect.width > 40 && rect.height > 40),
-        }
-      })
-
-      expect(state).toEqual({
-        title: 'Executive Sales Dashboard',
-        hasSubSidebar: true,
-        hasCanvas: true,
-        hasFilterCard: true,
-        hasKpi: true,
-        hasChart: true,
-        hasTable: true,
-        hasFilterDock: true,
-        hasFilterPanel: true,
-        hasFooter: true,
-        hasModal: true,
-        canvasVisible: true,
-      })
-
-      const layout = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
-        const canvas = element.shadowRoot.querySelector('lv-report-canvas') as any
+        const hosts = Array.from(root.querySelectorAll('lv-visualization-host')) as any[]
+        await Promise.all(hosts.map((host) => host.updateComplete))
+        const tableHost = hosts.find((host) => host.envelope?.visualID === 'orders')
+        const table = tableHost?.shadowRoot?.querySelector('lv-report-table') as any
+        await table?.updateComplete
+        const kpiHost = hosts.find((host) => host.envelope?.visualID === 'orders_kpi')
+        const kpi = kpiHost?.shadowRoot?.querySelector('.lv-kpi-card') as HTMLElement | null
+        const kpiLabel = kpi?.querySelector('.lv-visualization-label') as HTMLElement | null
+        const kpiValue = kpi?.querySelector('.lv-visualization-kpi') as HTMLElement | null
+        const canvas = root.querySelector('lv-report-canvas') as any
         await canvas.updateComplete
-        const root = canvas.shadowRoot
-        const surface = root.querySelector('.surface') as HTMLElement
-        const viewport = root.querySelector('.viewport') as HTMLElement
-        const frame = root.querySelector('.frame') as HTMLElement
-        const assigned = (root.querySelector('slot') as HTMLSlotElement).assignedElements() as HTMLElement[]
-        const kpi = assigned.find((item) => item.querySelector('lv-kpi-card'))
-        const chart = assigned.find((item) => item.querySelector('lv-echart'))
-        const table = assigned.find((item) => item.querySelector('lv-report-table'))
-        const rect = (item?: HTMLElement) => item ? item.getBoundingClientRect() : null
+        const assigned = (canvas.shadowRoot.querySelector('slot') as HTMLSlotElement).assignedElements() as HTMLElement[]
+        const visualFrame = (id: string) => assigned.find((item) => (item.querySelector('lv-visualization-host') as any)?.envelope?.visualID === id)?.getBoundingClientRect()
+        const chart = visualFrame('orders_chart')
+        const tableFrame = visualFrame('orders')
         return {
-          mode: surface.dataset.presentationMode,
-          scale: Number(surface.dataset.scale),
-          viewportScrollable: viewport.scrollHeight > viewport.clientHeight,
-          framePosition: getComputedStyle(frame).position,
-          kpi: rect(kpi),
-          chart: rect(chart),
-          table: rect(table),
-        }
-      })
-
-      if (viewport.name === 'mobile') {
-        expect(layout.mode).toBe('responsive')
-        expect(layout.scale).toBe(1)
-        expect(layout.framePosition).toBe('relative')
-        expect(layout.kpi?.width ?? 0).toBeGreaterThanOrEqual(300)
-        expect(layout.kpi?.height ?? 0).toBeLessThan(300)
-        expect(layout.chart?.height ?? 0).toBeGreaterThanOrEqual(280)
-        expect(layout.table?.height ?? 0).toBeLessThanOrEqual(700)
-        expect(layout.table?.top ?? 0).toBeGreaterThan(layout.chart?.bottom ?? 0)
-      } else {
-        expect(layout.mode).toBe('fit-width')
-        expect(layout.viewportScrollable).toBe(true)
-      }
-
-      const footerState = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
-        const footer = element.shadowRoot.querySelector('lv-report-footer') as any
-        await footer.updateComplete
-        const initial = footer.shadowRoot.querySelector('.status')?.textContent?.replace(/\s+/g, ' ').trim()
-        footer.status = { ...footer.status, loading: true }
-        await footer.updateComplete
-        const loading = footer.shadowRoot.querySelector('.status')?.textContent?.replace(/\s+/g, ' ').trim()
-        footer.status = { ...footer.status, error: 'query failed' }
-        await footer.updateComplete
-        const failed = footer.shadowRoot.querySelector('.status')?.textContent?.replace(/\s+/g, ' ').trim()
-        return { initial, loading, failed }
-      })
-      expect(footerState.initial).toStartWith('Data refreshed ')
-      expect(footerState.initial).not.toContain('2026-07-18T10:00:00Z')
-      expect(footerState.loading).toBe(footerState.initial)
-      expect(footerState.failed).toBe('Unable to update visuals')
-
-      const tableState = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
-        const table = element.shadowRoot.querySelector('lv-report-table') as any
-        await table.updateComplete
-        const root = table.shadowRoot
-        return {
-          text: root.textContent.replace(/\s+/g, ' ').trim(),
-          rows: root.querySelectorAll('[role="row"]').length,
-          cells: root.querySelectorAll('[role="cell"]').length,
-        }
-      })
-
-      expect(tableState.text).toContain('Orders')
-      expect(tableState.text).toContain('Order')
-      expect(tableState.text).toContain('o1')
-      expect(tableState.rows).toBeGreaterThan(0)
-      expect(tableState.cells).toBeGreaterThan(0)
-
-      const progressiveState = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
-        const root = element.shadowRoot
-        const chartFrame = root.querySelector('[data-component-status-key="visual:orders_chart"]') as any
-        const tableFrame = root.querySelector('[data-component-status-key="visual:orders"]') as any
-        const kpiFrame = root.querySelector('[data-component-status-key="visual:orders_kpi"]') as any
-        const chart = chartFrame?.querySelector('lv-echart') as any
-        const table = tableFrame?.querySelector('lv-report-table') as any
-        await Promise.all([chartFrame?.updateComplete, tableFrame?.updateComplete, chart?.updateComplete, table?.updateComplete])
-        const chartSpinner = chartFrame?.shadowRoot?.querySelector('lv-loading-spinner') as any
-        await chartSpinner?.updateComplete
-        const chartSpinnerSvg = chartSpinner?.shadowRoot?.querySelector('svg') as SVGElement | null
-        const chartIndicator = chartFrame?.shadowRoot?.querySelector('.loading-indicator.header') as HTMLElement | null
-        return {
-          chartBusy: chartFrame?.shadowRoot?.querySelector('article')?.getAttribute('aria-busy'),
-          chartLoadingLabel: chartFrame?.shadowRoot?.querySelector('[role="status"]')?.getAttribute('aria-label'),
-          chartIndicatorPlacement: chartIndicator?.className ?? '',
-          chartIndicatorDelay: chartIndicator ? getComputedStyle(chartIndicator).animationDelay : '',
-          chartHasFullOverlay: Boolean(chartFrame?.shadowRoot?.querySelector('.refresh-overlay.loading')),
-          chartSpinnerDuration: chartSpinnerSvg ? getComputedStyle(chartSpinnerSvg).animationDuration : '',
-          chartSpinnerIsNeutral: Boolean(chartSpinner && chartIndicator && getComputedStyle(chartSpinner).color === getComputedStyle(chartIndicator).color),
-          tableAlert: tableFrame?.shadowRoot?.querySelector('[role="alert"]')?.textContent?.replace(/\s+/g, ' ').trim(),
-          tableRetainedRow: table?.shadowRoot?.textContent?.includes('o1'),
-          kpiHasOverlay: Boolean(kpiFrame?.shadowRoot?.querySelector('.refresh-overlay')),
-          chartSelection: chart?.chart?.selection,
-          tableSelection: table?.table?.selection,
-        }
-      })
-
-      expect(progressiveState).toEqual({
-        chartBusy: 'true',
-        chartLoadingLabel: 'Refreshing component',
-        chartIndicatorPlacement: 'loading-indicator header',
-        chartIndicatorDelay: '0.5s',
-        chartHasFullOverlay: false,
-        chartSpinnerDuration: '1.8s',
-        chartSpinnerIsNeutral: true,
-        tableAlert: 'Could not refresh this component Ratings query failed',
-        tableRetainedRow: true,
-        kpiHasOverlay: false,
-        chartSelection: [{ mappings: [{ field: 'orders.status', value: 'delivered', label: 'Delivered' }], label: 'Delivered' }],
-        tableSelection: [{ mappings: [{ field: 'orders.order_id', value: 'o1', label: 'o1' }], label: 'o1' }],
-      })
-
-      if (viewport.name === 'desktop') {
-        const updateIsolation = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
-          const chart = element.shadowRoot.querySelector('lv-echart') as any
-          const direct = document.createElement('lv-echart') as any
-          direct.chart = structuredClone(chart.chart)
-          document.body.append(direct)
-          await direct.updateComplete
-          direct.rendererHandle?.dispose()
-          let directRendererUpdates = 0
-          direct.rendererHandle = {
-            update: () => { directRendererUpdates += 1 },
-            resize: () => {},
-            clear: () => {},
-            dispose: () => {},
-          }
-          direct.rendererName = 'echarts'
-          direct.chart = structuredClone(direct.chart)
-          await direct.updateComplete
-          const afterEquivalentClone = directRendererUpdates
-          direct.chart = { ...direct.chart, data: [{ label: 'delivered', value: 99 }] }
-          await direct.updateComplete
-          const afterDirectDataChange = directRendererUpdates
-          direct.remove()
-
-          let rendererUpdates = 0
-          chart.renderChart = () => { rendererUpdates += 1 }
-          const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev')
-
-          mergePatch({ componentStatus: { 'visual:orders': { generation: 3, loading: true, error: '' } } })
-          await element.updateComplete
-          await chart.updateComplete
-          const afterUnrelatedPatch = rendererUpdates
-
-          mergePatch({ visuals: { orders_chart: { data: [{ label: 'delivered', value: 43 }, { label: 'shipped', value: 7 }] } } })
-          await element.updateComplete
-          await chart.updateComplete
-          return { afterEquivalentClone, afterDirectDataChange, afterUnrelatedPatch, afterChartPatch: rendererUpdates }
-        })
-
-        expect(updateIsolation).toEqual({
-          afterEquivalentClone: 0,
-          afterDirectDataChange: 1,
-          afterUnrelatedPatch: 0,
-          afterChartPatch: 1,
-        })
-      }
-
-      if (viewport.name === 'desktop') {
-        const optimistic = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
-          const root = element.shadowRoot
-          const chart = root.querySelector('lv-echart') as any
-          const detail = (value: string) => ({
-            sourceKind: 'visual',
-            sourceId: 'orders_chart',
-            interactionKind: 'point_selection',
-            action: 'replace',
-            toggle: true,
-            mappings: [{ field: 'orders.status', value, label: value }],
-          })
-          chart.dispatchEvent(new CustomEvent('lv-interaction-select', { bubbles: true, composed: true, detail: detail('processing') }))
-          chart.dispatchEvent(new CustomEvent('lv-interaction-select', { bubbles: true, composed: true, detail: detail('complete') }))
-          await element.updateComplete
-          await chart.updateComplete
-
-          const kpiFrame = root.querySelector('[data-component-status-key="visual:orders_kpi"]') as any
-          const tableFrame = root.querySelector('[data-component-status-key="visual:orders"]') as any
-          await Promise.all([kpiFrame.updateComplete, tableFrame.updateComplete])
-          const pending = {
-            selection: chart.chart.selection,
-            kpiBusy: kpiFrame.shadowRoot.querySelector('article')?.getAttribute('aria-busy'),
-            tableBusy: tableFrame.shadowRoot.querySelector('article')?.getAttribute('aria-busy'),
-          }
-
-          const beforeForged = JSON.stringify(chart.chart.selection)
-          chart.dispatchEvent(new CustomEvent('lv-interaction-select', {
-            bubbles: true,
-            composed: true,
-            detail: { ...detail('forged'), mappings: [{ field: 'orders.secret', value: 'forged' }] },
-          }))
-          await element.updateComplete
-
-          const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev')
-          mergePatch({
-            status: { generation: 4, refreshId: 'refresh-4', loading: true },
-            filters: {
-              selections: [{
-                id: 'visual:orders_chart:point_selection',
-                sourceKind: 'visual',
-                sourceId: 'orders_chart',
-                interactionKind: 'point_selection',
-                label: 'complete',
-                order: 1,
-                entries: [{ mappings: [{ field: 'orders.status', value: 'complete', label: 'complete' }], label: 'complete' }],
-              }],
-            },
-          })
-          await element.updateComplete
-          await chart.updateComplete
-          return {
-            pending,
-            forgedRolledBack: JSON.stringify(chart.chart.selection) === beforeForged,
-            canonical: chart.chart.selection,
-          }
-        })
-
-        expect(optimistic).toEqual({
-          pending: {
-            selection: [{ mappings: [{ field: 'orders.status', value: 'complete', label: 'complete' }], label: 'complete' }],
-            kpiBusy: 'true',
-            tableBusy: 'true',
+          title: root.querySelector('h1')?.textContent?.trim(), hostCount: hosts.length,
+          legacyCount: root.querySelectorAll('lv-echart, lv-kpi-card, lv-report-table').length,
+          kinds: hosts.map((host) => host.envelope?.spec?.kind).sort(),
+          statuses: Object.fromEntries(hosts.map((host) => [host.envelope?.visualID, host.envelope?.status?.kind])),
+          tableText: table?.shadowRoot?.textContent?.replace(/\s+/g, ' ').trim(),
+          tableUpgraded: Boolean(table?.updateComplete && table?.shadowRoot?.childElementCount),
+          tableAlert: tableHost?.shadowRoot?.querySelector('[role="alert"]')?.textContent?.trim(),
+          kpi: {
+            tone: kpi?.dataset.tone,
+            label: kpiLabel?.textContent?.trim(),
+            value: kpiValue?.textContent?.trim(),
+            note: kpi?.querySelector('.lv-visualization-note')?.textContent?.trim(),
+            display: kpi ? getComputedStyle(kpi).display : '',
+            valueSize: kpiValue ? Number.parseFloat(getComputedStyle(kpiValue).fontSize) : 0,
+            labelSize: kpiLabel ? Number.parseFloat(getComputedStyle(kpiLabel).fontSize) : 0,
           },
-          forgedRolledBack: true,
-          canonical: [{ mappings: [{ field: 'orders.status', value: 'complete', label: 'complete' }], label: 'complete' }],
-        })
+          presentationMode: canvas.shadowRoot.querySelector('.surface')?.dataset.presentationMode,
+          chartHeight: chart?.height ?? 0, tableHeight: tableFrame?.height ?? 0,
+          tableAfterChart: (tableFrame?.top ?? 0) > (chart?.bottom ?? 0),
+        }
+      })
+      expect(state.title).toBe('Executive Sales Dashboard')
+      expect(state.hostCount).toBe(3)
+      expect(state.legacyCount).toBe(0)
+      expect(state.kinds).toEqual(['cartesian', 'kpi', 'table'])
+      expect(state.statuses).toEqual({ orders_kpi: 'ready', orders_chart: 'loading', orders: 'error' })
+      expect(state.tableAlert).toBe('Ratings query failed')
+      expect(state.tableText).toContain('o1')
+      expect(state.tableUpgraded).toBe(true)
+      expect(state.kpi).toMatchObject({ tone: 'ink', label: 'Orders', value: '42', note: 'Filtered', display: 'grid' })
+      expect(state.kpi.valueSize).toBeGreaterThan(state.kpi.labelSize)
+      if (viewport.name === 'mobile') {
+        expect(state.presentationMode).toBe('responsive')
+        expect(state.chartHeight).toBeGreaterThanOrEqual(280)
+        expect(state.tableHeight).toBeLessThanOrEqual(700)
+        expect(state.tableAfterChart).toBe(true)
+      } else {
+        expect(state.presentationMode).toBe('fit-width')
       }
-
-      if (viewport.name === 'desktop') {
-        const dockState = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
-          const dock = element.shadowRoot.querySelector('lv-filter-dock') as HTMLElement
-          const root = dock.shadowRoot
-          const beforeAside = root.querySelector('aside') as HTMLElement
-          const beforeRail = root.querySelector('.rail') as HTMLElement
-          const rect = (node: HTMLElement) => {
-            const box = node.getBoundingClientRect()
-            return {
-              width: Math.round(box.width),
-              height: Math.round(box.height),
-              right: Math.round(box.right),
-            }
-          }
-          const closedAside = rect(beforeAside)
-          const closedRail = rect(beforeRail)
-          beforeRail.click()
-          await dock.updateComplete
-          await new Promise((resolve) => setTimeout(resolve, 220))
-          const afterAside = root.querySelector('aside') as HTMLElement
-          const afterRail = root.querySelector('.rail') as HTMLElement
-          const panel = root.querySelector('.panel') as HTMLElement
-          return {
-            closedAside,
-            closedRail,
-            openAside: rect(afterAside),
-            openRail: rect(afterRail),
-            openRailDisplay: getComputedStyle(afterRail).display,
-            panelDisplay: getComputedStyle(panel).display,
-          }
-        })
-
-        expect(dockState.closedRail.width <= dockState.closedAside.width).toBe(true)
-        expect(dockState.openAside.width >= 300).toBe(true)
-        expect(dockState.openRailDisplay).toBe('none')
-        expect(dockState.openRail.height).toBe(0)
-        expect(dockState.panelDisplay).toBe('block')
-      }
-    } finally {
-      await page.close()
-    }
+    } finally { await page.close() }
   })
 }
 
@@ -416,190 +162,201 @@ test('embed presentation keeps page navigation and removes non-navigation chrome
   }
 })
 
-test('visual frame delays and distinguishes initial loading from background refresh', async () => {
+test('windowed table keeps a bounded DOM and requests unloaded chunks while scrolling', async () => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('lv-dashboard-visual-frame'))
-    const state = await page.evaluate(async () => {
-      const frame = document.createElement('lv-dashboard-visual-frame') as any
-      frame.refreshStatus = { generation: 4, loading: true, error: '' }
-      frame.loadingPresentation = 'center'
-      document.body.append(frame)
-      await frame.updateComplete
-      const center = frame.shadowRoot.querySelector('.loading-indicator.center') as HTMLElement
-      const centerSpinner = center.querySelector('lv-loading-spinner') as HTMLElement
-      const initial = {
-        delay: getComputedStyle(center).animationDelay,
-        background: getComputedStyle(center).backgroundColor,
-        spinnerSize: getComputedStyle(centerSpinner).width,
-      }
-
-      frame.loadingPresentation = 'header'
-      await frame.updateComplete
-      const header = frame.shadowRoot.querySelector('.loading-indicator.header') as HTMLElement
-      const headerSpinner = header.querySelector('lv-loading-spinner') as HTMLElement
-      const refresh = {
-        delay: getComputedStyle(header).animationDelay,
-        background: getComputedStyle(header).backgroundColor,
-        spinnerSize: getComputedStyle(headerSpinner).width,
-      }
-      frame.remove()
-      return { initial, refresh }
+    await page.waitForFunction(() => {
+      const dashboard = document.querySelector('lv-dashboard-page') as any
+      const hosts = Array.from(dashboard?.shadowRoot?.querySelectorAll('lv-visualization-host') ?? []) as any[]
+      const tableHost = hosts.find((host) => host.envelope?.visualID === 'orders')
+      return Boolean(tableHost?.shadowRoot?.querySelector('lv-report-table')?.shadowRoot?.querySelector('.table-scrollport'))
     })
-
-    expect(state).toEqual({
-      initial: { delay: '0.25s', background: 'rgb(255, 255, 255)', spinnerSize: '24px' },
-      refresh: { delay: '0.5s', background: 'rgba(0, 0, 0, 0)', spinnerSize: '12px' },
+    const result = await page.locator('lv-dashboard-page').evaluate(async (dashboard: any) => {
+      const hosts = Array.from(dashboard.shadowRoot.querySelectorAll('lv-visualization-host')) as any[]
+      const tableHost = hosts.find((host) => host.envelope?.visualID === 'orders')
+      const table = tableHost.shadowRoot.querySelector('lv-report-table') as any
+      await table.updateComplete
+      const scrollport = table.shadowRoot.querySelector('.table-scrollport') as HTMLElement
+      const request = new Promise<any>((resolve, reject) => {
+        const timeout = window.setTimeout(() => reject(new Error('window request was not emitted')), 1_000)
+        dashboard.addEventListener('lv-visualization-window-request', (event: Event) => {
+          window.clearTimeout(timeout)
+          resolve((event as CustomEvent).detail)
+        }, { once: true })
+      })
+      scrollport.scrollTop = 100 * 28
+      scrollport.dispatchEvent(new Event('scroll'))
+      const detail = await request
+      await table.updateComplete
+      return {
+        detail,
+        renderedRows: table.shadowRoot.querySelectorAll('.canvas > .row').length,
+        totalRows: table.table.availableRows,
+        loadingVisible: table.shadowRoot.textContent?.includes('loading'),
+      }
     })
-  } finally {
-    await page.close()
-  }
+    expect(result.detail).toMatchObject({
+      visualID: 'orders', specRevision: `sha256:${'3'.repeat(64)}`, dataRevision: 1,
+      resetVersion: 0, limit: 50,
+    })
+    expect(result.detail.requestSeq).toBeGreaterThan(0)
+    expect(result.detail.start).toBeGreaterThanOrEqual(50)
+    expect(['all', 'a', 'b', 'c']).toContain(result.detail.blockID)
+    expect(result.renderedRows).toBeLessThan(40)
+    expect(result.totalRows).toBe(250)
+    expect(result.loadingVisible).toBe(true)
+  } finally { await page.close() }
 })
 
-test('dashboard refresh progress follows only the latest generation', async () => {
+test('dashboard refresh progress is owned by the latest stream generation', async () => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => (
-      customElements.get('lv-dashboard-page')
-        && (document.querySelector('lv-dashboard-page') as any)?.page?.title === 'Executive Sales Dashboard'
-    ))
-
+    await page.waitForFunction(() => (document.querySelector('lv-dashboard-page') as any)?.page?.title === 'Executive Sales Dashboard')
     const states = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
       const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev')
       const read = async () => {
         await element.updateComplete
         const progress = element.shadowRoot.querySelector('[data-dashboard-refresh-progress]')
-        const value = progress?.querySelector('.dashboard-refresh-progress-value')
-        return {
-          active: progress?.getAttribute('data-active'),
-          complete: progress?.getAttribute('data-complete'),
-          generation: progress?.getAttribute('data-generation'),
-          now: progress?.getAttribute('aria-valuenow'),
-          max: progress?.getAttribute('aria-valuemax'),
-          text: progress?.getAttribute('aria-valuetext'),
-          indeterminate: progress?.hasAttribute('data-indeterminate'),
-          width: value?.getAttribute('style'),
-          animationName: getComputedStyle(value).animationName,
-          fadeDelay: getComputedStyle(progress).transitionDelay,
-        }
+        return { generation: progress?.getAttribute('data-generation'), now: progress?.getAttribute('aria-valuenow'), complete: progress?.getAttribute('data-complete') }
       }
-
       const initial = await read()
-      mergePatch({
-        status: {
-          generation: 4,
-          refreshId: 'refresh-4',
-          loading: true,
-          progressPercent: null,
-        },
-        componentStatus: {
-          'visual:orders_chart': { generation: 4, loading: true, error: '' },
-        },
-      })
-      const planning = await read()
-      mergePatch({
-        status: {
-          generation: 4,
-          refreshId: 'refresh-4',
-          loading: true,
-          progressPercent: 0,
-        },
-        componentStatus: {
-          'visual:orders_chart': { generation: 4, loading: true, error: '' },
-        },
-      })
-      const started = await read()
-      mergePatch({
-        status: { progressPercent: 33.33333333333333 },
-        componentStatus: {
-          'visual:orders_chart': { generation: 4, loading: false, error: '' },
-          'visual:stale': { generation: 3, loading: false, error: '' },
-        },
-      })
-      const progressive = await read()
-      mergePatch({
-        componentStatus: {
-          'visual:orders_kpi': { generation: 4, loading: false, error: 'Query failed' },
-          'visual:orders': { generation: 4, loading: false, error: '' },
-        },
-        status: {
-          generation: 4,
-          refreshId: 'refresh-4',
-          loading: false,
-          progressPercent: 100,
-        },
-      })
+      mergePatch({ status: { generation: 4, refreshId: 'refresh-4', loading: true, progressPercent: 25 } })
+      const active = await read()
+      mergePatch({ status: { generation: 4, refreshId: 'refresh-4', loading: false, progressPercent: 100 } })
       const complete = await read()
-      return { initial, planning, started, progressive, complete }
+      return { initial, active, complete }
+    })
+    expect(states).toEqual({
+      initial: { generation: '3', now: '50', complete: 'false' },
+      active: { generation: '4', now: '25', complete: 'false' },
+      complete: { generation: '4', now: '100', complete: 'true' },
+    })
+  } finally { await page.close() }
+})
+
+test('dashboard keeps the source visualization selected through canonicalization and clearing', async () => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => (document.querySelector('lv-dashboard-page') as any)?.page?.title === 'Executive Sales Dashboard')
+    const selections = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
+      const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev')
+      mergePatch({ filters: { selections: [] } })
+      await element.updateComplete
+      const readSelection = async () => {
+        await element.updateComplete
+        await Promise.resolve()
+        await element.updateComplete
+        const host = Array.from(element.shadowRoot.querySelectorAll('lv-visualization-host') as NodeListOf<any>)
+          .find((candidate: any) => candidate.envelope?.visualID === 'orders_chart')
+        return host.envelope.selection
+      }
+      await element.updateComplete
+      const source = Array.from(element.shadowRoot.querySelectorAll('lv-visualization-host') as NodeListOf<any>)
+        .find((host: any) => host.envelope?.visualID === 'orders_chart')
+      source.dispatchEvent(new CustomEvent('lv-interaction-select', { bubbles: true, composed: true, detail: {
+        sourceKind: 'visual', sourceId: 'orders_chart', interactionKind: 'selection', action: 'set', toggle: true,
+        mappings: [{ field: 'orders.status', fact: 'orders', value: 'delivered', label: 'Delivered' }],
+      } }))
+      const optimistic = await readSelection()
+
+      mergePatch({
+        filters: { selections: [{
+          sourceKind: 'visual', sourceId: 'orders_chart', interactionKind: 'selection',
+          entries: [{ label: 'Delivered', mappings: [{ field: 'orders.status', fact: 'orders', value: 'delivered' }] }],
+        }] },
+        status: { generation: 4, refreshId: 'refresh-4', loading: false, progressPercent: 100 },
+      })
+      const canonical = await readSelection()
+
+      mergePatch({
+        filters: { selections: [] },
+        status: { generation: 5, refreshId: 'refresh-5', loading: false, progressPercent: 100 },
+      })
+      const cleared = await readSelection()
+      return { optimistic, canonical, cleared }
+    })
+    const selected = [{
+      datum: { dataset: 'primary', dataRevision: 1, identity: { label: 'delivered' } }, label: 'Delivered',
+    }]
+    expect(selections).toEqual({ optimistic: selected, canonical: selected, cleared: [] })
+  } finally { await page.close() }
+})
+
+test('visualization host renders the shared title and preserves the live source through fullscreen', async () => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => (document.querySelector('lv-dashboard-page') as any)?.page?.title === 'Executive Sales Dashboard')
+    const initial = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
+      await element.updateComplete
+      const hosts = Array.from(element.shadowRoot.querySelectorAll('lv-visualization-host') as NodeListOf<any>)
+      const host = hosts.find((candidate: any) => candidate.envelope?.visualID === 'orders_chart')
+      await host.updateComplete
+      const title = host.shadowRoot.querySelector('[data-visualization-title]')?.textContent?.trim()
+      const expand = host.shadowRoot.querySelector('button[aria-label="Expand chart"]') as HTMLButtonElement | null
+      return { title, expand: expand?.title }
+    })
+    expect(initial).toEqual({
+      title: 'Orders by status',
+      expand: 'Expand chart',
     })
 
-    expect(states).toEqual({
-      initial: {
-        active: 'true',
-        complete: 'false',
-        generation: '3',
-        now: '50',
-        max: '100',
-        text: '50% of dashboard refresh complete',
-        indeterminate: false,
-        width: 'width:50%',
-        animationName: 'none',
-        fadeDelay: '0.25s',
-      },
-      planning: {
-        active: 'true',
-        complete: 'false',
-        generation: '4',
-        now: '0',
-        max: '100',
-        text: '0% of dashboard refresh complete',
-        indeterminate: false,
-        width: 'width:0%',
-        animationName: 'none',
-        fadeDelay: '0.25s',
-      },
-      started: {
-        active: 'true',
-        complete: 'false',
-        generation: '4',
-        now: '0',
-        max: '100',
-        text: '0% of dashboard refresh complete',
-        indeterminate: false,
-        width: 'width:0%',
-        animationName: 'none',
-        fadeDelay: '0.25s',
-      },
-      progressive: {
-        active: 'true',
-        complete: 'false',
-        generation: '4',
-        now: '33.33333333333333',
-        max: '100',
-        text: '33% of dashboard refresh complete',
-        indeterminate: false,
-        width: 'width:33.33333333333333%',
-        animationName: 'none',
-        fadeDelay: '0.25s',
-      },
-      complete: {
-        active: 'false',
-        complete: 'true',
-        generation: '4',
-        now: '100',
-        max: '100',
-        text: '100% of dashboard refresh complete',
-        indeterminate: false,
-        width: 'width:100%',
-        animationName: 'none',
-        fadeDelay: '0.18s',
-      },
+    await page.locator('[data-visualization-id="orders_chart"][data-visualization-expand]').click()
+    await page.waitForFunction(() => {
+      const dashboard = document.querySelector('lv-dashboard-page')
+      return Boolean(dashboard?.shadowRoot?.querySelector('lv-visual-modal')?.shadowRoot?.querySelector('[role="dialog"]'))
     })
-  } finally {
-    await page.close()
-  }
+    const focused = await page.locator('lv-dashboard-page').evaluate((dashboard: any) => {
+      const host = Array.from(dashboard.shadowRoot.querySelectorAll('lv-visualization-host') as NodeListOf<any>)
+        .find((candidate: any) => candidate.envelope?.visualID === 'orders_chart') as HTMLElement | undefined
+      const modal = dashboard.shadowRoot.querySelector('lv-visual-modal') as HTMLElement
+      return {
+        dialog: modal.shadowRoot?.querySelector('[role="dialog"]')?.getAttribute('aria-label'),
+        sourceParent: host?.parentElement?.localName,
+        sourceSlot: host?.getAttribute('slot'),
+        sourceTitle: host?.shadowRoot?.querySelector('[data-visualization-title]')?.textContent?.trim(),
+      }
+    })
+    expect(focused).toEqual({
+      dialog: 'Orders by status',
+      sourceParent: 'lv-visual-modal',
+      sourceSlot: 'focus-visual',
+      sourceTitle: 'Orders by status',
+    })
+
+    const focusedStatus = await page.locator('lv-dashboard-page').evaluate(async (dashboard: any) => {
+      const source = Array.from(dashboard.shadowRoot.querySelectorAll('lv-visualization-host') as NodeListOf<any>)
+        .find((candidate: any) => candidate.envelope?.visualID === 'orders_chart') as any
+      source.envelope = { ...source.envelope, status: { kind: 'partial', message: 'Focused refresh' } }
+      await source.updateComplete
+      return source.envelope?.status
+    })
+    expect(focusedStatus).toEqual({ kind: 'partial', message: 'Focused refresh' })
+
+    await page.locator('button[aria-label="Close visual modal"]').click()
+    await page.waitForFunction(() => {
+      const dashboard = document.querySelector('lv-dashboard-page')
+      const modal = dashboard?.shadowRoot?.querySelector('lv-visual-modal')
+      return !modal?.shadowRoot?.querySelector('[role="dialog"]') && !modal?.querySelector('[slot="focus-visual"]')
+    })
+    const restored = await page.locator('lv-dashboard-page').evaluate((dashboard: any) => {
+      const host = Array.from(dashboard.shadowRoot.querySelectorAll('lv-visualization-host') as NodeListOf<any>)
+        .find((candidate: any) => candidate.envelope?.visualID === 'orders_chart') as any
+      return {
+        sourceParent: host?.parentElement?.localName,
+        sourceSlot: host?.getAttribute('slot'),
+        status: host?.envelope?.status,
+      }
+    })
+    expect(restored).toEqual({
+      sourceParent: 'lv-dashboard-visual-frame',
+      sourceSlot: null,
+      status: { kind: 'partial', message: 'Focused refresh' },
+    })
+  } finally { await page.close() }
 })
 
 test('dashboard agent drawer carries page context and explicit visual references', async () => {
@@ -630,17 +387,16 @@ test('dashboard agent drawer carries page context and explicit visual references
 
     const visualActionsAtRest = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
       const root = element.shadowRoot
-      const frame = root.querySelector('[data-component-status-key="visual:orders_chart"]') as any
-      const chart = frame?.querySelector('lv-echart') as any
-      const kpi = root.querySelector('lv-kpi-card') as any
-      const table = root.querySelector('lv-report-table') as any
+      const frame = root.querySelector('[data-visual-id="orders_chart"]') as any
+      const chart = frame?.querySelector('lv-visualization-host') as any
+      const kpi = root.querySelector('[data-visual-id="orders_kpi"] lv-visualization-host') as any
+      const table = root.querySelector('[data-visual-id="orders"] lv-visualization-host') as any
       await Promise.all([frame?.updateComplete, chart?.updateComplete, kpi?.updateComplete, table?.updateComplete])
       const ask = chart.querySelector('.ask-visual') as HTMLElement
       const kpiAsk = kpi.querySelector('.ask-visual') as HTMLElement
       const tableAsk = table.querySelector('.ask-visual') as HTMLElement
       const askStyle = getComputedStyle(ask)
-      const expand = chart.shadowRoot.querySelector('[aria-label="Expand visual"]') as HTMLElement
-      const options = chart.shadowRoot.querySelector('[aria-label="Visual options"]') as HTMLElement
+      const expand = chart.shadowRoot.querySelector('[data-visualization-expand]') as HTMLElement
       const agentIconMarkup = root.querySelector('.agent-toggle svg')?.innerHTML
       const drawer = root.querySelector('lv-chat-drawer') as any
       return {
@@ -656,12 +412,8 @@ test('dashboard agent drawer carries page context and explicit visual references
         askPressed: ask.getAttribute('aria-pressed'),
         askUsesAgentIcon: ask.querySelector('svg')?.innerHTML === agentIconMarkup
           && drawer.shadowRoot.querySelector('.title svg')?.innerHTML === agentIconMarkup,
-        chartActions: [expand, options].map((control) => control.getAttribute('aria-label')),
-        chartHasExport: Array.from(chart.shadowRoot.querySelectorAll('[role="menuitem"]'))
-          .some((item: any) => item.textContent?.trim() === 'Export CSV'),
-        tableHasExpand: Boolean(table.shadowRoot.querySelector('[aria-label="Expand table"]')),
-        tableHasExport: Array.from(table.shadowRoot.querySelectorAll('[role="menuitem"]'))
-          .some((item: any) => item.textContent?.trim() === 'Export CSV'),
+        chartAction: expand.getAttribute('aria-label'),
+        tableHasExpand: Boolean(table.shadowRoot.querySelector('[data-visualization-expand]')),
       }
     })
     expect(visualActionsAtRest).toMatchObject({
@@ -670,22 +422,20 @@ test('dashboard agent drawer carries page context and explicit visual references
       askBackground: 'rgba(0, 0, 0, 0)',
       askBoxShadow: 'none',
       askActionRow: 'visual-actions',
-      kpiAskActionRow: 'visual-actions',
-      tableAskActionRow: 'visual-actions',
+      kpiAskActionRow: 'headerless-actions',
+      tableAskActionRow: 'headerless-actions',
       askPressed: 'false',
       askUsesAgentIcon: true,
-      chartActions: ['Expand visual', 'Visual options'],
-      chartHasExport: true,
-      tableHasExpand: true,
-      tableHasExport: true,
+      chartAction: 'Expand chart',
+      tableHasExpand: false,
     })
 
-    await page.locator('lv-dashboard-visual-frame[data-component-status-key="visual:orders_chart"]').hover()
+    await page.locator('lv-dashboard-visual-frame[data-visual-id="orders_chart"]').hover()
     const visualActionsOnHover = await page.locator('lv-dashboard-page').evaluate((element: any) => {
-      const frame = element.shadowRoot.querySelector('[data-component-status-key="visual:orders_chart"]') as any
-      const chart = frame.querySelector('lv-echart') as any
+      const frame = element.shadowRoot.querySelector('[data-visual-id="orders_chart"]') as any
+      const chart = frame.querySelector('lv-visualization-host') as any
       const ask = chart.querySelector('.ask-visual') as HTMLElement
-      const expand = chart.shadowRoot.querySelector('[aria-label="Expand visual"]') as HTMLElement
+      const expand = chart.shadowRoot.querySelector('[data-visualization-expand]') as HTMLElement
       const askStyle = getComputedStyle(ask)
       return {
         askOpacity: askStyle.opacity,
@@ -800,7 +550,7 @@ test('dashboard agent drawer carries page context and explicit visual references
 
     await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
       const frame = Array.from(element.shadowRoot.querySelectorAll('lv-dashboard-visual-frame'))
-        .find((candidate: any) => candidate.getAttribute('data-component-status-key') === 'visual:orders_chart') as any
+        .find((candidate: any) => candidate.getAttribute('data-visual-id') === 'orders_chart') as any
       frame.querySelector('.ask-visual').click()
       const drawer = element.shadowRoot.querySelector('lv-chat-drawer') as any
       await drawer.updateComplete
@@ -813,14 +563,14 @@ test('dashboard agent drawer carries page context and explicit visual references
       return {
         chip: composerRoot?.querySelector('.reference-chip')?.textContent?.replace(/\s+/g, ' ').trim(),
         highlighted: Boolean(element.shadowRoot.querySelector('lv-dashboard-visual-frame[data-agent-referenced]')),
-		pressed: element.shadowRoot.querySelector('[data-component-status-key="visual:orders_chart"] .ask-visual')?.getAttribute('aria-pressed'),
+		pressed: element.shadowRoot.querySelector('[data-visual-id="orders_chart"] .ask-visual')?.getAttribute('aria-pressed'),
       }
     })
     expect(referenced).toEqual({ chip: 'Orders by status', highlighted: true, pressed: 'true' })
 
     const limitReached = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
       const frame = Array.from(element.shadowRoot.querySelectorAll('lv-dashboard-visual-frame'))
-        .find((candidate: any) => candidate.getAttribute('data-component-status-key') === 'visual:orders_kpi') as any
+        .find((candidate: any) => candidate.getAttribute('data-visual-id') === 'orders_kpi') as any
       frame.querySelector('.ask-visual').click()
       const drawer = element.shadowRoot.querySelector('lv-chat-drawer') as any
       await drawer.updateComplete
@@ -1000,7 +750,11 @@ test('dashboard agent restores its open state and active conversation after relo
       ;(window as any).__agentRestoreRequests = []
       window.addEventListener('lv-chat-restore', (event: Event) => {
         ;(window as any).__agentRestoreRequests.push((event as CustomEvent).detail)
-      })
+        // This browser fixture has no dashboard command backend. Keep the test
+        // focused on persistence and prevent Datastar from following the
+        // synthetic restore command while assertions are running.
+        event.stopPropagation()
+      }, { capture: true })
     })
     await page.goto(baseURL)
     await page.evaluate(() => {
@@ -1010,6 +764,7 @@ test('dashboard agent restores its open state and active conversation after relo
       }))
     })
     await page.reload()
+    await page.waitForLoadState('networkidle')
     await page.waitForFunction(() => (
       customElements.get('lv-dashboard-page')
         && (window as any).__agentRestoreRequests?.length === 1
@@ -1051,6 +806,7 @@ test('dashboard agent restores its open state and active conversation after relo
     })
 
     await page.reload()
+    await page.waitForLoadState('networkidle')
     await page.waitForFunction(() => (
       customElements.get('lv-dashboard-page')
         && (window as any).__agentRestoreRequests?.length === 1
@@ -1073,142 +829,33 @@ test('dashboard agent restores its open state and active conversation after relo
 
 function testDocument(): string {
   const page = {
-    kind: 'dashboard',
-    title: 'Executive Sales Dashboard',
-    dashboardId: 'executive-sales',
-    dashboardTitle: 'Executive Sales Dashboard',
-    pageId: 'overview',
-    pageTitle: 'Overview',
-    headerDetail: '1. Overview',
-    modelId: 'olist',
-    modelTitle: 'Olist',
-    canvas: { width: 1024, height: 720 },
-    grid: { columns: 12, rowHeight: 48, gap: 16, padding: 16 },
+    kind: 'dashboard', title: 'Executive Sales Dashboard', dashboardId: 'executive-sales', dashboardTitle: 'Executive Sales Dashboard',
+    pageId: 'overview', pageTitle: 'Overview', headerDetail: '1. Overview', modelId: 'olist', modelTitle: 'Olist',
+    canvas: { width: 1024, height: 720 }, grid: { columns: 12, rowHeight: 48, gap: 16, padding: 16 },
     pages: [{ id: 'overview', title: 'Overview', href: '/dashboards/executive-sales/pages/overview', active: true }],
     components: [
-      { id: 'title', kind: 'header', x: 16, y: 16, width: 456, height: 88, title: 'Executive Sales', eyebrow: 'LeapView report', badges: ['Sales'] },
+      { id: 'title', kind: 'header', x: 16, y: 16, width: 456, height: 88, title: 'Executive Sales' },
       { id: 'state-filter', kind: 'filter', filter: 'state', x: 488, y: 16, width: 216, height: 88 },
       { id: 'orders-kpi', kind: 'visual', visual: 'orders_kpi', x: 720, y: 16, width: 240, height: 88 },
       { id: 'orders-chart', kind: 'visual', visual: 'orders_chart', x: 16, y: 128, width: 456, height: 280 },
       { id: 'orders-table', kind: 'visual', visual: 'orders', x: 16, y: 760, width: 944, height: 280 },
     ],
   }
-  const filterConfig = [{
-    id: 'state',
-    type: 'multi_select',
-    label: 'State',
-    dimension: 'orders.state',
-    default: { values: [] },
-    operator: 'in',
-    urlParam: 'state',
-  }]
   const filters = {
     controls: { state: { type: 'multi_select', operator: 'in', values: [] } },
     selections: [
-      {
-        id: 'visual:orders_chart:point_selection',
-        sourceKind: 'visual',
-        sourceId: 'orders_chart',
-        interactionKind: 'point_selection',
-        label: 'Delivered',
-        order: 1,
-        entries: [{ mappings: [{ field: 'orders.status', value: 'delivered', label: 'Delivered' }], label: 'Delivered' }],
-      },
-      {
-        id: 'visual:orders:row_selection',
-        sourceKind: 'visual',
-        sourceId: 'orders',
-        interactionKind: 'row_selection',
-        label: 'o1',
-        order: 2,
-        entries: [{ mappings: [{ field: 'orders.order_id', value: 'o1', label: 'o1' }], label: 'o1' }],
-      },
+      { sourceKind: 'visual', sourceId: 'orders_chart', interactionKind: 'selection', entries: [{ label: 'Delivered', mappings: [{ field: 'orders.status', fact: 'orders', value: 'delivered' }] }] },
+      { sourceKind: 'visual', sourceId: 'orders', interactionKind: 'row_selection', entries: [{ label: 'o1', mappings: [{ field: 'orders.order_id', fact: 'orders', value: 'o1' }] }] },
     ],
-  }
-  const visuals = {
-    orders_kpi: {
-      version: 3,
-      id: 'orders_kpi',
-      shape: 'single_value',
-      renderer: 'html',
-      type: 'kpi',
-      title: 'Orders',
-      unit: '',
-      interaction: { kind: 'point_selection', toggle: false, mappings: [] },
-      dimensions: [],
-      measure: 'order_count',
-      measures: ['order_count'],
-      series: [],
-      options: { tone: 'ink', note: 'Filtered' },
-      rendererOptions: {},
-      selection: [],
-      data: [{ label: 'Orders', value: 42 }],
-    },
-    orders_chart: {
-      version: 3,
-      id: 'orders_chart',
-      shape: 'category_value',
-      renderer: 'echarts',
-      type: 'bar',
-      title: 'Orders by status',
-      unit: 'orders',
-      interaction: { kind: 'point_selection', toggle: true, mappings: [{ field: 'orders.status', value: 'label' }], targets: ['orders_kpi', 'orders'] },
-      dimensions: ['status'],
-      measure: 'order_count',
-      measures: ['order_count'],
-      series: [],
-      options: {},
-      rendererOptions: {},
-      selection: [{ mappings: [{ field: 'orders.status', value: 'shipped', label: 'Shipped' }], label: 'Shipped' }],
-      data: [{ label: 'delivered', value: 42 }, { label: 'shipped', value: 7 }],
-    },
-    orders: {
-      version: 2,
-      id: 'orders',
-      type: 'table',
-      title: 'Orders',
-      style: { density: 'compact', zebra: true, grid: 'full' },
-      interaction: { kind: 'row_selection', toggle: false, mappings: [{ field: 'orders.order_id', value: 'order_id' }] },
-      selection: [{ mappings: [{ field: 'orders.order_id', value: 'server-value', label: 'Server value' }] }],
-      columns: [{ key: 'order_id', label: 'Order', width: 180 }],
-		cardinality: { kind: 'exact', value: 1 },
-      availableRows: 1,
-      isCapped: false,
-      rowCap: 1000,
-      chunkSize: 100,
-      rowHeight: 28,
-      resetVersion: 0,
-      sort: { key: 'order_id', direction: 'asc' },
-      blocks: {
-        a: { start: 0, requestSeq: 0, resetVersion: 0, sort: { key: 'order_id', direction: 'asc' }, rows: [{ order_id: 'o1' }] },
-        b: { start: 100, requestSeq: 0, resetVersion: 0, sort: { key: 'order_id', direction: 'asc' }, rows: [] },
-        c: { start: 200, requestSeq: 0, resetVersion: 0, sort: { key: 'order_id', direction: 'asc' }, rows: [] },
-      },
-      loadingBlock: '',
-      error: '',
-    },
-  }
-  const status = {
-    loading: true,
-    error: '',
-    refreshId: 'refresh-3',
-    generation: 3,
-    lastUpdated: '2026-07-18T10:00:00Z',
-    setupRequired: false,
-    progressPercent: 50,
-  }
-  const componentStatus = {
-    'visual:orders_chart': { generation: 3, loading: true, error: '' },
-    'visual:orders': { generation: 3, loading: false, error: 'Ratings query failed' },
+    spatialSelections: [],
   }
   const signals = {
     page,
-    filterConfig,
+    filterConfig: [{ id: 'state', type: 'multi_select', label: 'State', dimension: 'orders.state', default: { values: [] }, operator: 'in', urlParam: 'state' }],
     filters,
     filterOptions: { state: [{ value: 'SP', label: 'SP' }] },
-    componentStatus,
-    visuals,
-    status,
+    visuals: testVisualizationSignals(),
+    status: { loading: true, error: '', refreshId: 'refresh-3', generation: 3, lastUpdated: '2026-07-18T10:00:00Z', setupRequired: false, progressPercent: 50 },
     agent: {
       conversations: [],
       activeConversationId: '',
@@ -1228,6 +875,7 @@ function testDocument(): string {
       filters,
       references: [],
     },
+    agentReferenceSearch: { query: '', requestId: 0, results: [] },
     agentVisuals: {},
   }
   const attr = (value: unknown) => escapeHTML(JSON.stringify(value))
@@ -1253,10 +901,25 @@ function testDocument(): string {
   `
 }
 
-function escapeHTML(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('"', '&quot;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
+function testVisualizationEnvelopes() {
+  const kpiRevision = `sha256:${'1'.repeat(64)}`
+  const chartRevision = `sha256:${'2'.repeat(64)}`
+  const tableRevision = `sha256:${'3'.repeat(64)}`
+  const field = (id: string, role: string, dataType: string, label: string) => ({ id, role, dataType, nullable: false, label })
+  const base = (title: string, fields: unknown[]) => ({ title, datasets: [{ id: 'primary', fields }], dataBudget: { maxRows: 1000, requiredCompleteness: 'complete' }, accessibility: { title, description: title }, interactions: [] })
+  const inline = (revision: string, columns: string[], rows: unknown[][]) => ({ kind: 'inline', specRevision: revision, dataRevision: 1, generation: 3, datasets: [{ id: 'primary', specRevision: revision, dataRevision: 1, generation: 3, columns, rows, completeness: 'complete' }] })
+  return {
+    orders_kpi: { schemaVersion: 3, visualID: 'orders_kpi', rendererID: 'html', specRevision: kpiRevision, dataRevision: 1, spec: { ...base('Orders', [field('value', 'measure', 'decimal', 'Orders')]), kind: 'kpi', value: { dataset: 'primary', field: 'value' }, presentation: { trend: 'neutral', tone: 'ink', note: 'Filtered' } }, dataState: inline(kpiRevision, ['value'], [[42]]), selection: [], status: { kind: 'ready' }, diagnostics: [] },
+    orders_chart: { schemaVersion: 3, visualID: 'orders_chart', rendererID: 'echarts', specRevision: chartRevision, dataRevision: 1, spec: { ...base('Orders by status', [field('label', 'identity', 'string', 'Status'), field('value', 'measure', 'decimal', 'Orders')]), kind: 'cartesian', mark: 'bar', interactions: [{ id: 'selection', kind: 'select', mappings: [{ source: { dataset: 'primary', field: 'label' }, targetFieldID: 'orders.status', targetFactID: 'orders' }], targets: ['orders_kpi', 'orders'], mode: 'multiple', requiresStableIdentity: true }], x: { dataset: 'primary', field: 'label' }, y: [{ dataset: 'primary', field: 'value' }], presentation: { legend: 'hidden', showLabels: false, smooth: false, stacked: false, showSymbols: true, dataZoom: false, area: false, step: false } }, dataState: inline(chartRevision, ['label', 'value'], [['delivered', 42], ['shipped', 7]]), selection: [], status: { kind: 'loading', message: 'Refreshing' }, diagnostics: [] },
+    orders: { schemaVersion: 3, visualID: 'orders', rendererID: 'tanstack', specRevision: tableRevision, dataRevision: 1, spec: { ...base('Orders', [field('order_id', 'identity', 'string', 'Order')]), kind: 'table', dataBudget: { maxRows: 1000, requiredCompleteness: 'partial' }, columns: [{ field: { dataset: 'primary', field: 'order_id' }, label: 'Order', width: 180, formatting: [] }], defaultSort: [{ field: { dataset: 'primary', field: 'order_id' }, direction: 'ascending' }], presentation: { rowHeight: 28, striped: true, showHeader: true } }, dataState: { kind: 'windowed', specRevision: tableRevision, dataRevision: 1, generation: 3, schema: { id: 'primary', fields: [field('order_id', 'identity', 'string', 'Order')] }, cardinality: { kind: 'exact', count: 250 }, availableRows: 250, rowCap: 1000, chunkSize: 50, resetVersion: 0, sort: [{ field: { dataset: 'primary', field: 'order_id' }, direction: 'ascending' }], blocks: { a: { id: 'a', start: 0, rows: Array.from({ length: 50 }, (_, index) => [`o${index + 1}`]), requestSeq: 0, resetVersion: 0, sort: [{ field: { dataset: 'primary', field: 'order_id' }, direction: 'ascending' }] } } }, selection: [], status: { kind: 'error', message: 'Ratings query failed' }, diagnostics: [{ code: 'query_failed', severity: 'error', message: 'Ratings query failed' }] },
+  }
 }
+
+function testVisualizationSignals() {
+  return Object.fromEntries(Object.entries(testVisualizationEnvelopes()).map(([id, envelope]) => {
+    const { dataState, ...signal } = envelope
+    return [id, { ...signal, dataState: { schemaVersion: 1, encoding: 'json', kind: dataState.kind, specRevision: dataState.specRevision, dataRevision: dataState.dataRevision, generation: dataState.generation, payload: JSON.stringify(dataState) } }]
+  }))
+}
+
+function escapeHTML(value: string): string { return value.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;') }

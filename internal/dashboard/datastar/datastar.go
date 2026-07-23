@@ -2,12 +2,14 @@ package datastar
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	dashboardstream "github.com/Yacobolo/leapview/internal/dashboard/stream"
 	uisignals "github.com/Yacobolo/leapview/internal/ui/signals"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 	"github.com/Yacobolo/leapview/pkg/pagestream"
 )
 
@@ -57,32 +59,6 @@ func StreamID(clientID, dashboardID, pageID string, streamInstanceID ...string) 
 	return streamID
 }
 
-func DashboardPatch(patch dashboard.Patch) pagestream.SignalPatch {
-	patch.Status.ProgressPercent = dashboard.NormalizeProgressPercent(patch.Status.ProgressPercent, patch.Status.Loading)
-	return pagestream.SignalPatch{
-		"filters":       patch.Filters,
-		"filterOptions": patch.FilterOptions,
-		"status":        patch.Status,
-		"visuals":       visualSignals(patch.Visuals),
-	}
-}
-
-func TablePatch(name string, table dashboard.Table) pagestream.SignalPatch {
-	return pagestream.SignalPatch{
-		"visuals": map[string]dashboard.TabularVisual{
-			name: dashboard.NewTabularVisual(name, table),
-		},
-	}
-}
-
-func TablesPatch(tables map[string]dashboard.Table) pagestream.SignalPatch {
-	visuals := make(map[string]dashboard.TabularVisual, len(tables))
-	for id, table := range tables {
-		visuals[id] = dashboard.NewTabularVisual(id, table)
-	}
-	return pagestream.SignalPatch{"visuals": visuals}
-}
-
 func LoadingPatch() pagestream.SignalPatch {
 	return pagestream.SignalPatch{
 		"status": map[string]any{
@@ -113,21 +89,18 @@ func RefreshEventPatch(event dashboardstream.RefreshEvent) pagestream.SignalPatc
 			"progressPercent": dashboard.NormalizeProgressPercent(event.ProgressPercent, loading),
 		}
 	}
-	component := func(loading bool, err string) map[string]any {
-		return map[string]any{"generation": generation, "loading": loading, "error": err}
-	}
 	switch event.Type {
 	case dashboardstream.RefreshEventStart:
-		components := map[string]any{}
+		visuals := map[string]any{}
 		for _, target := range event.Targets {
 			if strings.HasPrefix(target, "visual:") {
-				components[visualStatusKey(target)] = component(true, "")
+				visuals[visualStatusKey(target)] = map[string]any{"status": map[string]any{"kind": "loading"}}
 			}
 		}
 		return pagestream.SignalPatch{
-			"filters":         event.Filters,
-			"status":          status(true, nil),
-			"componentStatus": components,
+			"filters": event.Filters,
+			"status":  status(true, nil),
+			"visuals": visuals,
 		}
 	case dashboardstream.RefreshEventFilterOptions:
 		options, _ := event.Value.(map[string][]dashboard.FilterOption)
@@ -135,22 +108,13 @@ func RefreshEventPatch(event dashboardstream.RefreshEvent) pagestream.SignalPatc
 	case dashboardstream.RefreshEventProgress:
 		return pagestream.SignalPatch{"status": status(true, nil)}
 	case dashboardstream.RefreshEventVisual:
-		visual, _ := event.Value.(dashboard.Visual)
-		key := "visual:" + event.Target
+		envelope := visualizationEnvelopeSignal(event)
 		return pagestream.SignalPatch{
-			"visuals":         map[string]uisignals.DashboardVisual{event.Target: uisignals.DashboardVisualFromDashboard(visual)},
-			"componentStatus": map[string]any{key: component(false, "")},
+			"visuals": map[string]uisignals.DashboardVisualizationSignal{event.Target: envelope},
 		}
-	case dashboardstream.RefreshEventTable:
-		table, _ := event.Value.(dashboard.Table)
-		key := "visual:" + event.Target
-		return pagestream.SignalPatch{
-			"visuals":         map[string]dashboard.TabularVisual{event.Target: dashboard.NewTabularVisual(event.Target, table)},
-			"componentStatus": map[string]any{key: component(false, "")},
-		}
-	case dashboardstream.RefreshEventTableMetadata:
-		table, _ := event.Value.(dashboard.Table)
-		return pagestream.SignalPatch{"visuals": map[string]dashboard.TabularVisual{event.Target: dashboard.NewTabularVisual(event.Target, table)}}
+	case dashboardstream.RefreshEventVisualMetadata:
+		envelope := visualizationEnvelopeSignal(event)
+		return pagestream.SignalPatch{"visuals": map[string]uisignals.DashboardVisualizationSignal{event.Target: envelope}}
 	case dashboardstream.RefreshEventTargetError:
 		if event.Target == "refresh" {
 			return pagestream.SignalPatch{"status": status(false, event.Err)}
@@ -159,7 +123,10 @@ func RefreshEventPatch(event dashboardstream.RefreshEvent) pagestream.SignalPatc
 		if event.Err != nil {
 			message = event.Err.Error()
 		}
-		return pagestream.SignalPatch{"componentStatus": map[string]any{visualStatusKey(event.Target): component(false, message)}}
+		return pagestream.SignalPatch{"visuals": map[string]any{visualStatusKey(event.Target): map[string]any{
+			"status":      map[string]any{"kind": "error", "message": message},
+			"diagnostics": []map[string]any{{"severity": "error", "code": "query_failed", "message": message}},
+		}}}
 	case dashboardstream.RefreshEventComplete:
 		return pagestream.SignalPatch{"status": status(false, event.Err)}
 	default:
@@ -167,12 +134,12 @@ func RefreshEventPatch(event dashboardstream.RefreshEvent) pagestream.SignalPatc
 	}
 }
 
-func visualSignals(values map[string]dashboard.Visual) map[string]uisignals.DashboardVisual {
-	out := make(map[string]uisignals.DashboardVisual, len(values))
-	for id, visual := range values {
-		out[id] = uisignals.DashboardVisualFromDashboard(visual)
+func visualizationEnvelopeSignal(event dashboardstream.RefreshEvent) uisignals.DashboardVisualizationSignal {
+	envelope, ok := event.Value.(visualizationir.VisualizationEnvelope)
+	if !ok {
+		panic(fmt.Sprintf("dashboard visualization %q has invalid envelope value %T", event.Target, event.Value))
 	}
-	return out
+	return uisignals.DashboardVisualizationSignalFromIR(envelope)
 }
 
 // RefreshEventEnvelope keeps refresh ordering and mailbox behavior outside the
@@ -209,11 +176,11 @@ func RefreshEventEnvelope(event dashboardstream.RefreshEvent) pagestream.Envelop
 }
 
 func dashboardMergeRoots() []string {
-	return []string{"componentStatus", "filterOptions", "visuals"}
+	return []string{"filterOptions", "visuals"}
 }
 
 func visualStatusKey(target string) string {
-	return strings.TrimPrefix(target, "visual:visual:")
+	return strings.TrimPrefix(target, "visual:")
 }
 
 func errorSetupRequired(err error) bool {

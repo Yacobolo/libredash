@@ -1,0 +1,63 @@
+package runtime
+
+import (
+	"reflect"
+	"testing"
+
+	"github.com/Yacobolo/leapview/internal/dashboard"
+	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+)
+
+func TestQueryRuntimeUsesOneVisualizationDataService(t *testing.T) {
+	visualizations := &VisualizationDataService{}
+	snapshots := &SnapshotService{visualizations: visualizations}
+	queries := &QueryService{snapshots: snapshots, visualizations: visualizations}
+
+	if queries.visualizations != snapshots.visualizations {
+		t.Fatal("query and snapshot paths must share one visualization data service")
+	}
+}
+
+func TestFlattenHierarchyRowsBuildsDeterministicNodeParentFrames(t *testing.T) {
+	t.Parallel()
+
+	rows := reportdef.QueryRows{
+		{"region": "Americas", "city": "Springfield", "value": 3.0},
+		{"region": "Europe", "city": "Springfield", "value": 5.0},
+		{"region": "Americas", "city": "Austin", "value": 7.0},
+	}
+	want := []dashboard.Datum{
+		{"node": "Americas", "parent": nil, "value": 10.0, "region": "Americas", "city": nil},
+		{"node": "Austin", "parent": "Americas", "value": 7.0, "region": "Americas", "city": "Austin"},
+		{"node": "Springfield", "parent": "Americas", "value": 3.0, "region": "Americas", "city": "Springfield"},
+		{"node": "Europe", "parent": nil, "value": 5.0, "region": "Europe", "city": nil},
+		{"node": "Springfield", "parent": "Europe", "value": 5.0, "region": "Europe", "city": "Springfield"},
+	}
+
+	got, err := flattenHierarchyRows(rows, []string{"region", "city"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("flattenHierarchyRows() = %#v, want %#v", got, want)
+	}
+}
+
+func TestFlattenHierarchyRowsRejectsInvalidValues(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		rows reportdef.QueryRows
+	}{
+		{name: "missing level", rows: reportdef.QueryRows{{"level_0": "Americas", "level_1": nil, "value": 1.0}}},
+		{name: "nonnumeric value", rows: reportdef.QueryRows{{"level_0": "Americas", "level_1": "Austin", "value": "many"}}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := flattenHierarchyRows(test.rows, []string{"level_0", "level_1"}); err == nil {
+				t.Fatal("expected invalid hierarchy data to fail")
+			}
+		})
+	}
+}

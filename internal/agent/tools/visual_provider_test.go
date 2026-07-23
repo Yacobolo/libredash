@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
@@ -27,13 +28,19 @@ func TestAgentVisualShapeUsesVisualTypeDefaults(t *testing.T) {
 	}
 }
 
-func TestAgentVisualContractRejectsIncompatibleExplicitShape(t *testing.T) {
-	input := agentVisualInput{
-		Type: "histogram", Shape: "single_value", Dataset: "orders",
-		Measures: []agentVisualFieldRef{{Field: "revenue"}},
+func TestAgentVisualInputRejectsLegacyAndUnknownProperties(t *testing.T) {
+	for _, property := range []string{"shape", "options", "rendererOptions", "unexpected"} {
+		t.Run(property, func(t *testing.T) {
+			_, err := decodeAgentVisualInput([]byte(`{"type":"histogram","model":"sales","dataset":"orders","` + property + `":{}}`))
+			if err == nil || !strings.Contains(err.Error(), property) {
+				t.Fatalf("decode error = %v, want closed-contract rejection for %q", err, property)
+			}
+		})
 	}
-	if err := validateAgentChartContract(input); err == nil {
-		t.Fatal("incompatible histogram shape was accepted")
+	for _, property := range []string{`"shape"`, `"options"`, `"rendererOptions"`} {
+		if strings.Contains(agentVisualToolSchema, property) {
+			t.Fatalf("agent schema still exposes legacy property %s", property)
+		}
 	}
 }
 
@@ -45,7 +52,7 @@ func TestAgentHistogramProducesBinnedPayload(t *testing.T) {
 	}
 	input := agentVisualInput{
 		Type: "histogram", Dataset: "orders", Model: "sales",
-		Measures: []agentVisualFieldRef{{Field: "revenue"}}, Options: map[string]any{"bin_count": 12},
+		Measures: []agentVisualFieldRef{{Field: "revenue"}}, Presentation: agentVisualPresentation{HistogramBins: 12},
 	}
 	data, err := provider.agentChartData(context.Background(), "sales", input, agentVisualShape(input), nil)
 	if err != nil {

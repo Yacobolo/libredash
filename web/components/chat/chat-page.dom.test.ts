@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { afterAll, beforeAll, expect, setDefaultTimeout, test } from 'bun:test'
 import { createServer, type Server } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { join, normalize } from 'node:path'
@@ -7,6 +7,8 @@ import { chromium, type Browser } from '@playwright/test'
 let server: Server
 let baseURL = ''
 let browser: Browser
+
+setDefaultTimeout(15_000)
 
 const projectRoot = process.cwd()
 const root = join(projectRoot, '.tmp/chat-page-test')

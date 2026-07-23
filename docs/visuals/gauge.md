@@ -14,8 +14,6 @@ Use the `single_value` shape with one measure when the value is meaningful again
 visuals:
   total_orders_gauge:
     title: Total orders gauge
-    shape: single_value
-    renderer: echarts
     type: gauge
     query:
       measures:
@@ -32,8 +30,6 @@ Use a bounded measure such as review score so the gauge position has an immediat
 visuals:
   review_gauge:
     title: Average review gauge
-    shape: single_value
-    renderer: echarts
     type: gauge
     query:
       measures:
@@ -50,20 +46,18 @@ Declare `min` and `max`, then add ordered `thresholds` to give score ranges sema
 visuals:
   review_gauge_thresholds:
     title: Review gauge with thresholds
-    shape: single_value
-    renderer: echarts
     type: gauge
-    options:
-      min: 0
-      max: 5
+    presentation:
+      minimum: 0
+      maximum: 5
       progress_width: 16
       thresholds:
         - value: 3
-          color: '#cf222e'
+          tone: danger
         - value: 4
-          color: '#bf8700'
+          tone: warning
         - value: 5
-          color: '#1a7f37'
+          tone: success
     query:
       measures:
         review_score: null

@@ -34,15 +34,15 @@ func loadVisualDocumentation() visualDocumentationArtifact {
 			panic(fmt.Sprintf("generated visual documentation %q has no examples", slug))
 		}
 		for _, example := range examples {
-			if example.ID == "" {
+			if example.VisualID == "" {
 				panic(fmt.Sprintf("generated visual documentation %q has an example without an id", slug))
 			}
-			if previous := seen[example.ID]; previous != "" {
-				panic(fmt.Sprintf("generated visual example %q belongs to both %q and %q", example.ID, previous, slug))
+			if previous := seen[example.VisualID]; previous != "" {
+				panic(fmt.Sprintf("generated visual example %q belongs to both %q and %q", example.VisualID, previous, slug))
 			}
-			seen[example.ID] = slug
-			if len(artifact.References[slug].Examples[example.ID].KeyFields) == 0 {
-				panic(fmt.Sprintf("generated visual example %q has no key fields", example.ID))
+			seen[example.VisualID] = slug
+			if len(artifact.References[slug].Examples[example.VisualID].KeyFields) == 0 {
+				panic(fmt.Sprintf("generated visual example %q has no key fields", example.VisualID))
 			}
 		}
 		reference, ok := artifact.References[slug]
@@ -79,7 +79,7 @@ func visualExamplesForDocument(slug string) ([]visualdocs.Payload, bool) {
 
 func documentHasVisualExample(slug, id string) bool {
 	for _, example := range visualDocumentation.Documents[slug] {
-		if example.ID == id {
+		if example.VisualID == id {
 			return true
 		}
 	}
@@ -88,7 +88,7 @@ func documentHasVisualExample(slug, id string) bool {
 
 func visualExampleForDocument(slug, id string) (visualdocs.Payload, bool) {
 	for _, example := range visualDocumentation.Documents[slug] {
-		if example.ID == id {
+		if example.VisualID == id {
 			return example, true
 		}
 	}
@@ -108,8 +108,8 @@ func validateVisualDocumentationCatalog() bool {
 			panic(fmt.Sprintf("visual documentation %q has %d shortcodes and %d generated examples", document.slug, len(shortcodes), len(examples)))
 		}
 		for index, shortcode := range shortcodes {
-			if shortcode[1] != examples[index].ID {
-				panic(fmt.Sprintf("visual documentation %q shortcode %d = %q, generated id = %q", document.slug, index, shortcode[1], examples[index].ID))
+			if shortcode[1] != examples[index].VisualID {
+				panic(fmt.Sprintf("visual documentation %q shortcode %d = %q, generated id = %q", document.slug, index, shortcode[1], examples[index].VisualID))
 			}
 		}
 		if strings.Contains(docsVisualShortcode.ReplaceAllString(document.markdown, ""), "{{< visual") {

@@ -251,6 +251,20 @@ func (p *Planner) whereParts(view *queryView, aliases map[string]tableAlias, fil
 }
 
 func (p *Planner) filterPart(view *queryView, aliases map[string]tableAlias, filter Filter) (string, []any, error) {
+	if filter.Spatial != nil {
+		if filter.Field != "" || len(filter.Groups) != 0 {
+			return "", nil, fmt.Errorf("spatial filter cannot combine scalar or grouped filter fields")
+		}
+		_, latitude, err := view.ResolveDimensionRef(filter.Spatial.LatitudeField)
+		if err != nil {
+			return "", nil, err
+		}
+		_, longitude, err := view.ResolveDimensionRef(filter.Spatial.LongitudeField)
+		if err != nil {
+			return "", nil, err
+		}
+		return spatialFilterSQL(dimensionExpr(latitude, aliases), dimensionExpr(longitude, aliases), *filter.Spatial)
+	}
 	if len(filter.Groups) > 0 {
 		parts := []string{}
 		args := []any{}
@@ -399,6 +413,15 @@ func filterFieldSet(view *queryView, filters []Filter) ([]string, error) {
 
 func filterFields(view *queryView, filter Filter) ([]string, error) {
 	fields := []string{}
+	if filter.Spatial != nil {
+		for _, ref := range []string{filter.Spatial.LatitudeField, filter.Spatial.LongitudeField} {
+			field, _, err := view.ResolveDimensionRef(ref)
+			if err != nil {
+				return nil, err
+			}
+			fields = append(fields, field)
+		}
+	}
 	if filter.Field != "" {
 		field, _, err := view.ResolveDimensionRef(filter.Field)
 		if err != nil {

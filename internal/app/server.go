@@ -53,6 +53,10 @@ import (
 type QueryMetrics = queryruntime.Metrics
 type workspaceMetrics = queryruntime.WorkspaceMetrics
 
+type MapAssetReadiness interface {
+	Verify(context.Context) error
+}
+
 type multiWorkspaceMetrics struct {
 	defaultID  string
 	workspaces map[string]QueryMetrics
@@ -142,6 +146,8 @@ type Server struct {
 	managedDataTus                  http.Handler
 	managedDataExpirer              managedDataUploadExpirer
 	managedDataExpireInterval       time.Duration
+	mapAssetDir                     string
+	mapAssetReadiness               MapAssetReadiness
 	managedDataMaintenanceStarted   bool
 	publicationMonitorStarted       bool
 	refreshPipelineSchedulerStarted bool
@@ -212,6 +218,8 @@ type Options struct {
 	ManagedDataTus            http.Handler
 	ManagedDataExpirer        managedDataUploadExpirer
 	ManagedDataExpireInterval time.Duration
+	MapAssetDir               string
+	MapAssetReadiness         MapAssetReadiness
 	MCPOAuth                  MCPOAuthConfig
 	PublicURL                 string
 	RefreshPipelineClock      refreshpipeline.Clock
@@ -366,6 +374,11 @@ func NewWithOptions(metrics QueryMetrics, options Options) *Server {
 	server.managedDataTus = options.ManagedDataTus
 	server.managedDataExpirer = options.ManagedDataExpirer
 	server.managedDataExpireInterval = options.ManagedDataExpireInterval
+	server.mapAssetDir = strings.TrimSpace(options.MapAssetDir)
+	if server.mapAssetDir == "" {
+		server.mapAssetDir = ".data/map-assets"
+	}
+	server.mapAssetReadiness = options.MapAssetReadiness
 	server.jobLeaseTimeout = options.JobLeaseTimeout
 	if server.jobLeaseTimeout <= 0 {
 		server.jobLeaseTimeout = 2 * time.Minute

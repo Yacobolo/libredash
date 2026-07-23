@@ -18,19 +18,37 @@ enum UploadProtocol {
   s3Multipart: "s3_multipart",
 }
 
-enum VisualShape {
-  categoryValue: "category_value",
-  categorySeriesValue: "category_series_value",
-  categoryMultiMeasure: "category_multi_measure",
-  categoryDelta: "category_delta",
-  binnedMeasure: "binned_measure",
+enum VisualizationRendererID {
+  echarts,
+  tanstack,
+  html,
+  maplibre,
+  vegaLiteSandbox: "vega-lite-sandbox",
+}
+
+enum VisualizationSpecKind {
+  cartesian,
+  proportional,
   hierarchy,
-  singleValue: "single_value",
+  polar,
+  table,
   matrix,
-  graph,
-  geo,
-  ohlc,
-  distribution,
+  pivot,
+  kpi,
+  geographic,
+  custom,
+}
+
+model VisualizationRendererCapability {
+  id: VisualizationRendererID;
+  version: string;
+  schemaVersion: 3;
+  kinds: VisualizationSpecKind[];
+}
+
+model VisualizationCapabilities {
+  schemaVersion: 3;
+  renderers: VisualizationRendererCapability[];
 }
 
 model CapabilitiesResponse {
@@ -40,7 +58,7 @@ model CapabilitiesResponse {
   authentication: AuthenticationMode[];
   queryFormats: QueryFormat[];
   uploadProtocols: UploadProtocol[];
-  visualShapes: VisualShape[];
+  visualization: VisualizationCapabilities;
 }
 
 @tag("System")

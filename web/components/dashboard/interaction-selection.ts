@@ -1,3 +1,5 @@
+import type { VisualizationEnvelope, VisualizationSelectionEntry } from '../../generated/visualization'
+
 export type InteractionSelectionValue = string | number | boolean | null
 
 export interface InteractionMappingIdentity {
@@ -56,6 +58,41 @@ export function canonicalSelectionEntriesForSource(
   return (selections ?? [])
     .filter((selection) => selection.sourceKind === sourceKind && selection.sourceId === sourceId)
     .flatMap((selection) => selection.entries ?? [])
+}
+
+export function visualizationSelectionEntries(
+  envelope: VisualizationEnvelope,
+  selections: readonly CanonicalInteractionSelection[] | undefined,
+): VisualizationSelectionEntry[] {
+  const interaction = envelope.spec.interactions.find((candidate) => candidate.kind === 'select')
+  if (!interaction || interaction.mappings.length === 0) return []
+  const entries = (selections ?? [])
+    .filter((selection) => selection.sourceKind === 'visual'
+      && selection.sourceId === envelope.visualID
+      && (selection.interactionKind ?? interaction.id) === interaction.id)
+    .flatMap((selection) => selection.entries ?? [])
+
+  return entries.flatMap((entry) => {
+    const identity: Record<string, InteractionSelectionValue> = {}
+    let dataset = ''
+    for (const mapping of interaction.mappings) {
+      if (dataset && dataset !== mapping.source.dataset) return []
+      dataset = mapping.source.dataset
+      const target = {
+        field: mapping.targetFieldID,
+        ...(mapping.targetFactID ? { fact: mapping.targetFactID } : {}),
+        ...(mapping.grain ? { grain: mapping.grain } : {}),
+      }
+      const selected = entry.mappings?.find((candidate) => interactionMappingIdentityEqual(candidate, target))
+      if (!selected || interactionSelectionValue(selected.value) === undefined) return []
+      identity[mapping.source.field] = selected.value
+    }
+    if (!dataset) return []
+    return [{
+      datum: { dataset, dataRevision: envelope.dataRevision, identity },
+      ...(entry.label ? { label: entry.label } : {}),
+    }]
+  })
 }
 
 export function interactionSelectionValue(value: unknown): InteractionSelectionValue | undefined {

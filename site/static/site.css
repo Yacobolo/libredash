@@ -967,6 +967,7 @@ lv-site-search:not(:defined) > .site-search-active-input {
   background: var(--lv-bg-success-muted);
 }
 
+.site-docs-article .site-docs-callout-experimental,
 .site-docs-article .site-docs-callout-warning {
   border-color: var(--lv-line-warning-muted);
   background: var(--lv-bg-warning-muted);

@@ -256,6 +256,73 @@ func TestPlannerRowAndRawQueriesStaySingleFact(t *testing.T) {
 	}
 }
 
+func TestPlannerSpatialAggregationGroupsTheCompleteGovernedRowsetBeforeCapping(t *testing.T) {
+	planner := NewPlanner(testModel())
+	plan, err := planner.PlanSpatial(SpatialRequest{
+		Table: "orders",
+		Dimensions: []Field{
+			{Field: "orders.order_id", Alias: "order_id"},
+			{Field: "orders.latitude", Alias: "latitude"},
+			{Field: "orders.longitude", Alias: "longitude"},
+		},
+		Measures: []Field{{Field: "revenue", Alias: "revenue"}},
+		Latitude: Field{Field: "orders.latitude", Alias: "latitude"}, Longitude: Field{Field: "orders.longitude", Alias: "longitude"},
+		West: -180, South: -85, East: 180, North: 85, Width: 1200, Height: 800, FeatureCap: 5000, Precision: SpatialPrecisionAggregated,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"WITH governed AS", "AVG(latitude) AS latitude", "AVG(longitude) AS longitude", "SUM(revenue) AS revenue", "GROUP BY __spatial_x, __spatial_y", "SUM(COUNT(*)) OVER () AS __spatial_total", "LIMIT 5000"} {
+		if !strings.Contains(plan.SQL, want) {
+			t.Fatalf("spatial SQL missing %q:\n%s", want, plan.SQL)
+		}
+	}
+	inner := strings.Split(plan.SQL, ")\nSELECT")[0]
+	if strings.Contains(inner, "LIMIT") {
+		t.Fatalf("governed spatial input was truncated before aggregation:\n%s", plan.SQL)
+	}
+	if got, want := strings.Join(plan.Columns, ","), "order_id,latitude,longitude,revenue,__spatial_total"; got != want {
+		t.Fatalf("columns = %q, want %q", got, want)
+	}
+}
+
+func TestPlannerSpatialRawRowsUseStableOrderingAndFeatureCap(t *testing.T) {
+	plan, err := NewPlanner(testModel()).PlanSpatial(SpatialRequest{
+		Table: "orders", Dimensions: []Field{{Field: "orders.order_id", Alias: "order_id"}, {Field: "orders.latitude", Alias: "latitude"}, {Field: "orders.longitude", Alias: "longitude"}},
+		Latitude: Field{Field: "orders.latitude", Alias: "latitude"}, Longitude: Field{Field: "orders.longitude", Alias: "longitude"},
+		Sort: []Sort{{Field: "order_id", Direction: "asc"}}, West: -10, South: -10, East: 10, North: 10, Width: 800, Height: 600, FeatureCap: 5000, Precision: SpatialPrecisionRaw,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"COUNT(*) OVER () AS __spatial_total", "ORDER BY order_id ASC", "LIMIT 5000"} {
+		if !strings.Contains(plan.SQL, want) {
+			t.Fatalf("raw spatial SQL missing %q:\n%s", want, plan.SQL)
+		}
+	}
+}
+
+func TestPlannerAppliesSpatialInteractionPredicateBeforeAggregation(t *testing.T) {
+	plan, err := NewPlanner(testModel()).Plan(Request{
+		Table: "orders", Measures: []Field{{Field: "order_count"}},
+		Filters: []Filter{{Spatial: &SpatialFilter{
+			Kind: "radius", LatitudeField: "orders.latitude", LongitudeField: "orders.longitude", Fact: "orders",
+			Center: SpatialPoint{Longitude: -46.63, Latitude: -23.55}, RadiusMeters: 25_000,
+		}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"ASIN", "RADIANS(t0.latitude - ?)", "RADIANS(t0.longitude - ?)"} {
+		if !strings.Contains(plan.SQL, want) {
+			t.Fatalf("spatial interaction SQL missing %q:\n%s", want, plan.SQL)
+		}
+	}
+	if len(plan.Args) != 4 {
+		t.Fatalf("spatial interaction args = %#v", plan.Args)
+	}
+}
+
 func testModel() *semanticmodel.Model {
 	return &semanticmodel.Model{
 		Name: "commerce",
@@ -263,7 +330,7 @@ func testModel() *semanticmodel.Model {
 			"orders": {Dimensions: map[string]semanticmodel.MetricDimension{
 				"order_id": {Expr: "order_id"}, "customer_id": {Expr: "customer_id"},
 				"ordered_at": {Expr: "ordered_at", Type: "timestamp"}, "revenue": {Expr: "revenue", Type: "number"},
-				"status": {Expr: "status", Type: "string"},
+				"status": {Expr: "status", Type: "string"}, "latitude": {Expr: "latitude", Type: "number"}, "longitude": {Expr: "longitude", Type: "number"},
 			}},
 			"tags": {Dimensions: map[string]semanticmodel.MetricDimension{
 				"tag_id": {Expr: "tag_id"}, "customer_id": {Expr: "customer_id"},

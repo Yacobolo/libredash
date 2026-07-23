@@ -24,7 +24,11 @@ func ValidateDashboard(d *report.Dashboard, models map[string]*semanticmodel.Mod
 			return fmt.Errorf("filter %q references unknown dimension %q", name, filter.Dimension)
 		}
 	}
-	for name, visual := range d.Visuals {
+	for name, authored := range d.Visuals {
+		if authored.Chart == nil {
+			continue
+		}
+		visual := *authored.Chart
 		if visual.Query.Table != "" {
 			if _, ok := model.Tables[visual.Query.Table]; !ok {
 				return fmt.Errorf("visual %q query.table references unknown table %q", name, visual.Query.Table)
@@ -53,30 +57,40 @@ func ValidateDashboard(d *report.Dashboard, models map[string]*semanticmodel.Mod
 				return err
 			}
 		}
+		if !visual.Interaction.SpatialSelection.IsZero() {
+			if _, err := reportmodel.ResolveSpatialSelectionInteraction(d, model, name); err != nil {
+				return err
+			}
+		}
 		if err := validateVisualQueryPlan(d, model, name, visual); err != nil {
 			return err
 		}
 	}
-	for name, table := range d.Tables {
+	for name, authored := range d.Visuals {
+		if authored.Tabular == nil {
+			continue
+		}
+		table := *authored.Tabular
 		normalizeTableFormatting(model, &table)
 		for measure := range table.MeasureFormatting {
 			if err := model.ValidateAggregateMember(measure); err != nil {
 				return fmt.Errorf("table %q measure_formatting references unknown measure %q", name, measure)
 			}
 		}
-		switch table.KindOrDefault() {
-		case "data_table":
+		switch authored.Type {
+		case "table":
 			if err := normalizeDataTableFields(name, model, &table); err != nil {
 				return err
 			}
-		case "matrix_table", "pivot_table":
+		case "matrix", "pivot":
 			if err := normalizeTableFields(name, model, &table); err != nil {
 				return err
 			}
 		}
 		// Selection resolution reads sources from the dashboard definition. Publish
 		// the normalized table before resolving its configured row interaction.
-		d.Tables[name] = table
+		authored.Tabular = &table
+		d.Visuals[name] = authored
 		for _, mapping := range table.Interaction.RowSelection.Mappings {
 			if !tableHasOutputColumn(table, mapping.Value) {
 				return fmt.Errorf("table %q interaction references unknown value column %q", name, mapping.Value)
@@ -90,10 +104,11 @@ func ValidateDashboard(d *report.Dashboard, models map[string]*semanticmodel.Mod
 				return err
 			}
 		}
-		if err := validateTableQueryPlan(d, model, name, table); err != nil {
+		if err := validateTableQueryPlan(d, model, name, authored.Type, table); err != nil {
 			return err
 		}
-		d.Tables[name] = table
+		authored.Tabular = &table
+		d.Visuals[name] = authored
 	}
 	return validateFilterTargets(d, model)
 }
@@ -122,12 +137,12 @@ func validateVisualQueryPlan(d *report.Dashboard, model *semanticmodel.Model, na
 	return nil
 }
 
-func validateTableQueryPlan(d *report.Dashboard, model *semanticmodel.Model, name string, table report.TableVisual) error {
+func validateTableQueryPlan(d *report.Dashboard, model *semanticmodel.Model, name, visualType string, table report.TableVisual) error {
 	planner := semanticquery.NewPlanner(model)
-	filters := scopedQueryFilters(d, model, "table", name)
+	filters := scopedQueryFilters(d, model, "visual", name)
 	var err error
-	switch table.KindOrDefault() {
-	case "matrix_table", "pivot_table":
+	switch visualType {
+	case "matrix", "pivot":
 		dimensions := reportFieldRefsToQueryFields(table.Query.Rows)
 		dimensions = append(dimensions, reportFieldRefsToQueryFields(table.Query.Columns)...)
 		_, err = planner.Plan(semanticquery.Request{
@@ -334,15 +349,6 @@ func validateFilterTargets(d *report.Dashboard, model *semanticmodel.Model) erro
 					err = fmt.Errorf("filter field %q is not reachable", filter.Dimension)
 				}
 				return fmt.Errorf("filter %q cannot apply to visual %q: %w", name, target, err)
-			}
-		}
-		for _, target := range filter.Targets.Tables {
-			ok, err := reportmodel.FilterAppliesToTarget(d, model, filter, "table", target)
-			if err != nil || !ok {
-				if err == nil {
-					err = fmt.Errorf("filter field %q is not reachable", filter.Dimension)
-				}
-				return fmt.Errorf("filter %q cannot apply to table %q: %w", name, target, err)
 			}
 		}
 	}

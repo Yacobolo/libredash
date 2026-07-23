@@ -46,40 +46,36 @@ spec:
   visuals:
     genre_rating_count:
       type: kpi
-      shape: single_value
       query:
         measures:
           genre_rating_count:
-      options:
+      presentation:
         note: Rating-genre rows
         tone: ink
     average_rating:
       type: kpi
-      shape: single_value
       query:
         measures:
           average_rating:
-      options:
+      presentation:
         note: Mean rating
-        tone: amber
+        tone: warning
     active_users:
       type: kpi
-      shape: single_value
       query:
         measures:
           active_users:
-      options:
+      presentation:
         note: Distinct users
-        tone: green
+        tone: success
     rated_movies:
       type: kpi
-      shape: single_value
       query:
         measures:
           rated_movies:
-      options:
+      presentation:
         note: Distinct movies
-        tone: coral
+        tone: danger
     ratings_by_genre:
       title: Ratings by genre
       type: bar
@@ -106,10 +102,8 @@ spec:
         limit: 20
     genre_trend:
       title: Genre ratings by year
-      shape: category_series_value
-      renderer: echarts
       type: column
-      options:
+      presentation:
         stacked: true
       query:
         dimensions:
@@ -125,8 +119,6 @@ spec:
         limit: 120
     decade_genres:
       title: Release decade by genre
-      shape: matrix
-      renderer: echarts
       type: heatmap
       query:
         dimensions:

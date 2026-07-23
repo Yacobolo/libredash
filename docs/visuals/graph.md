@@ -15,8 +15,6 @@ visuals:
   status_delivery_graph:
     title: Status and delivery network
     description: Shows status and delivery-speed relationships as a network.
-    shape: graph
-    renderer: echarts
     type: graph
     query:
       dimensions:
@@ -40,8 +38,6 @@ Replace the source dimension with category to inspect a different relationship w
 visuals:
   category_status_graph:
     title: Category and status network
-    shape: graph
-    renderer: echarts
     type: graph
     query:
       dimensions:
@@ -57,7 +53,7 @@ visuals:
 
 ## Circular layout
 
-Set `options.layout: circular` for a stable ring, curve overlapping edges, and use `focus: adjacency` to emphasize connected nodes on interaction.
+Set `presentation.layout: circular` for a stable ring, curve overlapping edges, and use `focus: adjacency` to emphasize connected nodes on interaction.
 
 {{< visual id="category_status_graph_circular" >}}
 
@@ -65,10 +61,8 @@ Set `options.layout: circular` for a stable ring, curve overlapping edges, and u
 visuals:
   category_status_graph_circular:
     title: Circular category and status network
-    shape: graph
-    renderer: echarts
     type: graph
-    options:
+    presentation:
       layout: circular
       curveness: 0.28
       focus: adjacency

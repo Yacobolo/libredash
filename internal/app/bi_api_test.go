@@ -3,16 +3,18 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"github.com/Yacobolo/leapview/internal/api"
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	"github.com/Yacobolo/leapview/internal/dataquery"
 	"github.com/Yacobolo/leapview/internal/queryaudit"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
+	visualizationruntime "github.com/Yacobolo/leapview/internal/visualization/runtime"
 )
 
 func newPublicAPIRequest(method, target string, body io.Reader) *http.Request {
@@ -128,11 +130,12 @@ func TestBIAPIQueriesBoundRowsAndPageData(t *testing.T) {
 	if tableRec.Code != http.StatusOK {
 		t.Fatalf("table query status=%d body=%s", tableRec.Code, tableRec.Body.String())
 	}
-	var table api.DashboardTableQueryResponse
+	var table visualizationir.VisualizationEnvelope
 	if err := json.Unmarshal(tableRec.Body.Bytes(), &table); err != nil {
 		t.Fatalf("decode table: %v body=%s", err, tableRec.Body.String())
 	}
-	if table.AvailableRows != 500 || len(table.Rows) != 500 {
+	state, ok := table.DataState.Value.(*visualizationir.WindowedVisualizationDataState)
+	if !ok || state.AvailableRows != 500 || len(state.Blocks["a"].Rows) != 500 {
 		t.Fatalf("table did not honor query limit: %#v", table)
 	}
 }
@@ -180,7 +183,7 @@ func TestBIAPIDashboardVisualDataSurface(t *testing.T) {
 	dataReq.Header.Set("Content-Type", "application/json")
 	dataRec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(dataRec, dataReq)
-	if dataRec.Code != http.StatusOK || !strings.Contains(dataRec.Body.String(), `"data"`) || !strings.Contains(dataRec.Body.String(), `"delivered"`) {
+	if dataRec.Code != http.StatusOK || !strings.Contains(dataRec.Body.String(), `"dataState"`) || !strings.Contains(dataRec.Body.String(), `"delivered"`) {
 		t.Fatalf("visual data status=%d body=%s", dataRec.Code, dataRec.Body.String())
 	}
 
@@ -260,11 +263,18 @@ func TestDashboardPageQueryWritesQueryEvents(t *testing.T) {
 	}
 
 	events := queryEventsForTest(t, server, queryaudit.Filter{WorkspaceID: "test", Search: "req_dashboard_page"})
-	if len(events) != 1 {
-		t.Fatalf("events = %d, want 1: %#v", len(events), events)
+	if len(events) != 2 {
+		t.Fatalf("events = %d, want aggregate and tabular queries: %#v", len(events), events)
 	}
-	if events[0].Surface != dataquery.SurfaceAPI || events[0].Operation != dataquery.OperationDashboardAggregate || events[0].ObjectType != "dashboard_page" {
-		t.Fatalf("dashboard page event = %#v", events[0])
+	operations := map[string]bool{}
+	for _, event := range events {
+		if event.Surface != dataquery.SurfaceAPI || event.ObjectType != "dashboard_page" {
+			t.Fatalf("dashboard page event = %#v", event)
+		}
+		operations[event.Operation] = true
+	}
+	if !operations[dataquery.OperationDashboardAggregate] || !operations[dataquery.OperationDashboardRows] {
+		t.Fatalf("dashboard page query operations = %#v", operations)
 	}
 }
 
@@ -450,10 +460,25 @@ func (m auditedDashboardMetrics) QueryDashboardPage(ctx context.Context, dashboa
 	if err != nil {
 		return dashboard.Patch{}, err
 	}
-	return m.fakeMetrics.QueryDashboardPage(ctx, dashboardID, pageID, filters)
+	patch, err := m.fakeMetrics.QueryDashboardPage(ctx, dashboardID, pageID, filters)
+	if err != nil {
+		return dashboard.Patch{}, err
+	}
+	request := dashboard.TableRequest{Table: "order_rows", Block: "a", Count: dashboard.TableChunkSize}.WithDefaults()
+	table, err := m.queryWindow(ctx, dashboardID, pageID, filters, request)
+	if err != nil {
+		return dashboard.Patch{}, err
+	}
+	definition, _ := m.VisualizationDefinition(dashboardID, "order_rows")
+	envelope, err := visualizationruntime.WindowEnvelopeFromDefinition(definition, table, 0, 0)
+	if err != nil {
+		return dashboard.Patch{}, err
+	}
+	patch.Visuals["order_rows"] = envelope
+	return patch, nil
 }
 
-func (m auditedDashboardMetrics) QueryTablePage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
+func (m auditedDashboardMetrics) queryWindow(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
 	_, err := m.ExecuteDataQuery(ctx, dataquery.Query{
 		Surface:   dataquery.SurfaceDashboard,
 		Operation: dataquery.OperationDashboardRows,
@@ -466,22 +491,34 @@ func (m auditedDashboardMetrics) QueryTablePage(ctx context.Context, dashboardID
 	if err != nil {
 		return dashboard.Table{}, err
 	}
-	return m.fakeMetrics.QueryTablePage(ctx, dashboardID, pageID, filters, request)
+	return m.fakeMetrics.queryWindow(ctx, dashboardID, pageID, filters, request)
+}
+
+func (m auditedDashboardMetrics) QueryVisualizationWindow(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request visualizationir.VisualizationWindowRequest) (visualizationir.VisualizationEnvelope, error) {
+	return fakeVisualizationWindow(ctx, m, dashboardID, pageID, filters, request)
 }
 
 func (m auditedDashboardMetrics) ExecuteDataQuery(ctx context.Context, request dataquery.Query) (dataquery.Result, error) {
 	return dataquery.ExecuteAudited(ctx, request, m.fakeMetrics.ExecuteDataQuery)
 }
 
-func (manyRowsMetrics) QueryTablePage(_ context.Context, _ string, _ string, _ dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
+func (manyRowsMetrics) queryWindow(_ context.Context, _ string, _ string, _ dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
 	rows := make([]map[string]any, 0, request.Count)
 	for i := 0; i < request.Count; i++ {
-		rows = append(rows, map[string]any{"order_id": i})
+		rows = append(rows, map[string]any{"order_id": fmt.Sprintf("order-%d", i)})
 	}
 	return dashboard.Table{
 		Title:         "Orders",
 		Columns:       []dashboard.TableColumn{{Key: "order_id", Label: "Order"}},
+		Cardinality:   dashboard.ExactCardinality(len(rows)),
 		AvailableRows: len(rows),
+		RowCap:        dashboard.TableInteractiveRowCap,
+		ChunkSize:     dashboard.TableChunkSize,
+		Sort:          dashboard.TableSort{Key: "order_id", Direction: "desc"},
 		Blocks:        map[string]dashboard.TableBlock{"a": {Rows: rows}},
 	}, nil
+}
+
+func (m manyRowsMetrics) QueryVisualizationWindow(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request visualizationir.VisualizationWindowRequest) (visualizationir.VisualizationEnvelope, error) {
+	return fakeVisualizationWindow(ctx, m, dashboardID, pageID, filters, request)
 }

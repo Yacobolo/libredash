@@ -1,4 +1,5 @@
 import type { InteractionMapping, InteractionSelectionEntry } from '../interaction-selection'
+import type { VisualizationFormat } from '../../../generated/visualization'
 
 export type {
   InteractionMapping,
@@ -31,6 +32,7 @@ export interface TableColumn {
   columnValue?: string
   width?: number
   format?: 'text' | 'integer' | 'decimal' | 'currency' | 'days'
+	visualizationFormat?: VisualizationFormat
   formatting?: TableFormattingRule[]
 }
 
@@ -74,7 +76,7 @@ export interface TableSignal {
   type: TabularVisualType
   title: string
   style: TableStyle
-  interaction: InteractionConfig
+	interaction?: InteractionConfig
   selection?: InteractionSelectionEntry[]
   columns: TableColumn[]
   cardinality: TableCardinality

@@ -75,9 +75,25 @@ func reportFiltersToDataFilters(filters []reportdef.QueryFilter) []dataquery.Fil
 			Operator: filter.Operator,
 			Values:   append([]any{}, filter.Values...),
 			Groups:   groups,
+			Spatial:  reportSpatialFilterToData(filter.Spatial),
 		})
 	}
 	return out
+}
+
+func reportSpatialFilterToData(value *reportdef.SpatialFilter) *dataquery.SpatialFilter {
+	if value == nil {
+		return nil
+	}
+	points := make([]dataquery.SpatialPoint, len(value.Points))
+	for index, point := range value.Points {
+		points[index] = dataquery.SpatialPoint{Longitude: point.Longitude, Latitude: point.Latitude}
+	}
+	return &dataquery.SpatialFilter{
+		Kind: value.Kind, LatitudeField: value.LatitudeField, LongitudeField: value.LongitudeField, Fact: value.Fact,
+		West: value.West, South: value.South, East: value.East, North: value.North, Points: points,
+		Center: dataquery.SpatialPoint{Longitude: value.Center.Longitude, Latitude: value.Center.Latitude}, RadiusMeters: value.RadiusMeters,
+	}
 }
 
 func reportSortToDataSort(sort []reportdef.QuerySort) []dataquery.Sort {

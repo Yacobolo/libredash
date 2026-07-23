@@ -236,6 +236,9 @@ func TestSiteProductionHeadersAndHealthEndpoints(t *testing.T) {
 	if got := response.Header.Get("Content-Security-Policy"); !strings.Contains(got, "script-src 'self' 'unsafe-eval'") {
 		t.Errorf("Content-Security-Policy = %q, want Datastar expression evaluation allowance", got)
 	}
+	if got := response.Header.Get("Content-Security-Policy"); !strings.Contains(got, "worker-src 'self' blob:") {
+		t.Errorf("Content-Security-Policy = %q, want same-origin and blob renderer workers", got)
+	}
 
 	response, err = server.Client().Get(server.URL + "/static/site-page.js")
 	if err != nil {
@@ -244,6 +247,18 @@ func TestSiteProductionHeadersAndHealthEndpoints(t *testing.T) {
 	response.Body.Close()
 	if got := response.Header.Get("Cache-Control"); got != "public, max-age=0, must-revalidate" {
 		t.Fatalf("site asset cache control = %q", got)
+	}
+
+	response, err = server.Client().Get(server.URL + "/static/vega-sandbox.js")
+	if err != nil {
+		t.Fatalf("get Vega-Lite sandbox: %v", err)
+	}
+	response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("Vega-Lite sandbox status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+	if got := response.Header.Get("Access-Control-Allow-Origin"); got != "*" {
+		t.Fatalf("Vega-Lite sandbox Access-Control-Allow-Origin = %q, want *", got)
 	}
 }
 
@@ -256,7 +271,7 @@ func TestSiteAssetsDoNotDependOnWorkingDirectory(t *testing.T) {
 
 	server := httptest.NewServer(NewHandler())
 	defer server.Close()
-	for _, path := range []string{"/static/favicon.svg", "/static/logo-lab.html", "/static/site.css", "/static/site-page.js", "/shared/app.css", "/shared/theme.js", "/shared/files/inter-latin-wght-normal.woff2", "/static/vendor/datastar-1.0.2.js", "/static/vendor/github-mark.svg"} {
+	for _, path := range []string{"/static/favicon.svg", "/static/logo-lab.html", "/static/site.css", "/static/site-page.js", "/static/vega-sandbox.js", "/static/geometry/br-states-ibge.geojson", "/static/geometry/world-countries-natural-earth-110m.geojson", "/shared/app.css", "/shared/theme.js", "/shared/files/inter-latin-wght-normal.woff2", "/static/vendor/datastar-1.0.2.js", "/static/vendor/github-mark.svg"} {
 		response, err := server.Client().Get(server.URL + path)
 		if err != nil {
 			t.Fatalf("get %s: %v", path, err)
@@ -1024,13 +1039,13 @@ func TestSiteChartDocumentationArticleRendersConfiguration(t *testing.T) {
 		`<h2 id="site-visual-api-reference">API reference</h2>`,
 		`<table aria-labelledby="site-visual-api-reference">`,
 		`<th scope="col">Field</th><th scope="col">Type</th><th scope="col">Default</th><th scope="col">Allowed values</th><th scope="col">Description</th>`,
-		`<code>options.step</code>`,
-		`<code>string | boolean</code>`,
+		`<code>presentation.step</code>`,
+		`<code>boolean</code>`,
 		`<lv-site-visual-example example-id="revenue_line"></lv-site-visual-example>`,
 		`<lv-site-visual-example example-id="revenue_line_status"></lv-site-visual-example>`,
 		`<lv-site-visual-example example-id="revenue_line_step"></lv-site-visual-example>`,
 		`<div class="site-visual-key-fields" aria-label="Key fields" data-key-fields="[&#34;query.dimensions&#34;,&#34;query.measures&#34;]">`,
-		`<button type="button" class="site-visual-key-field" data-visual-key-field="options.step" aria-label="Highlight options.step in YAML"><code>options.step</code></button>`,
+		`<button type="button" class="site-visual-key-field" data-visual-key-field="presentation.step" aria-label="Highlight presentation.step in YAML"><code>presentation.step</code></button>`,
 		`<h2 id="basic">Basic</h2>`,
 		"type: line",
 		"visual-example=revenue_line_step",
@@ -1054,7 +1069,7 @@ func TestSiteChartDocumentationArticleRendersConfiguration(t *testing.T) {
 }
 
 func TestSiteEveryVisualTypeHasDocumentation(t *testing.T) {
-	if got, want := len(visualDocuments), 26; got != want {
+	if got, want := len(visualDocuments), 27; got != want {
 		t.Fatalf("documented visual types = %d, want %d", got, want)
 	}
 
@@ -1188,7 +1203,7 @@ func TestSiteVisualShowcaseUpdatesIncludeEveryVisualType(t *testing.T) {
 	defer response.Body.Close()
 
 	line := readSSEUntil(t, response, `"visuals"`)
-	for _, want := range []string{`"type":"line"`, `"type":"sunburst"`, `"type":"kpi"`, `"type":"table"`, `"type":"matrix"`, `"type":"pivot"`} {
+	for _, want := range []string{`"kind":"cartesian","mark":"line"`, `"kind":"hierarchy","mark":"sunburst"`, `"kind":"kpi"`, `"kind":"table"`, `"kind":"matrix"`, `"kind":"pivot"`} {
 		if !strings.Contains(line, want) {
 			t.Errorf("chart showcase updates missing %q:\n%s", want, line)
 		}
@@ -1205,12 +1220,12 @@ func TestSiteVisualDocumentationUpdatesAreScopedToTheArticle(t *testing.T) {
 	}
 	defer response.Body.Close()
 	line := readSSEUntil(t, response, `"visuals"`)
-	for _, want := range []string{`"id":"revenue_line"`, `"id":"revenue_line_status"`, `"id":"revenue_line_step"`, `"step":"middle"`} {
+	for _, want := range []string{`"visualID":"revenue_line"`, `"visualID":"revenue_line_status"`, `"visualID":"revenue_line_step"`, `"step":true`} {
 		if !strings.Contains(line, want) {
 			t.Errorf("line documentation updates missing %q:\n%s", want, line)
 		}
 	}
-	for _, unwanted := range []string{`"type":"area"`, `"type":"kpi"`, `"type":"table"`} {
+	for _, unwanted := range []string{`"mark":"area"`, `"kind":"kpi"`, `"kind":"table"`} {
 		if strings.Contains(line, unwanted) {
 			t.Errorf("line documentation updates unexpectedly include %q:\n%s", unwanted, line)
 		}

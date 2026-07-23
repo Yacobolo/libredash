@@ -429,6 +429,37 @@ func TestReadinessChecksActiveWorkspaceRuntime(t *testing.T) {
 	}
 }
 
+func TestReadinessIncludesMapAssetIntegrity(t *testing.T) {
+	assets := &fakeMapAssetReadiness{}
+	server := NewWithOptions(fakeMetrics{}, Options{
+		Store:             testStore(t),
+		MapAssetReadiness: assets,
+	})
+	request := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	response := httptest.NewRecorder()
+	server.Routes().ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"mapAssets":"ok"`) || assets.calls != 1 {
+		t.Fatalf("ready map assets response = %d %s, calls=%d", response.Code, response.Body.String(), assets.calls)
+	}
+
+	assets.err = errors.New("map asset digest mismatch")
+	response = httptest.NewRecorder()
+	server.Routes().ServeHTTP(response, request)
+	if response.Code != http.StatusServiceUnavailable || !strings.Contains(response.Body.String(), `"mapAssets":"map asset digest mismatch"`) {
+		t.Fatalf("corrupt map assets response = %d %s", response.Code, response.Body.String())
+	}
+}
+
+type fakeMapAssetReadiness struct {
+	calls int
+	err   error
+}
+
+func (f *fakeMapAssetReadiness) Verify(context.Context) error {
+	f.calls++
+	return f.err
+}
+
 func TestReadinessFailsWhenActiveWorkspaceRuntimeIsMissing(t *testing.T) {
 	server := NewWithOptions(fakeMetrics{}, Options{
 		Store: testStore(t),

@@ -12,6 +12,7 @@ import (
 	"github.com/Yacobolo/leapview/internal/dataquery"
 	"github.com/Yacobolo/leapview/internal/queryaudit"
 	queryauditsqlite "github.com/Yacobolo/leapview/internal/queryaudit/sqlite"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -91,15 +92,32 @@ func (m queryAuditMetrics) QueryDashboardPage(ctx context.Context, dashboardID, 
 	return m.QueryMetrics.QueryDashboardPage(m.auditContext(ctx), dashboardID, pageID, filters)
 }
 
-func (m queryAuditMetrics) QueryTable(ctx context.Context, dashboardID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
-	return m.QueryTablePage(ctx, dashboardID, "", filters, request)
+func (m queryAuditMetrics) QueryDashboardVisualizations(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters) (dashboard.Patch, error) {
+	if m.QueryMetrics == nil {
+		return dashboard.EmptyPatch(filters.WithDefaults(), errors.New("query metrics are not configured")), nil
+	}
+	return m.QueryMetrics.QueryDashboardVisualizations(m.auditContext(ctx), dashboardID, pageID, filters)
 }
 
-func (m queryAuditMetrics) QueryTablePage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
+func (m queryAuditMetrics) QueryVisualization(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualID string) (visualizationir.VisualizationEnvelope, error) {
 	if m.QueryMetrics == nil {
-		return dashboard.EmptyTable(request.WithDefaults(), errors.New("query metrics are not configured")), nil
+		return visualizationir.VisualizationEnvelope{}, errors.New("query metrics are not configured")
 	}
-	return m.QueryMetrics.QueryTablePage(m.auditContext(ctx), dashboardID, pageID, filters, request)
+	return m.QueryMetrics.QueryVisualization(m.auditContext(ctx), dashboardID, pageID, filters, visualID)
+}
+
+func (m queryAuditMetrics) QueryVisualizationWindow(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request visualizationir.VisualizationWindowRequest) (visualizationir.VisualizationEnvelope, error) {
+	if m.QueryMetrics == nil {
+		return visualizationir.VisualizationEnvelope{}, errors.New("query metrics are not configured")
+	}
+	return m.QueryMetrics.QueryVisualizationWindow(m.auditContext(ctx), dashboardID, pageID, filters, request)
+}
+
+func (m queryAuditMetrics) QueryVisualizationSpatialWindow(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request visualizationir.VisualizationSpatialWindowRequest) (visualizationir.VisualizationEnvelope, error) {
+	if m.QueryMetrics == nil {
+		return visualizationir.VisualizationEnvelope{}, errors.New("query metrics are not configured")
+	}
+	return m.QueryMetrics.QueryVisualizationSpatialWindow(m.auditContext(ctx), dashboardID, pageID, filters, request)
 }
 
 func (m queryAuditMetrics) QuerySemantic(ctx context.Context, modelID string, request reportdef.AggregateQuery) (reportdef.QueryRows, error) {

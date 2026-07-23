@@ -13,13 +13,13 @@ import (
 	"strings"
 
 	apigenapi "github.com/Yacobolo/leapview/internal/api/gen"
-	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 	manageddatabinding "github.com/Yacobolo/leapview/internal/manageddata/binding"
 	"github.com/Yacobolo/leapview/internal/release"
 	"github.com/Yacobolo/leapview/internal/servingstate"
 	servingstatefs "github.com/Yacobolo/leapview/internal/servingstate/filesystem"
 	"github.com/Yacobolo/leapview/internal/servingstate/validate"
 	"github.com/Yacobolo/leapview/internal/staticasset"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 )
 
 func (s *Server) releaseService() (*release.Service, error) {
@@ -60,15 +60,20 @@ func (a apiGenAdapter) GetCapabilities(w http.ResponseWriter, r *http.Request) {
 	if a.server.managedDataOptions.Multipart != nil {
 		uploadProtocols = append(uploadProtocols, apigenapi.UploadProtocolS3Multipart)
 	}
-	visualShapes := make([]apigenapi.VisualShape, 0, len(reportdef.SupportedVisualShapes()))
-	for _, shape := range reportdef.SupportedVisualShapes() {
-		visualShapes = append(visualShapes, apigenapi.VisualShape(shape))
-	}
 	writeAPIJSON(w, http.StatusOK, apigenapi.CapabilitiesResponse{
 		ApiVersion: "v1", BuildVersion: staticasset.Version(), Authentication: []apigenapi.AuthenticationMode{apigenapi.AuthenticationModeBearer}, Environment: a.server.defaultEnvironment,
 		QueryFormats:    []apigenapi.QueryFormat{apigenapi.QueryFormatApplicationJson, apigenapi.QueryFormatApplicationVndApacheArrowStream},
 		UploadProtocols: uploadProtocols,
-		VisualShapes:    visualShapes,
+		Visualization: apigenapi.VisualizationCapabilities{
+			SchemaVersion: visualizationir.CurrentSchemaVersion,
+			Renderers: []apigenapi.VisualizationRendererCapability{
+				{Id: apigenapi.VisualizationRendererIDEcharts, Version: "6.1.0", SchemaVersion: visualizationir.CurrentSchemaVersion, Kinds: []apigenapi.VisualizationSpecKind{apigenapi.VisualizationSpecKindCartesian, apigenapi.VisualizationSpecKindProportional, apigenapi.VisualizationSpecKindHierarchy, apigenapi.VisualizationSpecKindPolar}},
+				{Id: apigenapi.VisualizationRendererIDTanstack, Version: "9.0.0-beta.12", SchemaVersion: visualizationir.CurrentSchemaVersion, Kinds: []apigenapi.VisualizationSpecKind{apigenapi.VisualizationSpecKindTable, apigenapi.VisualizationSpecKindMatrix, apigenapi.VisualizationSpecKindPivot}},
+				{Id: apigenapi.VisualizationRendererIDHtml, Version: "1", SchemaVersion: visualizationir.CurrentSchemaVersion, Kinds: []apigenapi.VisualizationSpecKind{apigenapi.VisualizationSpecKindKpi}},
+				{Id: apigenapi.VisualizationRendererIDMaplibre, Version: "5.19.0", SchemaVersion: visualizationir.CurrentSchemaVersion, Kinds: []apigenapi.VisualizationSpecKind{apigenapi.VisualizationSpecKindGeographic}},
+				{Id: apigenapi.VisualizationRendererIDVegaLiteSandbox, Version: "6.4.3", SchemaVersion: visualizationir.CurrentSchemaVersion, Kinds: []apigenapi.VisualizationSpecKind{apigenapi.VisualizationSpecKindCustom}},
+			},
+		},
 	})
 }
 

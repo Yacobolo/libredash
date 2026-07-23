@@ -78,16 +78,15 @@ Open `dashboards/workspaces/sales/dashboards/executive-sales.yaml`. Find the `ao
 ```yaml
 aov_kpi:
   type: kpi
-  shape: single_value
   query:
     measures:
       aov:
-  options:
+  presentation:
     note: Average revenue per completed order
-    tone: amber
+    tone: warning
 ```
 
-The visual owns its semantic query and presentation options. A page component later places that reusable visual on the grid by referencing `aov_kpi`.
+The visual owns its semantic query and typed presentation. A page component later places that reusable visual on the grid by referencing `aov_kpi`.
 
 ## Review and deploy the change
 

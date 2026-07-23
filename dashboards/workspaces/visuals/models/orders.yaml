@@ -85,7 +85,7 @@ spec:
           ELSE datediff('day', CAST(o.order_purchase_timestamp AS TIMESTAMP), CAST(o.order_delivered_customer_date AS TIMESTAMP))
         END AS delivery_days,
         CASE
-          WHEN o.order_delivered_customer_date IS NULL THEN NULL
+          WHEN o.order_delivered_customer_date IS NULL THEN 'Not delivered'
           WHEN datediff('day', CAST(o.order_purchase_timestamp AS TIMESTAMP), CAST(o.order_delivered_customer_date AS TIMESTAMP)) <= 3 THEN '0-3 days'
           WHEN datediff('day', CAST(o.order_purchase_timestamp AS TIMESTAMP), CAST(o.order_delivered_customer_date AS TIMESTAMP)) <= 7 THEN '4-7 days'
           WHEN datediff('day', CAST(o.order_purchase_timestamp AS TIMESTAMP), CAST(o.order_delivered_customer_date AS TIMESTAMP)) <= 14 THEN '8-14 days'

@@ -214,6 +214,9 @@ func validateSingleFactFilterScope(fact string, filters []Filter) error {
 		if filter.Fact != "" && filter.Fact != fact {
 			return fmt.Errorf("filter fact %q does not match query fact %q", filter.Fact, fact)
 		}
+		if filter.Spatial != nil && filter.Spatial.Fact != "" && filter.Spatial.Fact != fact {
+			return fmt.Errorf("spatial filter fact %q does not match query fact %q", filter.Spatial.Fact, fact)
+		}
 		for _, group := range filter.Groups {
 			if err := validateSingleFactFilterScope(fact, group.Filters); err != nil {
 				return err
@@ -249,6 +252,9 @@ func filterRefs(filters []Filter) []string {
 	for _, filter := range filters {
 		if filter.Field != "" {
 			fields = append(fields, filter.Field)
+		}
+		if filter.Spatial != nil {
+			fields = append(fields, filter.Spatial.LatitudeField, filter.Spatial.LongitudeField)
 		}
 		for _, group := range filter.Groups {
 			fields = append(fields, filterRefs(group.Filters)...)

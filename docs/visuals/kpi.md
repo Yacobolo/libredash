@@ -6,7 +6,7 @@ Every preview on this page is generated from the YAML shown below it using a fix
 
 ## Neutral tone
 
-Use one measure with `shape: single_value`; `tone: ink` presents an informational value without implying positive or negative status.
+Use one measure; `presentation.tone: neutral` presents an informational value without implying positive or negative status.
 
 {{< visual id="total_orders" >}}
 
@@ -15,18 +15,17 @@ visuals:
   total_orders:
     type: kpi
     description: Shows the filtered count of distinct orders.
-    shape: single_value
     query:
       measures:
         order_count: null
-    options:
+    presentation:
       note: Filtered order count
       tone: ink
 ```
 
 ## Success tone
 
-Set `options.tone: green` for a favorable result and use `options.note` to state what the monetary value represents.
+Set `presentation.tone: success` for a favorable result and use `presentation.note` to state what the monetary value represents.
 
 {{< visual id="revenue_kpi" >}}
 
@@ -35,13 +34,12 @@ visuals:
   revenue_kpi:
     type: kpi
     description: Shows filtered total payment revenue.
-    shape: single_value
     query:
       measures:
         revenue: null
-    options:
+    presentation:
       note: Payment value
-      tone: green
+      tone: success
 ```
 
 ## Warning tone
@@ -55,13 +53,12 @@ visuals:
   aov_kpi:
     type: kpi
     description: Shows average order value for the current filters.
-    shape: single_value
     query:
       measures:
         aov: null
-    options:
+    presentation:
       note: Revenue per order
-      tone: amber
+      tone: warning
 ```
 
 ## Attention tone
@@ -75,11 +72,10 @@ visuals:
   review_kpi:
     type: kpi
     description: Shows average review score for the current filters.
-    shape: single_value
     query:
       measures:
         review_score: null
-    options:
+    presentation:
       note: Average score
-      tone: coral
+      tone: danger
 ```

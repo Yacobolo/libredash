@@ -15,10 +15,8 @@ visuals:
   revenue_orders_combo:
     title: Revenue and orders by month
     description: Compares monthly revenue and order volume together.
-    shape: category_multi_measure
-    renderer: echarts
     type: combo
-    options:
+    presentation:
       series_types:
         Revenue: line
         Orders: column
@@ -36,7 +34,7 @@ visuals:
 
 ## Per-series renderers
 
-Use `options.series_types` to render review score as a line and delivery days as columns while retaining one shared status axis.
+Use `presentation.series_types` to render review score as a line and delivery days as columns while retaining one shared status axis.
 
 {{< visual id="review_delivery_combo" >}}
 
@@ -44,10 +42,8 @@ Use `options.series_types` to render review score as a line and delivery days as
 visuals:
   review_delivery_combo:
     title: Review and delivery by status
-    shape: category_multi_measure
-    renderer: echarts
     type: combo
-    options:
+    presentation:
       series_types:
         Review: line
         Delivery days: column
@@ -64,7 +60,7 @@ visuals:
 
 ## Dual axes
 
-Enable `options.dual_axis` when the measures use different scales, then assign line and column renderers explicitly with `series_types`.
+Enable `presentation.dual_axis` when the measures use different scales, then assign line and column marks explicitly with `series_types`.
 
 {{< visual id="revenue_orders_dual_axis_combo" >}}
 
@@ -72,10 +68,8 @@ Enable `options.dual_axis` when the measures use different scales, then assign l
 visuals:
   revenue_orders_dual_axis_combo:
     title: Revenue and orders dual-axis combo
-    shape: category_multi_measure
-    renderer: echarts
     type: combo
-    options:
+    presentation:
       dual_axis: true
       series_types:
         Revenue: column

@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"errors"
 	nethttp "net/http"
 
 	"github.com/Yacobolo/leapview/internal/dashboard"
@@ -19,9 +20,21 @@ func (h Handler) VisualWindow(w nethttp.ResponseWriter, r *nethttp.Request) {
 	})
 }
 
+func (h Handler) VisualSpatialWindow(w nethttp.ResponseWriter, r *nethttp.Request) {
+	h.handleCommand(w, r, func(service command.Service, request command.Request, current dashboard.Filters) (command.PreparedRefresh, error) {
+		return service.PrepareVisualSpatialWindow(request, current)
+	})
+}
+
 func (h Handler) Select(w nethttp.ResponseWriter, r *nethttp.Request) {
 	h.handleCommand(w, r, func(service command.Service, request command.Request, current dashboard.Filters) (command.PreparedRefresh, error) {
 		return service.PrepareSelect(request, current)
+	})
+}
+
+func (h Handler) SpatialSelect(w nethttp.ResponseWriter, r *nethttp.Request) {
+	h.handleCommand(w, r, func(service command.Service, request command.Request, current dashboard.Filters) (command.PreparedRefresh, error) {
+		return service.PrepareSpatialSelect(request, current)
 	})
 }
 
@@ -66,12 +79,14 @@ func (h Handler) handleCommandWithBefore(w nethttp.ResponseWriter, r *nethttp.Re
 	modelID := lddatastar.ModelID(r, signals, dashboardID, metrics.ModelIDForDashboard)
 	streamID := lddatastar.ClientStreamID(r, signals, dashboardID, pageID)
 	request := command.Request{
-		DashboardID:         dashboardID,
-		PageID:              pageID,
-		ModelID:             modelID,
-		Filters:             signals.Filters,
-		VisualWindowCommand: signals.VisualWindowCommand,
-		InteractionCommand:  signals.InteractionCommand,
+		DashboardID:                dashboardID,
+		PageID:                     pageID,
+		ModelID:                    modelID,
+		Filters:                    signals.Filters,
+		VisualWindowCommand:        signals.VisualWindowCommand,
+		VisualSpatialWindowCommand: signals.VisualSpatialWindowCommand,
+		InteractionCommand:         signals.InteractionCommand,
+		SpatialInteractionCommand:  signals.SpatialInteractionCommand,
 	}
 	if h.CommandGuard != nil {
 		if err := h.CommandGuard(r, metrics, request, signals); err != nil {
@@ -120,6 +135,10 @@ func (h Handler) handleCommandWithBefore(w nethttp.ResponseWriter, r *nethttp.Re
 		}
 		return dashboardstream.TargetWork(metrics, workRequest)
 	})
+	if errors.Is(err, dashboardstream.ErrStalePreparation) {
+		writeJSON(w, nethttp.StatusOK, map[string]any{})
+		return
+	}
 	if err != nil {
 		// Invalid commands still form a generation so the canonical filters and
 		// scoped failure are delivered through the page stream.
@@ -146,12 +165,25 @@ func streamPreparation(prepared command.PreparedRefresh) dashboardstream.Refresh
 	for _, target := range prepared.Plan.Targets {
 		targets = append(targets, target.Key())
 	}
-	return dashboardstream.RefreshPreparation{
+	preparation := dashboardstream.RefreshPreparation{
 		Filters: prepared.Filters,
 		Command: prepared.Plan.Command,
 		Targets: targets,
 		Plan:    prepared.Plan,
 	}
+	if prepared.Plan.Command == "visual_spatial_window" && len(prepared.Plan.Targets) == 1 {
+		request := prepared.Plan.Targets[0].SpatialRequest
+		preparation.SequenceKey = "spatial:" + request.VisualID
+		preparation.Sequence = request.RequestSeq
+		preparation.SequenceEpoch = request.ResetVersion
+	}
+	if prepared.Plan.Command == "visual_window" && len(prepared.Plan.Targets) == 1 {
+		request := prepared.Plan.Targets[0].WindowRequest
+		preparation.SequenceKey = "window:" + request.Table
+		preparation.Sequence = int64(request.RequestSeq)
+		preparation.SequenceEpoch = int64(request.ResetVersion)
+	}
+	return preparation
 }
 
 func (h Handler) readSignals(w nethttp.ResponseWriter, r *nethttp.Request) (dashboard.Signals, bool) {

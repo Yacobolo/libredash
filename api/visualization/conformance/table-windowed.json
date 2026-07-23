@@ -1,0 +1,138 @@
+{
+  "schemaVersion": 3,
+  "visualID": "orders",
+  "rendererID": "tanstack",
+  "specRevision": "sha256:8e2bcc88fa8dec7ee0588bcc09cfda7b28ff97679a1e2d2c67280a189f9a7fdc",
+  "spec": {
+    "kind": "table",
+    "title": "Orders",
+    "datasets": [
+      {
+        "id": "primary",
+        "fields": [
+          {
+            "id": "order_id",
+            "sourceRef": "orders.order_id",
+            "role": "identity",
+            "dataType": "string",
+            "nullable": false,
+            "label": "Order ID"
+          },
+          {
+            "id": "total",
+            "sourceRef": "orders.total",
+            "role": "measure",
+            "dataType": "decimal",
+            "nullable": false,
+            "label": "Total",
+            "format": {
+              "kind": "currency",
+              "currency": "USD",
+              "minimumFractionDigits": 2,
+              "maximumFractionDigits": 2
+            }
+          }
+        ]
+      }
+    ],
+    "dataBudget": {
+      "maxRows": 100000,
+      "requiredCompleteness": "partial"
+    },
+    "accessibility": {
+      "title": "Orders",
+      "description": "Windowed order detail"
+    },
+    "interactions": [],
+    "columns": [
+      {
+        "field": {"dataset": "primary", "field": "order_id"},
+        "label": "Order ID",
+        "width": 180,
+        "formatting": []
+      },
+      {
+        "field": {"dataset": "primary", "field": "total"},
+        "label": "Total",
+        "width": 120,
+        "formatting": []
+      }
+    ],
+    "defaultSort": [
+      {
+        "field": {"dataset": "primary", "field": "total"},
+        "direction": "descending"
+      }
+    ],
+    "presentation": {
+      "rowHeight": 32,
+      "striped": true,
+      "showHeader": true
+    }
+  },
+  "dataRevision": 11,
+  "dataState": {
+    "kind": "windowed",
+    "specRevision": "sha256:8e2bcc88fa8dec7ee0588bcc09cfda7b28ff97679a1e2d2c67280a189f9a7fdc",
+    "dataRevision": 11,
+    "generation": 4,
+    "schema": {
+      "id": "primary",
+      "fields": [
+        {
+          "id": "order_id",
+          "sourceRef": "orders.order_id",
+          "role": "identity",
+          "dataType": "string",
+          "nullable": false,
+          "label": "Order ID"
+        },
+        {
+          "id": "total",
+          "sourceRef": "orders.total",
+          "role": "measure",
+          "dataType": "decimal",
+          "nullable": false,
+          "label": "Total",
+          "format": {
+            "kind": "currency",
+            "currency": "USD",
+            "minimumFractionDigits": 2,
+            "maximumFractionDigits": 2
+          }
+        }
+      ]
+    },
+    "cardinality": {"kind": "exact", "count": 2},
+    "availableRows": 2,
+    "rowCap": 100000,
+    "chunkSize": 50,
+    "resetVersion": 2,
+    "sort": [
+      {
+        "field": {"dataset": "primary", "field": "total"},
+        "direction": "descending"
+      }
+    ],
+    "blocks": {
+      "0:2": {
+        "id": "0:2",
+        "start": 0,
+        "rows": [["order_2", 210.0], ["order_1", 125.5]],
+        "requestSeq": 8,
+        "resetVersion": 2,
+        "sort": [
+          {
+            "field": {"dataset": "primary", "field": "total"},
+            "direction": "descending"
+          }
+        ]
+      }
+    }
+  },
+  "selection": [],
+  "status": {
+    "kind": "ready"
+  },
+  "diagnostics": []
+}

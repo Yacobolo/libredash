@@ -51,7 +51,7 @@ visuals:
 
 ## Stacked series
 
-Use `query.series` for status and `options.stacked` to combine each status segment into one category total while preserving its composition.
+Use `query.series` for status and `presentation.stacked` to combine each status segment into one category total while preserving its composition.
 
 {{< visual id="categories_by_status_bar" >}}
 
@@ -59,10 +59,8 @@ Use `query.series` for status and `options.stacked` to combine each status segme
 visuals:
   categories_by_status_bar:
     title: Category revenue by status
-    shape: category_series_value
-    renderer: echarts
     type: bar
-    options:
+    presentation:
       stacked: true
     query:
       dimensions:

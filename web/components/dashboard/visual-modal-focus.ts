@@ -31,11 +31,8 @@ export function restoreVisualFocus(mount: VisualFocusMount): void {
   restoreParent.insertBefore(mount.element, restoreBefore)
   mount.placeholder.remove()
   if (mount.previousSlot !== undefined) {
-    if (mount.previousSlot === null) {
-      mount.element.removeAttribute('slot')
-    } else {
-      mount.element.setAttribute('slot', mount.previousSlot)
-    }
+    if (mount.previousSlot === null) mount.element.removeAttribute('slot')
+    else mount.element.setAttribute('slot', mount.previousSlot)
   }
 }
 
@@ -47,5 +44,5 @@ export function visualSourceFromEvent(event: Event): HTMLElement | null {
 }
 
 function isFocusableVisual(element: HTMLElement): boolean {
-  return element.localName === 'lv-echart' || element.localName === 'lv-report-table'
+  return element.localName === 'lv-visualization-host'
 }

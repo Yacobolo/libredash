@@ -7,46 +7,83 @@
       "additionalProperties": true,
       "type": "object"
     },
-    "#ChartVisual": {
-      "$ref": "#/$defs/%23VisualCommon",
+    "#CartesianPresentation": {
+      "$ref": "#/$defs/%23PresentationCommon",
       "additionalProperties": false,
       "properties": {
-        "encode": {
+        "area": {
+          "type": "boolean"
+        },
+        "data_zoom": {
+          "type": "boolean"
+        },
+        "dual_axis": {
+          "type": "boolean"
+        },
+        "histogram_bins": {
+          "allOf": [
+            {
+              "type": "number"
+            },
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            }
+          ]
+        },
+        "label_position": {
+          "enum": [
+            "automatic",
+            "inside",
+            "outside",
+            "top"
+          ]
+        },
+        "orientation": {
+          "enum": [
+            "horizontal",
+            "vertical"
+          ]
+        },
+        "series_types": {
           "additionalProperties": {
-            "type": "string"
+            "enum": [
+              "line",
+              "area",
+              "bar",
+              "column"
+            ]
           },
           "type": "object"
         },
-        "options": {
-          "$ref": "#/$defs/%23AnyObject"
+        "show_symbols": {
+          "type": "boolean"
+        },
+        "smooth": {
+          "type": "boolean"
+        },
+        "stacked": {
+          "type": "boolean"
+        },
+        "step": {
+          "type": "boolean"
+        },
+        "symbol_size": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "#CartesianVisual": {
+      "$ref": "#/$defs/%23VisualCommon",
+      "additionalProperties": false,
+      "properties": {
+        "presentation": {
+          "$ref": "#/$defs/%23CartesianPresentation"
         },
         "query": {
           "$ref": "#/$defs/%23VisualQuery"
-        },
-        "renderer": {
-          "enum": [
-            "echarts",
-            "html"
-          ]
-        },
-        "renderer_options": {
-          "$ref": "#/$defs/%23AnyObject"
-        },
-        "shape": {
-          "enum": [
-            "category_value",
-            "category_series_value",
-            "category_multi_measure",
-            "category_delta",
-            "single_value",
-            "matrix",
-            "graph",
-            "geo",
-            "ohlc",
-            "distribution",
-            "binned_measure",
-            "hierarchy"
-          ]
         },
         "type": {
           "enum": [
@@ -54,28 +91,51 @@
             "area",
             "bar",
             "column",
-            "pie",
-            "donut",
             "scatter",
-            "funnel",
-            "treemap",
-            "gauge",
             "heatmap",
-            "sankey",
-            "graph",
-            "map",
             "candlestick",
             "boxplot",
             "combo",
             "waterfall",
-            "histogram",
-            "radar",
-            "tree",
-            "sunburst"
+            "histogram"
           ]
         }
       },
       "required": [
+        "query",
+        "type"
+      ],
+      "type": "object"
+    },
+    "#CustomVisual": {
+      "$ref": "#/$defs/%23VisualCommon",
+      "additionalProperties": false,
+      "properties": {
+        "custom": {
+          "additionalProperties": false,
+          "properties": {
+            "engine": {
+              "const": "vega_lite"
+            },
+            "program": {
+              "$ref": "#/$defs/%23AnyObject"
+            }
+          },
+          "required": [
+            "engine",
+            "program"
+          ],
+          "type": "object"
+        },
+        "query": {
+          "$ref": "#/$defs/%23VisualQuery"
+        },
+        "type": {
+          "const": "custom"
+        }
+      },
+      "required": [
+        "custom",
         "query",
         "type"
       ],
@@ -412,6 +472,472 @@
       ],
       "type": "object"
     },
+    "#GeographicLayer": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/%23GeographicLayerCommon",
+          "additionalProperties": false,
+          "properties": {
+            "geometry_asset": {
+              "$ref": "#/$defs/%23Identifier"
+            },
+            "join": {
+              "$ref": "#/$defs/%23Identifier"
+            },
+            "kind": {
+              "const": "choropleth"
+            }
+          },
+          "required": [
+            "geometry_asset",
+            "join",
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "$ref": "#/$defs/%23GeographicLayerCommon",
+          "additionalProperties": false,
+          "properties": {
+            "cluster": {
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "max_zoom": {
+                  "allOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "maximum": 24,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  ]
+                },
+                "minimum_points": {
+                  "allOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "minimum": 2,
+                      "type": "integer"
+                    }
+                  ]
+                },
+                "radius": {
+                  "allOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "exclusiveMinimum": 0,
+                      "type": "integer"
+                    }
+                  ]
+                },
+                "show_count": {
+                  "type": "boolean"
+                }
+              },
+              "type": "object"
+            },
+            "kind": {
+              "const": "point"
+            },
+            "latitude": {
+              "$ref": "#/$defs/%23Identifier"
+            },
+            "longitude": {
+              "$ref": "#/$defs/%23Identifier"
+            },
+            "size": {
+              "additionalProperties": false,
+              "properties": {
+                "domain_maximum": {
+                  "type": "number"
+                },
+                "domain_minimum": {
+                  "type": "number"
+                },
+                "maximum_radius": {
+                  "minimum": 0,
+                  "type": "number"
+                },
+                "minimum_radius": {
+                  "minimum": 0,
+                  "type": "number"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "kind",
+            "latitude",
+            "longitude"
+          ],
+          "type": "object"
+        },
+        {
+          "$ref": "#/$defs/%23GeographicLayerCommon",
+          "additionalProperties": false,
+          "properties": {
+            "heat": {
+              "additionalProperties": false,
+              "properties": {
+                "intensity": {
+                  "exclusiveMinimum": 0,
+                  "type": "number"
+                },
+                "radius": {
+                  "exclusiveMinimum": 0,
+                  "type": "number"
+                }
+              },
+              "type": "object"
+            },
+            "kind": {
+              "anyOf": [
+                {
+                  "const": "heat"
+                },
+                {
+                  "const": "density"
+                }
+              ]
+            },
+            "latitude": {
+              "$ref": "#/$defs/%23Identifier"
+            },
+            "longitude": {
+              "$ref": "#/$defs/%23Identifier"
+            }
+          },
+          "required": [
+            "kind",
+            "latitude",
+            "longitude"
+          ],
+          "type": "object"
+        },
+        {
+          "$ref": "#/$defs/%23GeographicLayerCommon",
+          "additionalProperties": false,
+          "properties": {
+            "geometry_asset": {
+              "$ref": "#/$defs/%23Identifier"
+            },
+            "kind": {
+              "const": "reference"
+            }
+          },
+          "required": [
+            "geometry_asset",
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "$ref": "#/$defs/%23GeographicLayerCommon",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "path"
+            },
+            "latitude": {
+              "$ref": "#/$defs/%23Identifier"
+            },
+            "line": {
+              "additionalProperties": false,
+              "properties": {
+                "curvature": {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                "width": {
+                  "exclusiveMinimum": 0,
+                  "type": "number"
+                }
+              },
+              "type": "object"
+            },
+            "longitude": {
+              "$ref": "#/$defs/%23Identifier"
+            },
+            "order": {
+              "$ref": "#/$defs/%23Identifier"
+            },
+            "path": {
+              "$ref": "#/$defs/%23Identifier"
+            }
+          },
+          "required": [
+            "kind",
+            "latitude",
+            "longitude",
+            "order",
+            "path"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "#GeographicLayerCommon": {
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "$ref": "#/$defs/%23Identifier"
+        },
+        "color": {
+          "additionalProperties": false,
+          "properties": {
+            "domain_maximum": {
+              "type": "number"
+            },
+            "domain_midpoint": {
+              "type": "number"
+            },
+            "domain_minimum": {
+              "type": "number"
+            },
+            "kind": {
+              "enum": [
+                "sequential",
+                "diverging",
+                "categorical"
+              ]
+            },
+            "null_color": {
+              "type": "string"
+            },
+            "palette": {
+              "$ref": "#/$defs/%23Identifier"
+            },
+            "reverse": {
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        },
+        "id": {
+          "$ref": "#/$defs/%23Identifier"
+        },
+        "label": {
+          "$ref": "#/$defs/%23Identifier"
+        },
+        "opacity": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "position": {
+          "enum": [
+            "below_labels",
+            "above_labels"
+          ]
+        },
+        "stroke": {
+          "additionalProperties": false,
+          "properties": {
+            "color": {
+              "type": "string"
+            },
+            "opacity": {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            "width": {
+              "minimum": 0,
+              "type": "number"
+            }
+          },
+          "type": "object"
+        },
+        "tooltip": {
+          "items": {
+            "$ref": "#/$defs/%23Identifier"
+          },
+          "type": "array"
+        },
+        "value": {
+          "$ref": "#/$defs/%23Identifier"
+        },
+        "visibility": {
+          "additionalProperties": false,
+          "properties": {
+            "max_zoom": {
+              "maximum": 24,
+              "minimum": 0,
+              "type": "number"
+            },
+            "min_zoom": {
+              "maximum": 24,
+              "minimum": 0,
+              "type": "number"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "#GeographicVisual": {
+      "$ref": "#/$defs/%23VisualCommon",
+      "additionalProperties": false,
+      "properties": {
+        "geo": {
+          "additionalProperties": false,
+          "properties": {
+            "basemap": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/%23Identifier"
+                },
+                {
+                  "const": "blank"
+                }
+              ]
+            },
+            "camera": {
+              "additionalProperties": false,
+              "properties": {
+                "center": {
+                  "maxLength": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "type": "array"
+                },
+                "max_zoom": {
+                  "maximum": 24,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                "min_zoom": {
+                  "maximum": 24,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                "mode": {
+                  "enum": [
+                    "fit_data",
+                    "fixed",
+                    "preserve"
+                  ]
+                },
+                "padding": {
+                  "allOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  ]
+                },
+                "zoom": {
+                  "maximum": 24,
+                  "minimum": 0,
+                  "type": "number"
+                }
+              },
+              "type": "object"
+            },
+            "controls": {
+              "additionalProperties": false,
+              "properties": {
+                "compass": {
+                  "type": "boolean"
+                },
+                "reset": {
+                  "type": "boolean"
+                },
+                "zoom": {
+                  "type": "boolean"
+                }
+              },
+              "type": "object"
+            },
+            "label_density": {
+              "enum": [
+                "hidden",
+                "normal",
+                "dense"
+              ]
+            },
+            "layers": {
+              "items": {
+                "$ref": "#/$defs/%23GeographicLayer"
+              },
+              "minItems": 1,
+              "prefixItems": [
+                {
+                  "$ref": "#/$defs/%23GeographicLayer"
+                }
+              ],
+              "type": "array"
+            },
+            "theme": {
+              "enum": [
+                "auto",
+                "light",
+                "dark"
+              ]
+            }
+          },
+          "required": [
+            "layers"
+          ],
+          "type": "object"
+        },
+        "presentation": {
+          "additionalProperties": false,
+          "properties": {
+            "legend": {
+              "enum": [
+                "hidden",
+                "top",
+                "right",
+                "bottom",
+                "left"
+              ]
+            },
+            "show_labels": {
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        },
+        "query": {
+          "$ref": "#/$defs/%23VisualQuery"
+        },
+        "type": {
+          "const": "map"
+        }
+      },
+      "required": [
+        "geo",
+        "query",
+        "type"
+      ],
+      "type": "object"
+    },
     "#HeaderComponent": {
       "$ref": "#/$defs/%23PageComponentCommon",
       "additionalProperties": false,
@@ -422,6 +948,83 @@
       },
       "required": [
         "kind"
+      ],
+      "type": "object"
+    },
+    "#HierarchyPresentation": {
+      "$ref": "#/$defs/%23PresentationCommon",
+      "additionalProperties": false,
+      "properties": {
+        "breadcrumb": {
+          "type": "boolean"
+        },
+        "curveness": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "focus": {
+          "enum": [
+            "none",
+            "adjacency"
+          ]
+        },
+        "initial_depth": {
+          "allOf": [
+            {
+              "type": "number"
+            },
+            {
+              "minimum": 0,
+              "type": "integer"
+            }
+          ]
+        },
+        "layout": {
+          "enum": [
+            "standard",
+            "circular"
+          ]
+        },
+        "node_gap": {
+          "minimum": 0,
+          "type": "number"
+        },
+        "orientation": {
+          "enum": [
+            "horizontal",
+            "vertical"
+          ]
+        },
+        "roam": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "#HierarchyVisual": {
+      "$ref": "#/$defs/%23VisualCommon",
+      "additionalProperties": false,
+      "properties": {
+        "presentation": {
+          "$ref": "#/$defs/%23HierarchyPresentation"
+        },
+        "query": {
+          "$ref": "#/$defs/%23VisualQuery"
+        },
+        "type": {
+          "enum": [
+            "treemap",
+            "sankey",
+            "graph",
+            "tree",
+            "sunburst"
+          ]
+        }
+      },
+      "required": [
+        "query",
+        "type"
       ],
       "type": "object"
     },
@@ -437,6 +1040,9 @@
         },
         "row_selection": {
           "$ref": "#/$defs/%23SelectionInteraction"
+        },
+        "spatial_selection": {
+          "$ref": "#/$defs/%23SpatialSelectionInteraction"
         }
       },
       "type": "object"
@@ -445,14 +1051,11 @@
       "$ref": "#/$defs/%23VisualCommon",
       "additionalProperties": false,
       "properties": {
-        "options": {
-          "$ref": "#/$defs/%23AnyObject"
+        "presentation": {
+          "$ref": "#/$defs/%23KPIVisualPresentation"
         },
         "query": {
           "$ref": "#/$defs/%23VisualQuery"
-        },
-        "shape": {
-          "const": "single_value"
         },
         "type": {
           "const": "kpi"
@@ -462,6 +1065,30 @@
         "query",
         "type"
       ],
+      "type": "object"
+    },
+    "#KPIVisualPresentation": {
+      "additionalProperties": false,
+      "properties": {
+        "note": {
+          "type": "string"
+        },
+        "thresholds": {
+          "items": {
+            "$ref": "#/$defs/%23Threshold"
+          },
+          "type": "array"
+        },
+        "tone": {
+          "enum": [
+            "neutral",
+            "ink",
+            "success",
+            "warning",
+            "danger"
+          ]
+        }
+      },
       "type": "object"
     },
     "#MatrixVisual": {
@@ -691,6 +1318,147 @@
       ],
       "type": "object"
     },
+    "#PolarPresentation": {
+      "$ref": "#/$defs/%23PresentationCommon",
+      "additionalProperties": false,
+      "properties": {
+        "area": {
+          "type": "boolean"
+        },
+        "maximum": {
+          "type": "number"
+        },
+        "minimum": {
+          "type": "number"
+        },
+        "progress_width": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "thresholds": {
+          "items": {
+            "$ref": "#/$defs/%23Threshold"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "#PolarVisual": {
+      "$ref": "#/$defs/%23VisualCommon",
+      "additionalProperties": false,
+      "properties": {
+        "presentation": {
+          "$ref": "#/$defs/%23PolarPresentation"
+        },
+        "query": {
+          "$ref": "#/$defs/%23VisualQuery"
+        },
+        "type": {
+          "enum": [
+            "gauge",
+            "radar"
+          ]
+        }
+      },
+      "required": [
+        "query",
+        "type"
+      ],
+      "type": "object"
+    },
+    "#PresentationCommon": {
+      "additionalProperties": false,
+      "properties": {
+        "legend": {
+          "enum": [
+            "hidden",
+            "top",
+            "right",
+            "bottom",
+            "left"
+          ]
+        },
+        "show_labels": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "#ProportionalPresentation": {
+      "$ref": "#/$defs/%23PresentationCommon",
+      "additionalProperties": false,
+      "properties": {
+        "align": {
+          "enum": [
+            "left",
+            "center",
+            "right"
+          ]
+        },
+        "center_label": {
+          "type": "string"
+        },
+        "inner_radius": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "label_position": {
+          "enum": [
+            "automatic",
+            "inside",
+            "outside",
+            "top"
+          ]
+        },
+        "orientation": {
+          "enum": [
+            "horizontal",
+            "vertical"
+          ]
+        },
+        "outer_radius": {
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "type": "number"
+        },
+        "rose": {
+          "type": "boolean"
+        },
+        "sort": {
+          "enum": [
+            "ascending",
+            "descending"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "#ProportionalVisual": {
+      "$ref": "#/$defs/%23VisualCommon",
+      "additionalProperties": false,
+      "properties": {
+        "presentation": {
+          "$ref": "#/$defs/%23ProportionalPresentation"
+        },
+        "query": {
+          "$ref": "#/$defs/%23VisualQuery"
+        },
+        "type": {
+          "enum": [
+            "pie",
+            "donut",
+            "funnel"
+          ]
+        }
+      },
+      "required": [
+        "query",
+        "type"
+      ],
+      "type": "object"
+    },
     "#ResourceID": {
       "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$",
       "type": "string"
@@ -774,6 +1542,66 @@
           "type": "string"
         }
       },
+      "type": "object"
+    },
+    "#SpatialSelectionInteraction": {
+      "additionalProperties": false,
+      "properties": {
+        "gestures": {
+          "items": {
+            "enum": [
+              "box",
+              "lasso",
+              "radius"
+            ]
+          },
+          "type": "array"
+        },
+        "latitude": {
+          "$ref": "#/$defs/%23SpatialSelectionMapping"
+        },
+        "longitude": {
+          "$ref": "#/$defs/%23SpatialSelectionMapping"
+        },
+        "targets": {
+          "items": {
+            "$ref": "#/$defs/%23Identifier"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "gestures",
+        "latitude",
+        "longitude",
+        "targets"
+      ],
+      "type": "object"
+    },
+    "#SpatialSelectionMapping": {
+      "additionalProperties": false,
+      "properties": {
+        "fact": {
+          "$ref": "#/$defs/%23Identifier"
+        },
+        "field": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/%23FieldRef"
+            },
+            {
+              "$ref": "#/$defs/%23Identifier"
+            }
+          ]
+        },
+        "source": {
+          "$ref": "#/$defs/%23Identifier"
+        }
+      },
+      "required": [
+        "field",
+        "source"
+      ],
       "type": "object"
     },
     "#TableColumn": {
@@ -949,7 +1777,7 @@
           },
           "type": "object"
         },
-        "style": {
+        "presentation": {
           "additionalProperties": false,
           "properties": {
             "density": {
@@ -1002,10 +1830,47 @@
       ],
       "type": "object"
     },
+    "#Threshold": {
+      "additionalProperties": false,
+      "properties": {
+        "tone": {
+          "enum": [
+            "neutral",
+            "ink",
+            "success",
+            "warning",
+            "danger"
+          ]
+        },
+        "value": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "tone",
+        "value"
+      ],
+      "type": "object"
+    },
     "#Visual": {
       "anyOf": [
         {
-          "$ref": "#/$defs/%23ChartVisual"
+          "$ref": "#/$defs/%23CartesianVisual"
+        },
+        {
+          "$ref": "#/$defs/%23ProportionalVisual"
+        },
+        {
+          "$ref": "#/$defs/%23HierarchyVisual"
+        },
+        {
+          "$ref": "#/$defs/%23PolarVisual"
+        },
+        {
+          "$ref": "#/$defs/%23GeographicVisual"
+        },
+        {
+          "$ref": "#/$defs/%23CustomVisual"
         },
         {
           "$ref": "#/$defs/%23KPIVisual"
@@ -1024,6 +1889,49 @@
     "#VisualCommon": {
       "additionalProperties": false,
       "properties": {
+        "accessibility": {
+          "additionalProperties": false,
+          "properties": {
+            "announce_changes": {
+              "type": "boolean"
+            },
+            "description": {
+              "type": "string"
+            },
+            "summary": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "data_budget": {
+          "additionalProperties": false,
+          "properties": {
+            "max_rows": {
+              "allOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "exclusiveMinimum": 0,
+                  "type": "integer"
+                }
+              ]
+            },
+            "required_completeness": {
+              "enum": [
+                "complete",
+                "truncated",
+                "partial",
+                "empty"
+              ]
+            }
+          },
+          "type": "object"
+        },
         "description": {
           "type": "string"
         },

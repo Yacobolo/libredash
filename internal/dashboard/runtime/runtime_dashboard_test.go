@@ -15,8 +15,11 @@ import (
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	"github.com/Yacobolo/leapview/internal/dashboard/consumer"
+	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 	"github.com/Yacobolo/leapview/internal/dataquery"
+	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 	"github.com/Yacobolo/leapview/internal/workspace"
 	workspacecompiler "github.com/Yacobolo/leapview/internal/workspace/compiler"
 )
@@ -24,6 +27,30 @@ import (
 type runtimeAuditRecorder struct {
 	queries []dataquery.Query
 	results []dataquery.Result
+}
+
+func setCompiledInteractionTarget(spec *visualizationir.VisualizationSpec, target string, enabled bool) {
+	proportional, ok := spec.Value.(*visualizationir.ProportionalVisualizationSpec)
+	if !ok || len(proportional.Interactions) == 0 {
+		panic("orders visualization must have a proportional interaction")
+	}
+	targets := proportional.Interactions[0].Targets
+	if enabled {
+		for _, existing := range targets {
+			if existing == target {
+				return
+			}
+		}
+		proportional.Interactions[0].Targets = append(targets, target)
+		return
+	}
+	filtered := targets[:0]
+	for _, existing := range targets {
+		if existing != target {
+			filtered = append(filtered, existing)
+		}
+	}
+	proportional.Interactions[0].Targets = filtered
 }
 
 func (r *runtimeAuditRecorder) RecordDataQuery(_ context.Context, query dataquery.Query, result dataquery.Result) error {
@@ -157,7 +184,7 @@ func sharedOrdersWorkspaceDefinition(t *testing.T) *workspace.Definition {
 			"model_a": modelA,
 			"model_b": modelB,
 		},
-		Dashboards: map[string]*reportdef.Dashboard{"dashboard": {ID: "dashboard", Title: "Dashboard", SemanticModel: "model_a"}},
+		Dashboards: map[string]dashboarddefinition.Definition{"dashboard": {ID: "dashboard", Title: "Dashboard", SemanticModel: "model_a", Filters: map[string]dashboarddefinition.FilterDefinition{}, Pages: []dashboard.Page{}, Visualizations: map[string]visualizationdefinition.Definition{}}},
 	}
 }
 
@@ -217,9 +244,9 @@ o2,c2,shipped,2018-01-05 10:00:00,2018-01-15 10:00:00
 o1,5
 o2,3
 `)
-	writeFixture(t, dir, "olist_customers_dataset.csv", `customer_id,customer_state
-c1,SP
-c2,RJ
+	writeFixture(t, dir, "olist_customers_dataset.csv", `customer_id,customer_zip_code_prefix,customer_city,customer_state
+c1,01001,Sao Paulo,SP
+c2,20040,Rio de Janeiro,RJ
 `)
 
 	metrics, err := newOperationsRuntime(t, dir)
@@ -236,11 +263,63 @@ c2,RJ
 		t.Fatalf("unexpected status error: %s", patch.Status.Error)
 	}
 	assertVisualKeys(t, patch, []string{"delivery_days", "delivery_speed", "orders_by_status", "review_by_status", "review_score", "total_orders"})
-	if got := datumInt(patch.Visuals["total_orders"].Data[0], "value"); got != 2 {
+	if got := datumInt(envelopeRows(t, patch.Visuals["total_orders"])[0], "value"); got != 2 {
 		t.Fatalf("orders KPI value = %d, want 2", got)
 	}
-	if len(patch.Visuals["orders_by_status"].Data) == 0 {
+	if len(envelopeRows(t, patch.Visuals["orders_by_status"])) == 0 {
 		t.Fatal("orders by status chart has no data")
+	}
+	visualPatch, err := metrics.QueryDashboardVisualizations(context.Background(), "fulfillment-operations", "overview", dashboard.Filters{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertVisualKeys(t, visualPatch, []string{"delivery_days", "delivery_speed", "orders_by_status", "review_by_status", "review_score", "total_orders"})
+}
+
+func TestDashboardPageQueryIsolatesOneVisualizationFailure(t *testing.T) {
+	dir := t.TempDir()
+	writeFixture(t, dir, "olist_orders_dataset.csv", `order_id,customer_id,order_status,order_purchase_timestamp,order_delivered_customer_date
+o1,c1,delivered,2018-01-01 10:00:00,2018-01-03 10:00:00
+o2,c2,shipped,2018-01-05 10:00:00,2018-01-15 10:00:00
+`)
+	writeFixture(t, dir, "olist_order_reviews_dataset.csv", `order_id,review_score
+o1,5
+o2,3
+`)
+	writeFixture(t, dir, "olist_customers_dataset.csv", `customer_id,customer_zip_code_prefix,customer_city,customer_state
+c1,01001,Sao Paulo,SP
+c2,20040,Rio de Janeiro,RJ
+`)
+
+	metrics, err := newOperationsRuntime(t, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer metrics.Close()
+
+	report := metrics.reports.workspace.Dashboards["fulfillment-operations"]
+	broken := report.Visualizations["delivery_speed"]
+	broken.Query.Aggregate.TableID = "missing_table"
+	report.Visualizations["delivery_speed"] = broken
+	metrics.reports.workspace.Dashboards["fulfillment-operations"] = report
+
+	patch, err := metrics.QueryDashboardPage(context.Background(), "fulfillment-operations", "overview", dashboard.Filters{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if patch.Status.Error != "" {
+		t.Fatalf("page status error = %q, want target-local error", patch.Status.Error)
+	}
+	assertVisualKeys(t, patch, []string{"delivery_days", "delivery_speed", "orders_by_status", "review_by_status", "review_score", "total_orders"})
+	failed := patch.Visuals["delivery_speed"]
+	if failed.Status.Kind != visualizationir.VisualizationStatusKindError || failed.Status.Message == nil || !strings.Contains(*failed.Status.Message, "missing_table") {
+		t.Fatalf("failed visual envelope = %#v", failed)
+	}
+	if len(failed.Diagnostics) != 1 || failed.Diagnostics[0].Code != "query_failed" {
+		t.Fatalf("failed visual diagnostics = %#v", failed.Diagnostics)
+	}
+	if patch.Visuals["total_orders"].Status.Kind != visualizationir.VisualizationStatusKindReady {
+		t.Fatalf("successful visual was discarded: %#v", patch.Visuals["total_orders"].Status)
 	}
 }
 
@@ -254,9 +333,9 @@ o2,c2,shipped,2018-01-05 10:00:00,2018-01-15 10:00:00
 o1,5
 o2,3
 `)
-	writeFixture(t, dir, "olist_customers_dataset.csv", `customer_id,customer_state
-c1,SP
-c2,RJ
+	writeFixture(t, dir, "olist_customers_dataset.csv", `customer_id,customer_zip_code_prefix,customer_city,customer_state
+c1,01001,Sao Paulo,SP
+c2,20040,Rio de Janeiro,RJ
 `)
 
 	metrics, err := newOperationsRuntime(t, dir)
@@ -330,7 +409,7 @@ c2,RJ
 	}
 	recorder.queries = nil
 	recorder.results = nil
-	visuals := map[string]dashboard.Visual{}
+	visuals := map[string]visualizationir.VisualizationEnvelope{}
 	progress := []consumer.Progress{}
 	err = metrics.ExecuteConsumersPage(ctx, consumer.Request{DashboardID: "fulfillment-operations", PageID: "overview", Progress: func(value consumer.Progress) {
 		progress = append(progress, value)
@@ -339,13 +418,14 @@ c2,RJ
 		{Kind: consumer.KindVisual, ID: "delivery_days"},
 		{Kind: consumer.KindVisual, ID: "review_score"},
 	}}, func(result consumer.Result) bool {
-		visuals[result.Target.ID] = result.Visual
+		visuals[result.Target.ID] = result.Envelope
 		return true
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(visuals) != 3 || len(visuals["total_orders"].Data) == 0 {
+	state, ok := visuals["total_orders"].DataState.Value.(*visualizationir.InlineVisualizationDataState)
+	if len(visuals) != 3 || !ok || len(state.Datasets) == 0 || len(state.Datasets[0].Rows) == 0 {
 		t.Fatalf("targeted visuals = %#v", visuals)
 	}
 	if len(recorder.queries) != 1 || len(recorder.queries[0].Measures) != 3 {
@@ -439,7 +519,7 @@ func TestServiceTableInteractiveCap(t *testing.T) {
 	recorder := &runtimeAuditRecorder{}
 	ctx := dataquery.WithAuditRecorder(context.Background(), recorder)
 	ctx = dataquery.WithMetadata(ctx, dataquery.Metadata{PrincipalID: "table_test"})
-	table, err := metrics.QueryTable(ctx, "executive-sales", dashboard.Filters{}, dashboard.TableRequest{Table: "orders_table", Block: "all", RequestSeq: 9})
+	table, err := metrics.queryTableForTest(ctx, "executive-sales", dashboard.Filters{}, dashboard.TableRequest{Table: "orders_table", Block: "all", RequestSeq: 9})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -458,11 +538,11 @@ func TestServiceTableInteractiveCap(t *testing.T) {
 	if got := len(table.Blocks["a"].Rows); got != dashboard.TableChunkSize {
 		t.Fatalf("initial block rows = %d, want %d", got, dashboard.TableChunkSize)
 	}
-	if _, ok := table.Blocks["b"]; ok {
-		t.Fatalf("initial table unexpectedly loaded block b: %#v", table.Blocks["b"])
+	if got := len(table.Blocks["b"].Rows); got != dashboard.TableChunkSize {
+		t.Fatalf("initial block b rows = %d, want %d", got, dashboard.TableChunkSize)
 	}
-	if _, ok := table.Blocks["c"]; ok {
-		t.Fatalf("initial table unexpectedly loaded block c: %#v", table.Blocks["c"])
+	if got := len(table.Blocks["c"].Rows); got != dashboard.TableChunkSize {
+		t.Fatalf("initial block c rows = %d, want %d", got, dashboard.TableChunkSize)
 	}
 	if len(recorder.queries) != 2 {
 		t.Fatalf("initial table data queries = %d, want rows plus count: %#v", len(recorder.queries), recorder.queries)
@@ -482,7 +562,7 @@ func TestServiceTableInteractiveCap(t *testing.T) {
 
 	recorder.queries = nil
 	recorder.results = nil
-	next, err := metrics.QueryTable(ctx, "executive-sales", dashboard.Filters{}, dashboard.TableRequest{Table: "orders_table", Block: "b", Start: dashboard.TableChunkSize, Count: dashboard.TableChunkSize, RequestSeq: 10})
+	next, err := metrics.queryTableForTest(ctx, "executive-sales", dashboard.Filters{}, dashboard.TableRequest{Table: "orders_table", Block: "b", Start: dashboard.TableChunkSize, Count: dashboard.TableChunkSize, RequestSeq: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -499,7 +579,41 @@ func TestServiceTableInteractiveCap(t *testing.T) {
 		t.Fatalf("next block queries = %#v, want independent rows and count", recorder.queries)
 	}
 
-	overshoot, err := metrics.queries.tables.queryTableRowsPage(ctx, "executive-sales", "", dashboard.Filters{}, dashboard.TableRequest{
+	definition, ok := metrics.VisualizationDefinition("executive-sales", "orders_table")
+	if !ok {
+		t.Fatal("compiled orders table definition is missing")
+	}
+	window, err := metrics.QueryVisualizationWindow(ctx, "executive-sales", "overview", dashboard.Filters{}, visualizationir.VisualizationWindowRequest{
+		VisualID: "orders_table", SpecRevision: definition.SpecRevision, DataRevision: 4,
+		BlockID: "b", Start: dashboard.TableChunkSize, Limit: dashboard.TableChunkSize, RequestSeq: 11,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	windowState, ok := window.DataState.Value.(*visualizationir.WindowedVisualizationDataState)
+	if !ok || window.DataRevision != 4 || len(windowState.Blocks["b"].Rows) != dashboard.TableChunkSize {
+		t.Fatalf("canonical visualization window = %#v", window)
+	}
+	if _, err := metrics.QueryVisualizationWindow(ctx, "executive-sales", "overview", dashboard.Filters{}, visualizationir.VisualizationWindowRequest{
+		VisualID: "orders_table", SpecRevision: "sha256:stale", BlockID: "a", Limit: dashboard.TableChunkSize,
+	}); err == nil {
+		t.Fatal("stale visualization specification revision was accepted")
+	}
+
+	jump, err := metrics.queries.visualizations.queryTableRowsPage(ctx, "executive-sales", "", dashboard.Filters{}, dashboard.TableRequest{
+		Table: "orders_table", Block: "all", Start: 5_000, Count: dashboard.TableChunkSize, RequestSeq: 12, ResetVersion: 3,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for id, wantStart := range map[string]int{"a": 4_950, "b": 5_000, "c": 5_050} {
+		block := jump.Blocks[id]
+		if block.Start != wantStart || len(block.Rows) != dashboard.TableChunkSize || block.RequestSeq != 12 || block.ResetVersion != 3 {
+			t.Fatalf("jump block %s = %#v, want start %d with a complete chunk", id, block, wantStart)
+		}
+	}
+
+	overshoot, err := metrics.queries.visualizations.queryTableRowsPage(ctx, "executive-sales", "", dashboard.Filters{}, dashboard.TableRequest{
 		Table: "orders_table", Block: "b", Start: rows + dashboard.TableChunkSize, Count: dashboard.TableChunkSize, RequestSeq: 11,
 	})
 	if err != nil {
@@ -565,40 +679,41 @@ relogios_presentes,watches_gifts
 		t.Fatalf("unexpected status error: %s", patch.Status.Error)
 	}
 	assertVisualKeys(t, patch, overviewVisualKeys())
-	if got := datumInt(patch.Visuals["total_orders"].Data[0], "value"); got != 1 {
+	if got := datumInt(envelopeRows(t, patch.Visuals["total_orders"])[0], "value"); got != 1 {
 		t.Fatalf("orders KPI value = %d, want 1", got)
 	}
-	if got := patch.Visuals["total_orders"].Kind; got != "kpi" {
+	if got := specKind(t, patch.Visuals["total_orders"]); got != "kpi" {
 		t.Fatalf("orders KPI kind = %q, want kpi", got)
 	}
-	if got := patch.Visuals["total_orders"].Type; got != "kpi" {
-		t.Fatalf("orders KPI type = %q, want kpi", got)
+	if _, ok := patch.Visuals["total_orders"].Spec.Value.(*visualizationir.KPIVisualizationSpec); !ok {
+		t.Fatalf("orders KPI spec = %T, want KPI", patch.Visuals["total_orders"].Spec.Value)
 	}
-	if got := patch.Visuals["total_orders"].Title; got != "Orders" {
+	if got := specBase(t, patch.Visuals["total_orders"]).Title; got != "Orders" {
 		t.Fatalf("orders KPI title = %q, want Orders", got)
 	}
-	if len(patch.Visuals["revenue_by_month"].Data) != 1 {
-		t.Fatalf("revenue points = %d, want 1", len(patch.Visuals["revenue_by_month"].Data))
+	if len(envelopeRows(t, patch.Visuals["revenue_by_month"])) != 1 {
+		t.Fatalf("revenue points = %d, want 1", len(envelopeRows(t, patch.Visuals["revenue_by_month"])))
 	}
-	if got := patch.Visuals["revenue_by_month"].Type; got != "area" {
+	revenueSpec, ok := patch.Visuals["revenue_by_month"].Spec.Value.(*visualizationir.CartesianVisualizationSpec)
+	if !ok {
+		t.Fatalf("revenue chart spec = %T, want cartesian", patch.Visuals["revenue_by_month"].Spec.Value)
+	}
+	if got := revenueSpec.Mark; got != visualizationir.VisualizationCartesianMarkArea {
 		t.Fatalf("revenue chart type = %q, want area", got)
 	}
-	if got := patch.Visuals["revenue_by_month"].Version; got != 3 {
+	if got := patch.Visuals["revenue_by_month"].SchemaVersion; got != visualizationir.CurrentSchemaVersion {
 		t.Fatalf("revenue chart version = %d, want 3", got)
 	}
-	if got := patch.Visuals["revenue_by_month"].Kind; got != "chart" {
-		t.Fatalf("revenue chart kind = %q, want chart", got)
+	if got := specKind(t, patch.Visuals["revenue_by_month"]); got != "cartesian" {
+		t.Fatalf("revenue chart kind = %q, want cartesian", got)
 	}
-	if got := patch.Visuals["revenue_by_month"].Shape; got != "category_value" {
-		t.Fatalf("revenue chart shape = %q, want category_value", got)
-	}
-	if got := patch.Visuals["revenue_by_month"].Renderer; got != "echarts" {
+	if got := patch.Visuals["revenue_by_month"].RendererID; got != "echarts" {
 		t.Fatalf("revenue chart renderer = %q, want echarts", got)
 	}
-	if got := patch.Visuals["revenue_by_month"].Measures[0]; got != "revenue" {
-		t.Fatalf("revenue chart measure = %q, want revenue", got)
+	if got := revenueSpec.Y[0].Field; got != "value" {
+		t.Fatalf("revenue chart encoded value field = %q, want value", got)
 	}
-	if got := datumString(patch.Visuals["category_revenue"].Data[0], "label"); got != "health_beauty" {
+	if got := datumString(envelopeRows(t, patch.Visuals["category_revenue"])[0], "label"); got != "health_beauty" {
 		t.Fatalf("top category = %q, want health_beauty", got)
 	}
 	if got := len(patch.FilterOptions["state"]); got != 2 {
@@ -632,43 +747,43 @@ relogios_presentes,watches_gifts
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := datumInt(selectedPatch.Visuals["total_orders"].Data[0], "value"); got != 2 {
+	if got := datumInt(envelopeRows(t, selectedPatch.Visuals["total_orders"])[0], "value"); got != 2 {
 		t.Fatalf("selected orders KPI value = %d, want 2", got)
 	}
-	if len(selectedPatch.Visuals["orders"].Data) != 2 {
-		t.Fatalf("orders chart points without explicit self-target = %d, want 2", len(selectedPatch.Visuals["orders"].Data))
+	if len(envelopeRows(t, selectedPatch.Visuals["orders"])) != 2 {
+		t.Fatalf("orders chart points without explicit self-target = %d, want 2", len(envelopeRows(t, selectedPatch.Visuals["orders"])))
 	}
-	if !pointSelected(selectedPatch.Visuals["orders"].Data, "delivered") {
-		t.Fatalf("orders chart did not mark delivered as selected: %#v", selectedPatch.Visuals["orders"].Data)
+	if !pointSelected(envelopeRows(t, selectedPatch.Visuals["orders"]), "delivered") {
+		t.Fatalf("orders chart did not mark delivered as selected: %#v", envelopeRows(t, selectedPatch.Visuals["orders"]))
 	}
-	if got := selectedEntryValue(selectedPatch.Visuals["orders"].Selection, "orders.status"); got != "delivered" {
+	if got := selectedEnvelopeEntryValue(selectedPatch.Visuals["orders"].Selection, "orders.status"); got != "delivered" {
 		t.Fatalf("orders chart selection entry = %q, want delivered: %#v", got, selectedPatch.Visuals["orders"].Selection)
 	}
-	if got := datumString(selectedPatch.Visuals["categories"].Data[0], "label"); got != "health_beauty" {
+	if got := datumString(envelopeRows(t, selectedPatch.Visuals["categories"])[0], "label"); got != "health_beauty" {
 		t.Fatalf("category chart under status selection = %q, want health_beauty", got)
 	}
-	if got := datumString(selectedPatch.Visuals["revenue"].Data[0], "series"); got != "" {
+	if got := datumString(envelopeRows(t, selectedPatch.Visuals["revenue"])[0], "series"); got != "" {
 		t.Fatalf("single-series chart row series = %q, want empty", got)
 	}
 
 	report := metrics.reports.workspace.Dashboards["executive-sales"]
-	ordersVisual := report.Visuals["orders"]
-	ordersVisual.Interaction.PointSelection.Targets = append(ordersVisual.Interaction.PointSelection.Targets, "orders")
-	report.Visuals["orders"] = ordersVisual
+	ordersVisual := report.Visualizations["orders"]
+	setCompiledInteractionTarget(&ordersVisual.Spec, "orders", true)
+	report.Visualizations["orders"] = ordersVisual
 	metrics.reports.workspace.Dashboards["executive-sales"] = report
 	selfTargetPatch, err := metrics.QueryDashboardPage(context.Background(), "executive-sales", "overview", selectedFilters)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(selfTargetPatch.Visuals["orders"].Data) != 1 {
-		t.Fatalf("orders chart points with explicit self-target = %d, want 1", len(selfTargetPatch.Visuals["orders"].Data))
+	if len(envelopeRows(t, selfTargetPatch.Visuals["orders"])) != 1 {
+		t.Fatalf("orders chart points with explicit self-target = %d, want 1", len(envelopeRows(t, selfTargetPatch.Visuals["orders"])))
 	}
-	if !pointSelected(selfTargetPatch.Visuals["orders"].Data, "delivered") {
-		t.Fatalf("self-targeted orders chart did not mark delivered as selected: %#v", selfTargetPatch.Visuals["orders"].Data)
+	if !pointSelected(envelopeRows(t, selfTargetPatch.Visuals["orders"]), "delivered") {
+		t.Fatalf("self-targeted orders chart did not mark delivered as selected: %#v", envelopeRows(t, selfTargetPatch.Visuals["orders"]))
 	}
 	report = metrics.reports.workspace.Dashboards["executive-sales"]
-	ordersVisual.Interaction.PointSelection.Targets = removeString(ordersVisual.Interaction.PointSelection.Targets, "orders")
-	report.Visuals["orders"] = ordersVisual
+	setCompiledInteractionTarget(&ordersVisual.Spec, "orders", false)
+	report.Visualizations["orders"] = ordersVisual
 	metrics.reports.workspace.Dashboards["executive-sales"] = report
 
 	columnPatch, err := metrics.QueryDashboardPage(context.Background(), "executive-sales", "chart-column", selectedFilters)
@@ -676,17 +791,18 @@ relogios_presentes,watches_gifts
 		t.Fatal(err)
 	}
 	assertVisualKeys(t, columnPatch, []string{"orders_by_month_column", "orders_by_month_status", "orders_by_month_status_grouped"})
-	if got := columnPatch.Visuals["orders_by_month_status"].Shape; got != "category_series_value" {
-		t.Fatalf("multi-series chart shape = %q, want category_series_value", got)
+	columnSpec, ok := columnPatch.Visuals["orders_by_month_status"].Spec.Value.(*visualizationir.CartesianVisualizationSpec)
+	if !ok || columnSpec.Series == nil {
+		t.Fatalf("multi-series chart spec = %#v, want cartesian series", columnPatch.Visuals["orders_by_month_status"].Spec.Value)
 	}
-	if got := columnPatch.Visuals["orders_by_month_status"].Options["stacked"]; got != true {
+	if got := columnSpec.Presentation.Stacked; !got {
 		t.Fatalf("multi-series chart stacked option = %v, want true", got)
 	}
-	if got := datumString(columnPatch.Visuals["orders_by_month_status"].Data[0], "series"); got == "" {
+	if got := datumString(envelopeRows(t, columnPatch.Visuals["orders_by_month_status"])[0], "series"); got == "" {
 		t.Fatal("multi-series chart row series is empty")
 	}
-	if len(columnPatch.Visuals["orders_by_month_status"].Data) != 2 {
-		t.Fatalf("non-target multi-series chart points under status selection = %d, want 2", len(columnPatch.Visuals["orders_by_month_status"].Data))
+	if len(envelopeRows(t, columnPatch.Visuals["orders_by_month_status"])) != 2 {
+		t.Fatalf("non-target multi-series chart points under status selection = %d, want 2", len(envelopeRows(t, columnPatch.Visuals["orders_by_month_status"])))
 	}
 
 	boxplotPatch, err := metrics.QueryDashboardPage(context.Background(), "executive-sales", "chart-boxplot", dashboard.Filters{})
@@ -694,7 +810,7 @@ relogios_presentes,watches_gifts
 		t.Fatal(err)
 	}
 	assertVisualKeys(t, boxplotPatch, []string{"delivery_distribution", "review_distribution", "revenue_distribution"})
-	if len(boxplotPatch.Visuals["revenue_distribution"].Data) == 0 {
+	if len(envelopeRows(t, boxplotPatch.Visuals["revenue_distribution"])) == 0 {
 		t.Fatal("revenue distribution payload is empty")
 	}
 
@@ -745,7 +861,7 @@ relogios_presentes,watches_gifts
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(candlestickPatch.Visuals["revenue_candlestick"].Data) == 0 {
+	if len(envelopeRows(t, candlestickPatch.Visuals["revenue_candlestick"])) == 0 {
 		t.Fatal("revenue candlestick payload is empty")
 	}
 
@@ -754,11 +870,11 @@ relogios_presentes,watches_gifts
 		t.Fatal(err)
 	}
 	assertVisualKeys(t, comboPatch, []string{"review_delivery_combo", "revenue_orders_combo", "revenue_orders_dual_axis_combo"})
-	if got := comboPatch.Visuals["revenue_orders_combo"].Shape; got != "category_multi_measure" {
-		t.Fatalf("combo chart shape = %q, want category_multi_measure", got)
+	if comboSpec, ok := comboPatch.Visuals["revenue_orders_combo"].Spec.Value.(*visualizationir.CartesianVisualizationSpec); !ok || len(comboSpec.Y) != 2 {
+		t.Fatalf("combo chart spec = %#v, want two measures", comboPatch.Visuals["revenue_orders_combo"].Spec.Value)
 	}
-	if !hasDatumValue(comboPatch.Visuals["revenue_orders_combo"].Data, "series", "Revenue") || !hasDatumValue(comboPatch.Visuals["revenue_orders_combo"].Data, "series", "Orders") {
-		t.Fatalf("combo chart rows missing expected measure series: %#v", comboPatch.Visuals["revenue_orders_combo"].Data)
+	if !hasDatumValue(envelopeRows(t, comboPatch.Visuals["revenue_orders_combo"]), "series", "Revenue") || !hasDatumValue(envelopeRows(t, comboPatch.Visuals["revenue_orders_combo"]), "series", "Orders") {
+		t.Fatalf("combo chart rows missing expected measure series: %#v", envelopeRows(t, comboPatch.Visuals["revenue_orders_combo"]))
 	}
 
 	waterfallPatch, err := metrics.QueryDashboardPage(context.Background(), "executive-sales", "chart-waterfall", selectedFilters)
@@ -766,11 +882,11 @@ relogios_presentes,watches_gifts
 		t.Fatal(err)
 	}
 	assertVisualKeys(t, waterfallPatch, []string{"orders_waterfall", "revenue_waterfall", "revenue_waterfall_labeled"})
-	if got := waterfallPatch.Visuals["revenue_waterfall"].Shape; got != "category_delta" {
-		t.Fatalf("waterfall chart shape = %q, want category_delta", got)
+	if got := cartesianMark(t, waterfallPatch.Visuals["revenue_waterfall"]); got != visualizationir.VisualizationCartesianMarkWaterfall {
+		t.Fatalf("waterfall chart mark = %q, want waterfall", got)
 	}
-	if _, ok := waterfallPatch.Visuals["revenue_waterfall"].Data[0]["start"]; !ok {
-		t.Fatalf("waterfall row missing start/end: %#v", waterfallPatch.Visuals["revenue_waterfall"].Data[0])
+	if _, ok := envelopeRows(t, waterfallPatch.Visuals["revenue_waterfall"])[0]["start"]; !ok {
+		t.Fatalf("waterfall row missing start/end: %#v", envelopeRows(t, waterfallPatch.Visuals["revenue_waterfall"])[0])
 	}
 
 	histogramPatch, err := metrics.QueryDashboardPage(context.Background(), "executive-sales", "chart-histogram", selectedFilters)
@@ -778,11 +894,11 @@ relogios_presentes,watches_gifts
 		t.Fatal(err)
 	}
 	assertVisualKeys(t, histogramPatch, []string{"delivery_histogram", "review_histogram", "revenue_histogram"})
-	if got := histogramPatch.Visuals["delivery_histogram"].Shape; got != "binned_measure" {
-		t.Fatalf("histogram chart shape = %q, want binned_measure", got)
+	if got := cartesianMark(t, histogramPatch.Visuals["delivery_histogram"]); got != visualizationir.VisualizationCartesianMarkHistogram {
+		t.Fatalf("histogram chart mark = %q, want histogram", got)
 	}
-	if _, ok := histogramPatch.Visuals["delivery_histogram"].Data[0]["binStart"]; !ok {
-		t.Fatalf("histogram row missing bin metadata: %#v", histogramPatch.Visuals["delivery_histogram"].Data[0])
+	if _, ok := envelopeRows(t, histogramPatch.Visuals["delivery_histogram"])[0]["binStart"]; !ok {
+		t.Fatalf("histogram row missing bin metadata: %#v", envelopeRows(t, histogramPatch.Visuals["delivery_histogram"])[0])
 	}
 
 	mapPatch, err := metrics.QueryDashboardPage(context.Background(), "executive-sales", "chart-map", selectedFilters)
@@ -790,11 +906,11 @@ relogios_presentes,watches_gifts
 		t.Fatal(err)
 	}
 	assertVisualKeys(t, mapPatch, []string{"state_order_map", "state_revenue_map", "state_revenue_map_labeled"})
-	if got := mapPatch.Visuals["state_order_map"].Shape; got != "geo" {
-		t.Fatalf("map chart shape = %q, want geo", got)
+	if got := specKind(t, mapPatch.Visuals["state_order_map"]); got != "geographic" {
+		t.Fatalf("map chart kind = %q, want geographic", got)
 	}
-	if !hasDatumValue(mapPatch.Visuals["state_order_map"].Data, "name", "SP") {
-		t.Fatalf("map chart rows missing SP: %#v", mapPatch.Visuals["state_order_map"].Data)
+	if !hasDatumValue(envelopeRows(t, mapPatch.Visuals["state_order_map"]), "name", "SP") {
+		t.Fatalf("map chart rows missing SP: %#v", envelopeRows(t, mapPatch.Visuals["state_order_map"]))
 	}
 
 	graphPatch, err := metrics.QueryDashboardPage(context.Background(), "executive-sales", "chart-graph", selectedFilters)
@@ -802,11 +918,12 @@ relogios_presentes,watches_gifts
 		t.Fatal(err)
 	}
 	assertVisualKeys(t, graphPatch, []string{"category_status_graph", "category_status_graph_circular", "status_delivery_graph"})
-	if got := graphPatch.Visuals["status_delivery_graph"].Type; got != "graph" {
-		t.Fatalf("graph visual type = %q, want graph", got)
+	graphSpec, ok := graphPatch.Visuals["status_delivery_graph"].Spec.Value.(*visualizationir.HierarchyVisualizationSpec)
+	if !ok || graphSpec.Mark != visualizationir.VisualizationHierarchyMarkGraph {
+		t.Fatalf("graph visual spec = %#v, want graph", graphPatch.Visuals["status_delivery_graph"].Spec.Value)
 	}
-	if !hasDatumValue(graphPatch.Visuals["status_delivery_graph"].Data, "source", "delivered") {
-		t.Fatalf("graph rows missing delivered source: %#v", graphPatch.Visuals["status_delivery_graph"].Data)
+	if !hasDatumValue(envelopeRows(t, graphPatch.Visuals["status_delivery_graph"]), "source", "delivered") {
+		t.Fatalf("graph rows missing delivered source: %#v", envelopeRows(t, graphPatch.Visuals["status_delivery_graph"]))
 	}
 
 	sunburstPatch, err := metrics.QueryDashboardPage(context.Background(), "executive-sales", "chart-sunburst", selectedFilters)
@@ -814,14 +931,15 @@ relogios_presentes,watches_gifts
 		t.Fatal(err)
 	}
 	assertVisualKeys(t, sunburstPatch, []string{"category_state_status_sunburst", "category_status_sunburst", "state_status_sunburst"})
-	if got := sunburstPatch.Visuals["category_status_sunburst"].Shape; got != "hierarchy" {
-		t.Fatalf("hierarchy chart shape = %q, want hierarchy", got)
+	sunburstSpec, ok := sunburstPatch.Visuals["category_status_sunburst"].Spec.Value.(*visualizationir.HierarchyVisualizationSpec)
+	if !ok || sunburstSpec.Mark != visualizationir.VisualizationHierarchyMarkSunburst {
+		t.Fatalf("hierarchy chart spec = %#v, want sunburst", sunburstPatch.Visuals["category_status_sunburst"].Spec.Value)
 	}
-	if !hasHierarchyPathValue(sunburstPatch.Visuals["category_status_sunburst"].Data, "health_beauty") {
-		t.Fatalf("hierarchy rows missing health_beauty path: %#v", sunburstPatch.Visuals["category_status_sunburst"].Data)
+	if !hasDatumValue(envelopeRows(t, sunburstPatch.Visuals["category_status_sunburst"]), "node", "health_beauty") {
+		t.Fatalf("hierarchy rows missing health_beauty node: %#v", envelopeRows(t, sunburstPatch.Visuals["category_status_sunburst"]))
 	}
 
-	table, err := metrics.QueryTable(context.Background(), "executive-sales", dashboard.Filters{}, dashboard.TableRequest{
+	table, err := metrics.queryTableForTest(context.Background(), "executive-sales", dashboard.Filters{}, dashboard.TableRequest{
 		Table:      "orders_table",
 		Block:      "a",
 		Start:      0,
@@ -854,7 +972,7 @@ relogios_presentes,watches_gifts
 		t.Fatalf("orders revenue format = %q, want currency", got)
 	}
 
-	conditionalTable, err := metrics.QueryTable(context.Background(), "executive-sales", dashboard.Filters{}, dashboard.TableRequest{
+	conditionalTable, err := metrics.queryTableForTest(context.Background(), "executive-sales", dashboard.Filters{}, dashboard.TableRequest{
 		Table: "orders_conditional",
 		Block: "all",
 		Count: 10,
@@ -872,7 +990,7 @@ relogios_presentes,watches_gifts
 		t.Fatalf("conditional table status column missing badge formatting: %#v", conditionalTable.Columns)
 	}
 
-	filteredTable, err := metrics.QueryTable(context.Background(), "executive-sales", dashboard.Filters{
+	filteredTable, err := metrics.queryTableForTest(context.Background(), "executive-sales", dashboard.Filters{
 		Selections: []dashboard.InteractionSelection{
 			interactionSelection("visual", "orders", "point_selection", "orders.status", "delivered"),
 		},
@@ -887,7 +1005,7 @@ relogios_presentes,watches_gifts
 		t.Fatalf("targeted table available rows = %d, want 1", filteredTable.AvailableRows)
 	}
 
-	andFilteredTable, err := metrics.QueryTable(context.Background(), "executive-sales", dashboard.Filters{
+	andFilteredTable, err := metrics.queryTableForTest(context.Background(), "executive-sales", dashboard.Filters{
 		Selections: []dashboard.InteractionSelection{
 			interactionSelection("visual", "orders", "point_selection", "orders.status", "delivered"),
 			interactionSelection("visual", "categories", "point_selection", "orders.category", "watches_gifts"),
@@ -903,7 +1021,7 @@ relogios_presentes,watches_gifts
 		t.Fatalf("all block request seq = %d, want 8", got)
 	}
 
-	selectedRowTable, err := metrics.QueryTable(context.Background(), "executive-sales", dashboard.Filters{
+	selectedRowTable, err := metrics.queryTableForTest(context.Background(), "executive-sales", dashboard.Filters{
 		Selections: []dashboard.InteractionSelection{
 			interactionSelection("visual", "orders_table", "row_selection", "orders.order_id", "o1"),
 		},
@@ -923,7 +1041,7 @@ relogios_presentes,watches_gifts
 			interactionSelection("visual", "orders_table", "row_selection", dashboard.UIRowSelectionField, "o1"),
 		},
 	}
-	uiOnlyRowTable, err := metrics.QueryTable(context.Background(), "executive-sales", uiOnlyRowSelection, dashboard.TableRequest{Table: "orders_table", Block: "all", Count: 10, RequestSeq: 11})
+	uiOnlyRowTable, err := metrics.queryTableForTest(context.Background(), "executive-sales", uiOnlyRowSelection, dashboard.TableRequest{Table: "orders_table", Block: "all", Count: 10, RequestSeq: 11})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -937,7 +1055,7 @@ relogios_presentes,watches_gifts
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := datumInt(uiOnlyRowPatch.Visuals["total_orders"].Data[0], "value"); got != 2 {
+	if got := datumInt(envelopeRows(t, uiOnlyRowPatch.Visuals["total_orders"])[0], "value"); got != 2 {
 		t.Fatalf("UI-only row selection KPI value = %d, want unfiltered value 2", got)
 	}
 
@@ -950,11 +1068,11 @@ relogios_presentes,watches_gifts
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := datumInt(multiRowPatch.Visuals["total_orders"].Data[0], "value"); got != 2 {
+	if got := datumInt(envelopeRows(t, multiRowPatch.Visuals["total_orders"])[0], "value"); got != 2 {
 		t.Fatalf("multi-row selected orders KPI value = %d, want 2", got)
 	}
-	if len(multiRowPatch.Visuals["orders"].Data) != 2 {
-		t.Fatalf("orders chart points under multi-row table selection = %d, want 2", len(multiRowPatch.Visuals["orders"].Data))
+	if len(envelopeRows(t, multiRowPatch.Visuals["orders"])) != 2 {
+		t.Fatalf("orders chart points under multi-row table selection = %d, want 2", len(envelopeRows(t, multiRowPatch.Visuals["orders"])))
 	}
 	andMultiRowPatch, err := metrics.QueryDashboardPage(context.Background(), "executive-sales", "overview", dashboard.Filters{
 		Controls: map[string]dashboard.FilterControl{
@@ -965,11 +1083,11 @@ relogios_presentes,watches_gifts
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := datumInt(andMultiRowPatch.Visuals["total_orders"].Data[0], "value"); got != 1 {
+	if got := datumInt(envelopeRows(t, andMultiRowPatch.Visuals["total_orders"])[0], "value"); got != 1 {
 		t.Fatalf("page filter AND multi-row selected orders KPI value = %d, want 1", got)
 	}
 
-	matrixTable, err := metrics.QueryTable(context.Background(), "executive-sales", dashboard.Filters{}, dashboard.TableRequest{
+	matrixTable, err := metrics.queryTableForTest(context.Background(), "executive-sales", dashboard.Filters{}, dashboard.TableRequest{
 		Table:      "state_status_matrix",
 		Block:      "all",
 		Count:      10,
@@ -998,7 +1116,7 @@ relogios_presentes,watches_gifts
 		t.Fatalf("matrix rows missing delivered order count values: %#v", matrixTable.Blocks["a"].Rows)
 	}
 
-	pivotTable, err := metrics.QueryTable(context.Background(), "executive-sales", dashboard.Filters{}, dashboard.TableRequest{
+	pivotTable, err := metrics.queryTableForTest(context.Background(), "executive-sales", dashboard.Filters{}, dashboard.TableRequest{
 		Table:      "category_status_pivot",
 		Block:      "all",
 		Count:      10,
@@ -1023,7 +1141,7 @@ relogios_presentes,watches_gifts
 		t.Fatalf("pivot rows missing delivered values: %#v", pivotTable.Blocks["a"].Rows)
 	}
 
-	formattedMatrix, err := metrics.QueryTable(context.Background(), "executive-sales", dashboard.Filters{}, dashboard.TableRequest{
+	formattedMatrix, err := metrics.queryTableForTest(context.Background(), "executive-sales", dashboard.Filters{}, dashboard.TableRequest{
 		Table: "state_status_matrix_formatted",
 		Block: "all",
 		Count: 10,
@@ -1039,7 +1157,7 @@ relogios_presentes,watches_gifts
 		t.Fatalf("formatted matrix revenue column missing data bar formatting: %#v", formattedMatrix.Columns)
 	}
 
-	heatPivot, err := metrics.QueryTable(context.Background(), "executive-sales", dashboard.Filters{}, dashboard.TableRequest{
+	heatPivot, err := metrics.queryTableForTest(context.Background(), "executive-sales", dashboard.Filters{}, dashboard.TableRequest{
 		Table: "category_status_pivot_heat",
 		Block: "all",
 		Count: 10,
@@ -1121,13 +1239,13 @@ relogios_presentes,watches_gifts
 	if patch.Status.Error != "" {
 		t.Fatalf("unexpected status error: %s", patch.Status.Error)
 	}
-	if got := categoryRevenue(patch.Visuals["category_revenue"].Data, "health_beauty"); got != 110 {
+	if got := categoryRevenue(envelopeRows(t, patch.Visuals["category_revenue"]), "health_beauty"); got != 110 {
 		t.Fatalf("health_beauty revenue = %v, want 110", got)
 	}
-	if got := categoryRevenue(patch.Visuals["category_revenue"].Data, "watches_gifts"); got != 220 {
+	if got := categoryRevenue(envelopeRows(t, patch.Visuals["category_revenue"]), "watches_gifts"); got != 220 {
 		t.Fatalf("watches_gifts revenue = %v, want 220", got)
 	}
-	if got := categoryRevenueTotal(patch.Visuals["category_revenue"].Data); got != 330 {
+	if got := categoryRevenueTotal(envelopeRows(t, patch.Visuals["category_revenue"])); got != 330 {
 		t.Fatalf("category revenue total = %v, want 330 without cross-matched tuples", got)
 	}
 
@@ -1229,7 +1347,7 @@ relogios_presentes,watches_gifts
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got := fmt.Sprint(datumInt(patch.Visuals["total_orders"].Data[0], "value")); got != tt.want {
+			if got := fmt.Sprint(datumInt(envelopeRows(t, patch.Visuals["total_orders"])[0], "value")); got != tt.want {
 				t.Fatalf("orders KPI value = %q, want %s", got, tt.want)
 			}
 		})
@@ -1308,6 +1426,67 @@ func exactTableRows(t *testing.T, table dashboard.Table) int {
 	return value
 }
 
+func (m *Service) queryTableForTest(ctx context.Context, dashboardID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
+	return m.visualizations.queryTablePage(ctx, dashboardID, "", filters, request, true)
+}
+
+func specBase(t *testing.T, envelope visualizationir.VisualizationEnvelope) visualizationir.VisualizationSpecBase {
+	t.Helper()
+	base, err := visualizationir.SpecificationBase(envelope.Spec)
+	if err != nil {
+		t.Fatalf("visualization %q spec: %v", envelope.VisualID, err)
+	}
+	return base
+}
+
+func specKind(t *testing.T, envelope visualizationir.VisualizationEnvelope) string {
+	t.Helper()
+	return specBase(t, envelope).Kind
+}
+
+func cartesianMark(t *testing.T, envelope visualizationir.VisualizationEnvelope) visualizationir.VisualizationCartesianMark {
+	t.Helper()
+	spec, ok := envelope.Spec.Value.(*visualizationir.CartesianVisualizationSpec)
+	if !ok {
+		t.Fatalf("visualization %q spec = %T, want cartesian", envelope.VisualID, envelope.Spec.Value)
+	}
+	return spec.Mark
+}
+
+func envelopeRows(t *testing.T, envelope visualizationir.VisualizationEnvelope) []dashboard.Datum {
+	t.Helper()
+	var columns []string
+	var rows [][]any
+	switch state := envelope.DataState.Value.(type) {
+	case *visualizationir.InlineVisualizationDataState:
+		if len(state.Datasets) != 1 {
+			t.Fatalf("visualization %q datasets = %d, want 1", envelope.VisualID, len(state.Datasets))
+		}
+		columns, rows = state.Datasets[0].Columns, state.Datasets[0].Rows
+	case *visualizationir.SpatialWindowedVisualizationDataState:
+		if state.Window == nil {
+			return nil
+		}
+		for _, field := range state.Schema.Fields {
+			columns = append(columns, field.ID)
+		}
+		rows = state.Window.Rows
+	default:
+		t.Fatalf("visualization %q data state = %T, want inline or spatial", envelope.VisualID, envelope.DataState.Value)
+	}
+	data := make([]dashboard.Datum, len(rows))
+	for rowIndex, row := range rows {
+		if len(row) != len(columns) {
+			t.Fatalf("visualization %q row %d width = %d, want %d", envelope.VisualID, rowIndex, len(row), len(columns))
+		}
+		data[rowIndex] = dashboard.Datum{}
+		for columnIndex, column := range columns {
+			data[rowIndex][column] = row[columnIndex]
+		}
+	}
+	return data
+}
+
 func categoryRevenue(data []dashboard.Datum, label string) float64 {
 	for _, row := range data {
 		if datumString(row, "label") == label {
@@ -1323,6 +1502,15 @@ func categoryRevenueTotal(data []dashboard.Datum) float64 {
 		total += datumFloat(row["value"])
 	}
 	return total
+}
+
+func selectedEnvelopeEntryValue(entries []visualizationir.VisualizationSelectionEntry, field string) string {
+	for _, entry := range entries {
+		if value, ok := entry.Datum.Identity[field]; ok {
+			return fmt.Sprint(value)
+		}
+	}
+	return ""
 }
 
 func selectedEntryValue(entries []dashboard.InteractionSelectionEntry, field string) string {

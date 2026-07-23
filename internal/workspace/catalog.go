@@ -2,7 +2,7 @@ package workspace
 
 import (
 	"github.com/Yacobolo/leapview/internal/analytics/model"
-	"github.com/Yacobolo/leapview/internal/dashboard/report"
+	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
 	"github.com/Yacobolo/leapview/internal/refreshpipeline"
 )
 
@@ -36,7 +36,7 @@ type CatalogDashboard struct {
 type Definition struct {
 	Catalog          Catalog
 	Models           map[string]*model.Model
-	Dashboards       map[string]*report.Dashboard
+	Dashboards       map[string]dashboarddefinition.Definition
 	Publications     map[string]DashboardPublication
 	Access           AccessPolicy
 	RefreshPipelines map[string]refreshpipeline.Definition

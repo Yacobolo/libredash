@@ -1,0 +1,86 @@
+import { expect, test } from 'bun:test'
+
+import type { VisualizationEnvelope } from '../../../../generated/visualization'
+import { tableSignal } from './tanstack'
+
+test('TanStack adapter derives semantic row interactions from the typed IR', () => {
+  const envelope = {
+    schemaVersion: 3, visualID: 'orders', rendererID: 'tanstack', specRevision: 'sha256:test', dataRevision: 3,
+    spec: {
+      kind: 'table', title: 'Orders',
+      datasets: [{ id: 'primary', fields: [
+        { id: 'order_id', role: 'identity', dataType: 'string', nullable: false, label: 'Order' },
+        { id: 'revenue', role: 'measure', dataType: 'decimal', nullable: false, label: 'Revenue' },
+      ] }],
+      dataBudget: { maxRows: 1000, requiredCompleteness: 'partial' }, accessibility: { title: 'Orders', description: 'Orders' },
+      interactions: [{ id: 'row_selection', kind: 'select', mode: 'multiple', requiresStableIdentity: true, targets: ['revenue'], mappings: [
+        { source: { dataset: 'primary', field: 'order_id' }, targetFieldID: 'orders.order_id', targetFactID: 'orders', label: { dataset: 'primary', field: 'order_id' } },
+      ] }],
+      columns: [
+        { field: { dataset: 'primary', field: 'order_id' }, label: 'Order', formatting: [] },
+        { field: { dataset: 'primary', field: 'revenue' }, label: 'Revenue', formatting: [{ kind: 'data_bar', minimum: 0, maximum: 100, color: 'accent' }] },
+      ],
+      presentation: { rowHeight: 34, striped: true, showHeader: true },
+    },
+    dataState: {
+      kind: 'windowed', specRevision: 'sha256:test', dataRevision: 3, generation: 1,
+      schema: { id: 'primary', fields: [
+        { id: 'order_id', role: 'identity', dataType: 'string', nullable: false, label: 'Order' },
+        { id: 'revenue', role: 'measure', dataType: 'decimal', nullable: false, label: 'Revenue' },
+      ] },
+      cardinality: { kind: 'exact', count: 1 }, availableRows: 1, rowCap: 1000, chunkSize: 50, resetVersion: 2,
+      sort: [{ field: { dataset: 'primary', field: 'order_id' }, direction: 'ascending' }],
+      blocks: { a: { id: 'a', start: 0, rows: [['o1', 42]], requestSeq: 4, resetVersion: 2, sort: [{ field: { dataset: 'primary', field: 'order_id' }, direction: 'ascending' }] } },
+    },
+    selection: [], status: { kind: 'ready' }, diagnostics: [],
+  } as VisualizationEnvelope
+
+  expect(tableSignal(envelope).interaction).toEqual({
+    kind: 'row_selection', toggle: true, targets: ['revenue'],
+    mappings: [{ field: 'orders.order_id', fact: 'orders', value: 'order_id', label: 'order_id' }],
+  })
+  expect(tableSignal(envelope).columns[1]?.formatting).toEqual([{ kind: 'data_bar', min: 0, max: 100, color: 'accent' }])
+})
+
+test('TanStack adapter leaves row interaction disabled when the IR declares none', () => {
+  const envelope = {
+    schemaVersion: 3, visualID: 'orders', rendererID: 'tanstack', specRevision: 'sha256:test', dataRevision: 1,
+    spec: {
+      kind: 'table', title: 'Orders', datasets: [{ id: 'primary', fields: [{ id: 'order_id', role: 'identity', dataType: 'string', nullable: false, label: 'Order' }] }],
+      dataBudget: { maxRows: 100, requiredCompleteness: 'complete' }, accessibility: { title: 'Orders', description: 'Orders' }, interactions: [],
+      columns: [{ field: { dataset: 'primary', field: 'order_id' }, label: 'Order', formatting: [] }], presentation: { rowHeight: 34, striped: true, showHeader: true },
+    },
+    dataState: { kind: 'inline', specRevision: 'sha256:test', dataRevision: 1, generation: 1, datasets: [{ id: 'primary', specRevision: 'sha256:test', dataRevision: 1, generation: 1, columns: ['order_id'], rows: [['o1']], completeness: 'complete' }] },
+    selection: [], status: { kind: 'ready' }, diagnostics: [],
+  } as VisualizationEnvelope
+
+  expect(tableSignal(envelope).interaction).toBeUndefined()
+})
+
+test('TanStack matrix adapter renders dynamic window schema columns with compiled formatting', () => {
+  const envelope = {
+    schemaVersion: 3, visualID: 'matrix', rendererID: 'tanstack', specRevision: 'sha256:matrix', dataRevision: 2,
+    spec: {
+      kind: 'matrix', title: 'Matrix', datasets: [{ id: 'primary', fields: [
+        { id: 'state', role: 'dimension', dataType: 'string', nullable: true, label: 'State' },
+        { id: 'revenue', role: 'measure', dataType: 'decimal', nullable: true, label: 'Revenue' },
+      ] }], dataBudget: { maxRows: 1000, requiredCompleteness: 'partial' }, accessibility: { title: 'Matrix', description: 'Matrix' }, interactions: [],
+      rows: [{ dataset: 'primary', field: 'state' }], columns: [], measures: [{ dataset: 'primary', field: 'revenue' }],
+      measureFormatting: { revenue: [{ kind: 'data_bar', minimum: 0, maximum: 100, color: 'accent' }] },
+      presentation: { rowHeight: 34, striped: true, showHeader: true },
+    },
+    dataState: {
+      kind: 'windowed', specRevision: 'sha256:matrix', dataRevision: 2, generation: 1,
+      schema: { id: 'primary', fields: [
+        { id: 'state', role: 'identity', dataType: 'string', nullable: true, label: 'State', grid: { formatting: [] } },
+        { id: 'delivered__revenue', role: 'measure', dataType: 'decimal', nullable: true, label: 'Delivered revenue', grid: { group: 'Delivered', measure: 'revenue', columnValue: 'delivered', formatting: [] } },
+      ] },
+      cardinality: { kind: 'exact', count: 1 }, availableRows: 1, rowCap: 1000, chunkSize: 50, resetVersion: 1,
+      sort: [{ field: { dataset: 'primary', field: 'state' }, direction: 'ascending' }],
+      blocks: { a: { id: 'a', start: 0, rows: [['SP', 42]], requestSeq: 1, resetVersion: 1, sort: [{ field: { dataset: 'primary', field: 'state' }, direction: 'ascending' }] } },
+    }, selection: [], status: { kind: 'ready' }, diagnostics: [],
+  } as VisualizationEnvelope
+  const table = tableSignal(envelope)
+  expect(table.columns.map((column) => column.key)).toEqual(['state', 'delivered__revenue'])
+  expect(table.columns[1]).toMatchObject({ group: 'Delivered', measure: 'revenue', columnValue: 'delivered', formatting: [{ kind: 'data_bar', min: 0, max: 100, color: 'accent' }] })
+})

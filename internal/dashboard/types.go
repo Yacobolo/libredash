@@ -5,14 +5,24 @@ import (
 	"fmt"
 	"math"
 	"time"
+
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 )
 
 type Signals struct {
-	Filters             Filters            `json:"filters"`
-	Runtime             Runtime            `json:"runtime"`
-	VisualWindowCommand TableRequest       `json:"visualWindowCommand"`
-	InteractionCommand  InteractionCommand `json:"interactionCommand"`
+	Filters                    Filters                    `json:"filters"`
+	Runtime                    Runtime                    `json:"runtime"`
+	VisualWindowCommand        VisualizationWindowRequest `json:"visualWindowCommand"`
+	VisualSpatialWindowCommand SpatialWindowRequest       `json:"visualSpatialWindowCommand"`
+	InteractionCommand         InteractionCommand         `json:"interactionCommand"`
+	SpatialInteractionCommand  SpatialSelectionCommand    `json:"spatialInteractionCommand"`
 }
+
+// Browser command contracts are owned by the visualization IR. These aliases
+// keep dashboard orchestration readable without creating a second wire model.
+type VisualizationWindowRequest = visualizationir.VisualizationWindowRequest
+type SpatialBounds = visualizationir.VisualizationSpatialBounds
+type SpatialWindowRequest = visualizationir.VisualizationSpatialWindowRequest
 
 type Catalog struct {
 	Workspace  CatalogWorkspace   `json:"workspace"`
@@ -139,7 +149,6 @@ type PageVisual struct {
 	ID          string        `json:"id" yaml:"id"`
 	Kind        string        `json:"kind" yaml:"kind"`
 	Visual      string        `json:"visual,omitempty" yaml:"visual"`
-	Table       string        `json:"table,omitempty" yaml:"table"`
 	Filter      string        `json:"filter,omitempty" yaml:"filter"`
 	Description string        `json:"description,omitempty" yaml:"description"`
 	Placement   PagePlacement `json:"placement" yaml:"placement"`
@@ -154,8 +163,9 @@ type PageVisual struct {
 }
 
 type Filters struct {
-	Controls   map[string]FilterControl `json:"controls"`
-	Selections []InteractionSelection   `json:"selections"`
+	Controls          map[string]FilterControl      `json:"controls"`
+	Selections        []InteractionSelection        `json:"selections"`
+	SpatialSelections []SpatialInteractionSelection `json:"spatialSelections"`
 }
 
 type FilterControl struct {
@@ -183,7 +193,28 @@ func (f Filters) WithDefaults() Filters {
 	if f.Selections == nil {
 		f.Selections = []InteractionSelection{}
 	}
+	if f.SpatialSelections == nil {
+		f.SpatialSelections = []SpatialInteractionSelection{}
+	}
 	return f
+}
+
+type SpatialSelectionCommand struct {
+	VisualID      string                                                `json:"visualID"`
+	SpecRevision  string                                                `json:"specRevision"`
+	DataRevision  int64                                                 `json:"dataRevision"`
+	InteractionID string                                                `json:"interactionID"`
+	Action        string                                                `json:"action"`
+	Gesture       visualizationir.VisualizationSpatialSelectionGesture  `json:"gesture"`
+	Geometry      visualizationir.VisualizationSpatialSelectionGeometry `json:"geometry"`
+}
+
+type SpatialInteractionSelection struct {
+	VisualID      string                                                `json:"visualID"`
+	InteractionID string                                                `json:"interactionID"`
+	Gesture       visualizationir.VisualizationSpatialSelectionGesture  `json:"gesture"`
+	Geometry      visualizationir.VisualizationSpatialSelectionGeometry `json:"geometry"`
+	Order         int                                                   `json:"order"`
 }
 
 type InteractionSelection struct {
@@ -442,6 +473,39 @@ func (f Filters) ApplyInteraction(command InteractionCommand) Filters {
 	return f
 }
 
+// ApplySpatialInteraction stores one canonical geometry per source visual and
+// interaction. Replacing a spatial selection moves it to the end of the stable
+// selection order; clearing it cannot affect selections owned by other maps.
+func (f Filters) ApplySpatialInteraction(command SpatialSelectionCommand) Filters {
+	f = f.WithDefaults()
+	if command.VisualID == "" || command.InteractionID == "" || (command.Action != "set" && command.Action != "clear") {
+		return f
+	}
+
+	next := make([]SpatialInteractionSelection, 0, len(f.SpatialSelections)+1)
+	maxOrder := 0
+	for _, selection := range f.SpatialSelections {
+		if selection.Order > maxOrder {
+			maxOrder = selection.Order
+		}
+		if selection.VisualID == command.VisualID && selection.InteractionID == command.InteractionID {
+			continue
+		}
+		next = append(next, selection)
+	}
+	if command.Action == "set" && command.Geometry.Value != nil {
+		next = append(next, SpatialInteractionSelection{
+			VisualID:      command.VisualID,
+			InteractionID: command.InteractionID,
+			Gesture:       command.Gesture,
+			Geometry:      command.Geometry,
+			Order:         maxOrder + 1,
+		})
+	}
+	f.SpatialSelections = next
+	return f
+}
+
 func updateSelectionEntries(existing []InteractionSelectionEntry, incoming []InteractionCommandMapping, toggle bool) []InteractionSelectionEntry {
 	entry := interactionSelectionEntry(incoming)
 	if len(entry.Mappings) == 0 {
@@ -588,10 +652,10 @@ func joinValues(values []string) string {
 }
 
 type Patch struct {
-	Filters       Filters                   `json:"filters"`
-	FilterOptions map[string][]FilterOption `json:"filterOptions,omitempty"`
-	Status        Status                    `json:"status"`
-	Visuals       map[string]Visual         `json:"visuals"`
+	Filters       Filters                                          `json:"filters"`
+	FilterOptions map[string][]FilterOption                        `json:"filterOptions,omitempty"`
+	Status        Status                                           `json:"status"`
+	Visuals       map[string]visualizationir.VisualizationEnvelope `json:"visuals"`
 }
 
 type FilterOption struct {
@@ -619,27 +683,6 @@ func NormalizeProgressPercent(percent *float64, loading bool) *float64 {
 	}
 	value := math.Max(0, math.Min(100, *percent))
 	return &value
-}
-
-type Visual struct {
-	Version         int                         `json:"version"`
-	ID              string                      `json:"id"`
-	Kind            string                      `json:"-"`
-	Shape           string                      `json:"shape"`
-	Renderer        string                      `json:"renderer"`
-	Type            string                      `json:"type"`
-	Title           string                      `json:"title"`
-	Unit            string                      `json:"unit"`
-	Format          string                      `json:"format,omitempty"`
-	Interaction     InteractionConfig           `json:"interaction"`
-	Dimensions      []string                    `json:"dimensions"`
-	Measure         string                      `json:"measure"`
-	Measures        []string                    `json:"measures"`
-	Series          []string                    `json:"series"`
-	Options         map[string]any              `json:"options"`
-	RendererOptions map[string]map[string]any   `json:"rendererOptions"`
-	Selection       []InteractionSelectionEntry `json:"selection"`
-	Data            []Datum                     `json:"data"`
 }
 
 type Datum map[string]any
@@ -923,27 +966,6 @@ func EmptyPatch(filters Filters, err error) Patch {
 			SetupRequired:   err != nil,
 			ProgressPercent: NormalizeProgressPercent(nil, false),
 		},
-		Visuals: map[string]Visual{},
-	}
-}
-
-func emptyChart(id, chartType, title, unit, dimension, measure string) Visual {
-	return Visual{
-		Version:         3,
-		ID:              id,
-		Kind:            "chart",
-		Shape:           "category_value",
-		Renderer:        "echarts",
-		Type:            chartType,
-		Title:           title,
-		Unit:            unit,
-		Dimensions:      []string{dimension},
-		Measure:         measure,
-		Measures:        []string{measure},
-		Series:          []string{},
-		Options:         map[string]any{},
-		RendererOptions: map[string]map[string]any{},
-		Selection:       []InteractionSelectionEntry{},
-		Data:            []Datum{},
+		Visuals: map[string]visualizationir.VisualizationEnvelope{},
 	}
 }

@@ -1,18 +1,11 @@
 package report
 
 func (targets FilterTargets) IsEmpty() bool {
-	return len(targets.Visuals) == 0 && len(targets.Tables) == 0
+	return len(targets.Visuals) == 0
 }
 
 func (targets FilterTargets) Contains(kind, id string) bool {
-	switch kind {
-	case "visual":
-		return containsString(targets.Visuals, id)
-	case "table":
-		return containsString(targets.Tables, id)
-	default:
-		return false
-	}
+	return kind == "visual" && containsString(targets.Visuals, id)
 }
 
 func containsString(values []string, value string) bool {

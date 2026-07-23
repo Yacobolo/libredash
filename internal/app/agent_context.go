@@ -12,8 +12,9 @@ import (
 	"github.com/Yacobolo/leapview/internal/access"
 	"github.com/Yacobolo/leapview/internal/agent"
 	"github.com/Yacobolo/leapview/internal/dashboard"
-	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 	productsearch "github.com/Yacobolo/leapview/internal/search"
+	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 )
 
 func (s *Server) resolveAgentTurnContext(r *http.Request, scope agent.Scope, candidate agent.TurnContext) (agent.TurnContext, error) {
@@ -139,7 +140,7 @@ func (s *Server) resolveDashboardTurnContext(ctx context.Context, scope agent.Sc
 		References: resolveDashboardTurnReferences(candidate.References, dashboardTurnReferenceContext{
 			Workspace:   agent.TurnReferenceWorkspace{ID: workspaceID, Name: workspaceName},
 			DashboardID: report.ID, DashboardTitle: report.Title, Page: page,
-		}, report.Visuals, report.Tables),
+		}, report.Visualizations),
 	}, nil
 }
 
@@ -195,7 +196,7 @@ type dashboardTurnReferenceContext struct {
 	Page           dashboard.Page
 }
 
-func resolveDashboardTurnReferences(candidates []agent.TurnReference, context dashboardTurnReferenceContext, visuals map[string]reportdef.Visual, tables map[string]reportdef.TableVisual) []agent.TurnReference {
+func resolveDashboardTurnReferences(candidates []agent.TurnReference, context dashboardTurnReferenceContext, visualizations map[string]visualizationdefinition.Definition) []agent.TurnReference {
 	resolved := make([]agent.TurnReference, 0, min(len(candidates), agent.MaxTurnReferences))
 	seen := map[string]struct{}{}
 	href := "/workspaces/" + url.PathEscape(context.Workspace.ID) + "/dashboards/" + url.PathEscape(context.DashboardID) + "/pages/" + url.PathEscape(context.Page.ID)
@@ -218,10 +219,10 @@ func resolveDashboardTurnReferences(candidates []agent.TurnReference, context da
 			continue
 		}
 		for _, component := range context.Page.Visuals {
-			if component.Visual != visualID && component.Table != visualID {
+			if component.Visual != visualID {
 				continue
 			}
-			title, visualType, ok := resolvedVisualMetadata(component, visualID, visuals, tables)
+			title, visualType, ok := resolvedVisualMetadata(component, visualID, visualizations)
 			if !ok {
 				break
 			}
@@ -247,42 +248,35 @@ func resolveDashboardTurnReferences(candidates []agent.TurnReference, context da
 	return resolved
 }
 
-func resolvedVisualMetadata(component dashboard.PageVisual, visualID string, visuals map[string]reportdef.Visual, tables map[string]reportdef.TableVisual) (string, string, bool) {
-	if component.Visual == visualID {
-		visual, ok := visuals[visualID]
-		if !ok {
-			return "", "", false
-		}
-		title := strings.TrimSpace(component.Title)
-		if title == "" {
-			title = strings.TrimSpace(visual.Title)
-		}
-		if title == "" {
-			title = visualID
-		}
-		visualType := strings.TrimSpace(visual.Type)
-		if visualType == "" {
-			visualType = strings.TrimSpace(visual.Kind)
-		}
-		return title, visualType, true
+func resolvedVisualMetadata(component dashboard.PageVisual, visualID string, visualizations map[string]visualizationdefinition.Definition) (string, string, bool) {
+	if component.Visual != visualID {
+		return "", "", false
 	}
-	if component.Table == visualID {
-		table, ok := tables[visualID]
-		if !ok {
-			return "", "", false
-		}
-		title := strings.TrimSpace(component.Title)
-		if title == "" {
-			title = strings.TrimSpace(table.Title)
-		}
-		if title == "" {
-			title = visualID
-		}
-		visualType := strings.TrimSpace(table.Kind)
-		if visualType == "" {
-			visualType = "table"
-		}
-		return title, visualType, true
+	visual, ok := visualizations[visualID]
+	if !ok {
+		return "", "", false
 	}
-	return "", "", false
+	base, err := visualizationir.SpecificationBase(visual.Spec)
+	if err != nil {
+		return "", "", false
+	}
+	title := strings.TrimSpace(component.Title)
+	if title == "" {
+		title = strings.TrimSpace(base.Title)
+	}
+	if title == "" {
+		title = visualID
+	}
+	visualType := base.Kind
+	switch spec := visual.Spec.Value.(type) {
+	case *visualizationir.CartesianVisualizationSpec:
+		visualType = string(spec.Mark)
+	case *visualizationir.ProportionalVisualizationSpec:
+		visualType = string(spec.Mark)
+	case *visualizationir.HierarchyVisualizationSpec:
+		visualType = string(spec.Mark)
+	case *visualizationir.PolarVisualizationSpec:
+		visualType = string(spec.Mark)
+	}
+	return title, strings.TrimSpace(visualType), true
 }

@@ -15,11 +15,9 @@ visuals:
   delivery_histogram:
     title: Delivery days histogram
     description: Buckets order volume by delivery duration.
-    shape: binned_measure
-    renderer: echarts
     type: histogram
-    options:
-      bin_count: 16
+    presentation:
+      histogram_bins: 16
     query:
       table: orders
       measures:
@@ -28,7 +26,7 @@ visuals:
 
 ## Custom bins
 
-Change the raw measure to revenue and use `options.bin_count` to balance distribution detail against the available chart width.
+Change the raw measure to revenue and use `presentation.bin_count` to balance distribution detail against the available chart width.
 
 {{< visual id="revenue_histogram" >}}
 
@@ -36,11 +34,9 @@ Change the raw measure to revenue and use `options.bin_count` to balance distrib
 visuals:
   revenue_histogram:
     title: Revenue histogram
-    shape: binned_measure
-    renderer: echarts
     type: histogram
-    options:
-      bin_count: 18
+    presentation:
+      histogram_bins: 18
     query:
       table: orders
       measures:
@@ -57,11 +53,9 @@ Use fewer bins for the bounded review scale and enable `show_labels` when every 
 visuals:
   review_histogram:
     title: Review score histogram
-    shape: binned_measure
-    renderer: echarts
     type: histogram
-    options:
-      bin_count: 10
+    presentation:
+      histogram_bins: 10
       show_labels: true
     query:
       table: orders

@@ -12,12 +12,14 @@ import (
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	"github.com/Yacobolo/leapview/internal/dashboard/command"
 	"github.com/Yacobolo/leapview/internal/dashboard/consumer"
+	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
 	"github.com/Yacobolo/leapview/internal/dashboard/report"
-	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 	dashboardstream "github.com/Yacobolo/leapview/internal/dashboard/stream"
 	reportui "github.com/Yacobolo/leapview/internal/dashboard/ui"
 	"github.com/Yacobolo/leapview/internal/dataquery"
 	"github.com/Yacobolo/leapview/internal/ui"
+	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 	"github.com/Yacobolo/leapview/pkg/pagestream"
 	"github.com/go-chi/chi/v5"
 )
@@ -44,11 +46,12 @@ type Metrics interface {
 	DefaultDashboardID() string
 	DefaultFilters(dashboardID string) dashboard.Filters
 	ModelIDForDashboard(dashboardID string) string
-	NormalizeTableRequest(dashboardID string, request dashboard.TableRequest) dashboard.TableRequest
+	NormalizeVisualizationWindow(dashboardID string, request dashboard.TableRequest) dashboard.TableRequest
 	Pages(dashboardID string) []dashboard.Page
 	QueryDashboardPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters) (dashboard.Patch, error)
-	QueryTablePage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error)
-	Report(dashboardID string) (reportdef.Dashboard, *semanticmodel.Model, bool)
+	QueryVisualizationWindow(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request visualizationir.VisualizationWindowRequest) (visualizationir.VisualizationEnvelope, error)
+	Report(dashboardID string) (dashboarddefinition.Definition, *semanticmodel.Model, bool)
+	VisualizationDefinition(dashboardID, visualID string) (visualizationdefinition.Definition, bool)
 }
 
 type SignalBroker interface {

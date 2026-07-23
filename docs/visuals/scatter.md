@@ -36,8 +36,6 @@ Map status through `query.series` to split points into comparable groups while r
 visuals:
   delivery_scatter_status:
     title: Delivery days scatter by status
-    shape: category_series_value
-    renderer: echarts
     type: scatter
     query:
       dimensions:
@@ -64,7 +62,7 @@ visuals:
   delivery_scatter_labeled:
     title: Labeled delivery scatter
     type: scatter
-    options:
+    presentation:
       show_labels: true
       label_position: top
       symbol_size: 12

@@ -4,18 +4,17 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/Yacobolo/leapview/internal/dashboard"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 	"github.com/apache/arrow-go/v18/arrow/array"
 	"github.com/apache/arrow-go/v18/arrow/ipc"
 )
 
 func TestDashboardTableRowsetIsTypedPrecisionSafeAndCursorPaged(t *testing.T) {
-	table := dashboard.Table{
-		Title: "Orders", AvailableRows: 2,
-		Columns: []dashboard.TableColumn{{Key: "order_id"}, {Key: "amount"}},
-		Blocks:  map[string]dashboard.TableBlock{"a": {Rows: []map[string]any{{"order_id": int64(9007199254740993), "amount": 12.5}}}},
+	envelope := rowsetTestEnvelope([]visualizationir.VisualizationField{{ID: "order_id", DataType: visualizationir.VisualizationDataTypeInteger}, {ID: "amount", DataType: visualizationir.VisualizationDataTypeDecimal}}, [][]any{{int64(9007199254740993), 12.5}}, 2)
+	response, err := dashboardVisualizationRowset(envelope, "a", 0, 1, "scope-a", "snapshot-a")
+	if err != nil {
+		t.Fatal(err)
 	}
-	response := dashboardTableRowset("orders", table, "a", 0, 1, "scope-a", "snapshot-a")
 	if len(response.Columns) != 2 || response.Columns[0].Type != "int64" || response.Columns[1].Type != "float64" {
 		t.Fatalf("columns = %#v", response.Columns)
 	}
@@ -28,12 +27,11 @@ func TestDashboardTableRowsetIsTypedPrecisionSafeAndCursorPaged(t *testing.T) {
 }
 
 func TestDashboardTableArrowMatchesJSONAndCarriesSnapshotMetadata(t *testing.T) {
-	table := dashboard.Table{
-		Title: "Orders", AvailableRows: 1,
-		Columns: []dashboard.TableColumn{{Key: "order_id"}},
-		Blocks:  map[string]dashboard.TableBlock{"a": {Rows: []map[string]any{{"order_id": int64(9007199254740993)}}}},
+	envelope := rowsetTestEnvelope([]visualizationir.VisualizationField{{ID: "order_id", DataType: visualizationir.VisualizationDataTypeInteger}}, [][]any{{int64(9007199254740993)}}, 1)
+	response, err := dashboardVisualizationRowset(envelope, "a", 0, 100, "scope-a", "snapshot-a")
+	if err != nil {
+		t.Fatal(err)
 	}
-	response := dashboardTableRowset("orders", table, "a", 0, 100, "scope-a", "snapshot-a")
 	payload, err := encodeDashboardTableArrow(response)
 	if err != nil {
 		t.Fatalf("encode Arrow: %v", err)
@@ -52,4 +50,14 @@ func TestDashboardTableArrowMatchesJSONAndCarriesSnapshotMetadata(t *testing.T) 
 	if got := reader.Record().Column(0).(*array.String).Value(0); got != response.Rows[0][0] {
 		t.Fatalf("Arrow value=%q JSON=%q", got, response.Rows[0][0])
 	}
+}
+
+func rowsetTestEnvelope(fields []visualizationir.VisualizationField, rows [][]any, available int64) visualizationir.VisualizationEnvelope {
+	base := visualizationir.VisualizationSpecBase{Kind: "table", Title: "Orders"}
+	state := visualizationir.WindowedVisualizationDataState{
+		VisualizationDataStateBase: visualizationir.VisualizationDataStateBase{Kind: "windowed"}, Kind: "windowed",
+		Schema: visualizationir.VisualizationDatasetSchema{ID: "primary", Fields: fields}, AvailableRows: available,
+		Blocks: map[string]visualizationir.VisualizationWindowBlock{"a": {ID: "a", Rows: rows}},
+	}
+	return visualizationir.VisualizationEnvelope{VisualID: "orders", Spec: visualizationir.VisualizationSpec{Value: &visualizationir.TableVisualizationSpec{VisualizationSpecBase: base, Kind: "table"}}, DataState: visualizationir.VisualizationDataState{Value: &state}}
 }

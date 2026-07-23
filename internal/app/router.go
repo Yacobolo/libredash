@@ -13,6 +13,7 @@ import (
 	dashboardhttp "github.com/Yacobolo/leapview/internal/dashboard/http"
 	reportui "github.com/Yacobolo/leapview/internal/dashboard/ui"
 	"github.com/Yacobolo/leapview/internal/staticasset"
+	mapassethttp "github.com/Yacobolo/leapview/internal/visualization/mapasset/http"
 	workspacehttp "github.com/Yacobolo/leapview/internal/workspace/http"
 	"github.com/go-chi/chi/v5"
 )
@@ -44,8 +45,10 @@ func (s *Server) Routes() http.Handler {
 		r.Post("/public/dashboards/{publicId}/commands/reload", s.publicDashboardCommand("reload", func(h dashboardhttp.Handler, w http.ResponseWriter, r *http.Request) { h.Reload(w, r) }))
 		r.Post("/public/dashboards/{publicId}/commands/reset-filters", s.publicDashboardCommand("reset_filters", func(h dashboardhttp.Handler, w http.ResponseWriter, r *http.Request) { h.ResetFilters(w, r) }))
 		r.Post("/public/dashboards/{publicId}/commands/select", s.publicDashboardCommand("select", func(h dashboardhttp.Handler, w http.ResponseWriter, r *http.Request) { h.Select(w, r) }))
+		r.Post("/public/dashboards/{publicId}/commands/spatial-select", s.publicDashboardCommand("spatial_select", func(h dashboardhttp.Handler, w http.ResponseWriter, r *http.Request) { h.SpatialSelect(w, r) }))
 		r.Post("/public/dashboards/{publicId}/commands/clear-selection", s.publicDashboardCommand("clear_selection", func(h dashboardhttp.Handler, w http.ResponseWriter, r *http.Request) { h.ClearSelection(w, r) }))
 		r.Post("/public/dashboards/{publicId}/commands/visual-window", s.publicDashboardCommand("visual_window", func(h dashboardhttp.Handler, w http.ResponseWriter, r *http.Request) { h.VisualWindow(w, r) }))
+		r.Post("/public/dashboards/{publicId}/commands/visual-spatial-window", s.publicDashboardCommand("visual_spatial_window", func(h dashboardhttp.Handler, w http.ResponseWriter, r *http.Request) { h.VisualSpatialWindow(w, r) }))
 	})
 	mux.With(s.rateLimits.publicStreamMiddleware(s.telemetry)).Get("/public/dashboards/{publicId}/updates", s.publicDashboardUpdates)
 	if s.pageStreamTrace != nil {
@@ -106,7 +109,9 @@ func (s *Server) Routes() http.Handler {
 		r.Get("/workspaces/{workspace}/dashboards/{dashboard}", s.protectedWithObjects(access.PrivilegeViewItem, dashboardhttp.DashboardObjectRefs, dashboardHTTP.Dashboard))
 		r.Get("/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}", s.protectedWithObjects(access.PrivilegeViewItem, dashboardhttp.DashboardObjectRefs, dashboardHTTP.Page))
 		r.Post("/workspaces/{workspace}/commands/visual-window", s.protected(access.PrivilegeViewItem, dashboardHTTP.VisualWindow))
+		r.Post("/workspaces/{workspace}/commands/visual-spatial-window", s.protected(access.PrivilegeViewItem, dashboardHTTP.VisualSpatialWindow))
 		r.Post("/workspaces/{workspace}/commands/select", s.protected(access.PrivilegeViewItem, dashboardHTTP.Select))
+		r.Post("/workspaces/{workspace}/commands/spatial-select", s.protected(access.PrivilegeViewItem, dashboardHTTP.SpatialSelect))
 		r.Post("/workspaces/{workspace}/commands/clear-selection", s.protected(access.PrivilegeViewItem, dashboardHTTP.ClearSelection))
 		r.Post("/workspaces/{workspace}/commands/reload", s.protected(access.PrivilegeViewItem, dashboardHTTP.Reload))
 		r.Post("/workspaces/{workspace}/commands/reset-filters", s.protected(access.PrivilegeViewItem, dashboardHTTP.ResetFilters))
@@ -158,6 +163,7 @@ func (s *Server) Routes() http.Handler {
 		})
 	}
 	mux.Handle("/static/*", staticAssetCache(http.StripPrefix("/static/", http.FileServer(http.Dir("static")))))
+	mux.Handle("/map-assets/*", mapassethttp.CacheHandler(http.StripPrefix("/map-assets/", http.FileServer(http.Dir(s.mapAssetDir)))))
 	mux.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		if isPublicAPIPath(r.URL.Path) {
 			preparePublicAPIRequest(w, r)
@@ -411,12 +417,19 @@ func (s *Server) authLogout(w http.ResponseWriter, r *http.Request) {
 
 func staticAssetCache(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/static/vega-sandbox.js" {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+		}
 		version := staticasset.Version()
 		switch {
 		case version != "dev" && r.URL.Query().Get("v") == version:
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		case immutableStaticPath(r.URL.Path):
-			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			// Bun's chunk hash covers the chunk's source, but not the final hashed
+			// URLs of its lazy dependencies. A parent chunk can therefore keep its
+			// filename while its import graph changes. Revalidate split chunks so a
+			// cached parent can never point at a removed child chunk.
+			w.Header().Set("Cache-Control", "no-cache")
 		case fontStaticPath(r.URL.Path):
 			w.Header().Set("Cache-Control", "public, max-age=86400")
 		default:

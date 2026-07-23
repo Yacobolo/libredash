@@ -6,7 +6,7 @@ import (
 
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	"github.com/Yacobolo/leapview/internal/dashboard"
-	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
 	"github.com/Yacobolo/leapview/internal/dataquery"
 	"github.com/Yacobolo/leapview/internal/ui"
 	"github.com/Yacobolo/leapview/internal/workspace"
@@ -14,7 +14,7 @@ import (
 
 type Metrics interface {
 	Catalog() dashboard.Catalog
-	Report(dashboardID string) (reportdef.Dashboard, *semanticmodel.Model, bool)
+	Report(dashboardID string) (dashboarddefinition.Definition, *semanticmodel.Model, bool)
 	SemanticModel(modelID string) (*semanticmodel.Model, bool)
 	ExecuteDataQuery(ctx context.Context, request dataquery.Query) (dataquery.Result, error)
 	Pages(dashboardID string) []dashboard.Page

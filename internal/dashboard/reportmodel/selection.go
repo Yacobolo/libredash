@@ -34,6 +34,63 @@ type ResolvedSelectionTarget struct {
 	Facts []string
 }
 
+type ResolvedSpatialSelectionInteraction struct {
+	Latitude  ResolvedSelectionMapping
+	Longitude ResolvedSelectionMapping
+	Targets   []ResolvedSelectionTarget
+}
+
+// ResolveSpatialSelectionInteraction proves that both governed coordinate
+// fields are numeric and can be applied to every explicitly targeted query.
+func ResolveSpatialSelectionInteraction(d *report.Dashboard, model *semanticmodel.Model, sourceID string) (ResolvedSpatialSelectionInteraction, error) {
+	visual, ok := d.Visuals[sourceID]
+	if !ok || visual.Chart == nil {
+		return ResolvedSpatialSelectionInteraction{}, fmt.Errorf("unknown source visualization %q", sourceID)
+	}
+	selection := visual.Chart.Interaction.SpatialSelection
+	resolve := func(axis string, mapping report.SpatialSelectionMapping) (ResolvedSelectionMapping, error) {
+		resolved, err := resolveSelectionMapping(model, report.SelectionMapping{Field: mapping.Field, Fact: mapping.Fact, Value: mapping.Source})
+		if err != nil {
+			return ResolvedSelectionMapping{}, fmt.Errorf("visual %q spatial_selection %s: %w", sourceID, axis, err)
+		}
+		if resolved.Type != "number" {
+			return ResolvedSelectionMapping{}, fmt.Errorf("visual %q spatial_selection %s field %q must be numeric", sourceID, axis, mapping.Field)
+		}
+		return resolved, nil
+	}
+	latitude, err := resolve("latitude", selection.Latitude)
+	if err != nil {
+		return ResolvedSpatialSelectionInteraction{}, err
+	}
+	longitude, err := resolve("longitude", selection.Longitude)
+	if err != nil {
+		return ResolvedSpatialSelectionInteraction{}, err
+	}
+	mappings := []ResolvedSelectionMapping{latitude, longitude}
+	if err := validateSelectionTupleScope(mappings); err != nil {
+		return ResolvedSpatialSelectionInteraction{}, fmt.Errorf("visual %q spatial_selection coordinates %w", sourceID, err)
+	}
+	if err := validateSelectionSourceFacts(d, model, "visual", sourceID, mappings); err != nil {
+		return ResolvedSpatialSelectionInteraction{}, err
+	}
+	resolved := ResolvedSpatialSelectionInteraction{Latitude: latitude, Longitude: longitude, Targets: make([]ResolvedSelectionTarget, 0, len(selection.Targets))}
+	for _, targetID := range selection.Targets {
+		targetKind, err := selectionTargetKind(d, targetID)
+		if err != nil {
+			return ResolvedSpatialSelectionInteraction{}, err
+		}
+		facts, err := TargetFacts(d, model, targetKind, targetID)
+		if err != nil {
+			return ResolvedSpatialSelectionInteraction{}, fmt.Errorf("visual %q spatial_selection target %q: %w", sourceID, targetID, err)
+		}
+		if err := validateSelectionTarget(model, targetID, facts, mappings); err != nil {
+			return ResolvedSpatialSelectionInteraction{}, fmt.Errorf("visual %q spatial_selection: %w", sourceID, err)
+		}
+		resolved.Targets = append(resolved.Targets, ResolvedSelectionTarget{Kind: targetKind, ID: targetID, Facts: facts})
+	}
+	return resolved, nil
+}
+
 type SelectionMappingIdentity struct {
 	Field string
 	Fact  string
@@ -116,10 +173,12 @@ func sourceSelection(d *report.Dashboard, sourceKind, sourceID string) (report.S
 	switch sourceKind {
 	case "visual":
 		if visual, ok := d.Visuals[sourceID]; ok {
-			return visual.Interaction.PointSelection, nil
-		}
-		if visual, ok := d.Tables[sourceID]; ok {
-			return visual.Interaction.RowSelection, nil
+			if visual.Chart != nil {
+				return visual.Chart.Interaction.PointSelection, nil
+			}
+			if visual.Tabular != nil {
+				return visual.Tabular.Interaction.RowSelection, nil
+			}
 		}
 		return report.SelectionInteraction{}, fmt.Errorf("unknown source visual %q", sourceID)
 	default:
@@ -131,37 +190,30 @@ func sourceSelectionFields(d *report.Dashboard, sourceKind, sourceID string) (ma
 	fields := map[string]bool{}
 	if sourceKind == "visual" {
 		if visual, ok := d.Visuals[sourceID]; ok {
-			for _, dimension := range visual.Query.Dimensions {
-				fields[dimension.Field] = true
+			if visual.Chart != nil {
+				for _, dimension := range visual.Chart.Query.Dimensions {
+					fields[dimension.Field] = true
+				}
+				if !visual.Chart.Query.Series.IsZero() {
+					fields[visual.Chart.Query.Series.Field] = true
+				}
+				if visual.Chart.Query.Time.Field != "" {
+					fields[visual.Chart.Query.Time.Field] = true
+				}
+				return fields, visual.Chart.Query.Time
 			}
-			if !visual.Query.Series.IsZero() {
-				fields[visual.Query.Series.Field] = true
-			}
-			if visual.Query.Time.Field != "" {
-				fields[visual.Query.Time.Field] = true
-			}
-			return fields, visual.Query.Time
-		}
-		if table, ok := d.Tables[sourceID]; ok {
-			for _, field := range table.Query.Fields {
-				fields[field] = true
-			}
-			for _, columns := range [][]report.FieldRef{table.Query.Columns, table.Query.Rows} {
-				for _, field := range columns {
-					fields[field.Field] = true
+			if visual.Tabular != nil {
+				for _, field := range visual.Tabular.Query.Fields {
+					fields[field] = true
+				}
+				for _, columns := range [][]report.FieldRef{visual.Tabular.Query.Columns, visual.Tabular.Query.Rows} {
+					for _, field := range columns {
+						fields[field.Field] = true
+					}
 				}
 			}
 		}
 		return fields, report.QueryTime{}
-	}
-	table := d.Tables[sourceID]
-	for _, field := range table.Query.Fields {
-		fields[field] = true
-	}
-	for _, columns := range [][]report.FieldRef{table.Query.Columns, table.Query.Rows} {
-		for _, field := range columns {
-			fields[field.Field] = true
-		}
 	}
 	return fields, report.QueryTime{}
 }
@@ -265,18 +317,10 @@ func validateSelectionCompatibility(model *semanticmodel.Model, role, id string,
 }
 
 func selectionTargetKind(d *report.Dashboard, targetID string) (string, error) {
-	_, visualOK := d.Visuals[targetID]
-	_, tableOK := d.Tables[targetID]
-	if visualOK == tableOK {
-		if visualOK {
-			return "", fmt.Errorf("interaction target %q is ambiguous across visuals and tables", targetID)
-		}
+	if _, ok := d.Visuals[targetID]; !ok {
 		return "", fmt.Errorf("interaction references unknown target %q", targetID)
 	}
-	if visualOK {
-		return "visual", nil
-	}
-	return "table", nil
+	return "visual", nil
 }
 
 func containsFact(facts []string, fact string) bool {

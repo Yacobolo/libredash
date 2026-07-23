@@ -15,8 +15,6 @@ visuals:
   state_status_tree:
     title: State and status tree
     description: Shows customer state and order status as a hierarchy.
-    shape: hierarchy
-    renderer: echarts
     type: tree
     query:
       dimensions:
@@ -40,8 +38,6 @@ Replace the parent dimension with category to present a different two-level hier
 visuals:
   category_status_tree:
     title: Category and status tree
-    shape: hierarchy
-    renderer: echarts
     type: tree
     query:
       dimensions:
@@ -65,11 +61,9 @@ Add state as an intermediate level, use `initial_depth` to limit the initial exp
 visuals:
   category_state_status_tree:
     title: Category, state, and status tree
-    shape: hierarchy
-    renderer: echarts
     type: tree
-    options:
-      orient: TB
+    presentation:
+      orientation: vertical
       initial_depth: 2
     query:
       dimensions:

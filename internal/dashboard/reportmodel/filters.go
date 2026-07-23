@@ -54,18 +54,14 @@ func TargetFacts(d *report.Dashboard, model *semanticmodel.Model, targetKind, ta
 	switch targetKind {
 	case "visual":
 		if visual, ok := d.Visuals[targetID]; ok {
-			table, measures = visual.Query.Table, visual.Query.Measures
-		} else if visual, ok := d.Tables[targetID]; ok {
-			table, measures = visual.Query.Table, visual.Query.Measures
+			if visual.Chart != nil {
+				table, measures = visual.Chart.Query.Table, visual.Chart.Query.Measures
+			} else if visual.Tabular != nil {
+				table, measures = visual.Tabular.Query.Table, visual.Tabular.Query.Measures
+			}
 		} else {
 			return nil, fmt.Errorf("unknown target visual %q", targetID)
 		}
-	case "table":
-		tableVisual, ok := d.Tables[targetID]
-		if !ok {
-			return nil, fmt.Errorf("unknown target table %q", targetID)
-		}
-		table, measures = tableVisual.Query.Table, tableVisual.Query.Measures
 	default:
 		return nil, fmt.Errorf("unknown target kind %q", targetKind)
 	}

@@ -14,8 +14,6 @@ Use the `ohlc` shape with an ordered month dimension and a numeric measure to su
 visuals:
   delivery_candlestick:
     title: Delivery day candlestick by month
-    shape: ohlc
-    renderer: echarts
     type: candlestick
     query:
       dimensions:
@@ -33,7 +31,7 @@ visuals:
 
 ## Revenue range
 
-Change the measure to revenue and enable `options.data_zoom` so dense monthly ranges remain explorable without changing the OHLC contract.
+Change the measure to revenue and enable `presentation.data_zoom` so dense monthly ranges remain explorable without changing the OHLC contract.
 
 {{< visual id="revenue_candlestick" >}}
 
@@ -41,10 +39,8 @@ Change the measure to revenue and enable `options.data_zoom` so dense monthly ra
 visuals:
   revenue_candlestick:
     title: Revenue OHLC by month
-    shape: ohlc
-    renderer: echarts
     type: candlestick
-    options:
+    presentation:
       data_zoom: true
     query:
       dimensions:

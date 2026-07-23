@@ -1,4 +1,5 @@
 import "@yacobolo/apigen";
+import "../visualization/main.tsp";
 import "./common.tsp";
 import "./capabilities.tsp";
 import "./projects.tsp";

@@ -63,7 +63,7 @@ func pointSelected(points []dashboard.Datum, label string) bool {
 }
 
 func overviewVisualKeys() []string {
-	return []string{"aov_kpi", "category_revenue", "revenue_by_month", "revenue_kpi", "total_orders"}
+	return []string{"aov_kpi", "category_revenue", "orders_table", "revenue_by_month", "revenue_kpi", "total_orders"}
 }
 
 func chartShowcaseMatrix() map[string][]string {
@@ -109,15 +109,6 @@ func assertVisualKeys(t *testing.T, patch dashboard.Patch, want []string) {
 func hasDatumValue(rows []dashboard.Datum, key string, value string) bool {
 	for _, row := range rows {
 		if datumString(row, key) == value {
-			return true
-		}
-	}
-	return false
-}
-
-func hasHierarchyPathValue(rows []dashboard.Datum, value string) bool {
-	for _, row := range rows {
-		if strings.Contains(fmt.Sprint(row["path"]), value) {
 			return true
 		}
 	}

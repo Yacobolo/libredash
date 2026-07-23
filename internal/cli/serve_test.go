@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -117,6 +118,22 @@ func TestDeploymentBackedDevServerAlwaysOpensPlatformStore(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(home, "ducklake")); err != nil {
 		t.Fatalf("DuckLake catalog directory was not created: %v", err)
+	}
+}
+
+func TestDeploymentBackedServerRejectsMissingMapAssetsBeforeOpeningState(t *testing.T) {
+	home := t.TempDir()
+	cfg := serveTestConfig(home)
+	cfg.MapAssetDir = t.TempDir()
+	_, cleanup, err := servingStateBackedServer(context.Background(), cfg, false, servingstate.DefaultEnvironment)
+	if cleanup != nil {
+		cleanup()
+	}
+	if err == nil || !strings.Contains(err.Error(), "verify map assets") || !strings.Contains(err.Error(), "missing") {
+		t.Fatalf("servingStateBackedServer() error = %v, want missing map asset failure", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(home, "leapview.db")); !os.IsNotExist(statErr) {
+		t.Fatalf("platform store opened before map asset verification: %v", statErr)
 	}
 }
 

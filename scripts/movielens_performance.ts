@@ -442,18 +442,22 @@ type RapidToggleResult = PerformanceTraceResult & {
 
 async function interactionInput(page: Page, visualId: string, datumOffset: number): Promise<InteractionInput> {
   return page.locator('lv-dashboard-page').evaluate((element: any, input) => {
-    const chart = element.shadowRoot?.querySelector(`lv-echart[visual-id="${input.visualId}"]`) as any
-    const payload = chart?.chart
-    const rows = payload?.data ?? []
+    const host = Array.from(element.shadowRoot?.querySelectorAll('lv-visualization-host') ?? []).find((candidate: any) => candidate.envelope?.visualID === input.visualId) as any
+    const payload = host?.envelope
+    if (payload?.dataState?.kind !== 'inline') throw new Error(`visual ${input.visualId} is not inline`)
+    const dataset = payload.dataState.datasets[0]
+    const rows = dataset?.rows ?? []
     if (rows.length === 0) throw new Error(`visual ${input.visualId} has no data`)
-    const datum = rows[input.datumOffset % rows.length]
-    const mappings = (payload.interaction?.mappings ?? []).map((mapping: any) => {
-      const value = datum[mapping.value]
-      if (value === undefined || (typeof value === 'object' && value !== null)) throw new Error(`visual ${input.visualId} mapping ${mapping.field} has no scalar value`)
-      const labelValue = mapping.label ? datum[mapping.label] : value
+    const values = rows[input.datumOffset % rows.length]
+    const datum = Object.fromEntries((dataset.columns ?? []).map((column: string, index: number) => [column, values[index]]))
+    const interaction = payload.spec.interactions.find((candidate: any) => candidate.kind === 'select')
+    const mappings = (interaction?.mappings ?? []).map((mapping: any) => {
+      const value = datum[mapping.source.field]
+      if (value === undefined || (typeof value === 'object' && value !== null)) throw new Error(`visual ${input.visualId} mapping ${mapping.targetFieldID} has no scalar value`)
+      const labelValue = mapping.label ? datum[mapping.label.field] : value
       return {
-        field: mapping.field,
-        ...(mapping.fact !== undefined ? { fact: mapping.fact } : {}),
+        field: mapping.targetFieldID,
+        ...(mapping.targetFactID !== undefined ? { fact: mapping.targetFactID } : {}),
         ...(mapping.grain !== undefined ? { grain: mapping.grain } : {}),
         value,
         label: labelValue === null ? '' : String(labelValue),
@@ -538,8 +542,12 @@ async function installPerformanceObserver(page: Page): Promise<void> {
         }
         active.initialized = true
 
-        const source = element.shadowRoot?.querySelector(`lv-echart[visual-id="${active.visualId}"]`) as any
-        const selected = (source?.chart?.selection ?? []).flatMap((entry: any) => entry.mappings ?? [])
+        const source = Array.from(element.shadowRoot?.querySelectorAll('lv-visualization-host') ?? []).find((candidate: any) => candidate.envelope?.visualID === active.visualId) as any
+        const envelope = source?.envelope
+        const interaction = envelope?.spec?.interactions?.find((candidate: any) => candidate.kind === 'select')
+        const selected = (envelope?.selection ?? []).flatMap((entry: any) => (interaction?.mappings ?? []).map((mapping: any) => ({
+          field: mapping.targetFieldID, fact: mapping.targetFactID, grain: mapping.grain, value: entry.datum?.identity?.[mapping.source.field],
+        })))
         const matches = active.expectedMappings.every((expected: any) => selected.some((actual: any) =>
           actual.field === expected.field
           && (actual.fact ?? '') === (expected.fact ?? '')
@@ -647,8 +655,12 @@ async function runRapidToggle(page: Page, visualId: string): Promise<RapidToggle
     const settled = await waitForStatus(page, (status) => status.generation >= before.generation + 2 && !status.loading, 600_000)
     const trace = await finishPerformanceTrace(page)
     const finalSelectionMatchesB = await page.locator('lv-dashboard-page').evaluate((element: any, expected) => {
-      const chart = element.shadowRoot?.querySelector(`lv-echart[visual-id="${expected.visualId}"]`) as any
-      const selected = (chart?.chart?.selection ?? []).flatMap((entry: any) => entry.mappings ?? [])
+      const host = Array.from(element.shadowRoot?.querySelectorAll('lv-visualization-host') ?? []).find((candidate: any) => candidate.envelope?.visualID === expected.visualId) as any
+      const envelope = host?.envelope
+      const interaction = envelope?.spec?.interactions?.find((candidate: any) => candidate.kind === 'select')
+      const selected = (envelope?.selection ?? []).flatMap((entry: any) => (interaction?.mappings ?? []).map((mapping: any) => ({
+        field: mapping.targetFieldID, fact: mapping.targetFactID, grain: mapping.grain, value: entry.datum?.identity?.[mapping.source.field],
+      })))
       return expected.command.mappings.every((mapping: any) => selected.some((candidate: any) =>
         candidate.field === mapping.field
         && (candidate.fact ?? '') === (mapping.fact ?? '')

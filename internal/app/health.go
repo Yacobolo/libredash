@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/Yacobolo/leapview/internal/dashboard"
-	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
 	"github.com/Yacobolo/leapview/internal/workspace"
 )
 
@@ -35,6 +35,14 @@ func (s *Server) readyz(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	checks["platformStore"] = "ok"
+	if s.mapAssetReadiness != nil {
+		if err := s.mapAssetReadiness.Verify(ctx); err != nil {
+			checks["mapAssets"] = err.Error()
+			writeJSON(w, http.StatusServiceUnavailable, healthResponse{Status: "not_ready", Checks: checks})
+			return
+		}
+		checks["mapAssets"] = "ok"
+	}
 	if s.duckDBEnvironment != nil {
 		if err := s.duckDBEnvironment.Healthy(); err != nil {
 			checks["analytics"] = err.Error()
@@ -147,7 +155,7 @@ func metricsMetadataReady(metrics QueryMetrics, workspaceID string) error {
 
 func reportMetadataReady(metrics interface {
 	Pages(string) []dashboard.Page
-}, dashboardID string, report reportdef.Dashboard, model any, ok bool) error {
+}, dashboardID string, report dashboarddefinition.Definition, model any, ok bool) error {
 	if !ok {
 		return fmt.Errorf("default dashboard %q is not available", dashboardID)
 	}

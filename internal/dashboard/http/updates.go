@@ -13,6 +13,7 @@ import (
 	lddatastar "github.com/Yacobolo/leapview/internal/dashboard/datastar"
 	dashboardstream "github.com/Yacobolo/leapview/internal/dashboard/stream"
 	reportui "github.com/Yacobolo/leapview/internal/dashboard/ui"
+	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
 	"github.com/Yacobolo/leapview/pkg/pagestream"
 )
 
@@ -38,6 +39,19 @@ func (h Handler) Updates(w nethttp.ResponseWriter, r *nethttp.Request) {
 		nethttp.NotFound(w, r)
 		return
 	}
+	definitions := make(map[string]visualizationdefinition.Definition)
+	for _, component := range activePage.Visuals {
+		id := component.Visual
+		if id == "" {
+			continue
+		}
+		definition, exists := metrics.VisualizationDefinition(dashboardID, id)
+		if !exists {
+			nethttp.Error(w, "compiled visualization definition is missing", nethttp.StatusInternalServerError)
+			return
+		}
+		definitions[id] = definition
+	}
 	initialFilters := reportDefinition.FiltersFromURLForPage(activePage.ID, r.URL.Query())
 	clientID := pagestream.ClientIDFromRequest(r, strings.TrimSpace(r.URL.Query().Get("clientId")))
 	streamInstanceID := strings.TrimSpace(r.URL.Query().Get("streamInstance"))
@@ -61,9 +75,9 @@ func (h Handler) Updates(w nethttp.ResponseWriter, r *nethttp.Request) {
 	updates := pagestream.NewSignalStream(w, r, pagestream.WithStreamTrace(
 		broker.TraceStore(), streamID, "dashboard.bootstrap",
 	))
-	bootstrap := reportui.BootstrapSignals(clientID, streamInstanceID, metrics.Catalog(), reportDefinition, model, pages, activePage, initialFilters)
+	bootstrap := reportui.BootstrapSignals(clientID, streamInstanceID, metrics.Catalog(), reportDefinition, model, definitions, pages, activePage, initialFilters)
 	if presentation, ok := publicPresentationFromContext(r.Context()); ok {
-		bootstrap = reportui.PublicBootstrapSignals(clientID, streamInstanceID, presentation.PublicID, presentation.Presentation, metrics.Catalog(), reportDefinition, model, pages, activePage, initialFilters)
+		bootstrap = reportui.PublicBootstrapSignals(clientID, streamInstanceID, presentation.PublicID, presentation.Presentation, metrics.Catalog(), reportDefinition, model, definitions, pages, activePage, initialFilters)
 	} else if hasClientAgentState(r) {
 		delete(bootstrap, "agent")
 		delete(bootstrap, "agentVisuals")

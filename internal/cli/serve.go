@@ -39,6 +39,7 @@ import (
 	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
 	servingstatesqlite "github.com/Yacobolo/leapview/internal/servingstate/sqlite"
 	storagemaintenance "github.com/Yacobolo/leapview/internal/storage/maintenance"
+	visualizationmapasset "github.com/Yacobolo/leapview/internal/visualization/mapasset"
 	"github.com/Yacobolo/leapview/internal/workload"
 	"github.com/Yacobolo/leapview/internal/workspace"
 	workspacesqlite "github.com/Yacobolo/leapview/internal/workspace/sqlite"
@@ -196,6 +197,14 @@ func runHTTPServer(ctx context.Context, server *http.Server) error {
 }
 
 func servingStateBackedServer(ctx context.Context, cfg config.Config, production bool, environment servingstate.Environment) (*app.Server, func(), error) {
+	var mapAssetReadiness app.MapAssetReadiness
+	if strings.TrimSpace(cfg.MapAssetDir) != "" {
+		verifier := visualizationmapasset.NewVerifier(cfg.MapAssetDir)
+		if err := verifier.Verify(ctx); err != nil {
+			return nil, nil, fmt.Errorf("verify map assets: %w", err)
+		}
+		mapAssetReadiness = verifier
+	}
 	cookieSecure, err := cfg.CookieSecure()
 	if err != nil {
 		return nil, nil, err
@@ -476,6 +485,8 @@ func servingStateBackedServer(ctx context.Context, cfg config.Config, production
 			uploadTTL: cfg.ManagedDataUploadSessionTTL, collector: managedDataCollector, runtime: managedDataRuntimeCollector,
 		},
 		ManagedDataExpireInterval: cfg.ManagedDataGCInterval,
+		MapAssetDir:               cfg.MapAssetDir,
+		MapAssetReadiness:         mapAssetReadiness,
 	})
 	return server, cleanupWithRegistry, nil
 }

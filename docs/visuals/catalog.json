@@ -20,6 +20,7 @@
     { "source": "sankey", "title": "Sankey" },
     { "source": "graph", "title": "Graph" },
     { "source": "map", "title": "Map" },
+    { "source": "custom", "title": "Custom Vega-Lite" },
     { "source": "candlestick", "title": "Candlestick chart" },
     { "source": "boxplot", "title": "Boxplot" },
     { "source": "combo", "title": "Combo chart" },

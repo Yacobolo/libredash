@@ -29,7 +29,7 @@ visuals:
 
 ## Stacked series
 
-Map `query.series` to status and enable `options.stacked` to show how each status contributes to the monthly total.
+Map `query.series` to status and enable `presentation.stacked` to show how each status contributes to the monthly total.
 
 {{< visual id="revenue_area_status" >}}
 
@@ -37,10 +37,8 @@ Map `query.series` to status and enable `options.stacked` to show how each statu
 visuals:
   revenue_area_status:
     title: Stacked revenue area
-    shape: category_series_value
-    renderer: echarts
     type: area
-    options:
+    presentation:
       stacked: true
     query:
       dimensions:
@@ -58,7 +56,7 @@ visuals:
 
 ## Smoothed line
 
-Enable `options.smooth` to interpolate the boundary, hide symbols to reduce clutter, and add `data_zoom` when the ordered range grows.
+Enable `presentation.smooth` to interpolate the boundary, hide symbols to reduce clutter, and add `data_zoom` when the ordered range grows.
 
 {{< visual id="revenue_area_smooth" >}}
 
@@ -66,9 +64,8 @@ Enable `options.smooth` to interpolate the boundary, hide symbols to reduce clut
 visuals:
   revenue_area_smooth:
     title: Smooth revenue area
-    renderer: echarts
     type: area
-    options:
+    presentation:
       smooth: true
       show_symbols: false
       data_zoom: true

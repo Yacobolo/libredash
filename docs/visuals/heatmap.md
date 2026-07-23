@@ -15,8 +15,6 @@ visuals:
   state_status_heatmap:
     title: State by order status
     description: Shows order status concentration by customer state.
-    shape: matrix
-    renderer: echarts
     type: heatmap
     query:
       dimensions:
@@ -42,8 +40,6 @@ Replace the row dimension with product category to reuse the same matrix contrac
 visuals:
   category_status_heatmap:
     title: Category by order status
-    shape: matrix
-    renderer: echarts
     type: heatmap
     query:
       dimensions:
@@ -59,7 +55,7 @@ visuals:
 
 ## Cell labels
 
-Enable `options.show_labels` when exact cell values matter in addition to color intensity and the matrix remains sparse enough to read.
+Enable `presentation.show_labels` when exact cell values matter in addition to color intensity and the matrix remains sparse enough to read.
 
 {{< visual id="category_status_heatmap_labels" >}}
 
@@ -67,10 +63,8 @@ Enable `options.show_labels` when exact cell values matter in addition to color 
 visuals:
   category_status_heatmap_labels:
     title: Labeled category status heatmap
-    shape: matrix
-    renderer: echarts
     type: heatmap
-    options:
+    presentation:
       show_labels: true
     query:
       dimensions:

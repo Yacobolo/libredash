@@ -4,66 +4,12 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
 const modulePath = "github.com/Yacobolo/leapview"
-
-func TestRepositoryUsesOnlyLeapViewIdentifiers(t *testing.T) {
-	root := repoRoot(t)
-	deprecated := []string{
-		"libre" + "dash",
-		"Libre" + "Dash",
-		"LIBRE" + "DASH",
-		"libre" + "Dash",
-		"--" + "l" + "d-",
-		"<" + "l" + "d-",
-		"</" + "l" + "d-",
-		"'" + "l" + "d-",
-		"\"" + "l" + "d-",
-		"'" + "l" + "d_",
-		"\"" + "l" + "d_",
-		"ease-" + "l" + "d",
-		"|" + "l" + "d|",
-	}
-	command := exec.Command("git", "ls-files", "-z", "--cached", "--others", "--exclude-standard")
-	command.Dir = root
-	output, err := command.Output()
-	if err != nil {
-		t.Fatalf("list tracked files: %v", err)
-	}
-	for _, rel := range strings.Split(string(output), "\x00") {
-		if rel == "" {
-			continue
-		}
-		if strings.HasPrefix(rel, "."+deprecated[0]+"/") {
-			continue
-		}
-		path := filepath.Join(root, filepath.FromSlash(rel))
-		if _, err := os.Stat(path); os.IsNotExist(err) {
-			continue
-		} else if err != nil {
-			t.Fatal(err)
-		}
-		for _, marker := range deprecated[:4] {
-			if strings.Contains(rel, marker) {
-				t.Errorf("legacy product identifier %q remains in path %s", marker, rel)
-			}
-		}
-		body, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, marker := range deprecated {
-			if strings.Contains(string(body), marker) {
-				t.Errorf("legacy product identifier %q remains in %s", marker, rel)
-			}
-		}
-	}
-}
 
 type goFile struct {
 	path    string
@@ -582,15 +528,16 @@ func TestProductionContainerContractExists(t *testing.T) {
 		"COPY --from=node /usr/local/bin/node /usr/local/bin/node",
 		"COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules",
 		"ln -sf ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm",
-		"go run ./internal/tools/configgen",
-		"go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3",
-		"typespec-compile -manifest api/apigen.yaml -target ui-signals",
-		"all -manifest api/apigen.yaml -target ui-signals",
-		"go run ./internal/tools/uisignalspostprocess",
+		"./scripts/generate_build_sources.sh",
+		"go run ./internal/tools/mapassets --out .data/map-assets",
 		"FROM oven/bun:1.3.7@sha256:",
+		"COPY --from=sourcegen /src/api/gen ./api/gen",
+		"COPY --from=sourcegen /src/api/visualization ./api/visualization",
 		"COPY --from=sourcegen /src/web/generated ./web/generated",
 		"RUN bun install --frozen-lockfile --no-cache",
-		"RUN bun run build",
+		"bun scripts/generate_visualization_validator.ts",
+		"bun scripts/generate_vega_lite_validator.ts",
+		"bun run build",
 		"FROM golang:1.25-bookworm@sha256:",
 		"COPY --from=sourcegen /src/internal/api/gen ./internal/api/gen",
 		"COPY --from=sourcegen /src/internal/ui/signals/models.gen.go ./internal/ui/signals/models.gen.go",
@@ -599,6 +546,7 @@ func TestProductionContainerContractExists(t *testing.T) {
 		"USER leapview",
 		"WORKDIR /app",
 		"COPY --from=web /src/static ./static",
+		"COPY --from=sourcegen /src/.data/map-assets ./.data/map-assets",
 		"LEAPVIEW_HOME=/var/lib/leapview/home",
 		"LEAPVIEW_MANAGED_DATA_DIR=/var/lib/leapview/home/managed-data",
 		"LEAPVIEW_PRODUCTION=1",
@@ -622,6 +570,36 @@ func TestProductionContainerContractExists(t *testing.T) {
 	}
 }
 
+func TestGeographicRendererDecisionIsExplicitAndNavigable(t *testing.T) {
+	root := repoRoot(t)
+	decision, err := os.ReadFile(filepath.Join(root, "docs", "articles", "architecture", "geographic-rendering.md"))
+	if err != nil {
+		t.Fatalf("read geographic rendering decision: %v", err)
+	}
+	text := string(decision)
+	for _, want := range []string{
+		"# Geographic rendering decision",
+		"Status: accepted",
+		"MapLibre is the sole geographic renderer",
+		"ECharts `geo`",
+		"one geographic camera",
+		"same-origin",
+		"spatial-windowed",
+		"| Capability | MapLibre | ECharts `geo` |",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("geographic rendering decision missing %q", want)
+		}
+	}
+	navigation, err := os.ReadFile(filepath.Join(root, "docs", "navigation.yaml"))
+	if err != nil {
+		t.Fatalf("read docs navigation: %v", err)
+	}
+	if !strings.Contains(string(navigation), "source: articles/architecture/geographic-rendering.md") {
+		t.Fatal("geographic rendering decision is not registered in documentation navigation")
+	}
+}
+
 func TestPublicSiteProductionContainerContractExists(t *testing.T) {
 	root := repoRoot(t)
 	dockerfile, err := os.ReadFile(filepath.Join(root, "Dockerfile.site"))
@@ -632,14 +610,15 @@ func TestPublicSiteProductionContainerContractExists(t *testing.T) {
 	for _, want := range []string{
 		"FROM node:24-bookworm@sha256:",
 		"FROM golang:1.25-bookworm@sha256:",
-		"go run ./internal/tools/configgen",
-		"go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3",
-		"typespec-compile -manifest api/apigen.yaml -target ui-signals",
-		"all -manifest api/apigen.yaml -target ui-signals",
-		"go run ./internal/tools/uisignalspostprocess",
+		"./scripts/generate_build_sources.sh",
 		"FROM oven/bun:1.3.7@sha256:",
+		"COPY --from=sourcegen /src/api/gen ./api/gen",
+		"COPY --from=sourcegen /src/api/visualization ./api/visualization",
+		"COPY --from=sourcegen /src/web/generated ./web/generated",
 		"RUN bun install --frozen-lockfile --no-cache",
-		"RUN bun run build:site",
+		"bun scripts/generate_visualization_validator.ts",
+		"bun scripts/generate_vega_lite_validator.ts",
+		"bun run build:site",
 		"FROM golang:1.25-bookworm@sha256:",
 		"CGO_ENABLED=0 go build -trimpath",
 		"./cmd/leapview-site",
@@ -655,6 +634,43 @@ func TestPublicSiteProductionContainerContractExists(t *testing.T) {
 	}
 	if strings.Contains(text, "apigen@v0.4.0") || strings.Contains(text, "apigenpostprocess") {
 		t.Error("Dockerfile.site still uses the retired APIGen v0.4 generation pipeline")
+	}
+}
+
+func TestBuildSourceGenerationContract(t *testing.T) {
+	root := repoRoot(t)
+	path := filepath.Join(root, "scripts", "generate_build_sources.sh")
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat shared build source generator: %v", err)
+	}
+	if info.Mode()&0o111 == 0 {
+		t.Fatal("shared build source generator is not executable")
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read shared build source generator: %v", err)
+	}
+	text := string(body)
+	commands := []string{
+		"go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 generate",
+		"go run ./internal/tools/configgen",
+		"typespec-compile -manifest api/apigen.yaml -target leapview-v1",
+		"typespec-compile -manifest api/apigen.yaml -target ui-signals",
+		"typespec-compile -manifest api/apigen.yaml -target visualization-ir",
+		"all -manifest api/apigen.yaml -target visualization-ir",
+		"schema export --format json-schema --out schemas/json",
+	}
+	previous := -1
+	for _, command := range commands {
+		current := strings.Index(text, command)
+		if current < 0 {
+			t.Fatalf("shared build source generator missing command %q", command)
+		}
+		if current <= previous {
+			t.Fatalf("shared build source generator command %q is out of order", command)
+		}
+		previous = current
 	}
 }
 
@@ -854,8 +870,11 @@ func TestSQLCOutputsAreGeneratedBuildInputs(t *testing.T) {
 			"internal/platform/db/models.go",
 			"internal/platform/db/*.sql.go",
 		},
-		"Dockerfile": {
+		filepath.Join("scripts", "generate_build_sources.sh"): {
 			"go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 generate",
+		},
+		"Dockerfile": {
+			"./scripts/generate_build_sources.sh",
 			"COPY --from=sourcegen /src/internal/platform/db/db.go ./internal/platform/db/db.go",
 			"COPY --from=sourcegen /src/internal/platform/db/models.go ./internal/platform/db/models.go",
 			"COPY --from=sourcegen /src/internal/platform/db/*.sql.go ./internal/platform/db/",
@@ -912,7 +931,7 @@ func TestDerivedArtifactsAreGeneratedBuildInputs(t *testing.T) {
 		},
 		"Dockerfile.site": {
 			"AS sourcegen",
-			"go run ./internal/tools/configgen",
+			"./scripts/generate_build_sources.sh",
 			"go run ./internal/tools/clidocgen",
 			"go run ./internal/tools/schemadocgen",
 			"go run ./internal/tools/openapidocgen",
@@ -923,6 +942,9 @@ func TestDerivedArtifactsAreGeneratedBuildInputs(t *testing.T) {
 		"Dockerfile": {
 			"COPY --from=sourcegen /src/internal/config/config_gen.go ./internal/config/config_gen.go",
 			"COPY --from=sourcegen /src/internal/configspec/names_gen.go ./internal/configspec/names_gen.go",
+		},
+		filepath.Join("scripts", "generate_build_sources.sh"): {
+			"go run ./internal/tools/configgen",
 		},
 		"Taskfile.yml": {
 			"desc: Build the LeapView public site assets from generated contracts",

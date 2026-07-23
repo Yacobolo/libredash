@@ -9,6 +9,7 @@ import (
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 	uiactions "github.com/Yacobolo/leapview/internal/ui/actions"
+	workspacecompiler "github.com/Yacobolo/leapview/internal/workspace/compiler"
 	"github.com/Yacobolo/leapview/pkg/pagestream"
 	g "maragu.dev/gomponents"
 	dsattr "maragu.dev/gomponents-datastar"
@@ -26,12 +27,20 @@ func BenchmarkDashboardDatastarLitBridge(b *testing.B) {
 func benchmarkDashboardBridge(b *testing.B, legacy bool) {
 	report, model, catalog := benchmarkDashboardFixture()
 	activePage := report.Pages[0]
+	definitions, err := workspacecompiler.CompileVisualizationDefinitions(&report, model)
+	if err != nil {
+		b.Fatal(err)
+	}
+	compiled, err := workspacecompiler.CompileDashboardDefinition(&report, definitions)
+	if err != nil {
+		b.Fatal(err)
+	}
 	htmlBytes := 0
 	jsonAttrBytes := 0
 
 	b.ReportAllocs()
 	for b.Loop() {
-		signals := BootstrapSignals("client", "benchmark-stream", catalog, report, model, report.Pages, activePage, dashboard.Filters{})
+		signals := BootstrapSignals("client", "benchmark-stream", catalog, compiled, model, definitions, report.Pages, activePage, dashboard.Filters{})
 		node := benchmarkDashboardDocument(catalog, report, model, activePage, signals, legacy)
 		var out strings.Builder
 		if err := node.Render(&out); err != nil {
@@ -140,7 +149,7 @@ func benchmarkDashboardCommandAttrs(catalog dashboard.Catalog, report reportdef.
 		g.Attr("data-on:lv-filters-refresh", reloadAction),
 		g.Attr("data-on:lv-selection-clear", "$filters.selections = []; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/clear-selection", "runtime")),
 		g.Attr("data-on:lv-interaction-select", "$interactionCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/select", "runtime", "interactionCommand")),
-		g.Attr("data-on:lv-visual-window-change", "$visualWindowCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/visual-window", "runtime", "visualWindowCommand")),
+		g.Attr("data-on:lv-visualization-window-request", "$visualWindowCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/visual-window", "runtime", "visualWindowCommand")),
 	}
 }
 
@@ -162,7 +171,7 @@ func benchmarkDashboardFixture() (reportdef.Dashboard, *semanticmodel.Model, das
 	}
 	visuals := map[string]reportdef.Visual{}
 	components := []dashboard.PageVisual{}
-	for i, kind := range []string{"bar_chart", "line_chart", "area_chart", "column_chart", "pie_chart", "donut_chart", "scatter_chart", "treemap_chart"} {
+	for i := range 8 {
 		id := "visual_" + string(rune('a'+i))
 		visuals[id] = reportdef.Visual{
 			Title: "Benchmark Visual " + string(rune('A'+i)),
@@ -172,10 +181,10 @@ func benchmarkDashboardFixture() (reportdef.Dashboard, *semanticmodel.Model, das
 				Measures:   fieldRefs("order_count"),
 			},
 		}
-		components = append(components, dashboard.PageVisual{ID: id, Kind: kind, Visual: id, X: float64((i % 4) * 300), Y: float64((i / 4) * 180), Width: 280, Height: 160})
+		components = append(components, dashboard.PageVisual{ID: id, Kind: "visual", Visual: id, X: float64((i % 4) * 300), Y: float64((i / 4) * 180), Width: 280, Height: 160})
 	}
 	for i, filterID := range []string{"state", "category", "status", "channel"} {
-		components = append(components, dashboard.PageVisual{ID: filterID + "_filter", Kind: "filter_card", Filter: filterID, X: float64(i * 220), Y: 390, Width: 200, Height: 120})
+		components = append(components, dashboard.PageVisual{ID: filterID + "_filter", Kind: "filter", Filter: filterID, X: float64(i * 220), Y: 390, Width: 200, Height: 120})
 	}
 	tables := map[string]reportdef.TableVisual{}
 	for i := 0; i < 4; i++ {
@@ -191,15 +200,14 @@ func benchmarkDashboardFixture() (reportdef.Dashboard, *semanticmodel.Model, das
 				{Key: "category", Label: "Category", Width: 180, Format: "text"},
 			},
 		}
-		components = append(components, dashboard.PageVisual{ID: id, Kind: "table", Table: id, X: float64(i * 300), Y: 540, Width: 280, Height: 220})
+		components = append(components, dashboard.PageVisual{ID: id, Kind: "visual", Visual: id, X: float64(i * 300), Y: 540, Width: 280, Height: 220})
 	}
 	report := reportdef.Dashboard{
 		ID:            "benchmark-dashboard",
 		Title:         "Benchmark Dashboard",
 		SemanticModel: "benchmark",
 		Filters:       filters,
-		Visuals:       visuals,
-		Tables:        tables,
+		Visuals:       reportdef.MergeVisualizations(reportdef.ChartVisualizations(visuals), reportdef.TabularVisualizations("table", tables)),
 		Pages: []dashboard.Page{{
 			ID:      "overview",
 			Title:   "Overview",

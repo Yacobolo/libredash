@@ -14,6 +14,8 @@ spec:
     status: {label: Status}
     category: {label: Category}
     state: {label: State}
+    latitude: {label: Latitude}
+    longitude: {label: Longitude}
     revenue: {label: Revenue}
     review_score: {label: Review score}
     delivery_days: {label: Delivery days}
@@ -26,6 +28,8 @@ spec:
         status,
         category,
         state,
+        CAST(-33 + (hash(order_id) % 3800) / 100.0 AS DOUBLE) AS latitude,
+        CAST(-74 + (hash(order_id || '-longitude') % 4000) / 100.0 AS DOUBLE) AS longitude,
         CAST(revenue AS DOUBLE) AS revenue,
         CAST(review_score AS DOUBLE) AS review_score,
         CAST(delivery_days AS DOUBLE) AS delivery_days,

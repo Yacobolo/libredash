@@ -9,6 +9,7 @@ import (
 	analyticsmaterialize "github.com/Yacobolo/leapview/internal/analytics/materialize"
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	"github.com/Yacobolo/leapview/internal/dashboard"
+	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
 	"github.com/Yacobolo/leapview/internal/refreshpipeline"
 	"github.com/Yacobolo/leapview/internal/workspace"
 )
@@ -47,35 +48,16 @@ func projectModelTable(spec projectModelTableSpec) semanticmodel.Table {
 	return table
 }
 
-func projectDashboardPages(pages []projectDashboardPage, visuals map[string]dashboardVisualSpec) []dashboard.Page {
+func projectDashboardPages(pages []projectDashboardPage) []dashboard.Page {
 	out := make([]dashboard.Page, 0, len(pages))
 	for _, page := range pages {
-		components := make([]dashboard.PageVisual, 0, len(page.Components))
-		for _, component := range page.Components {
-			switch component.Kind {
-			case "visual":
-				definition := visuals[component.Visual]
-				if definition.Tabular != nil {
-					component.Kind = "table"
-					component.Table = component.Visual
-					component.Visual = ""
-				} else if definition.Type == "kpi" {
-					component.Kind = "kpi_card"
-				} else {
-					component.Kind = definition.Type + "_chart"
-				}
-			case "filter":
-				component.Kind = "filter_card"
-			}
-			components = append(components, component)
-		}
 		out = append(out, dashboard.Page{
 			ID:          page.ID,
 			Title:       page.Title,
 			Description: page.Description,
 			Canvas:      page.Canvas,
 			Grid:        page.Grid,
-			Visuals:     components,
+			Visuals:     append([]dashboard.PageVisual(nil), page.Components...),
 		})
 	}
 	return out
@@ -236,7 +218,7 @@ func (workspaceProject *WorkspaceProject) definition(project Project) (*workspac
 	definition := &workspace.Definition{
 		Catalog:      catalog,
 		Models:       map[string]*semanticmodel.Model{},
-		Dashboards:   workspaceProject.Dashboards,
+		Dashboards:   map[string]dashboarddefinition.Definition{},
 		Publications: copyDashboardPublications(workspaceProject.Publications),
 		Access: workspace.AccessPolicy{
 			Groups:       copyWorkspaceGroups(workspaceProject.AccessGroups),
@@ -267,6 +249,15 @@ func (workspaceProject *WorkspaceProject) definition(project Project) (*workspac
 		if err := ValidateDashboard(dashboard, definition.Models); err != nil {
 			return nil, resourceError(workspaceProject.DashboardPaths[name], "dashboard:"+workspaceProject.ID+"."+name, "spec", "loading dashboard %q: %s", name, err.Error())
 		}
+		visualizations, err := compileVisualizationDefinitions(dashboard, definition.Models[dashboard.SemanticModel])
+		if err != nil {
+			return nil, resourceError(workspaceProject.DashboardPaths[name], "dashboard:"+workspaceProject.ID+"."+name, "spec.visuals", "compiling dashboard %q visualizations: %s", name, err.Error())
+		}
+		compiledDashboard, err := CompileDashboardDefinition(dashboard, visualizations)
+		if err != nil {
+			return nil, resourceError(workspaceProject.DashboardPaths[name], "dashboard:"+workspaceProject.ID+"."+name, "spec", "compiling dashboard %q definition: %s", name, err.Error())
+		}
+		definition.Dashboards[name] = compiledDashboard
 		definition.Catalog.Dashboards = append(definition.Catalog.Dashboards, workspace.CatalogDashboard{
 			ID:          name,
 			Title:       firstNonEmpty(workspaceProject.DashboardTitles[name], dashboard.Title),

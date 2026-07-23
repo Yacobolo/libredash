@@ -66,25 +66,24 @@ The visual definition owns semantic query and presentation settings. The page en
 
 ### Design the query result
 
-Names on the left of `dimensions` and `measures` are result aliases consumed by the visual shape. Values on the right refer to semantic fields. Choose clear aliases and keep them stable when custom options or interactions depend on them.
+Names on the left of `dimensions` and `measures` are stable field IDs compiled into the visualization specification. Values on the right refer to semantic fields. Choose clear aliases and keep them stable when typed presentation or interactions depend on them.
 
 Every chart query should have a bounded limit and deterministic sort. For time series, sort the time field ascending. For ranked bars, sort the value descending and choose a limit that users can read. Do not rely on database default order.
 
 ### Add a KPI
 
-KPI visuals use a single-value shape:
+KPI visuals use one measure and typed KPI presentation:
 
 ```yaml
 visuals:
   total_revenue:
     type: kpi
-    shape: single_value
     query:
       measures:
         revenue:
-    options:
+    presentation:
       note: Filtered order revenue
-      tone: green
+      tone: success
 ```
 
 Place it on the page with `kind: visual` and `visual: total_revenue`. Its `type: kpi` selects the KPI renderer. The semantic measure supplies empty and formatting behavior; the dashboard supplies context-specific note and tone.

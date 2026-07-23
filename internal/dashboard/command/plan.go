@@ -2,10 +2,14 @@ package command
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	"github.com/Yacobolo/leapview/internal/dashboard/consumer"
+	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
 	"github.com/Yacobolo/leapview/internal/dashboard/report"
+	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 )
 
 type TargetKind = consumer.Kind
@@ -13,7 +17,8 @@ type TargetKind = consumer.Kind
 const (
 	TargetFilterOptions TargetKind = consumer.KindFilterOptions
 	TargetVisual        TargetKind = consumer.KindVisual
-	TargetTable         TargetKind = consumer.KindTable
+	TargetWindow        TargetKind = consumer.KindWindow
+	TargetSpatial       TargetKind = consumer.KindSpatial
 )
 
 type Target = consumer.Target
@@ -37,12 +42,32 @@ func (s Service) PrepareSelect(request Request, authoritative dashboard.Filters)
 	if err != nil {
 		return PreparedRefresh{}, fmt.Errorf("invalid interaction selection: %w", err)
 	}
+	if err := s.requireVisualizationOnPage(request, command.SourceID); err != nil {
+		return PreparedRefresh{}, fmt.Errorf("invalid interaction selection: %w", err)
+	}
 	filters = report.NormalizeFilters(s.Metrics, request.DashboardID, request.PageID, filters.ApplyInteraction(command))
 	targets, err := s.selectionTargets(request, command.SourceKind, command.SourceID)
 	if err != nil {
 		return PreparedRefresh{}, err
 	}
 	return PreparedRefresh{Filters: filters, Plan: RefreshPlan{Command: "select", Targets: targets}}, nil
+}
+
+func (s Service) PrepareSpatialSelect(request Request, authoritative dashboard.Filters) (PreparedRefresh, error) {
+	filters := report.NormalizeFilters(s.Metrics, request.DashboardID, request.PageID, authoritative)
+	command, err := canonicalSpatialInteractionCommand(s.Metrics, request.DashboardID, request.SpatialInteractionCommand)
+	if err != nil {
+		return PreparedRefresh{}, fmt.Errorf("invalid spatial interaction selection: %w", err)
+	}
+	if err := s.requireVisualizationOnPage(request, command.VisualID); err != nil {
+		return PreparedRefresh{}, fmt.Errorf("invalid spatial interaction selection: %w", err)
+	}
+	filters = report.NormalizeFilters(s.Metrics, request.DashboardID, request.PageID, filters.ApplySpatialInteraction(command))
+	targets, err := s.spatialSelectionTargets(request, command.VisualID, command.InteractionID)
+	if err != nil {
+		return PreparedRefresh{}, err
+	}
+	return PreparedRefresh{Filters: filters, Plan: RefreshPlan{Command: "spatial_select", Targets: targets}}, nil
 }
 
 // PrepareClearSelection queries the ordered union of targets affected by the
@@ -65,7 +90,22 @@ func (s Service) PrepareClearSelection(request Request, authoritative dashboard.
 			targets = append(targets, target)
 		}
 	}
+	for _, selection := range filters.SpatialSelections {
+		selectionTargets, err := s.spatialSelectionTargets(request, selection.VisualID, selection.InteractionID)
+		if err != nil {
+			return PreparedRefresh{}, err
+		}
+		for _, target := range selectionTargets {
+			key := target.Key()
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+			targets = append(targets, target)
+		}
+	}
 	filters.Selections = []dashboard.InteractionSelection{}
+	filters.SpatialSelections = []dashboard.SpatialInteractionSelection{}
 	return PreparedRefresh{Filters: filters, Plan: RefreshPlan{Command: "clear_selection", Targets: targets}}, nil
 }
 
@@ -86,15 +126,119 @@ func (s Service) PrepareInitial(request Request, initial dashboard.Filters) (Pre
 
 func (s Service) PrepareVisualWindow(request Request, authoritative dashboard.Filters) (PreparedRefresh, error) {
 	filters := report.NormalizeFilters(s.Metrics, request.DashboardID, request.PageID, authoritative)
-	tableRequest := s.Metrics.NormalizeTableRequest(request.DashboardID, request.VisualWindowCommand)
+	tableRequest, err := s.visualWindowTableRequest(request.DashboardID, request.VisualWindowCommand)
+	if err != nil {
+		return PreparedRefresh{}, err
+	}
 	return PreparedRefresh{
 		Filters: filters,
 		Plan: RefreshPlan{Command: "visual_window", Targets: []Target{{
-			Kind:         TargetTable,
-			ID:           tableRequest.Table,
-			TableRequest: tableRequest,
+			Kind:          TargetWindow,
+			ID:            tableRequest.Table,
+			WindowRequest: tableRequest,
 		}}},
 	}, nil
+}
+
+func (s Service) visualWindowTableRequest(dashboardID string, window dashboard.VisualizationWindowRequest) (dashboard.TableRequest, error) {
+	if window.VisualID == "" {
+		return dashboard.TableRequest{}, fmt.Errorf("visual window requires a visual ID")
+	}
+	definition, _, ok := s.Metrics.Report(dashboardID)
+	if !ok {
+		return dashboard.TableRequest{}, fmt.Errorf("dashboard %q is not published", dashboardID)
+	}
+	visual, ok := definition.Visualizations[window.VisualID]
+	if !ok {
+		return dashboard.TableRequest{}, fmt.Errorf("unknown windowed visual %q", window.VisualID)
+	}
+	if visual.Query.Kind != visualizationdefinition.QueryDetail && visual.Query.Kind != visualizationdefinition.QueryMatrix && visual.Query.Kind != visualizationdefinition.QueryPivot {
+		return dashboard.TableRequest{}, fmt.Errorf("visual %q is not windowed", window.VisualID)
+	}
+	if window.SpecRevision != "" && window.SpecRevision != visual.SpecRevision {
+		return dashboard.TableRequest{}, fmt.Errorf("visual %q specification revision is stale", window.VisualID)
+	}
+	if window.DataRevision < 0 || window.RequestSeq <= 0 || window.ResetVersion < 0 || window.Start < 0 || window.Start > math.MaxInt || window.Limit <= 0 || window.Limit > dashboard.TableMaxRequestCount {
+		return dashboard.TableRequest{}, fmt.Errorf("invalid window coordinates for visual %q", window.VisualID)
+	}
+	if window.BlockID != "all" && window.BlockID != "a" && window.BlockID != "b" && window.BlockID != "c" {
+		return dashboard.TableRequest{}, fmt.Errorf("invalid window block %q", window.BlockID)
+	}
+	if len(window.Sort) > 1 {
+		return dashboard.TableRequest{}, fmt.Errorf("visual window supports exactly one active sort")
+	}
+	request := dashboard.TableRequest{
+		Table: window.VisualID, Block: window.BlockID, Start: int(window.Start), Count: int(window.Limit),
+		RequestSeq: int(window.RequestSeq), ResetVersion: int(window.ResetVersion),
+	}
+	if len(window.Sort) == 1 {
+		sort := window.Sort[0]
+		if sort.Field.Dataset == "" || sort.Field.Field == "" {
+			return dashboard.TableRequest{}, fmt.Errorf("visual window sort field is required")
+		}
+		request.Sort.Key = sort.Field.Field
+		switch sort.Direction {
+		case visualizationir.VisualizationSortDirectionAscending:
+			request.Sort.Direction = "asc"
+		case visualizationir.VisualizationSortDirectionDescending:
+			request.Sort.Direction = "desc"
+		default:
+			return dashboard.TableRequest{}, fmt.Errorf("unsupported visual window sort direction %q", sort.Direction)
+		}
+	}
+	return s.Metrics.NormalizeVisualizationWindow(dashboardID, request), nil
+}
+
+func internalTableRequest(window dashboard.VisualizationWindowRequest) dashboard.TableRequest {
+	request := dashboard.TableRequest{
+		Table: window.VisualID, Block: window.BlockID, Start: int(window.Start), Count: int(window.Limit),
+		RequestSeq: int(window.RequestSeq), ResetVersion: int(window.ResetVersion),
+	}
+	if len(window.Sort) > 0 {
+		request.Sort.Key = window.Sort[0].Field.Field
+		if window.Sort[0].Direction == visualizationir.VisualizationSortDirectionDescending {
+			request.Sort.Direction = "desc"
+		} else {
+			request.Sort.Direction = "asc"
+		}
+	}
+	return request
+}
+
+func (s Service) PrepareVisualSpatialWindow(request Request, authoritative dashboard.Filters) (PreparedRefresh, error) {
+	filters := report.NormalizeFilters(s.Metrics, request.DashboardID, request.PageID, authoritative)
+	spatial := request.VisualSpatialWindowCommand
+	definition, _, ok := s.Metrics.Report(request.DashboardID)
+	if !ok {
+		return PreparedRefresh{}, fmt.Errorf("dashboard %q is not published", request.DashboardID)
+	}
+	visual, ok := definition.Visualizations[spatial.VisualID]
+	if !ok {
+		return PreparedRefresh{}, fmt.Errorf("unknown spatial visual %q", spatial.VisualID)
+	}
+	if _, ok := visual.Spec.Value.(*visualizationir.GeographicVisualizationSpec); !ok {
+		return PreparedRefresh{}, fmt.Errorf("visual %q is not geographic", spatial.VisualID)
+	}
+	if visual.Query.Kind != visualizationdefinition.QuerySpatial || visual.Query.Spatial == nil || visual.Query.Spatial.Viewport == nil {
+		return PreparedRefresh{}, fmt.Errorf("visual %q does not use spatial windowing", spatial.VisualID)
+	}
+	if spatial.SpecRevision != visual.SpecRevision {
+		return PreparedRefresh{}, fmt.Errorf("spatial visual %q specification revision is stale", spatial.VisualID)
+	}
+	values := []float64{spatial.Bounds.West, spatial.Bounds.South, spatial.Bounds.East, spatial.Bounds.North, spatial.Zoom}
+	for _, value := range values {
+		if math.IsNaN(value) || math.IsInf(value, 0) {
+			return PreparedRefresh{}, fmt.Errorf("spatial viewport values must be finite")
+		}
+	}
+	if spatial.RequestSeq <= 0 || spatial.DataRevision < 0 || spatial.ResetVersion < 0 || spatial.Width <= 0 || spatial.Width > 16384 || spatial.Height <= 0 || spatial.Height > 16384 || spatial.Zoom < 0 || spatial.Zoom > 24 || spatial.Bounds.West < -180 || spatial.Bounds.West > 180 || spatial.Bounds.East < -180 || spatial.Bounds.East > 180 || spatial.Bounds.South < -90 || spatial.Bounds.South > 90 || spatial.Bounds.North < -90 || spatial.Bounds.North > 90 || spatial.Bounds.South > spatial.Bounds.North {
+		return PreparedRefresh{}, fmt.Errorf("invalid spatial viewport for visual %q", spatial.VisualID)
+	}
+	wantWindowID := fmt.Sprintf("%.6f,%.6f,%.6f,%.6f@%.3f:%dx%d", spatial.Bounds.West, spatial.Bounds.South, spatial.Bounds.East, spatial.Bounds.North, spatial.Zoom, spatial.Width, spatial.Height)
+	if spatial.WindowID != wantWindowID {
+		return PreparedRefresh{}, fmt.Errorf("spatial visual %q window identity mismatch", spatial.VisualID)
+	}
+	return PreparedRefresh{Filters: filters, Plan: RefreshPlan{Command: "visual_spatial_window", Targets: []Target{{Kind: TargetSpatial, ID: spatial.VisualID, SpatialRequest: spatial}}}}, nil
 }
 
 func (s Service) fullPlan(request Request, commandName string) RefreshPlan {
@@ -106,20 +250,28 @@ func (s Service) fullPlan(request Request, commandName string) RefreshPlan {
 	if !ok {
 		return RefreshPlan{Command: commandName}
 	}
-	tableRequest := s.Metrics.NormalizeTableRequest(request.DashboardID, request.VisualWindowCommand).Reset()
+	tableRequest := s.Metrics.NormalizeVisualizationWindow(request.DashboardID, internalTableRequest(request.VisualWindowCommand)).Reset()
 	targets := make([]Target, 0, len(page.Visuals))
 	seen := map[string]struct{}{}
 	for _, item := range page.Visuals {
 		var target Target
 		switch {
-		case item.Kind == "filter_card" && item.Filter != "":
+		case item.Kind == "filter" && item.Filter != "":
 			target = Target{Kind: TargetFilterOptions, ID: item.Filter}
 		case item.Visual != "":
-			target = Target{Kind: TargetVisual, ID: item.Visual}
-		case item.Table != "":
-			requestForTable := tableRequest
-			requestForTable.Table = item.Table
-			target = Target{Kind: TargetTable, ID: item.Table, TableRequest: requestForTable}
+			if compiled, ok := definition.Visualizations[item.Visual]; ok {
+				if spatial, windowed := spatialTarget(compiled, request.VisualSpatialWindowCommand, commandName != "initial"); windowed {
+					target = spatial
+				} else if isGridVisualization(compiled) {
+					requestForTable := tableRequest
+					requestForTable.Table = item.Visual
+					target = Target{Kind: TargetWindow, ID: item.Visual, WindowRequest: requestForTable}
+				} else {
+					target = Target{Kind: TargetVisual, ID: item.Visual}
+				}
+			} else {
+				target = Target{Kind: TargetVisual, ID: item.Visual}
+			}
 		default:
 			continue
 		}
@@ -151,29 +303,40 @@ func (s Service) selectionTargets(request Request, sourceKind, sourceID string) 
 	var ids []string
 	switch sourceKind {
 	case "visual":
-		if visual, ok := definition.Visuals[sourceID]; ok {
-			ids = visual.Interaction.PointSelection.Targets
-		} else if visual, ok := definition.Tables[sourceID]; ok {
-			ids = visual.Interaction.RowSelection.Targets
-		} else {
+		visual, ok := definition.Visualizations[sourceID]
+		if !ok {
 			return nil, fmt.Errorf("unknown source visual %q", sourceID)
+		}
+		if interaction, ok := compiledInteraction(visual); ok {
+			ids = interaction.Targets
 		}
 	default:
 		return nil, fmt.Errorf("unknown source kind %q", sourceKind)
 	}
-	tableRequest := s.Metrics.NormalizeTableRequest(request.DashboardID, request.VisualWindowCommand).Reset()
+	pageIDs, err := visualizationIDsForPage(definition, request.PageID)
+	if err != nil {
+		return nil, err
+	}
+	tableRequest := s.Metrics.NormalizeVisualizationWindow(request.DashboardID, internalTableRequest(request.VisualWindowCommand)).Reset()
 	targets := make([]Target, 0, len(ids))
 	seen := map[string]struct{}{}
 	for _, id := range ids {
+		if _, onPage := pageIDs[id]; !onPage {
+			continue
+		}
 		var target Target
-		if _, ok := definition.Visuals[id]; ok {
-			target = Target{Kind: TargetVisual, ID: id}
-		} else if _, ok := definition.Tables[id]; ok {
+		targetDefinition, ok := definition.Visualizations[id]
+		if !ok {
+			return nil, fmt.Errorf("interaction references unknown target %q", id)
+		}
+		if spatial, windowed := spatialTarget(targetDefinition, request.VisualSpatialWindowCommand, true); windowed {
+			target = spatial
+		} else if isGridVisualization(targetDefinition) {
 			requestForTable := tableRequest
 			requestForTable.Table = id
-			target = Target{Kind: TargetTable, ID: id, TableRequest: requestForTable}
+			target = Target{Kind: TargetWindow, ID: id, WindowRequest: requestForTable}
 		} else {
-			return nil, fmt.Errorf("interaction references unknown target %q", id)
+			target = Target{Kind: TargetVisual, ID: id}
 		}
 		key := target.Key()
 		if _, duplicate := seen[key]; duplicate {
@@ -183,4 +346,118 @@ func (s Service) selectionTargets(request Request, sourceKind, sourceID string) 
 		targets = append(targets, target)
 	}
 	return targets, nil
+}
+
+func (s Service) spatialSelectionTargets(request Request, sourceID, interactionID string) ([]Target, error) {
+	definition, _, ok := s.Metrics.Report(request.DashboardID)
+	if !ok {
+		return nil, fmt.Errorf("dashboard %q is not published", request.DashboardID)
+	}
+	source, ok := definition.Visualizations[sourceID]
+	if !ok {
+		return nil, fmt.Errorf("unknown source visual %q", sourceID)
+	}
+	spec, ok := source.Spec.Value.(*visualizationir.GeographicVisualizationSpec)
+	if !ok {
+		return nil, fmt.Errorf("visual %q is not geographic", sourceID)
+	}
+	var ids []string
+	for _, interaction := range spec.SpatialInteractions {
+		if interaction.ID == interactionID {
+			ids = interaction.Targets
+			break
+		}
+	}
+	if ids == nil {
+		return nil, fmt.Errorf("visual %q has no spatial interaction %q", sourceID, interactionID)
+	}
+	return s.targetsForIDs(request, ids)
+}
+
+func (s Service) targetsForIDs(request Request, ids []string) ([]Target, error) {
+	definition, _, ok := s.Metrics.Report(request.DashboardID)
+	if !ok {
+		return nil, fmt.Errorf("dashboard %q is not published", request.DashboardID)
+	}
+	pageIDs, err := visualizationIDsForPage(definition, request.PageID)
+	if err != nil {
+		return nil, err
+	}
+	tableRequest := s.Metrics.NormalizeVisualizationWindow(request.DashboardID, internalTableRequest(request.VisualWindowCommand)).Reset()
+	targets := make([]Target, 0, len(ids))
+	seen := map[string]struct{}{}
+	for _, id := range ids {
+		if _, onPage := pageIDs[id]; !onPage {
+			continue
+		}
+		targetDefinition, ok := definition.Visualizations[id]
+		if !ok {
+			return nil, fmt.Errorf("interaction references unknown target %q", id)
+		}
+		var target Target
+		if spatial, windowed := spatialTarget(targetDefinition, request.VisualSpatialWindowCommand, true); windowed {
+			target = spatial
+		} else if isGridVisualization(targetDefinition) {
+			requestForTable := tableRequest
+			requestForTable.Table = id
+			target = Target{Kind: TargetWindow, ID: id, WindowRequest: requestForTable}
+		} else {
+			target = Target{Kind: TargetVisual, ID: id}
+		}
+		if _, duplicate := seen[target.Key()]; duplicate {
+			continue
+		}
+		seen[target.Key()] = struct{}{}
+		targets = append(targets, target)
+	}
+	return targets, nil
+}
+
+func (s Service) requireVisualizationOnPage(request Request, visualID string) error {
+	definition, _, ok := s.Metrics.Report(request.DashboardID)
+	if !ok {
+		return fmt.Errorf("dashboard %q is not published", request.DashboardID)
+	}
+	ids, err := visualizationIDsForPage(definition, request.PageID)
+	if err != nil {
+		return err
+	}
+	if _, ok := ids[visualID]; !ok {
+		return fmt.Errorf("source visual %q is not on page %q", visualID, request.PageID)
+	}
+	return nil
+}
+
+func visualizationIDsForPage(definition dashboarddefinition.Definition, pageID string) (map[string]struct{}, error) {
+	page, ok := definition.PageOrDefault(pageID)
+	if !ok || (pageID != "" && page.ID != pageID) {
+		return nil, fmt.Errorf("unknown dashboard page %q", pageID)
+	}
+	ids := make(map[string]struct{}, len(page.Visuals))
+	for _, placement := range page.Visuals {
+		if placement.Visual != "" {
+			ids[placement.Visual] = struct{}{}
+		}
+	}
+	return ids, nil
+}
+
+func spatialTarget(definition visualizationdefinition.Definition, current dashboard.SpatialWindowRequest, reset bool) (Target, bool) {
+	if definition.Query.Kind != visualizationdefinition.QuerySpatial || definition.Query.Spatial == nil || definition.Query.Spatial.Viewport == nil {
+		return Target{}, false
+	}
+	_, ok := definition.Spec.Value.(*visualizationir.GeographicVisualizationSpec)
+	if !ok {
+		return Target{}, false
+	}
+	if current.VisualID != definition.ID || current.SpecRevision != definition.SpecRevision || current.Width <= 0 || current.Height <= 0 {
+		current = dashboard.SpatialWindowRequest{VisualID: definition.ID, SpecRevision: definition.SpecRevision, RequestSeq: 1, ResetVersion: 1, Bounds: dashboard.SpatialBounds{West: -180, South: -85, East: 180, North: 85}, Zoom: 1, Width: 1024, Height: 768}
+	} else {
+		current.RequestSeq++
+		if reset {
+			current.ResetVersion++
+		}
+	}
+	current.WindowID = fmt.Sprintf("%.6f,%.6f,%.6f,%.6f@%.3f:%dx%d", current.Bounds.West, current.Bounds.South, current.Bounds.East, current.Bounds.North, current.Zoom, current.Width, current.Height)
+	return Target{Kind: TargetSpatial, ID: definition.ID, SpatialRequest: current}, true
 }

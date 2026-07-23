@@ -2,25 +2,29 @@
 
 A visual type is complete only when resource validation, semantic query shape, server payload, renderer adaptation, interactions, documentation, examples, and tests agree. Start by deciding whether the requirement is truly a new type, a new renderer-neutral option, or only an adapter improvement for an existing shape.
 
+LeapView compiles every built-in visual into the versioned IR described by the [visualization architecture](/docs/architecture/visual-plugins). Charts, KPIs, tables, matrices, and pivots share visual identity, page placement, envelopes, commands, interactions, and headless APIs. New product semantics must remain renderer-independent, closed, typed, and suitable for immutable specifications and validated inline or windowed data.
+
 ## Define the product contract
 
 Specify:
 
 - the visual type ID and compatible page component kind;
-- the renderer-neutral shape;
+- the renderer-independent specification kind and mark;
 - required and optional dimensions, measures, series, or table input;
 - sorting and cardinality rules;
 - stable payload fields and formatting behavior;
 - whether point selection is supported and which datum fields identify it;
 - empty, invalid, and partial data behavior.
 
-Add the type/shape to the configuration contract in `internal/configschema/contracts/contracts.cue` and to owning Go dashboard report validation. Update tests that reject unsupported combinations. Regenerate JSON Schema and configuration reference.
+Add the type to the closed authoring contract and canonical TypeSpec IR, then update compiler capability validation. Update tests that reject unsupported combinations. Regenerate Go, TypeScript, JSON Schema, and configuration reference artifacts.
 
 Do not begin by adding a raw ECharts option. The server and non-ECharts consumers need to understand the product meaning first.
 
+MapLibre exclusively owns geographic visuals. New map behavior must be a closed geographic IR layer rendered within the existing MapLibre camera and interaction lifecycle, not an ECharts `geo` fallback or a second canvas overlay. See the [geographic rendering decision](/docs/architecture/geographic-rendering).
+
 ## Produce the server payload
 
-Extend dashboard runtime normalization so a valid semantic query becomes the expected `ChartPayload`: type, shape, dimensions, measures, data, format, options, renderer, and interaction mappings.
+Extend compilation and data shaping so a valid semantic query becomes a `VisualizationSpec` plus validated inline or windowed `VisualizationDataState` inside one envelope.
 
 Test:
 
@@ -34,13 +38,13 @@ Test:
 
 Keep renderer-specific data transformations out of Go unless they are part of the stable product payload.
 
-## Extend browser types and adapters
+## Extend browser adapters
 
-Add the type/shape to `web/components/dashboard/charts/types.ts`. Implement the conversion in `echarts-adapters.ts` or an appropriately focused adapter module. Register a new rendering library only through `registry.ts`/`renderers.ts` and the `ChartRenderer` lifecycle.
+Regenerate the canonical browser types from `api/visualization`; never add a parallel handwritten visual model. Implement ECharts behavior in the matching semantic translator under `web/components/dashboard/visualization/adapters/echarts/`, or update the owning TanStack, HTML, MapLibre, or sandboxed Vega-Lite adapter. Register an engine only through `web/components/dashboard/visualization/registry.ts` and the common `RendererAdapter` lifecycle.
 
 The adapter must handle theme tokens, resize, update without remount when safe, clear, and dispose. Avoid global listeners or renderer instances that survive component disconnect.
 
-Use `rendererOptions` only for a bounded exceptional setting. Prefer a product-level option when the behavior could apply to several renderer implementations.
+Do not add renderer-native options to YAML or the IR. Add a typed product-level presentation field, validate it during compilation, and translate it inside the owning adapter.
 
 ## Implement interactions
 

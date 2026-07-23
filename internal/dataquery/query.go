@@ -15,6 +15,7 @@ const (
 	KindModelTableRows       Kind = "model_table_rows"
 	KindSemanticHistogram    Kind = "semantic_histogram"
 	KindSemanticDistribution Kind = "semantic_distribution"
+	KindSemanticSpatial      Kind = "semantic_spatial"
 )
 
 type Query struct {
@@ -45,6 +46,27 @@ type Query struct {
 	Limit               int
 	BinCount            int
 	IncludeTotal        bool
+	Spatial             *SpatialWindow
+}
+
+type SpatialPrecision string
+
+const (
+	SpatialPrecisionRaw        SpatialPrecision = "raw"
+	SpatialPrecisionAggregated SpatialPrecision = "aggregated"
+)
+
+type SpatialWindow struct {
+	Latitude   Field
+	Longitude  Field
+	West       float64
+	South      float64
+	East       float64
+	North      float64
+	Width      int
+	Height     int
+	FeatureCap int
+	Precision  SpatialPrecision
 }
 
 type Field struct {
@@ -64,6 +86,26 @@ type Filter struct {
 	Operator string
 	Values   []any
 	Groups   []FilterGroup
+	Spatial  *SpatialFilter
+}
+
+type SpatialFilter struct {
+	Kind           string
+	LatitudeField  string
+	LongitudeField string
+	Fact           string
+	West           float64
+	South          float64
+	East           float64
+	North          float64
+	Points         []SpatialPoint
+	Center         SpatialPoint
+	RadiusMeters   float64
+}
+
+type SpatialPoint struct {
+	Longitude float64
+	Latitude  float64
 }
 
 type FilterGroup struct {
@@ -161,6 +203,7 @@ const (
 	OperationDashboardHistogram     = "dashboard_histogram"
 	OperationDashboardDistribution  = "dashboard_distribution"
 	OperationDashboardFilterOptions = "dashboard_filter_options"
+	OperationDashboardSpatial       = "dashboard_spatial"
 	OperationAPIQuery               = "api_query"
 	OperationAPIPreview             = "api_preview"
 	OperationAgentQuery             = "agent_query"
@@ -291,6 +334,17 @@ func (q Query) Validate() error {
 		}
 		if q.Kind == KindSemanticHistogram && q.BinCount <= 0 {
 			return fmt.Errorf("semantic histogram query requires a positive bin count")
+		}
+	case KindSemanticSpatial:
+		if strings.TrimSpace(q.Target) == "" || len(q.Fields) == 0 || q.Spatial == nil {
+			return fmt.Errorf("semantic spatial query requires target, selected fields, and spatial window")
+		}
+		spatial := q.Spatial
+		if strings.TrimSpace(spatial.Latitude.Field) == "" || strings.TrimSpace(spatial.Longitude.Field) == "" || spatial.Width <= 0 || spatial.Height <= 0 || spatial.FeatureCap <= 0 {
+			return fmt.Errorf("semantic spatial query requires coordinates, viewport dimensions, and feature cap")
+		}
+		if spatial.Precision != SpatialPrecisionRaw && spatial.Precision != SpatialPrecisionAggregated {
+			return fmt.Errorf("unsupported semantic spatial precision %q", spatial.Precision)
 		}
 	default:
 		return fmt.Errorf("unsupported data query kind %q", q.Kind)

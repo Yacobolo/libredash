@@ -428,10 +428,15 @@ sections:
             summary: Understand server-owned state and SSE response contracts.
             source: articles/architecture/datastar.md
           - slug: architecture/visual-plugins
-            title: Visual plugin architecture
+            title: Visualization architecture
             type: explanation
-            summary: Understand renderer-neutral shapes and renderer adapters.
+            summary: Understand the visualization IR, generated contracts, runtime data states, and renderer adapters.
             source: articles/architecture/visual-plugins.md
+          - slug: architecture/geographic-rendering
+            title: Geographic rendering decision
+            type: explanation
+            summary: Understand why MapLibre exclusively owns built-in geographic rendering.
+            source: articles/architecture/geographic-rendering.md
       - id: contributing
         title: Contributing
         summary: Develop LeapView and extend its generated contracts safely.

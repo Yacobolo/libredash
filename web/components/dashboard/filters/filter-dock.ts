@@ -5,7 +5,7 @@ import type { DashboardFilters, DashboardStatus, ReportFilterConfig } from '../.
 import { jsonAttribute } from '../../shared/json-attribute'
 import { lucideIcon } from '../../shared/lucide-icons'
 
-const emptyFilters: DashboardFilters = { controls: {}, selections: [] }
+const emptyFilters: DashboardFilters = { controls: {}, selections: [], spatialSelections: [] }
 
 class LeapViewFilterDock extends LitElement {
   @property({ converter: jsonAttribute<ReportFilterConfig[]>([]) }) config: ReportFilterConfig[] = []

@@ -3,11 +3,11 @@ import { property, state } from 'lit/decorators.js'
 import { ExternalLink, Plus, X } from 'lucide'
 import type {
   AgentContextSignal,
-  AgentReferenceSearchSignal,
-  AgentReferenceSignal,
-  ChatSignal,
-  DashboardVisual,
+	AgentReferenceSearchSignal,
+	AgentReferenceSignal,
+	ChatSignal,
 } from '../../generated/signals'
+import type { VisualizationEnvelope } from '../../generated/visualization'
 import { DatastarLit } from '../shared/datastar-lit'
 import { domainEvents, emitDomainEvent } from '../shared/events'
 import { lucideIcon } from '../shared/lucide-icons'
@@ -207,12 +207,12 @@ class ChatDrawer extends DatastarLit(LitElement) {
     return this.signal<AgentContextSignal | null>('agentContext', null)
   }
 
-  get visuals(): Record<string, DashboardVisual> {
-    return this.signal<Record<string, DashboardVisual>>('agentVisuals', {})
+	get visuals(): Record<string, VisualizationEnvelope> {
+		return this.signal<Record<string, VisualizationEnvelope>>('agentVisuals', {})
   }
 
 	get dashboardFilters(): AgentContextSignal['filters'] {
-		return this.signal<AgentContextSignal['filters']>('filters', this.context?.filters ?? { controls: {}, selections: [] })
+		return this.signal<AgentContextSignal['filters']>('filters', this.context?.filters ?? { controls: {}, selections: [], spatialSelections: [] })
 	}
 
   get pending(): boolean {

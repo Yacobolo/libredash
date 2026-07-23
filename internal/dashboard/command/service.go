@@ -3,14 +3,101 @@ package command
 import (
 	"fmt"
 
+	semanticquery "github.com/Yacobolo/leapview/internal/analytics/query"
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	"github.com/Yacobolo/leapview/internal/dashboard/report"
 	"github.com/Yacobolo/leapview/internal/dashboard/reportmodel"
+	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 )
 
 type Metrics interface {
 	report.Metrics
-	NormalizeTableRequest(dashboardID string, request dashboard.TableRequest) dashboard.TableRequest
+	NormalizeVisualizationWindow(dashboardID string, request dashboard.TableRequest) dashboard.TableRequest
+}
+
+func canonicalSpatialInteractionCommand(metrics Metrics, dashboardID string, command dashboard.SpatialSelectionCommand) (dashboard.SpatialSelectionCommand, error) {
+	definition, model, ok := metrics.Report(dashboardID)
+	if !ok || model == nil {
+		return dashboard.SpatialSelectionCommand{}, fmt.Errorf("dashboard %q is not published", dashboardID)
+	}
+	source, ok := definition.Visualizations[command.VisualID]
+	if !ok {
+		return dashboard.SpatialSelectionCommand{}, fmt.Errorf("unknown source visual %q", command.VisualID)
+	}
+	if source.SpecRevision != command.SpecRevision {
+		return dashboard.SpatialSelectionCommand{}, fmt.Errorf("spatial visual %q specification revision is stale", command.VisualID)
+	}
+	spec, ok := source.Spec.Value.(*visualizationir.GeographicVisualizationSpec)
+	if !ok {
+		return dashboard.SpatialSelectionCommand{}, fmt.Errorf("visual %q is not geographic", command.VisualID)
+	}
+	var interaction *visualizationir.VisualizationSpatialSelectionInteraction
+	for index := range spec.SpatialInteractions {
+		if spec.SpatialInteractions[index].ID == command.InteractionID {
+			interaction = &spec.SpatialInteractions[index]
+			break
+		}
+	}
+	if interaction == nil {
+		return dashboard.SpatialSelectionCommand{}, fmt.Errorf("visual %q has no spatial interaction %q", command.VisualID, command.InteractionID)
+	}
+	if command.Action != "set" && command.Action != "clear" {
+		return dashboard.SpatialSelectionCommand{}, fmt.Errorf("unsupported spatial selection action %q", command.Action)
+	}
+	if command.Action == "clear" {
+		command.Geometry = visualizationir.VisualizationSpatialSelectionGeometry{}
+		return command, nil
+	}
+	allowed := false
+	for _, gesture := range interaction.Gestures {
+		if gesture == command.Gesture {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
+		return dashboard.SpatialSelectionCommand{}, fmt.Errorf("visual %q does not allow %q spatial selection", command.VisualID, command.Gesture)
+	}
+	filter, err := semanticSpatialFilterForGeometry(command.Geometry)
+	if err != nil {
+		return dashboard.SpatialSelectionCommand{}, err
+	}
+	if filter.Kind != string(command.Gesture) {
+		return dashboard.SpatialSelectionCommand{}, fmt.Errorf("spatial gesture %q does not match geometry %q", command.Gesture, filter.Kind)
+	}
+	if err := semanticquery.ValidateSpatialFilter(filter); err != nil {
+		return dashboard.SpatialSelectionCommand{}, err
+	}
+	if _, err := reportmodel.ResolveCompiledSpatialSelectionInteraction(&definition, model, command.VisualID, command.InteractionID); err != nil {
+		return dashboard.SpatialSelectionCommand{}, err
+	}
+	return command, nil
+}
+
+func semanticSpatialFilterForGeometry(geometry visualizationir.VisualizationSpatialSelectionGeometry) (semanticquery.SpatialFilter, error) {
+	switch value := geometry.Value.(type) {
+	case *visualizationir.VisualizationSpatialBoxSelection:
+		if value == nil {
+			break
+		}
+		return semanticquery.SpatialFilter{Kind: "box", West: value.Bounds.West, South: value.Bounds.South, East: value.Bounds.East, North: value.Bounds.North}, nil
+	case *visualizationir.VisualizationSpatialLassoSelection:
+		if value == nil {
+			break
+		}
+		points := make([]semanticquery.SpatialPoint, len(value.Points))
+		for index, point := range value.Points {
+			points[index] = semanticquery.SpatialPoint{Longitude: point.Longitude, Latitude: point.Latitude}
+		}
+		return semanticquery.SpatialFilter{Kind: "lasso", Points: points}, nil
+	case *visualizationir.VisualizationSpatialRadiusSelection:
+		if value == nil {
+			break
+		}
+		return semanticquery.SpatialFilter{Kind: "radius", Center: semanticquery.SpatialPoint{Longitude: value.Center.Longitude, Latitude: value.Center.Latitude}, RadiusMeters: value.RadiusMeters}, nil
+	}
+	return semanticquery.SpatialFilter{}, fmt.Errorf("spatial selection geometry is required")
 }
 
 type Service struct {
@@ -18,12 +105,14 @@ type Service struct {
 }
 
 type Request struct {
-	DashboardID         string
-	PageID              string
-	ModelID             string
-	Filters             dashboard.Filters
-	VisualWindowCommand dashboard.TableRequest
-	InteractionCommand  dashboard.InteractionCommand
+	DashboardID                string
+	PageID                     string
+	ModelID                    string
+	Filters                    dashboard.Filters
+	VisualWindowCommand        dashboard.VisualizationWindowRequest
+	VisualSpatialWindowCommand dashboard.SpatialWindowRequest
+	InteractionCommand         dashboard.InteractionCommand
+	SpatialInteractionCommand  dashboard.SpatialSelectionCommand
 }
 
 func canonicalInteractionCommand(metrics Metrics, dashboardID string, command dashboard.InteractionCommand) (dashboard.InteractionCommand, error) {
@@ -36,15 +125,17 @@ func canonicalInteractionCommand(metrics Metrics, dashboardID string, command da
 	semanticMappingCount := 0
 	switch command.SourceKind {
 	case "visual":
-		if source, ok := definition.Visuals[command.SourceID]; ok {
-			toggle = source.Interaction.PointSelection.Toggle
-			semanticMappingCount = len(source.Interaction.PointSelection.Mappings)
-		} else if source, ok := definition.Tables[command.SourceID]; ok {
-			wantKind = "row_selection"
-			toggle = source.Interaction.RowSelection.Toggle
-			semanticMappingCount = len(source.Interaction.RowSelection.Mappings)
-		} else {
+		source, ok := definition.Visualizations[command.SourceID]
+		if !ok {
 			return dashboard.InteractionCommand{}, fmt.Errorf("unknown source visual %q", command.SourceID)
+		}
+		if isGridVisualization(source) {
+			wantKind = "row_selection"
+		}
+		interaction, hasInteraction := compiledInteraction(source)
+		if hasInteraction {
+			toggle = interaction.Mode == visualizationir.VisualizationSelectionModeMultiple
+			semanticMappingCount = len(interaction.Mappings)
 		}
 	default:
 		return dashboard.InteractionCommand{}, fmt.Errorf("unknown source kind %q", command.SourceKind)
@@ -69,7 +160,7 @@ func canonicalInteractionCommand(metrics Metrics, dashboardID string, command da
 	if semanticMappingCount == 0 {
 		return dashboard.InteractionCommand{}, fmt.Errorf("%s %q has no semantic selection mappings", command.SourceKind, command.SourceID)
 	}
-	resolved, err := reportmodel.ResolveSelectionInteraction(&definition, model, command.SourceKind, command.SourceID)
+	resolved, err := reportmodel.ResolveCompiledSelectionInteraction(&definition, model, command.SourceKind, command.SourceID)
 	if err != nil {
 		return dashboard.InteractionCommand{}, err
 	}
@@ -100,4 +191,16 @@ func canonicalInteractionCommand(metrics Metrics, dashboardID string, command da
 		command.Mappings = append(command.Mappings, value)
 	}
 	return command, nil
+}
+
+func isGridVisualization(definition visualizationdefinition.Definition) bool {
+	return definition.Query.Kind == visualizationdefinition.QueryDetail || definition.Query.Kind == visualizationdefinition.QueryMatrix || definition.Query.Kind == visualizationdefinition.QueryPivot
+}
+
+func compiledInteraction(definition visualizationdefinition.Definition) (visualizationir.VisualizationInteraction, bool) {
+	base, err := visualizationir.SpecificationBase(definition.Spec)
+	if err != nil || len(base.Interactions) == 0 {
+		return visualizationir.VisualizationInteraction{}, false
+	}
+	return base.Interactions[0], true
 }

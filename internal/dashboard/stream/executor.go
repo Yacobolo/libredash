@@ -127,16 +127,16 @@ func executeConsumers(ctx context.Context, executor consumer.Executor, request W
 		case consumer.KindFilterOptions:
 			event.Type = RefreshEventFilterOptions
 			event.Value = result.FilterOptions
-		case consumer.KindVisual:
+		case consumer.KindVisual, consumer.KindSpatial:
 			event.Type = RefreshEventVisual
-			event.Value = result.Visual
-		case consumer.KindTable:
-			if result.TableMetadata {
-				event.Type = RefreshEventTableMetadata
+			event.Value = result.Envelope
+		case consumer.KindWindow:
+			if result.Metadata {
+				event.Type = RefreshEventVisualMetadata
 			} else {
-				event.Type = RefreshEventTable
+				event.Type = RefreshEventVisual
 			}
-			event.Value = result.Table
+			event.Value = result.Envelope
 		default:
 			event.Type = RefreshEventTargetError
 			event.Target = "refresh"

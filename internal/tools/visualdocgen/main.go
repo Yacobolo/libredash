@@ -20,9 +20,11 @@ import (
 	analyticsducklake "github.com/Yacobolo/leapview/internal/analytics/ducklake"
 	"github.com/Yacobolo/leapview/internal/configschema"
 	"github.com/Yacobolo/leapview/internal/dashboard"
+	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 	dashboardruntime "github.com/Yacobolo/leapview/internal/dashboard/runtime"
 	"github.com/Yacobolo/leapview/internal/visualdocs"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 	"github.com/Yacobolo/leapview/internal/workload"
 	"github.com/Yacobolo/leapview/internal/workspace"
 	workspacecompiler "github.com/Yacobolo/leapview/internal/workspace/compiler"
@@ -36,6 +38,7 @@ type visualExample struct {
 	ID      string
 	Source  string
 	Line    int
+	Type    string
 	Chart   *reportdef.Visual
 	Tabular *reportdef.TableVisual
 }
@@ -139,7 +142,15 @@ func generateVisualExamples(docsDir, projectPath, dataRoot string) (visualExampl
 	if err := workspacecompiler.ValidateDashboard(report, definition.Models); err != nil {
 		return visualExamplesArtifact{}, fmt.Errorf("validate executable examples: %w", err)
 	}
-	definition.Dashboards = map[string]*reportdef.Dashboard{report.ID: report}
+	visualizations, err := workspacecompiler.CompileVisualizationDefinitions(report, definition.Models[report.SemanticModel])
+	if err != nil {
+		return visualExamplesArtifact{}, fmt.Errorf("compile executable example visualizations: %w", err)
+	}
+	compiledDashboard, err := workspacecompiler.CompileDashboardDefinition(report, visualizations)
+	if err != nil {
+		return visualExamplesArtifact{}, fmt.Errorf("compile executable example dashboard: %w", err)
+	}
+	definition.Dashboards = map[string]dashboarddefinition.Definition{report.ID: compiledDashboard}
 	definition.Catalog.Dashboards = []workspace.CatalogDashboard{{ID: report.ID, Title: report.Title, Path: "docs/visuals", Description: report.Description}}
 	if err := bindFixtureRoot(definition, dataRoot); err != nil {
 		return visualExamplesArtifact{}, err
@@ -187,31 +198,16 @@ func generateVisualExamples(docsDir, projectPath, dataRoot string) (visualExampl
 		}
 		payloads := make([]visualdocs.Payload, 0, len(examplesByPage[document.Source]))
 		for _, example := range examplesByPage[document.Source] {
-			if example.Chart != nil {
-				payload, ok := patch.Visuals[example.ID]
-				if !ok || len(payload.Data) == 0 {
-					return visualExamplesArtifact{}, fmt.Errorf("query %s did not return visual %q data", document.Source, example.ID)
-				}
-				if err := validateVisualPayload(example, payload); err != nil {
-					return visualExamplesArtifact{}, err
-				}
-				canonicalizePayloadData(*example.Chart, &payload)
-				payloads = append(payloads, visualdocs.ChartPayload(payload))
-				continue
+			envelope, ok := patch.Visuals[example.ID]
+			if !ok || len(envelopeRows(envelope)) == 0 {
+				return visualExamplesArtifact{}, fmt.Errorf("query %s did not return visual %q data", document.Source, example.ID)
 			}
-			tableLease, err := controller.Acquire(context.Background(), workload.Request{Class: workload.Interactive, WorkspaceID: "visual_examples", Operation: "visual-docs.table"})
-			if err != nil {
+			if err := validateVisualEnvelope(example, envelope); err != nil {
 				return visualExamplesArtifact{}, err
 			}
-			table, err := service.QueryTablePage(tableLease.Context(), report.ID, document.Source, dashboard.Filters{}, dashboard.TableRequest{Table: example.ID, Block: "a", Start: 0, Count: dashboard.TableMaxRequestCount})
-			tableLease.Release()
-			if err != nil {
-				return visualExamplesArtifact{}, fmt.Errorf("query %s visual %q: %w", document.Source, example.ID, err)
-			}
-			if len(table.Blocks["a"].Rows) == 0 {
-				return visualExamplesArtifact{}, fmt.Errorf("visual example %q returned no rows", example.ID)
-			}
-			payloads = append(payloads, visualdocs.TabularPayload(dashboard.NewTabularVisual(example.ID, table)))
+			canonicalizeEnvelopeData(&envelope)
+			normalizeEnvelopeRevision(&envelope, 1, 1)
+			payloads = append(payloads, envelope)
 		}
 		slug := "visuals/" + document.Source
 		artifact.Documents[slug] = payloads
@@ -237,9 +233,13 @@ func stringSet(values ...string) map[string]struct{} {
 	return result
 }
 
-func validateVisualPayload(example visualExample, payload dashboard.Visual) error {
+func validateVisualEnvelope(example visualExample, envelope visualizationir.VisualizationEnvelope) error {
+	return validateVisualData(example, envelopeRows(envelope))
+}
+
+func validateVisualData(example visualExample, payload []dashboard.Datum) error {
 	finiteNumbers := 0
-	for index, datum := range payload.Data {
+	for index, datum := range payload {
 		if len(datum) == 0 {
 			return fmt.Errorf("visual example %q has an empty row at data[%d]", example.ID, index)
 		}
@@ -250,28 +250,168 @@ func validateVisualPayload(example visualExample, payload dashboard.Visual) erro
 	if finiteNumbers == 0 {
 		return fmt.Errorf("visual example %q has no finite numeric values", example.ID)
 	}
-	if example.Chart.ShapeOrDefault() != "geo" {
+	if example.Chart == nil || example.Chart.ResultShape() != "geo" {
 		return nil
 	}
-	mapID, _ := example.Chart.Options["map"].(string)
-	regions, ok := visualDocMapRegions[mapID]
-	if !ok {
-		return fmt.Errorf("visual example %q uses unsupported documentation map %q", example.ID, mapID)
-	}
-	seenRegions := make(map[string]struct{}, len(payload.Data))
-	for index, datum := range payload.Data {
-		region, _ := datum["name"].(string)
-		if _, ok := regions[region]; !ok {
-			return fmt.Errorf("visual example %q region %q is not defined by map %q at data[%d].name", example.ID, region, mapID, index)
+	for _, layer := range example.Chart.Geo.Layers {
+		if layer.Kind != "choropleth" {
+			continue
 		}
-		seenRegions[region] = struct{}{}
-	}
-	for _, region := range sortedSet(regions) {
-		if _, ok := seenRegions[region]; !ok {
-			return fmt.Errorf("visual example %q does not provide data for map region %q in %q", example.ID, region, mapID)
+		regions, ok := visualDocMapRegions[layer.GeometryAsset]
+		if !ok {
+			return fmt.Errorf("visual example %q uses unsupported documentation map %q", example.ID, layer.GeometryAsset)
+		}
+		seenRegions := make(map[string]struct{}, len(payload))
+		for index, datum := range payload {
+			region, _ := datum[layer.Join].(string)
+			if _, ok := regions[region]; !ok {
+				return fmt.Errorf("visual example %q region %q is not defined by map %q at data[%d].%s", example.ID, region, layer.GeometryAsset, index, layer.Join)
+			}
+			seenRegions[region] = struct{}{}
+		}
+		for _, region := range sortedSet(regions) {
+			if _, ok := seenRegions[region]; !ok {
+				return fmt.Errorf("visual example %q does not provide data for map region %q in %q", example.ID, region, layer.GeometryAsset)
+			}
 		}
 	}
 	return nil
+}
+
+func envelopeRows(envelope visualizationir.VisualizationEnvelope) []dashboard.Datum {
+	switch state := envelope.DataState.Value.(type) {
+	case *visualizationir.InlineVisualizationDataState:
+		if len(state.Datasets) != 1 {
+			return nil
+		}
+		return envelopeDatums(state.Datasets[0].Columns, state.Datasets[0].Rows)
+	case *visualizationir.WindowedVisualizationDataState:
+		columns := make([]string, len(state.Schema.Fields))
+		for index, field := range state.Schema.Fields {
+			columns[index] = field.ID
+		}
+		blocks := make([]visualizationir.VisualizationWindowBlock, 0, len(state.Blocks))
+		for _, block := range state.Blocks {
+			blocks = append(blocks, block)
+		}
+		sort.Slice(blocks, func(left, right int) bool {
+			if blocks[left].Start != blocks[right].Start {
+				return blocks[left].Start < blocks[right].Start
+			}
+			return blocks[left].ID < blocks[right].ID
+		})
+		rows := [][]any{}
+		for _, block := range blocks {
+			rows = append(rows, block.Rows...)
+		}
+		return envelopeDatums(columns, rows)
+	case *visualizationir.SpatialWindowedVisualizationDataState:
+		if state.Window == nil {
+			return nil
+		}
+		columns := make([]string, len(state.Schema.Fields))
+		for index, field := range state.Schema.Fields {
+			columns[index] = field.ID
+		}
+		return envelopeDatums(columns, state.Window.Rows)
+	default:
+		return nil
+	}
+}
+
+func envelopeDatums(columns []string, rows [][]any) []dashboard.Datum {
+	out := make([]dashboard.Datum, len(rows))
+	for rowIndex, values := range rows {
+		if len(values) != len(columns) {
+			return nil
+		}
+		out[rowIndex] = make(dashboard.Datum, len(values))
+		for columnIndex, column := range columns {
+			out[rowIndex][column] = values[columnIndex]
+		}
+	}
+	return out
+}
+
+func normalizeEnvelopeRevision(envelope *visualizationir.VisualizationEnvelope, dataRevision, generation int64) {
+	if envelope == nil {
+		return
+	}
+	envelope.DataRevision = dataRevision
+	for index := range envelope.Selection {
+		envelope.Selection[index].Datum.DataRevision = dataRevision
+	}
+	switch state := envelope.DataState.Value.(type) {
+	case *visualizationir.InlineVisualizationDataState:
+		state.DataRevision, state.Generation = dataRevision, generation
+		for index := range state.Datasets {
+			state.Datasets[index].DataRevision, state.Datasets[index].Generation = dataRevision, generation
+		}
+	case *visualizationir.WindowedVisualizationDataState:
+		state.DataRevision, state.Generation = dataRevision, generation
+	case *visualizationir.SpatialWindowedVisualizationDataState:
+		state.DataRevision, state.Generation = dataRevision, generation
+	}
+}
+
+func canonicalizeEnvelopeData(envelope *visualizationir.VisualizationEnvelope) {
+	if envelope == nil {
+		return
+	}
+	state, ok := envelope.DataState.Value.(*visualizationir.InlineVisualizationDataState)
+	if !ok {
+		return
+	}
+	for datasetIndex := range state.Datasets {
+		rows := state.Datasets[datasetIndex].Rows
+		sort.SliceStable(rows, func(left, right int) bool {
+			for column := 0; column < len(rows[left]) && column < len(rows[right]); column++ {
+				comparison := compareEnvelopeValues(rows[left][column], rows[right][column])
+				if comparison != 0 {
+					return comparison < 0
+				}
+			}
+			return len(rows[left]) < len(rows[right])
+		})
+	}
+}
+
+func compareEnvelopeValues(left, right any) int {
+	leftNumber, leftIsNumber := envelopeNumber(left)
+	rightNumber, rightIsNumber := envelopeNumber(right)
+	if leftIsNumber && rightIsNumber {
+		if leftNumber < rightNumber {
+			return -1
+		}
+		if leftNumber > rightNumber {
+			return 1
+		}
+		return 0
+	}
+	return strings.Compare(fmt.Sprint(left), fmt.Sprint(right))
+}
+
+func envelopeNumber(value any) (float64, bool) {
+	switch typed := value.(type) {
+	case int:
+		return float64(typed), true
+	case int32:
+		return float64(typed), true
+	case int64:
+		return float64(typed), true
+	case uint:
+		return float64(typed), true
+	case uint32:
+		return float64(typed), true
+	case uint64:
+		return float64(typed), true
+	case float32:
+		return float64(typed), true
+	case float64:
+		return typed, true
+	default:
+		return 0, false
+	}
 }
 
 func inspectPayloadValue(value any, path string, finiteNumbers *int) error {
@@ -322,9 +462,8 @@ func inspectPayloadValue(value any, path string, finiteNumbers *int) error {
 
 func buildVisualDocumentReference(examples []visualExample) (visualDocumentReference, error) {
 	if len(examples) > 0 && examples[0].Tabular != nil {
-		visualType := dashboard.NewTabularVisual("reference", dashboard.Table{Kind: examples[0].Tabular.Kind}).Type
 		return visualDocumentReference{
-			Kind: "visual", Renderer: "tabular", Shapes: []string{visualType},
+			Kind: "visual", Renderer: "tabular", Shapes: []string{examples[0].Type},
 			QueryFields: []string{"table", "fields", "rows", "columns", "measures"},
 			Fields: []visualdocs.FieldReference{
 				{Path: "type", Type: "string", AllowedValues: []string{"table", "matrix", "pivot"}, Description: "Selects the tabular visual behavior."},
@@ -339,17 +478,18 @@ func buildVisualDocumentReference(examples []visualExample) (visualDocumentRefer
 	renderers := map[string]struct{}{}
 	shapes := map[string]struct{}{}
 	queryFields := map[string]struct{}{}
-	options := map[string]struct{}{}
+	presentation := map[string]struct{}{}
 	reference := visualDocumentReference{Examples: make(map[string]visualExampleReference, len(examples))}
 	var previous *reportdef.Visual
 	for index := range examples {
 		visual := *examples[index].Chart
 		kinds[visual.KindOrDefault()] = struct{}{}
-		renderers[visual.RendererOrDefault()] = struct{}{}
-		shapes[visual.ShapeOrDefault()] = struct{}{}
+		capability, _ := reportdef.VisualizationCapabilityForType(visual.Type)
+		renderers[capability.Renderer] = struct{}{}
+		shapes[visual.ResultShape()] = struct{}{}
 		collectQueryFields(visual.Query, queryFields)
-		for key := range visual.Options {
-			options[key] = struct{}{}
+		for key := range visualPresentationValues(visual) {
+			presentation[key] = struct{}{}
 		}
 		reference.Examples[examples[index].ID] = visualExampleReference{KeyFields: visualKeyFields(previous, visual)}
 		previous = examples[index].Chart
@@ -358,8 +498,8 @@ func buildVisualDocumentReference(examples []visualExample) (visualDocumentRefer
 	reference.Renderer = strings.Join(sortedSet(renderers), ", ")
 	reference.Shapes = sortedSet(shapes)
 	reference.QueryFields = sortedSet(queryFields)
-	reference.Options = sortedSet(options)
-	fields, err := visualFieldReferences(reference.QueryFields, reference.Options, examples[0].Chart.Type)
+	reference.Presentation = sortedSet(presentation)
+	fields, err := visualFieldReferences(reference.QueryFields, reference.Presentation, examples[0].Chart.Type)
 	if err != nil {
 		return visualDocumentReference{}, err
 	}
@@ -397,9 +537,6 @@ func visualKeyFields(previous *reportdef.Visual, visual reportdef.Visual) []stri
 	changedToValue := func(before, after any) bool {
 		return valueIsSet(after) && (previous == nil || !reflect.DeepEqual(before, after))
 	}
-	if changedToValue(valueOrZero(previous, func(item reportdef.Visual) any { return item.Shape }), visual.Shape) {
-		fields = append(fields, "shape")
-	}
 	queryChecks := []struct {
 		name string
 		get  func(reportdef.VisualQuery) any
@@ -420,16 +557,47 @@ func visualKeyFields(previous *reportdef.Visual, visual reportdef.Visual) []stri
 			fields = append(fields, "query."+check.name)
 		}
 	}
-	optionKeys := make(map[string]struct{}, len(visual.Options))
-	for key := range visual.Options {
+	values := visualPresentationValues(visual)
+	optionKeys := make(map[string]struct{}, len(values))
+	for key := range values {
 		optionKeys[key] = struct{}{}
 	}
+	previousValues := map[string]any{}
+	if previous != nil {
+		previousValues = visualPresentationValues(*previous)
+	}
 	for _, key := range sortedSet(optionKeys) {
-		if previous == nil || !reflect.DeepEqual(previous.Options[key], visual.Options[key]) {
-			fields = append(fields, "options."+key)
+		if previous == nil || !reflect.DeepEqual(previousValues[key], values[key]) {
+			fields = append(fields, "presentation."+key)
 		}
 	}
+	if len(visual.Geo.Layers) > 0 && (previous == nil || !reflect.DeepEqual(previous.Geo.Layers, visual.Geo.Layers)) {
+		fields = append(fields, "geo.layers")
+	}
+	if visual.Custom.Engine != "" && (previous == nil || previous.Custom.Engine != visual.Custom.Engine) {
+		fields = append(fields, "custom.engine")
+	}
+	if len(visual.Custom.Program) > 0 && (previous == nil || !reflect.DeepEqual(previous.Custom.Program, visual.Custom.Program)) {
+		fields = append(fields, "custom.program")
+	}
 	return fields
+}
+
+func visualPresentationValues(visual reportdef.Visual) map[string]any {
+	value := reflect.ValueOf(visual.Presentation)
+	typeInfo := value.Type()
+	out := make(map[string]any)
+	for index := 0; index < value.NumField(); index++ {
+		field := value.Field(index)
+		if field.IsZero() {
+			continue
+		}
+		name := typeInfo.Field(index).Tag.Get("yaml")
+		if name != "" && name != "-" {
+			out[name] = field.Interface()
+		}
+	}
+	return out
 }
 
 func valueIsSet(value any) bool {
@@ -462,7 +630,7 @@ func visualAccessibilityGuidance(visual reportdef.Visual) string {
 	}
 	switch visual.Type {
 	case "map":
-		return "Region values must match the selected map identifiers. Add labels when boundaries or color differences may be difficult to distinguish."
+		return "Use a descriptive summary for the geographic pattern, verify region joins or coordinate fields, and do not rely on color alone to communicate intensity."
 	case "graph", "sankey", "tree", "sunburst", "treemap":
 		return "Use meaningful node labels and keep the hierarchy or flow small enough to follow without relying on color alone."
 	default:
@@ -470,111 +638,18 @@ func visualAccessibilityGuidance(visual reportdef.Visual) string {
 	}
 }
 
-func canonicalizePayloadData(visual reportdef.Visual, payload *dashboard.Visual) {
-	if payload == nil || len(payload.Data) < 2 || payload.Shape == "binned_measure" || payload.Shape == "single_value" {
-		return
-	}
-	sort.SliceStable(payload.Data, func(left, right int) bool {
-		for _, order := range visual.Query.Sort {
-			leftValue := payloadSortValue(visual, payload.Data[left], order.Field)
-			rightValue := payloadSortValue(visual, payload.Data[right], order.Field)
-			comparison := comparePayloadValues(leftValue, rightValue)
-			if comparison == 0 {
-				continue
-			}
-			if strings.EqualFold(order.Direction, "desc") {
-				return comparison > 0
-			}
-			return comparison < 0
-		}
-		leftJSON, _ := json.Marshal(payload.Data[left])
-		rightJSON, _ := json.Marshal(payload.Data[right])
-		return bytes.Compare(leftJSON, rightJSON) < 0
-	})
-}
-
-func payloadSortValue(visual reportdef.Visual, datum dashboard.Datum, field string) any {
-	if value, ok := datum[field]; ok {
-		return value
-	}
-	for index, dimension := range visual.Query.Dimensions {
-		if field != dimension.Field && field != dimension.Alias {
-			continue
-		}
-		switch visual.ShapeOrDefault() {
-		case "matrix":
-			if index == 0 {
-				return datum["row"]
-			}
-			return datum["column"]
-		case "graph":
-			if index == 0 {
-				return datum["source"]
-			}
-			return datum["target"]
-		case "geo":
-			return datum["name"]
-		default:
-			return datum["label"]
-		}
-	}
-	return nil
-}
-
-func comparePayloadValues(left, right any) int {
-	leftNumber, leftIsNumber := payloadNumber(left)
-	rightNumber, rightIsNumber := payloadNumber(right)
-	if leftIsNumber && rightIsNumber {
-		switch {
-		case leftNumber < rightNumber:
-			return -1
-		case leftNumber > rightNumber:
-			return 1
-		default:
-			return 0
-		}
-	}
-	return strings.Compare(fmt.Sprint(left), fmt.Sprint(right))
-}
-
-func payloadNumber(value any) (float64, bool) {
-	switch typed := value.(type) {
-	case int:
-		return float64(typed), true
-	case int32:
-		return float64(typed), true
-	case int64:
-		return float64(typed), true
-	case uint:
-		return float64(typed), true
-	case uint32:
-		return float64(typed), true
-	case uint64:
-		return float64(typed), true
-	case float32:
-		return float64(typed), true
-	case float64:
-		return typed, true
-	default:
-		return 0, false
-	}
-}
-
 func buildExampleDashboard(catalog visualCatalog, examplesByPage map[string][]visualExample) *reportdef.Dashboard {
-	report := &reportdef.Dashboard{ID: "visual-docs", Title: "Visual documentation", Description: "Executable documentation examples.", SemanticModel: "visual_examples", Visuals: map[string]reportdef.Visual{}, Tables: map[string]reportdef.TableVisual{}, Pages: make([]dashboard.Page, 0, len(catalog.Documents))}
+	report := &reportdef.Dashboard{ID: "visual-docs", Title: "Visual documentation", Description: "Executable documentation examples.", SemanticModel: "visual_examples", Visuals: map[string]reportdef.AuthoringVisualization{}, Pages: make([]dashboard.Page, 0, len(catalog.Documents))}
 	for _, document := range catalog.Documents {
 		page := dashboard.Page{ID: document.Source, Title: document.Title, Canvas: dashboard.PageCanvas{Width: 1366, Height: 3000}, Grid: dashboard.PageGrid{Columns: 12, RowHeight: 48, Gap: 16, Padding: 16}, Visuals: make([]dashboard.PageVisual, 0, len(examplesByPage[document.Source]))}
 		for index, example := range examplesByPage[document.Source] {
 			component := dashboard.PageVisual{ID: example.ID, Placement: dashboard.PagePlacement{Col: 1, Row: 1 + index*8, ColSpan: 6, RowSpan: 7}}
 			if example.Chart != nil {
-				report.Visuals[example.ID] = *example.Chart
-				component.Kind, component.Visual = example.Chart.Type+"_chart", example.ID
-				if example.Chart.KindOrDefault() == "kpi" {
-					component.Kind = "kpi_card"
-				}
+				report.Visuals[example.ID] = reportdef.ChartVisualization(*example.Chart)
+				component.Kind, component.Visual = "visual", example.ID
 			} else {
-				report.Tables[example.ID] = *example.Tabular
-				component.Kind, component.Table = "table", example.ID
+				report.Visuals[example.ID] = reportdef.TabularVisualization(example.Type, *example.Tabular)
+				component.Kind, component.Visual = "visual", example.ID
 			}
 			page.Visuals = append(page.Visuals, component)
 		}
@@ -695,22 +770,11 @@ func decodeVisualExample(id, filename string, line int, node yaml.Node) (visualE
 	if err := validateVisualExampleContract(id, filename, node); err != nil {
 		return visualExample{}, fmt.Errorf("%s:%d: visual %q: %w", filename, line, id, err)
 	}
-	example := visualExample{ID: id, Source: filename, Line: line}
-	switch tag.Type {
-	case "table", "matrix", "pivot":
-		var value reportdef.TableVisual
-		if err := node.Decode(&value); err != nil {
-			return visualExample{}, fmt.Errorf("%s:%d: decode visual %q: %w", filename, line, id, err)
-		}
-		value.Kind = map[string]string{"table": "data_table", "matrix": "matrix_table", "pivot": "pivot_table"}[tag.Type]
-		example.Tabular = &value
-	default:
-		var value reportdef.Visual
-		if err := node.Decode(&value); err != nil {
-			return visualExample{}, fmt.Errorf("%s:%d: decode visual %q: %w", filename, line, id, err)
-		}
-		example.Chart = &value
+	var authored reportdef.AuthoringVisualization
+	if err := node.Decode(&authored); err != nil {
+		return visualExample{}, fmt.Errorf("%s:%d: decode visual %q: %w", filename, line, id, err)
 	}
+	example := visualExample{ID: id, Source: filename, Line: line, Type: authored.Type, Chart: authored.Chart, Tabular: authored.Tabular}
 	return example, nil
 }
 

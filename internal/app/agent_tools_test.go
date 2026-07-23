@@ -12,11 +12,11 @@ import (
 	"github.com/Yacobolo/leapview/internal/access"
 	agentcap "github.com/Yacobolo/leapview/internal/agent"
 	agenttools "github.com/Yacobolo/leapview/internal/agent/tools"
-	"github.com/Yacobolo/leapview/internal/dashboard"
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 	"github.com/Yacobolo/leapview/internal/dataquery"
 	"github.com/Yacobolo/leapview/internal/queryaudit"
 	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 	"github.com/Yacobolo/leapview/internal/workspace"
 	agentcore "github.com/Yacobolo/leapview/pkg/agent"
 )
@@ -222,7 +222,7 @@ func TestAgentVisualToolReturnsChartPatchFromSemanticData(t *testing.T) {
 		Type  string `json:"type"`
 		ID    string `json:"id"`
 		Patch struct {
-			Visuals map[string]dashboard.Visual `json:"visuals"`
+			Visuals map[string]visualizationir.VisualizationEnvelope `json:"visuals"`
 		} `json:"patch"`
 	}
 	if err := json.Unmarshal(body, &decoded); err != nil {
@@ -232,13 +232,15 @@ func TestAgentVisualToolReturnsChartPatchFromSemanticData(t *testing.T) {
 		t.Fatalf("compact result = %#v decoded=%#v", compactResult, decoded)
 	}
 	visual := decoded.Patch.Visuals[decoded.ID]
-	if decoded.Type != "bar" || visual.ID != decoded.ID || visual.Title != "Orders by status" || visual.Type != "bar" || len(visual.Data) != 2 {
+	spec, specOK := visual.Spec.Value.(*visualizationir.CartesianVisualizationSpec)
+	state, stateOK := visual.DataState.Value.(*visualizationir.InlineVisualizationDataState)
+	if decoded.Type != "bar" || visual.VisualID != decoded.ID || !specOK || spec.Title != "Orders by status" || spec.Mark != visualizationir.VisualizationCartesianMarkBar || !stateOK || len(state.Datasets) != 1 || len(state.Datasets[0].Rows) != 2 {
 		t.Fatalf("chart result = %#v visual=%#v", decoded, visual)
 	}
-	if visual.Data[0]["label"] == nil || visual.Data[0]["value"] == nil {
-		t.Fatalf("chart data does not use dashboard datum shape: %#v", visual.Data)
+	if len(state.Datasets[0].Rows[0]) != 2 || state.Datasets[0].Rows[0][0] == nil || state.Datasets[0].Rows[0][1] == nil {
+		t.Fatalf("chart data does not use the typed columnar frame: %#v", state.Datasets[0])
 	}
-	if len(visual.Interaction.Mappings) != 0 || len(visual.Selection) != 0 {
+	if len(spec.Interactions) != 0 || len(visual.Selection) != 0 {
 		t.Fatalf("chart should not include interactivity: %#v", visual)
 	}
 }
@@ -332,7 +334,7 @@ func TestAgentVisualToolReturnsTablePatchFromSemanticData(t *testing.T) {
 		Type  string `json:"type"`
 		ID    string `json:"id"`
 		Patch struct {
-			Visuals map[string]dashboard.TabularVisual `json:"visuals"`
+			Visuals map[string]visualizationir.VisualizationEnvelope `json:"visuals"`
 		} `json:"patch"`
 	}
 	if err := json.Unmarshal(body, &decoded); err != nil {
@@ -342,12 +344,13 @@ func TestAgentVisualToolReturnsTablePatchFromSemanticData(t *testing.T) {
 		t.Fatalf("compact result = %#v decoded=%#v", compactResult, decoded)
 	}
 	tabular := decoded.Patch.Visuals[decoded.ID]
-	table := tabular.Table
-	if decoded.Type != "table" || tabular.Type != "table" || table.Title != "Orders" || len(table.Columns) != 2 || len(table.Blocks["a"].Rows) != 2 {
-		t.Fatalf("table result = %#v table=%#v", decoded, table)
+	table, specOK := tabular.Spec.Value.(*visualizationir.TableVisualizationSpec)
+	state, stateOK := tabular.DataState.Value.(*visualizationir.WindowedVisualizationDataState)
+	if decoded.Type != "table" || tabular.VisualID != decoded.ID || !specOK || table.Title != "Orders" || len(table.Columns) != 2 || !stateOK || len(state.Blocks["a"].Rows) != 2 {
+		t.Fatalf("table result = %#v envelope=%#v", decoded, tabular)
 	}
-	if len(table.Interaction.Mappings) != 0 || len(table.Selection) != 0 {
-		t.Fatalf("table should not include interactivity: %#v", table)
+	if len(table.Interactions) != 0 || len(tabular.Selection) != 0 {
+		t.Fatalf("table should not include interactivity: %#v", tabular)
 	}
 }
 
@@ -380,18 +383,20 @@ func TestAgentVisualToolReturnsAggregateTableFromRowsAndMeasures(t *testing.T) {
 	var decoded struct {
 		ID    string `json:"id"`
 		Patch struct {
-			Visuals map[string]dashboard.TabularVisual `json:"visuals"`
+			Visuals map[string]visualizationir.VisualizationEnvelope `json:"visuals"`
 		} `json:"patch"`
 	}
 	if err := json.Unmarshal(body, &decoded); err != nil {
 		t.Fatalf("decode result: %v body=%s", err, body)
 	}
-	table := decoded.Patch.Visuals[decoded.ID].Table
-	if len(table.Columns) != 2 || table.Columns[0].Key != "status" || table.Columns[1].Key != "order_count" {
-		t.Fatalf("aggregate table columns = %#v", table.Columns)
+	envelope := decoded.Patch.Visuals[decoded.ID]
+	table, specOK := envelope.Spec.Value.(*visualizationir.TableVisualizationSpec)
+	state, stateOK := envelope.DataState.Value.(*visualizationir.WindowedVisualizationDataState)
+	if !specOK || len(table.Columns) != 2 || table.Columns[0].Field.Field != "status" || table.Columns[1].Field.Field != "order_count" {
+		t.Fatalf("aggregate table columns = %#v", envelope.Spec)
 	}
-	if got := table.Blocks["a"].Rows[0]["order_count"]; got == nil {
-		t.Fatalf("aggregate table rows missing measure: %#v", table.Blocks["a"].Rows)
+	if !stateOK || len(state.Blocks["a"].Rows) == 0 || len(state.Blocks["a"].Rows[0]) != 2 || state.Blocks["a"].Rows[0][1] == nil {
+		t.Fatalf("aggregate table rows missing measure: %#v", envelope.DataState)
 	}
 }
 
@@ -718,12 +723,19 @@ func TestAPIGenAgentDescribeDashboardVisualUsesDeclarativeOutputShape(t *testing
 	if err := json.Unmarshal(body, &visual); err != nil {
 		t.Fatalf("decode visual result: %v body=%s", err, body)
 	}
-	for _, want := range []string{"id", "title", "type", "query"} {
+	for _, want := range []string{"id", "rendererID", "specRevision", "spec"} {
 		if _, ok := visual[want]; !ok {
 			t.Fatalf("visual result missing %q: %#v", want, visual)
 		}
 	}
-	for _, forbidden := range []string{"componentId", "renderer", "rendererOptions", "options", "interaction", "placement", "x", "y", "width", "height"} {
+	if _, hasPlacement := visual["placement"]; !hasPlacement {
+		for _, coordinate := range []string{"y", "width", "height"} {
+			if _, ok := visual[coordinate]; !ok {
+				t.Fatalf("visual result has neither grid placement nor legacy coordinate %q: %#v", coordinate, visual)
+			}
+		}
+	}
+	for _, forbidden := range []string{"renderer", "rendererOptions", "options", "interaction", "query", "type", "shape"} {
 		if _, ok := visual[forbidden]; ok {
 			t.Fatalf("visual result kept noisy field %q: %#v", forbidden, visual)
 		}
@@ -844,15 +856,16 @@ func TestAPIGenAgentQueryDashboardPageUsesDeclarativeOutputShape(t *testing.T) {
 		t.Fatalf("page result missing compact visuals map: %#v", page)
 	}
 	orders := visuals["orders"].(map[string]any)
-	if orders["title"] != "Orders" || orders["count"] != float64(1) {
-		t.Fatalf("compact visual = %#v", orders)
+	spec, _ := orders["spec"].(map[string]any)
+	dataState, _ := orders["dataState"].(map[string]any)
+	datasets, _ := dataState["datasets"].([]any)
+	if orders["schemaVersion"] != float64(3) || orders["rendererID"] != "echarts" || spec["title"] != "Orders" || len(datasets) != 1 {
+		t.Fatalf("visualization envelope = %#v", orders)
 	}
-	for _, forbidden := range []string{"filters", "filterOptions", "status"} {
-		if _, ok := page[forbidden]; ok {
-			t.Fatalf("page result kept noisy field %q: %#v", forbidden, page)
-		}
+	if _, ok := visuals["order_rows"]; !ok {
+		t.Fatalf("page result omitted its windowed visualization envelope: %#v", visuals)
 	}
-	for _, forbidden := range []string{"rendererOptions", "options", "interaction", "selection", "version"} {
+	for _, forbidden := range []string{"rendererOptions", "options", "interaction", "version", "type", "shape", "data"} {
 		if _, ok := orders[forbidden]; ok {
 			t.Fatalf("compact visual kept noisy field %q: %#v", forbidden, orders)
 		}
@@ -959,22 +972,20 @@ func TestAPIGenAgentToolDispatchesTabularVisualQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal result content: %v", err)
 	}
-	var table struct {
-		AvailableRows int              `json:"availableRows"`
-		Columns       []map[string]any `json:"columns"`
-		Rows          [][]string       `json:"rows"`
-	}
+	var table visualizationir.VisualizationEnvelope
 	if err := json.Unmarshal(body, &table); err != nil {
 		t.Fatalf("decode table result: %v\n%s", err, body)
 	}
-	if table.AvailableRows != 500 || len(table.Rows) != 500 || len(table.Columns) == 0 {
-		t.Fatalf("table result did not honor the bounded query limit: %#v", table)
+	tableSpec, specOK := table.Spec.Value.(*visualizationir.TableVisualizationSpec)
+	tableState, stateOK := table.DataState.Value.(*visualizationir.WindowedVisualizationDataState)
+	if !specOK || len(tableSpec.Columns) == 0 || !stateOK || tableState.AvailableRows != 500 || len(tableState.Blocks["a"].Rows) != 500 {
+		t.Fatalf("table envelope did not honor the bounded query limit: %#v", table)
 	}
 	var tableMap map[string]any
 	if err := json.Unmarshal(body, &tableMap); err != nil {
 		t.Fatalf("decode table map: %v", err)
 	}
-	for _, forbidden := range []string{"blocks", "style", "interaction", "selection", "chunkSize", "rowHeight", "resetVersion", "loadingBlock"} {
+	for _, forbidden := range []string{"style", "interaction", "loadingBlock", "type", "shape", "rendererOptions", "options"} {
 		if _, ok := tableMap[forbidden]; ok {
 			t.Fatalf("table result kept noisy field %q: %#v", forbidden, tableMap)
 		}
@@ -1009,15 +1020,13 @@ func TestAPIGenAgentToolFetchesSingleDashboardVisualData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal result content: %v", err)
 	}
-	var visual struct {
-		Title string           `json:"title"`
-		Type  string           `json:"type"`
-		Data  []map[string]any `json:"data"`
-	}
+	var visual visualizationir.VisualizationEnvelope
 	if err := json.Unmarshal(body, &visual); err != nil {
 		t.Fatalf("decode visual result: %v body=%s", err, body)
 	}
-	if visual.Title != "Orders" || visual.Type != "bar" || len(visual.Data) != 1 {
+	visualSpec, specOK := visual.Spec.Value.(*visualizationir.ProportionalVisualizationSpec)
+	visualState, stateOK := visual.DataState.Value.(*visualizationir.InlineVisualizationDataState)
+	if !specOK || visualSpec.Title != "Orders" || visualSpec.Mark != visualizationir.VisualizationProportionalMarkDonut || !stateOK || len(visualState.Datasets) != 1 || len(visualState.Datasets[0].Rows) != 1 {
 		t.Fatalf("visual result = %#v", visual)
 	}
 }

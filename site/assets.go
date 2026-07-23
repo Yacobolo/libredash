@@ -24,6 +24,13 @@ func Shared() fs.FS {
 	return sub("static/shared")
 }
 
+// MapAssets returns the reduced, immutable documentation basemap package.
+// Production tile archives remain external; the embedded style is a safe
+// fallback that lets the documentation fail closed without third-party URLs.
+func MapAssets() fs.FS {
+	return sub("static/map-assets")
+}
+
 // IntegrationLogo returns a trusted vendored SVG for inline rendering. Inline
 // SVGs inherit the site's Primer-backed color variables, unlike SVGs loaded
 // through an img element.

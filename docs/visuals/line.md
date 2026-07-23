@@ -28,7 +28,7 @@ visuals:
 
 ## Multiple series
 
-Set `shape: category_series_value` and map `query.series` to split the measure into one line per order status.
+Map `query.series` to split the measure into one line per order status; the compiler derives the required series-aware Cartesian specification.
 
 {{< visual id="revenue_line_status" >}}
 
@@ -36,8 +36,6 @@ Set `shape: category_series_value` and map `query.series` to split the measure i
 visuals:
   revenue_line_status:
     title: Revenue line by status
-    shape: category_series_value
-    renderer: echarts
     type: line
     query:
       dimensions:
@@ -55,7 +53,7 @@ visuals:
 
 ## Stepped line
 
-Set `options.step: middle` for discrete changes between periods, hide point symbols for a quieter trace, and enable `data_zoom` for long ranges.
+Set `presentation.step: true` for discrete changes between periods, hide point symbols for a quieter trace, and enable `data_zoom` for long ranges.
 
 {{< visual id="revenue_line_step" >}}
 
@@ -64,8 +62,8 @@ visuals:
   revenue_line_step:
     title: Stepped revenue line
     type: line
-    options:
-      step: middle
+    presentation:
+      step: true
       show_symbols: false
       data_zoom: true
     query:

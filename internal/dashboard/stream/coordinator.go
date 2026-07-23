@@ -4,33 +4,34 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	"github.com/Yacobolo/leapview/internal/dataquery"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 )
 
 type RefreshEventType string
 
 const (
-	RefreshEventStart         RefreshEventType = "start"
-	RefreshEventFilterOptions RefreshEventType = "filter_options"
-	RefreshEventVisual        RefreshEventType = "visual"
-	RefreshEventTable         RefreshEventType = "table"
-	RefreshEventTableMetadata RefreshEventType = "table_metadata"
-	RefreshEventTableCountErr RefreshEventType = "table_count_error"
-	RefreshEventTargetError   RefreshEventType = "target_error"
-	RefreshEventCacheOutcome  RefreshEventType = "cache_outcome"
-	RefreshEventProgress      RefreshEventType = "progress"
-	RefreshEventComplete      RefreshEventType = "complete"
+	RefreshEventStart          RefreshEventType = "start"
+	RefreshEventFilterOptions  RefreshEventType = "filter_options"
+	RefreshEventVisual         RefreshEventType = "visual"
+	RefreshEventVisualMetadata RefreshEventType = "visual_metadata"
+	RefreshEventTargetError    RefreshEventType = "target_error"
+	RefreshEventCacheOutcome   RefreshEventType = "cache_outcome"
+	RefreshEventProgress       RefreshEventType = "progress"
+	RefreshEventComplete       RefreshEventType = "complete"
 )
 
 type RefreshEvent struct {
 	Type            RefreshEventType
 	RefreshID       string
 	Generation      uint64
+	DataRevision    int64
 	Command         string
 	Filters         dashboard.Filters
 	Targets         []string
@@ -52,10 +53,13 @@ type Refresh struct {
 }
 
 type RefreshPreparation struct {
-	Filters dashboard.Filters
-	Command string
-	Targets []string
-	Plan    any
+	Filters       dashboard.Filters
+	Command       string
+	Targets       []string
+	Plan          any
+	SequenceKey   string
+	Sequence      int64
+	SequenceEpoch int64
 	// Generation is reserved for coordinators whose canonical state is owned by
 	// a shared store. Zero keeps the normal process-local increment behavior.
 	Generation uint64
@@ -93,6 +97,12 @@ var refreshSequence atomic.Uint64
 const refreshExecutionDebounce = 35 * time.Millisecond
 
 var ErrCoordinatorClosed = errors.New("dashboard refresh coordinator is closed")
+var ErrStalePreparation = errors.New("dashboard refresh preparation is stale")
+
+type preparationSequence struct {
+	epoch    int64
+	sequence int64
+}
 
 // Coordinator owns the canonical filters and active refresh generation for a
 // single rendered page stream. Work contexts outlive command POST requests and
@@ -104,6 +114,8 @@ type Coordinator struct {
 	workCancel context.CancelFunc
 	filters    dashboard.Filters
 	generation uint64
+	revisions  map[string]int64
+	sequences  map[string]preparationSequence
 	closed     bool
 	publish    EventPublisher
 	started    StartObserver
@@ -133,10 +145,12 @@ func NewCoordinator(parent context.Context, publish EventPublisher) *Coordinator
 	}
 	ctx, cancel := context.WithCancel(parent)
 	return &Coordinator{
-		ctx:     ctx,
-		cancel:  cancel,
-		filters: cloneFilters(dashboard.Filters{}.WithDefaults()),
-		publish: publish,
+		ctx:       ctx,
+		cancel:    cancel,
+		filters:   cloneFilters(dashboard.Filters{}.WithDefaults()),
+		revisions: map[string]int64{},
+		sequences: map[string]preparationSequence{},
+		publish:   publish,
 	}
 }
 
@@ -170,6 +184,17 @@ func (c *Coordinator) BeginPrepared(prepare RefreshPrepare, work func(RefreshPre
 			c.mu.Unlock()
 			return Refresh{}, err
 		}
+	}
+	if preparation.SequenceKey != "" {
+		if preparation.Sequence <= 0 || preparation.SequenceEpoch < 0 {
+			c.mu.Unlock()
+			return Refresh{}, fmt.Errorf("invalid preparation sequence for %q", preparation.SequenceKey)
+		}
+		if current, ok := c.sequences[preparation.SequenceKey]; ok && (preparation.SequenceEpoch < current.epoch || (preparation.SequenceEpoch == current.epoch && preparation.Sequence <= current.sequence)) {
+			c.mu.Unlock()
+			return Refresh{}, ErrStalePreparation
+		}
+		c.sequences[preparation.SequenceKey] = preparationSequence{epoch: preparation.SequenceEpoch, sequence: preparation.Sequence}
 	}
 	filters := cloneFilters(preparation.Filters.WithDefaults())
 	preparation.Filters = cloneFilters(filters)
@@ -308,6 +333,23 @@ func (c *Coordinator) emitCurrent(refresh Refresh, event RefreshEvent) bool {
 	}
 	event.RefreshID = refresh.ID
 	event.Generation = refresh.Generation
+	if event.Target != "" && carriesVisualizationData(event.Type) {
+		if refresh.Generation > math.MaxInt64 {
+			event.Type, event.Err = RefreshEventTargetError, fmt.Errorf("visualization stream generation overflow")
+		} else if envelope, ok := event.Value.(visualizationir.VisualizationEnvelope); !ok {
+			event.Type, event.Err = RefreshEventTargetError, fmt.Errorf("visualization %q produced invalid envelope value %T", event.Target, event.Value)
+		} else {
+			nextRevision := c.revisions[event.Target] + 1
+			revised, err := visualizationir.WithStreamRevision(envelope, nextRevision, int64(refresh.Generation))
+			if err != nil {
+				event.Type, event.Err = RefreshEventTargetError, fmt.Errorf("visualization %q envelope: %w", event.Target, err)
+			} else {
+				c.revisions[event.Target] = nextRevision
+				event.DataRevision = nextRevision
+				event.Value = revised
+			}
+		}
+	}
 	if event.Command == "" {
 		event.Command = refresh.Command
 	}
@@ -341,7 +383,7 @@ func (c *Coordinator) emitCurrent(refresh Refresh, event RefreshEvent) bool {
 			}
 		}
 		switch event.Type {
-		case RefreshEventFilterOptions, RefreshEventVisual, RefreshEventTable:
+		case RefreshEventFilterOptions, RefreshEventVisual:
 			c.active.targetSuccesses++
 		case RefreshEventTargetError:
 			if event.Target == "refresh" {
@@ -368,6 +410,15 @@ func (c *Coordinator) emitCurrent(refresh Refresh, event RefreshEvent) bool {
 		c.publish(event)
 	}
 	return true
+}
+
+func carriesVisualizationData(eventType RefreshEventType) bool {
+	switch eventType {
+	case RefreshEventVisual, RefreshEventVisualMetadata:
+		return true
+	default:
+		return false
+	}
 }
 
 func progressRegresses(current, next *float64) bool {
@@ -474,8 +525,9 @@ func (c *Coordinator) notifyStarted(refresh Refresh) {
 
 func cloneFilters(filters dashboard.Filters) dashboard.Filters {
 	clone := dashboard.Filters{
-		Controls:   make(map[string]dashboard.FilterControl, len(filters.Controls)),
-		Selections: make([]dashboard.InteractionSelection, len(filters.Selections)),
+		Controls:          make(map[string]dashboard.FilterControl, len(filters.Controls)),
+		Selections:        make([]dashboard.InteractionSelection, len(filters.Selections)),
+		SpatialSelections: make([]dashboard.SpatialInteractionSelection, len(filters.SpatialSelections)),
 	}
 	for id, control := range filters.Controls {
 		control.Values = append([]string(nil), control.Values...)
@@ -489,5 +541,6 @@ func cloneFilters(filters dashboard.Filters) dashboard.Filters {
 		}
 		clone.Selections[index] = selection
 	}
+	copy(clone.SpatialSelections, filters.SpatialSelections)
 	return clone.WithDefaults()
 }

@@ -45,29 +45,26 @@ spec:
   visuals:
     revenue_kpi:
       type: kpi
-      shape: single_value
       query:
         measures:
           revenue:
-      options:
+      presentation:
         note: Payment value
-        tone: green
+        tone: success
     aov_kpi:
       type: kpi
-      shape: single_value
       query:
         measures:
           aov:
-      options:
+      presentation:
         note: Revenue per order
-        tone: amber
+        tone: warning
     total_orders:
       type: kpi
-      shape: single_value
       query:
         measures:
           order_count:
-      options:
+      presentation:
         note: Filtered order count
         tone: ink
     revenue_by_month:

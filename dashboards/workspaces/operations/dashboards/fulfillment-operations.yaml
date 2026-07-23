@@ -39,31 +39,28 @@ spec:
   visuals:
     total_orders:
       type: kpi
-      shape: single_value
       query:
         measures:
           order_count:
-      options:
+      presentation:
         note: Filtered order count
         tone: ink
     delivery_days:
       type: kpi
-      shape: single_value
       query:
         measures:
           delivery_days:
-      options:
+      presentation:
         note: Average days
-        tone: amber
+        tone: warning
     review_score:
       type: kpi
-      shape: single_value
       query:
         measures:
           review_score:
-      options:
+      presentation:
         note: Average score
-        tone: coral
+        tone: danger
     orders_by_status:
       title: Orders by status
       type: donut

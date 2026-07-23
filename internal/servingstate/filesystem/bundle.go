@@ -21,7 +21,7 @@ import (
 	securejoin "github.com/cyphar/filepath-securejoin"
 )
 
-const compiledWorkspaceArtifactVersion = 2
+const compiledWorkspaceArtifactVersion = 7
 
 type Manifest struct {
 	Version        int            `json:"version"`

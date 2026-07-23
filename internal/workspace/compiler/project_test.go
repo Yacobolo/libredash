@@ -9,7 +9,10 @@ import (
 	"testing"
 
 	"github.com/Yacobolo/leapview/internal/configschema"
+	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 	"github.com/Yacobolo/leapview/internal/workspace"
 )
 
@@ -93,9 +96,35 @@ spec:
 	}
 }
 
+func TestCompiledGaugePreservesTypedThresholdPresentation(t *testing.T) {
+	report := &reportdef.Dashboard{
+		ID: "dashboard", SemanticModel: "model",
+		Visuals: reportdef.ChartVisualizations(map[string]reportdef.Visual{
+			"score": {
+				Type:  "gauge",
+				Query: reportdef.VisualQuery{Measures: []reportdef.FieldRef{{Field: "score", Alias: "score"}}},
+				Presentation: reportdef.VisualPresentation{Thresholds: []reportdef.VisualThreshold{
+					{Value: 3, Tone: "danger"}, {Value: 4, Tone: "warning"}, {Value: 5, Tone: "success"},
+				}},
+			},
+		}),
+	}
+	definitions, err := compileVisualizationDefinitions(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec, ok := definitions["score"].Spec.Value.(*visualizationir.PolarVisualizationSpec)
+	if !ok || spec.Presentation.Thresholds == nil {
+		t.Fatalf("gauge presentation thresholds = %#v", definitions["score"].Spec.Value)
+	}
+	if got := len(*spec.Presentation.Thresholds); got != 3 {
+		t.Fatalf("gauge threshold count = %d, want 3", got)
+	}
+}
+
 func TestCompileRequiresExplicitWorkspaceID(t *testing.T) {
 	projectPath := writeProjectFixture(t, map[string]string{
-		"leapview.yaml":                                   projectYAML(),
+		"leapview.yaml":                                    projectYAML(),
 		"connections/olist.yaml":                           connectionYAML("olist"),
 		"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
 		"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -121,7 +150,7 @@ func TestCompileRequiresExplicitWorkspaceID(t *testing.T) {
 
 func TestCompileProjectCompilesRefreshPipeline(t *testing.T) {
 	projectPath := writeProjectFixture(t, map[string]string{
-		"leapview.yaml":                                        projectYAML(),
+		"leapview.yaml":                                         projectYAML(),
 		"connections/olist.yaml":                                connectionYAML("olist"),
 		"sources/olist.orders.yaml":                             sourceYAML("olist.orders", "orders.csv", "order_id"),
 		"sources/olist.customers.yaml":                          sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -152,7 +181,7 @@ func TestCompileProjectCompilesRefreshPipeline(t *testing.T) {
 
 func TestCompileProjectSupportsManualOnlyRefreshPipeline(t *testing.T) {
 	projectPath := writeProjectFixture(t, map[string]string{
-		"leapview.yaml":                                        projectYAML(),
+		"leapview.yaml":                                         projectYAML(),
 		"connections/olist.yaml":                                connectionYAML("olist"),
 		"sources/olist.orders.yaml":                             sourceYAML("olist.orders", "orders.csv", "order_id"),
 		"sources/olist.customers.yaml":                          sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -212,7 +241,7 @@ func TestCompileProjectRejectsInvalidRefreshPipeline(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			files := map[string]string{
-				"leapview.yaml":                                   projectYAML(),
+				"leapview.yaml":                                    projectYAML(),
 				"connections/olist.yaml":                           connectionYAML("olist"),
 				"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
 				"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -280,7 +309,7 @@ func TestCompileProjectRejectsInvalidAccessResources(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			files := map[string]string{
-				"leapview.yaml":                                   projectYAML(),
+				"leapview.yaml":                                    projectYAML(),
 				"connections/olist.yaml":                           connectionYAML("olist"),
 				"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
 				"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -366,12 +395,30 @@ func TestCompileShowcaseProject(t *testing.T) {
 	if _, ok := visuals.Definition.Models["visuals"]; !ok {
 		t.Fatalf("visuals semantic models = %#v, want visuals", visuals.Definition.Models)
 	}
-	assertVisualShowcaseCoverage(t, showcase)
+	assertVisualShowcaseCoverage(t, &showcase)
+	servingState, err := json.Marshal(visuals.Definition)
+	if err != nil {
+		t.Fatal(err)
+	}
+	serialized := string(servingState)
+	// Page layout legitimately uses a "visuals" collection; authored dashboard
+	// visual maps are gone because the dashboard root now exposes only
+	// "visualizations".
+	for _, legacy := range []string{`"tables":`, `"rendererOptions":`, `"options":`, `"shape":`} {
+		if strings.Contains(serialized, legacy) {
+			t.Fatalf("compiled serving state contains legacy authoring property %s", legacy)
+		}
+	}
+	for _, compiledProperty := range []string{`"visualizations":`, `"specRevision":`, `"query":`} {
+		if !strings.Contains(serialized, compiledProperty) {
+			t.Fatalf("compiled serving state missing %s", compiledProperty)
+		}
+	}
 }
 
 func TestPlanProjectIsStableAndSorted(t *testing.T) {
 	projectPath := writeProjectFixture(t, map[string]string{
-		"leapview.yaml":                                   projectYAML(),
+		"leapview.yaml":                                    projectYAML(),
 		"connections/olist.yaml":                           connectionYAML("olist"),
 		"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
 		"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -408,7 +455,7 @@ func TestPlanProjectIsStableAndSorted(t *testing.T) {
 
 func TestPlanProjectAgainstGraphReportsStableDiff(t *testing.T) {
 	projectPath := writeProjectFixture(t, map[string]string{
-		"leapview.yaml":                                   projectYAML(),
+		"leapview.yaml":                                    projectYAML(),
 		"connections/olist.yaml":                           connectionYAML("olist"),
 		"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
 		"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -472,7 +519,7 @@ func TestPlanProjectAgainstGraphReportsStableDiff(t *testing.T) {
 
 func TestPlanProjectAgainstGraphReportsSemanticAndAccessImpact(t *testing.T) {
 	projectPath := writeProjectFixture(t, map[string]string{
-		"leapview.yaml":                                   projectYAML(),
+		"leapview.yaml":                                    projectYAML(),
 		"connections/olist.yaml":                           connectionYAML("olist"),
 		"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
 		"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -938,7 +985,7 @@ spec:
 
 func TestCompileProjectSupportsMultipleSemanticModelsInWorkspace(t *testing.T) {
 	projectPath := writeProjectFixture(t, map[string]string{
-		"leapview.yaml":                                   projectYAML(),
+		"leapview.yaml":                                    projectYAML(),
 		"connections/olist.yaml":                           connectionYAML("olist"),
 		"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
 		"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -963,7 +1010,7 @@ func TestCompileProjectSupportsMultipleSemanticModelsInWorkspace(t *testing.T) {
 
 func TestCompileProjectAllowsDuplicateDashboardIDsAcrossWorkspaces(t *testing.T) {
 	projectPath := writeProjectFixture(t, map[string]string{
-		"leapview.yaml":                                        projectYAML(),
+		"leapview.yaml":                                         projectYAML(),
 		"connections/olist.yaml":                                connectionYAML("olist"),
 		"sources/olist.orders.yaml":                             sourceYAML("olist.orders", "orders.csv", "order_id"),
 		"sources/olist.customers.yaml":                          sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -987,7 +1034,7 @@ func TestCompileProjectAllowsDuplicateDashboardIDsAcrossWorkspaces(t *testing.T)
 
 func TestCompileProjectRejectsDuplicateDashboardIDsWithinWorkspace(t *testing.T) {
 	projectPath := writeProjectFixture(t, map[string]string{
-		"leapview.yaml":                              projectYAML(),
+		"leapview.yaml":                               projectYAML(),
 		"connections/olist.yaml":                      connectionYAML("olist"),
 		"sources/olist.orders.yaml":                   sourceYAML("olist.orders", "orders.csv", "order_id"),
 		"sources/olist.customers.yaml":                sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -1006,7 +1053,7 @@ func TestCompileProjectRejectsDuplicateDashboardIDsWithinWorkspace(t *testing.T)
 func TestCompileProjectRejectsUnknownReferences(t *testing.T) {
 	t.Run("source connection", func(t *testing.T) {
 		projectPath := writeProjectFixture(t, map[string]string{
-			"leapview.yaml":                                   projectYAML(),
+			"leapview.yaml":                                    projectYAML(),
 			"connections/olist.yaml":                           connectionYAML("olist"),
 			"sources/olist.orders.yaml":                        strings.Replace(sourceYAML("olist.orders", "orders.csv", "order_id"), "connection: olist", "connection: missing", 1),
 			"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -1022,7 +1069,7 @@ func TestCompileProjectRejectsUnknownReferences(t *testing.T) {
 
 	t.Run("dashboard semantic model", func(t *testing.T) {
 		projectPath := writeProjectFixture(t, map[string]string{
-			"leapview.yaml":                                   projectYAML(),
+			"leapview.yaml":                                    projectYAML(),
 			"connections/olist.yaml":                           connectionYAML("olist"),
 			"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
 			"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -1059,7 +1106,7 @@ spec:
 
 func TestCompileProjectRejectsWorkspaceMismatchWithResourceDiagnostic(t *testing.T) {
 	projectPath := writeProjectFixture(t, map[string]string{
-		"leapview.yaml":                                   projectYAML(),
+		"leapview.yaml":                                    projectYAML(),
 		"connections/olist.yaml":                           connectionYAML("olist"),
 		"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
 		"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -1077,7 +1124,7 @@ func TestCompileProjectRejectsWorkspaceMismatchWithResourceDiagnostic(t *testing
 func TestCompileProjectRejectsHiddenImportsAndUnsafeIncludes(t *testing.T) {
 	t.Run("raw relation", func(t *testing.T) {
 		projectPath := writeProjectFixture(t, map[string]string{
-			"leapview.yaml":                                   projectYAML(),
+			"leapview.yaml":                                    projectYAML(),
 			"connections/olist.yaml":                           connectionYAML("olist"),
 			"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
 			"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -1093,7 +1140,7 @@ func TestCompileProjectRejectsHiddenImportsAndUnsafeIncludes(t *testing.T) {
 
 	t.Run("unqualified relation", func(t *testing.T) {
 		projectPath := writeProjectFixture(t, map[string]string{
-			"leapview.yaml":                                   projectYAML(),
+			"leapview.yaml":                                    projectYAML(),
 			"connections/olist.yaml":                           connectionYAML("olist"),
 			"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
 			"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -1109,7 +1156,7 @@ func TestCompileProjectRejectsHiddenImportsAndUnsafeIncludes(t *testing.T) {
 
 	t.Run("escaping include", func(t *testing.T) {
 		projectPath := writeProjectFixture(t, map[string]string{
-			"leapview.yaml":         strings.Replace(projectYAML(), "connections/*.yaml", "../*.yaml", 1),
+			"leapview.yaml":          strings.Replace(projectYAML(), "connections/*.yaml", "../*.yaml", 1),
 			"connections/olist.yaml": connectionYAML("olist"),
 		})
 
@@ -1119,7 +1166,7 @@ func TestCompileProjectRejectsHiddenImportsAndUnsafeIncludes(t *testing.T) {
 
 	t.Run("recursive include", func(t *testing.T) {
 		projectPath := writeProjectFixture(t, map[string]string{
-			"leapview.yaml":         strings.Replace(projectYAML(), "connections/*.yaml", "connections/**/*.yaml", 1),
+			"leapview.yaml":          strings.Replace(projectYAML(), "connections/*.yaml", "connections/**/*.yaml", 1),
 			"connections/olist.yaml": connectionYAML("olist"),
 		})
 
@@ -1131,7 +1178,7 @@ func TestCompileProjectRejectsHiddenImportsAndUnsafeIncludes(t *testing.T) {
 func TestCompileProjectRejectsSQLSourceMismatchAndCycles(t *testing.T) {
 	t.Run("source mismatch", func(t *testing.T) {
 		projectPath := writeProjectFixture(t, map[string]string{
-			"leapview.yaml":                                   projectYAML(),
+			"leapview.yaml":                                    projectYAML(),
 			"connections/olist.yaml":                           connectionYAML("olist"),
 			"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
 			"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -1147,7 +1194,7 @@ func TestCompileProjectRejectsSQLSourceMismatchAndCycles(t *testing.T) {
 
 	t.Run("model table cycle", func(t *testing.T) {
 		projectPath := writeProjectFixture(t, map[string]string{
-			"leapview.yaml":                                   projectYAML(),
+			"leapview.yaml":                                    projectYAML(),
 			"connections/olist.yaml":                           connectionYAML("olist"),
 			"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
 			"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -1176,35 +1223,83 @@ func writeProjectFixture(t *testing.T, files map[string]string) string {
 	return filepath.Join(dir, "leapview.yaml")
 }
 
-func assertVisualShowcaseCoverage(t *testing.T, report *reportdef.Dashboard) {
+func assertVisualShowcaseCoverage(t *testing.T, report *dashboarddefinition.Definition) {
 	t.Helper()
 	visualTypes := map[string]struct{}{}
-	for _, visual := range report.Visuals {
-		if visual.Type != "" {
-			visualTypes[visual.Type] = struct{}{}
-		}
-		if visual.Kind != "" {
-			visualTypes[visual.Kind] = struct{}{}
+	geographicLayers := map[string]struct{}{}
+	for _, visual := range report.Visualizations {
+		switch spec := visual.Spec.Value.(type) {
+		case *visualizationir.CartesianVisualizationSpec:
+			visualTypes[string(spec.Mark)] = struct{}{}
+		case *visualizationir.ProportionalVisualizationSpec:
+			visualTypes[string(spec.Mark)] = struct{}{}
+		case *visualizationir.HierarchyVisualizationSpec:
+			visualTypes[string(spec.Mark)] = struct{}{}
+		case *visualizationir.PolarVisualizationSpec:
+			visualTypes[string(spec.Mark)] = struct{}{}
+		case *visualizationir.GeographicVisualizationSpec:
+			visualTypes["map"] = struct{}{}
+			for _, layer := range spec.Layers {
+				kind, err := layer.Kind()
+				if err != nil {
+					t.Fatal(err)
+				}
+				geographicLayers[kind] = struct{}{}
+			}
+		case *visualizationir.CustomVisualizationSpec:
+			visualTypes["custom"] = struct{}{}
 		}
 	}
 	for _, typ := range []string{
 		"line", "area", "bar", "column", "pie", "donut", "scatter", "funnel", "treemap", "gauge", "heatmap",
-		"sankey", "graph", "map", "candlestick", "boxplot", "combo", "waterfall", "histogram", "radar", "tree", "sunburst",
+		"sankey", "graph", "map", "candlestick", "boxplot", "combo", "waterfall", "histogram", "radar", "tree", "sunburst", "custom",
 	} {
 		if _, ok := visualTypes[typ]; !ok {
 			t.Fatalf("visual-showcase missing visual type %q", typ)
 		}
 	}
+	for _, kind := range []string{"choropleth", "point", "heat", "density"} {
+		if _, ok := geographicLayers[kind]; !ok {
+			t.Fatalf("visual-showcase missing geographic layer kind %q", kind)
+		}
+	}
+	assertSpatialDimensions(t, report, "customer_point_map", "customers.zip_prefix", "customers.latitude", "customers.longitude")
+	assertSpatialDimensions(t, report, "customer_revenue_heat_map", "customers.zip_prefix", "customers.latitude", "customers.longitude")
+	assertSpatialDimensions(t, report, "customer_density_map", "customers.zip_prefix", "customers.latitude", "customers.longitude")
+	assertSpatialDimensions(t, report, "customer_path_map", "delivery_routes.route_id", "delivery_routes.point_order", "delivery_routes.latitude", "delivery_routes.longitude")
+	assertSpatialDimensions(t, report, "million_point_map", "spatial_load_points.point_id", "spatial_load_points.latitude", "spatial_load_points.longitude")
+	million := report.Visualizations["million_point_map"]
+	if million.Query.Spatial == nil || million.Query.Spatial.Viewport == nil || million.Query.Spatial.Limit != 1_000_000 || million.Query.Spatial.Viewport.FeatureCap != 5_000 {
+		t.Errorf("million-point showcase must compile to a 5,000-feature spatial viewport: %#v", million.Query)
+	}
+	for _, id := range []string{"customer_point_map", "customer_revenue_heat_map", "customer_density_map", "customer_path_map"} {
+		visual := report.Visualizations[id]
+		if visual.Query.Spatial == nil || len(visual.Query.Spatial.Sort) == 0 {
+			t.Errorf("visual-showcase geographic visual %q requires deterministic sorting before its row budget", id)
+		}
+	}
 	tableKinds := map[string]struct{}{}
 	conditionalFormatting := map[string]struct{}{}
-	for _, table := range report.Tables {
-		tableKinds[table.Kind] = struct{}{}
-		for _, column := range table.Columns {
+	for _, table := range report.Visualizations {
+		var measures []visualizationdefinition.FieldBinding
+		switch table.Query.Kind {
+		case visualizationdefinition.QueryDetail:
+			tableKinds["data_table"] = struct{}{}
+		case visualizationdefinition.QueryMatrix:
+			tableKinds["matrix_table"] = struct{}{}
+			measures = table.Query.Matrix.Measures
+		case visualizationdefinition.QueryPivot:
+			tableKinds["pivot_table"] = struct{}{}
+			measures = table.Query.Pivot.Measures
+		default:
+			continue
+		}
+		for _, column := range dashboarddefinition.TableColumns(table.Spec) {
 			for _, rule := range column.Formatting {
 				conditionalFormatting[rule.Kind] = struct{}{}
 			}
 		}
-		for _, rules := range table.MeasureFormatting {
+		for _, rules := range dashboarddefinition.MeasureFormatting(table.Spec, measures) {
 			for _, rule := range rules {
 				conditionalFormatting[rule.Kind] = struct{}{}
 			}
@@ -1222,9 +1317,27 @@ func assertVisualShowcaseCoverage(t *testing.T, report *reportdef.Dashboard) {
 	}
 }
 
+func assertSpatialDimensions(t *testing.T, report *dashboarddefinition.Definition, visualID string, want ...string) {
+	t.Helper()
+	visual, ok := report.Visualizations[visualID]
+	if !ok || visual.Query.Spatial == nil {
+		t.Errorf("visual-showcase missing spatial visual %q", visualID)
+		return
+	}
+	present := make(map[string]bool, len(visual.Query.Spatial.Dimensions))
+	for _, dimension := range visual.Query.Spatial.Dimensions {
+		present[dimension.FieldID] = true
+	}
+	for _, field := range want {
+		if !present[field] {
+			t.Errorf("visual-showcase visual %q missing semantic dimension %q", visualID, field)
+		}
+	}
+}
+
 func minimalProjectFiles(extra map[string]string) map[string]string {
 	files := map[string]string{
-		"leapview.yaml":                                   projectYAML(),
+		"leapview.yaml":                                    projectYAML(),
 		"connections/olist.yaml":                           connectionYAML("olist"),
 		"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
 		"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -1488,6 +1601,34 @@ spec:
             col_span: 3
             row_span: 2
 `
+}
+
+func TestCompileProjectProducesImmutableVisualizationDefinitions(t *testing.T) {
+	projectPath := writeProjectFixture(t, map[string]string{
+		"leapview.yaml":                                    projectYAML(),
+		"connections/olist.yaml":                           connectionYAML("olist"),
+		"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
+		"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
+		"workspaces/sales/workspace.yaml":                  workspaceYAML("sales"),
+		"workspaces/sales/models/orders.yaml":              modelTableYAML("sales", "orders", "olist.orders", "order_id", "SELECT order_id FROM source.\"olist.orders\""),
+		"workspaces/sales/semantic-models/sales.yaml":      semanticModelYAML("sales", "orders", "order_count"),
+		"workspaces/sales/dashboards/executive-sales.yaml": dashboardYAML("sales", "executive-sales", "sales"),
+	})
+
+	compiled, err := CompileProject(projectPath, Options{ServingStateID: "state_1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	definition := compiled.Workspaces["sales"].Definition.Dashboards["executive-sales"].Visualizations["total"]
+	if definition.ID != "total" || definition.RendererID != "html" || definition.SpecRevision == "" {
+		t.Fatalf("compiled visualization = %#v", definition)
+	}
+	if definition.Query.Kind != visualizationdefinition.QueryAggregate || definition.Query.ModelID != "sales" || definition.Query.Aggregate == nil || len(definition.Query.Aggregate.Measures) != 1 || definition.Query.Aggregate.Measures[0].FieldID != "order_count" {
+		t.Fatalf("compiled query binding = %#v", definition.Query)
+	}
+	if err := definition.Validate(); err != nil {
+		t.Fatalf("compiled definition is invalid: %v", err)
+	}
 }
 
 func workspaceGroupYAML(workspace, name, email string) string {

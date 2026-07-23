@@ -59,55 +59,48 @@ spec:
   visuals:
     rating_count:
       type: kpi
-      shape: single_value
       query:
         measures:
           rating_count:
-      options:
+      presentation:
         note: Rating events
         tone: ink
     average_rating:
       type: kpi
-      shape: single_value
       query:
         measures:
           average_rating:
-      options:
+      presentation:
         note: Mean rating
-        tone: amber
+        tone: warning
     active_users:
       type: kpi
-      shape: single_value
       query:
         measures:
           active_users:
-      options:
+      presentation:
         note: Distinct users
-        tone: green
+        tone: success
     rated_movies:
       type: kpi
-      shape: single_value
       query:
         measures:
           rated_movies:
-      options:
+      presentation:
         note: Distinct movies
-        tone: coral
+        tone: danger
     tags_per_rating:
       type: kpi
-      shape: single_value
       query:
         measures:
           tags_per_rating:
-      options:
+      presentation:
         note: Independently aggregated tags / ratings
-        tone: green
+        tone: success
     activity_by_month:
       title: Ratings and tags by activity month
-      shape: category_multi_measure
-      renderer: echarts
       type: combo
-      options:
+      presentation:
         series_types:
           Ratings: column
           Tags: line

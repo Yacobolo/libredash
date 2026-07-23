@@ -36,7 +36,7 @@ import {
   Workflow,
   type IconNode,
 } from 'lucide'
-import type { AgentContextSignal, AgentReferenceSignal, ChatTranscriptItemSignal, DashboardVisual } from '../../generated/signals'
+import type { AgentContextSignal, AgentReferenceSignal, ChatTranscriptItemSignal } from '../../generated/signals'
 import { lucideIcon } from '../shared/lucide-icons'
 
 export type ChatContextReference = AgentReferenceSignal
@@ -132,7 +132,7 @@ export function mergeReferences(...groups: AgentReferenceSignal[][]): AgentRefer
 
 type ReferenceIcon = { name: string; icon: IconNode }
 
-const visualReferenceIcons: Record<DashboardVisual['type'], ReferenceIcon> = {
+const visualReferenceIcons: Record<string, ReferenceIcon> = {
   line: { name: 'line', icon: ChartLine },
   area: { name: 'area', icon: ChartArea },
   bar: { name: 'bar', icon: ChartBar },
@@ -166,7 +166,7 @@ export function referenceIcon(kind: string, visualType = '') {
   const normalizedVisualType = visualType.trim().toLocaleLowerCase()
   let resolved: ReferenceIcon
   if (normalizedKind === 'visual') {
-    resolved = visualReferenceIcons[normalizedVisualType as DashboardVisual['type']] ?? { name: 'visual', icon: ChartColumn }
+		resolved = visualReferenceIcons[normalizedVisualType] ?? { name: 'visual', icon: ChartColumn }
   } else {
     resolved = referenceKindIcon(normalizedKind)
   }

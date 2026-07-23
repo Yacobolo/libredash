@@ -1,14 +1,67 @@
 package signals
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
 	"github.com/Yacobolo/leapview/internal/agent"
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	"github.com/Yacobolo/leapview/internal/dashboard"
+	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
+	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
+	workspacecompiler "github.com/Yacobolo/leapview/internal/workspace/compiler"
 )
+
+func TestVisualizationSignalKeepsDataStateOpaque(t *testing.T) {
+	report := testDashboardReport()
+	model := testSemanticModel()
+	compiled, definitions := compiledTestDashboard(t, &report, model)
+	envelope := DashboardInitialEnvelope("client", "stream-instance", dashboard.Catalog{}, compiled, model, definitions, report.Pages, report.Pages[0], dashboard.Filters{})
+
+	encoded, err := json.Marshal(envelope.Visuals["active_chart"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var signal map[string]any
+	if err := json.Unmarshal(encoded, &signal); err != nil {
+		t.Fatal(err)
+	}
+	transport, ok := signal["dataState"].(map[string]any)
+	if !ok {
+		t.Fatalf("visualization signal must encode data state through one typed transport: %s", encoded)
+	}
+	if transport["schemaVersion"] != float64(1) || transport["encoding"] != "json" || transport["kind"] != "inline" {
+		t.Fatalf("visualization data-state transport header = %#v", transport)
+	}
+	if _, ok := transport["payload"].(string); !ok {
+		t.Fatalf("visualization data-state transport payload must stay opaque: %#v", transport)
+	}
+	if _, ok := signal["dataStateJson"]; ok {
+		t.Fatalf("legacy unversioned dataStateJson must not be emitted: %s", encoded)
+	}
+}
+
+func compiledTestVisualizations(t *testing.T, report *reportdef.Dashboard, model *semanticmodel.Model) map[string]visualizationdefinition.Definition {
+	t.Helper()
+	definitions, err := workspacecompiler.CompileVisualizationDefinitions(report, model)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return definitions
+}
+
+func compiledTestDashboard(t *testing.T, report *reportdef.Dashboard, model *semanticmodel.Model) (dashboarddefinition.Definition, map[string]visualizationdefinition.Definition) {
+	t.Helper()
+	definitions := compiledTestVisualizations(t, report, model)
+	compiled, err := workspacecompiler.CompileDashboardDefinition(report, definitions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return compiled, definitions
+}
 
 func TestChatTranscriptItemsProjectsTurnReferences(t *testing.T) {
 	items := ChatTranscriptItems([]agent.ChatTranscriptItem{{
@@ -34,7 +87,8 @@ func TestChatTranscriptItemsProjectsTurnReferences(t *testing.T) {
 func TestDashboardInitialEnvelopeValidatesPageScopedPayloads(t *testing.T) {
 	report := testDashboardReport()
 	model := testSemanticModel()
-	envelope := DashboardInitialEnvelope("client", "stream-instance", dashboard.Catalog{}, report, model, report.Pages, report.Pages[0], dashboard.Filters{})
+	compiled, definitions := compiledTestDashboard(t, &report, model)
+	envelope := DashboardInitialEnvelope("client", "stream-instance", dashboard.Catalog{}, compiled, model, definitions, report.Pages, report.Pages[0], dashboard.Filters{})
 
 	if err := ValidateDashboardEnvelope(envelope); err != nil {
 		t.Fatalf("validate dashboard envelope: %v", err)
@@ -57,9 +111,6 @@ func TestDashboardInitialEnvelopeValidatesPageScopedPayloads(t *testing.T) {
 	if envelope.Status.RefreshID != "" || envelope.Status.Generation != 0 {
 		t.Fatalf("initial refresh status = %#v", envelope.Status)
 	}
-	if len(envelope.ComponentStatus) != 0 {
-		t.Fatalf("initial component status = %#v, want empty", envelope.ComponentStatus)
-	}
 	if envelope.AgentContext.Surface != "dashboard" || envelope.AgentContext.PageID != report.Pages[0].ID || envelope.AgentContext.ModelID != model.Name {
 		t.Fatalf("agent context = %#v", envelope.AgentContext)
 	}
@@ -70,7 +121,9 @@ func TestDashboardInitialEnvelopeValidatesPageScopedPayloads(t *testing.T) {
 
 func TestDashboardEnvelopeRejectsMissingReferencedPayload(t *testing.T) {
 	report := testDashboardReport()
-	envelope := DashboardInitialEnvelope("client", "stream-instance", dashboard.Catalog{}, report, testSemanticModel(), report.Pages, report.Pages[0], dashboard.Filters{})
+	model := testSemanticModel()
+	compiled, definitions := compiledTestDashboard(t, &report, model)
+	envelope := DashboardInitialEnvelope("client", "stream-instance", dashboard.Catalog{}, compiled, model, definitions, report.Pages, report.Pages[0], dashboard.Filters{})
 	delete(envelope.Visuals, "active_chart")
 
 	err := ValidateDashboardEnvelope(envelope)
@@ -81,33 +134,14 @@ func TestDashboardEnvelopeRejectsMissingReferencedPayload(t *testing.T) {
 
 func TestDashboardEnvelopeRejectsUnusedPayload(t *testing.T) {
 	report := testDashboardReport()
-	envelope := DashboardInitialEnvelope("client", "stream-instance", dashboard.Catalog{}, report, testSemanticModel(), report.Pages, report.Pages[0], dashboard.Filters{})
-	envelope.Visuals["off_page_chart"] = DashboardVisualFromDashboard(dashboard.Visual{ID: "off_page_chart", Type: "bar"})
+	model := testSemanticModel()
+	compiled, definitions := compiledTestDashboard(t, &report, model)
+	envelope := DashboardInitialEnvelope("client", "stream-instance", dashboard.Catalog{}, compiled, model, definitions, report.Pages, report.Pages[0], dashboard.Filters{})
+	envelope.Visuals["off_page_chart"] = envelope.Visuals["active_chart"]
 
 	err := ValidateDashboardEnvelope(envelope)
 	if err == nil || !strings.Contains(err.Error(), `unused visual payload "off_page_chart"`) {
 		t.Fatalf("validate error = %v", err)
-	}
-}
-
-func TestInteractionSignalPreservesSelectionScope(t *testing.T) {
-	got := interactionSignal("point_selection", reportdef.SelectionInteraction{
-		Toggle: true,
-		Mappings: []reportdef.SelectionMapping{
-			{Field: "activity_date", Grain: "month", Value: "label"},
-			{Field: "ratings.rating_bucket", Fact: "ratings", Value: "series"},
-		},
-		Targets: []string{"activity_by_month"},
-	})
-
-	if !got.Toggle || len(got.Mappings) != 2 {
-		t.Fatalf("interaction signal = %#v", got)
-	}
-	if got.Mappings[0].Fact != "" || got.Mappings[0].Grain != "month" {
-		t.Fatalf("conformed mapping = %#v", got.Mappings[0])
-	}
-	if got.Mappings[1].Fact != "ratings" || got.Mappings[1].Grain != "" {
-		t.Fatalf("fact-local mapping = %#v", got.Mappings[1])
 	}
 }
 
@@ -187,7 +221,7 @@ func TestChatInitialEnvelopeOnlyListActivatesChatNav(t *testing.T) {
 func testChatViewState(signal ChatSignal) ChatViewState {
 	return ChatViewState{
 		Agent:   signal,
-		Visuals: map[string]DashboardVisual{},
+		Visuals: map[string]visualizationir.VisualizationEnvelope{},
 	}
 }
 
@@ -253,21 +287,20 @@ func testDashboardReport() reportdef.Dashboard {
 			"state":    {Type: "multi_select", Label: "State", Dimension: "orders.state", URLParam: "state", Operator: "in"},
 			"category": {Type: "text", Label: "Category", Dimension: "orders.category", URLParam: "category", DefaultOperator: "contains"},
 		},
-		Visuals: map[string]reportdef.Visual{
+		Visuals: reportdef.MergeVisualizations(reportdef.ChartVisualizations(map[string]reportdef.Visual{
 			"active_chart":   {Title: "Active", Type: "bar", Query: reportdef.VisualQuery{Dimensions: testFieldRefs("orders.status"), Measures: testFieldRefs("order_count")}},
 			"off_page_chart": {Title: "Off Page", Type: "bar", Query: reportdef.VisualQuery{Dimensions: testFieldRefs("orders.status"), Measures: testFieldRefs("order_count")}},
-		},
-		Tables: map[string]reportdef.TableVisual{
+		}), reportdef.TabularVisualizations("table", map[string]reportdef.TableVisual{
 			"orders": {Title: "Orders", Query: reportdef.TableQuery{Table: "orders", Fields: []string{"orders.order_id"}}, Columns: []dashboard.TableColumn{{Key: "order_id", Label: "Order"}}},
-		},
+		})),
 		Pages: []dashboard.Page{
 			{
 				ID:     "overview",
 				Title:  "Overview",
 				Canvas: dashboard.PageCanvas{Width: 1200, Height: 800},
 				Visuals: []dashboard.PageVisual{
-					{ID: "state-filter", Kind: "filter_card", Filter: "state", X: 0, Y: 0, Width: 100, Height: 40},
-					{ID: "chart", Kind: "bar_chart", Visual: "active_chart", X: 0, Y: 48, Width: 100, Height: 100},
+					{ID: "state-filter", Kind: "filter", Filter: "state", X: 0, Y: 0, Width: 100, Height: 40},
+					{ID: "chart", Kind: "visual", Visual: "active_chart", X: 0, Y: 48, Width: 100, Height: 100},
 				},
 			},
 			{
@@ -275,7 +308,7 @@ func testDashboardReport() reportdef.Dashboard {
 				Title:  "Detail",
 				Canvas: dashboard.PageCanvas{Width: 1200, Height: 800},
 				Visuals: []dashboard.PageVisual{
-					{ID: "orders", Kind: "table", Table: "orders", X: 0, Y: 0, Width: 100, Height: 100},
+					{ID: "orders", Kind: "visual", Visual: "orders", X: 0, Y: 0, Width: 100, Height: 100},
 				},
 			},
 		},

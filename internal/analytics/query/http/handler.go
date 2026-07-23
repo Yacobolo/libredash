@@ -23,6 +23,7 @@ import (
 	"github.com/Yacobolo/leapview/internal/api"
 	"github.com/Yacobolo/leapview/internal/cursorsigning"
 	"github.com/Yacobolo/leapview/internal/dashboard"
+	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 	"github.com/Yacobolo/leapview/internal/dataquery"
 	"github.com/Yacobolo/leapview/internal/workload"
@@ -33,7 +34,7 @@ type Metrics interface {
 	Catalog() dashboard.Catalog
 	ExecuteDataQuery(ctx context.Context, request dataquery.Query) (dataquery.Result, error)
 	Pages(dashboardID string) []dashboard.Page
-	Report(dashboardID string) (reportdef.Dashboard, *semanticmodel.Model, bool)
+	Report(dashboardID string) (dashboarddefinition.Definition, *semanticmodel.Model, bool)
 	SemanticModel(modelID string) (*semanticmodel.Model, bool)
 }
 

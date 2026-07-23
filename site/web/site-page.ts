@@ -4,12 +4,11 @@ import { DatastarLit } from '../../web/components/shared/datastar-lit'
 import { lucideIcon } from '../../web/components/shared/lucide-icons'
 import '../../web/components/shared/brand-mark'
 import '../../web/components/shared/code-block'
-import type { ChartPayload } from '../../web/components/dashboard/charts/types'
-import type { TableSignal } from '../../web/components/dashboard/table/types'
+import type { VisualizationEnvelope } from '../../web/generated/visualization'
 import { visualExampleHighlightLines } from './visual-example-highlights'
 
 type ThemeMode = 'system' | 'light' | 'dark'
-type VisualPayload = ChartPayload | TableSignal
+type VisualPayload = VisualizationEnvelope
 
 const nextThemeMode: Record<ThemeMode, ThemeMode> = {
   system: 'light',
@@ -1192,11 +1191,12 @@ function enhanceVisualKeyFieldControls(
   })
 }
 
-type CalloutKind = 'note' | 'tip' | 'warning' | 'danger'
+type CalloutKind = 'note' | 'tip' | 'experimental' | 'warning' | 'danger'
 
 const calloutKinds: Record<string, { kind: CalloutKind; label: string }> = {
   CAUTION: { kind: 'danger', label: 'Caution' },
   DANGER: { kind: 'danger', label: 'Danger' },
+  EXPERIMENTAL: { kind: 'experimental', label: 'Experimental' },
   IMPORTANT: { kind: 'note', label: 'Important' },
   NOTE: { kind: 'note', label: 'Note' },
   TIP: { kind: 'tip', label: 'Tip' },
@@ -1211,7 +1211,7 @@ function enhanceDocsCallouts(): void {
 
     const walker = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT)
     const markerNode = walker.nextNode() as Text | null
-    const marker = markerNode?.data.match(/^\s*\[!(NOTE|TIP|WARNING|CAUTION|DANGER|IMPORTANT)\]\s*/i)
+    const marker = markerNode?.data.match(/^\s*\[!(NOTE|TIP|EXPERIMENTAL|WARNING|CAUTION|DANGER|IMPORTANT)\]\s*/i)
     if (!markerNode || !marker) return
 
     const definition = calloutKinds[marker[1].toUpperCase()]
@@ -1544,9 +1544,7 @@ class SiteVisualExample extends DatastarLit(LitElement) {
       overflow: hidden;
     }
 
-    lv-echart,
-    lv-kpi-card,
-    lv-report-table {
+    lv-visualization-host {
       display: block;
       height: 28rem;
     }
@@ -1555,7 +1553,7 @@ class SiteVisualExample extends DatastarLit(LitElement) {
       min-height: 12rem;
     }
 
-    :host([type='kpi']) lv-kpi-card {
+    :host([type='kpi']) lv-visualization-host {
       height: 12rem;
     }
 
@@ -1563,21 +1561,15 @@ class SiteVisualExample extends DatastarLit(LitElement) {
 
   render() {
     const visuals = this.signal<VisualPayload[]>('visuals', [])
-    const visual = visuals.find((candidate) => candidate.id === this.exampleId) ?? null
-    const visualType = visual?.type ?? ''
+    const visual = visuals.find((candidate) => candidate.visualID === this.exampleId)
+    const visualType = visual?.spec.kind ?? ''
     if (this.getAttribute('type') !== visualType) {
       queueMicrotask(() => {
         if (visualType) this.setAttribute('type', visualType)
         else this.removeAttribute('type')
       })
     }
-    if (visual?.type === 'kpi') {
-      return html`<lv-kpi-card .visual=${visual}></lv-kpi-card>`
-    }
-    if (visual && isTabularVisualType(visual.type)) {
-      return html`<lv-report-table table-id=${this.exampleId} .table=${visual}></lv-report-table>`
-    }
-    return html`<lv-echart .chart=${visual}></lv-echart>`
+    return visual ? html`<lv-visualization-host .envelope=${visual}></lv-visualization-host>` : null
   }
 }
 
@@ -1642,8 +1634,7 @@ class SiteVisualShowcase extends DatastarLit(LitElement) {
       overflow: hidden;
     }
 
-    lv-echart,
-    lv-kpi-card {
+    lv-visualization-host {
       display: block;
       height: 20rem;
     }
@@ -1663,11 +1654,6 @@ class SiteVisualShowcase extends DatastarLit(LitElement) {
       height: 30rem;
     }
 
-    lv-report-table {
-      display: block;
-      height: 100%;
-    }
-
     @media (width < 48rem) {
       .table-grid {
         grid-template-columns: minmax(0, 1fr);
@@ -1681,15 +1667,15 @@ class SiteVisualShowcase extends DatastarLit(LitElement) {
 
   render() {
     const visuals = this.signal<VisualPayload[]>('visuals', [])
-    const charts = visuals.filter((visual): visual is ChartPayload => !isTabularVisualType(visual.type))
-    const tables = visuals.filter((visual): visual is TableSignal => isTabularVisualType(visual.type))
+    const charts = visuals.filter((visual) => !isTabularVisualType(visual.spec.kind))
+    const tables = visuals.filter((visual) => isTabularVisualType(visual.spec.kind))
     return html`
       <section class="showcase-section" aria-labelledby="chart-showcase-heading">
         <div class="section-heading">
           <h2 id="chart-showcase-heading">Charts and KPIs</h2>
           <p>Renderer-neutral visual payloads adapted by the built-in ECharts and KPI renderers.</p>
         </div>
-        <div class="chart-grid">${charts.map((chart) => html`<article class="chart">${chart.type === 'kpi' ? html`<lv-kpi-card .visual=${chart}></lv-kpi-card>` : html`<lv-echart .chart=${chart}></lv-echart>`}</article>`)}</div>
+        <div class="chart-grid">${charts.map((visual) => html`<article class="chart"><lv-visualization-host .envelope=${visual}></lv-visualization-host></article>`)}</div>
       </section>
       <section class="showcase-section" aria-labelledby="table-showcase-heading">
         <div class="section-heading">
@@ -1698,9 +1684,9 @@ class SiteVisualShowcase extends DatastarLit(LitElement) {
         </div>
         <div class="table-grid">
           ${tables.map(
-            (table, index) =>
+            (visual, index) =>
               html`<article class="table-card ${index === 0 ? 'featured' : ''}">
-                <lv-report-table table-id=${table.title} .table=${table}></lv-report-table>
+                <lv-visualization-host .envelope=${visual}></lv-visualization-host>
               </article>`,
           )}
         </div>
@@ -1720,10 +1706,7 @@ function isTabularVisualType(type: string): boolean {
 async function loadRouteComponents(): Promise<void> {
   const imports: Promise<unknown>[] = []
   if (document.querySelector('lv-site-visual-showcase, lv-site-visual-example')) {
-    imports.push(import('../../web/components/dashboard/charts/echart'))
-  }
-  if (document.querySelector('lv-site-visual-showcase, lv-site-visual-example')) {
-    imports.push(import('../../web/components/dashboard/table/report-table'))
+    imports.push(import('../../web/components/dashboard/visualization/host'))
   }
   if (document.querySelector('lv-site-flow-background')) {
     imports.push(import('./site-flow-background'))

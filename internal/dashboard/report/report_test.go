@@ -1,19 +1,18 @@
 package report
 
 import (
-	"context"
-	"reflect"
 	"strings"
 	"testing"
 
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	"github.com/Yacobolo/leapview/internal/dashboard"
+	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
+	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
 	"gopkg.in/yaml.v3"
 )
 
 type fakeMetrics struct {
 	report Dashboard
-	tables []dashboard.TableRequest
 }
 
 func (m *fakeMetrics) DefaultFilters(string) dashboard.Filters {
@@ -22,13 +21,25 @@ func (m *fakeMetrics) DefaultFilters(string) dashboard.Filters {
 	}}
 }
 
-func (m *fakeMetrics) Report(string) (Dashboard, *semanticmodel.Model, bool) {
-	return m.report, &semanticmodel.Model{Name: "model"}, true
-}
-
-func (m *fakeMetrics) QueryTablePage(_ context.Context, _, _ string, _ dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
-	m.tables = append(m.tables, request)
-	return dashboard.Table{Title: request.Table, Sort: request.Sort}, nil
+func (m *fakeMetrics) Report(string) (dashboarddefinition.Definition, *semanticmodel.Model, bool) {
+	model := &semanticmodel.Model{Name: "model"}
+	filters := map[string]dashboarddefinition.FilterDefinition{}
+	for id, filter := range m.report.Filters {
+		filters[id] = dashboarddefinition.FilterDefinition{Type: filter.Type, Label: filter.Label, Dimension: filter.Dimension}
+	}
+	visualizations := map[string]visualizationdefinition.Definition{}
+	for id, authored := range m.report.Visuals {
+		if authored.Tabular == nil {
+			continue
+		}
+		table := *authored.Tabular
+		fields := make([]visualizationdefinition.FieldBinding, len(table.DataColumns))
+		if len(fields) == 0 {
+			fields = []visualizationdefinition.FieldBinding{{FieldID: "value", Alias: "value"}}
+		}
+		visualizations[id] = visualizationdefinition.Definition{ID: id, Query: visualizationdefinition.QueryBinding{Kind: visualizationdefinition.QueryDetail, ResultShape: visualizationdefinition.ResultDetailWindow, Detail: &visualizationdefinition.DetailQueryBinding{Fields: fields, DefaultSort: []visualizationdefinition.Sort{{FieldID: table.DefaultSort.Key, Direction: table.DefaultSort.Direction}}, Limit: 100}}}
+	}
+	return dashboarddefinition.Definition{ID: m.report.ID, Title: m.report.Title, SemanticModel: "model", Filters: filters, Pages: m.report.Pages, Visualizations: visualizations}, model, true
 }
 
 func TestActivePageResolution(t *testing.T) {
@@ -62,8 +73,8 @@ func TestNormalizeFiltersUsesActivePageDefinitions(t *testing.T) {
 			"category": {Type: "text", Label: "Category", URLParam: "category", DefaultOperator: "contains"},
 		},
 		Pages: []dashboard.Page{
-			{ID: "overview", Visuals: []dashboard.PageVisual{{Kind: "filter_card", Filter: "state"}}},
-			{ID: "ops", Visuals: []dashboard.PageVisual{{Kind: "filter_card", Filter: "category"}}},
+			{ID: "overview", Visuals: []dashboard.PageVisual{{Kind: "filter", Filter: "state"}}},
+			{ID: "ops", Visuals: []dashboard.PageVisual{{Kind: "filter", Filter: "category"}}},
 		},
 	}}
 
@@ -77,30 +88,5 @@ func TestNormalizeFiltersUsesActivePageDefinitions(t *testing.T) {
 	}
 	if _, ok := filters.Controls["category"]; ok {
 		t.Fatalf("off-page category filter kept: %#v", filters.Controls)
-	}
-}
-
-func TestTablesBuildsPageScopedRequests(t *testing.T) {
-	metrics := &fakeMetrics{report: Dashboard{
-		Tables: map[string]TableVisual{
-			"orders": {DefaultSort: dashboard.TableSort{Key: "purchase_date", Direction: "desc"}},
-			"states": {DefaultSort: dashboard.TableSort{Key: "state", Direction: "asc"}},
-		},
-		Pages: []dashboard.Page{{ID: "overview", Visuals: []dashboard.PageVisual{
-			{Kind: "table", Table: "orders"},
-			{Kind: "table", Table: "orders"},
-			{Kind: "table", Table: "states"},
-		}}},
-	}}
-
-	tables := Tables(context.Background(), metrics, "dash", "overview", dashboard.Filters{}, dashboard.TableRequest{Start: 200, Count: 10})
-	if !reflect.DeepEqual(PageTableNames(metrics.report.Pages, "overview"), []string{"orders", "states"}) {
-		t.Fatalf("table names = %#v", PageTableNames(metrics.report.Pages, "overview"))
-	}
-	if len(tables) != 2 || len(metrics.tables) != 2 {
-		t.Fatalf("tables = %#v, requests = %#v", tables, metrics.tables)
-	}
-	if got := metrics.tables[0]; got.Table != "orders" || got.Start != 0 || got.Count != dashboard.TableChunkSize || got.Sort.Key != "purchase_date" {
-		t.Fatalf("orders request = %#v", got)
 	}
 }

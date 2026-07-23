@@ -41,6 +41,26 @@ type Filter struct {
 	Operator string
 	Values   []any
 	Groups   []FilterGroup
+	Spatial  *SpatialFilter
+}
+
+type SpatialFilter struct {
+	Kind           string
+	LatitudeField  string
+	LongitudeField string
+	Fact           string
+	West           float64
+	South          float64
+	East           float64
+	North          float64
+	Points         []SpatialPoint
+	Center         SpatialPoint
+	RadiusMeters   float64
+}
+
+type SpatialPoint struct {
+	Longitude float64
+	Latitude  float64
 }
 
 type FilterGroup struct {
@@ -93,6 +113,36 @@ type RawValueRequest struct {
 type CountRequest struct {
 	Table   string
 	Filters []Filter
+}
+
+type SpatialPrecision string
+
+const (
+	SpatialPrecisionRaw        SpatialPrecision = "raw"
+	SpatialPrecisionAggregated SpatialPrecision = "aggregated"
+)
+
+// SpatialRequest projects a governed semantic rowset into one bounded map
+// viewport. Aggregated precision groups the complete filtered rowset into a
+// deterministic screen-space grid before the feature cap is applied.
+type SpatialRequest struct {
+	Table       string
+	Dimensions  []Field
+	Measures    []Field
+	Time        Time
+	Filters     []Filter
+	Sort        []Sort
+	ColumnMasks []ColumnMask
+	Latitude    Field
+	Longitude   Field
+	West        float64
+	South       float64
+	East        float64
+	North       float64
+	Width       int
+	Height      int
+	FeatureCap  int
+	Precision   SpatialPrecision
 }
 
 type Plan struct {

@@ -1,6 +1,24 @@
 import type { TableColumn, TableRow } from './types'
+import { formatValue } from '../visualization/format'
 
 export function formatCell(value: unknown, column: TableColumn): string {
+	if (column.visualizationFormat) {
+		// TanStack represents null pivot cells with an empty/display placeholder
+		// while creating the cell context. Normalize only those known placeholders;
+		// numeric strings still fail the typed visualization contract.
+		if (value === null || value === undefined || value === '' || value === '-' || value === '—') return '—'
+		try {
+			return formatValue('en-US', column.visualizationFormat, value)
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error)
+			const valueKind = value === column.key ? 'column-key string'
+				: value === column.label ? 'column-label string'
+					: value === '-' || value === '—' || value === '' ? 'display-placeholder string'
+						: typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value)) ? 'numeric string'
+							: value === null ? 'null' : typeof value
+			throw new Error(`table column ${JSON.stringify(column.key)} cannot format ${valueKind}: ${message}`)
+		}
+	}
   if (value === null || value === undefined || value === '') return '-'
   const format = column.format || inferredFormat(column)
   if (format === 'currency' && Number.isFinite(Number(value))) {

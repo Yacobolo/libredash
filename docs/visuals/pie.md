@@ -27,7 +27,7 @@ visuals:
 
 ## Rose sectors
 
-Set `options.rose_type: radius` to encode values through sector radius as well as angle, and show labels so the less familiar form remains readable.
+Set `presentation.rose_type: radius` to encode values through sector radius as well as angle, and show labels so the less familiar form remains readable.
 
 {{< visual id="status_pie_rose" >}}
 
@@ -36,9 +36,9 @@ visuals:
   status_pie_rose:
     title: Orders by status rose pie
     type: pie
-    options:
-      rose_type: radius
+    presentation:
       show_labels: true
+      rose: true
     query:
       dimensions:
         status: orders.status
@@ -60,7 +60,7 @@ visuals:
   category_pie_inside:
     title: Compact category pie
     type: pie
-    options:
+    presentation:
       show_labels: true
       label_position: inside
     query:

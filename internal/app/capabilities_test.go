@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	apigenapi "github.com/Yacobolo/leapview/internal/api/gen"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 )
 
 func TestCapabilitiesReportOnlyEnabledUploadProtocols(t *testing.T) {
@@ -25,7 +26,12 @@ func TestCapabilitiesReportOnlyEnabledUploadProtocols(t *testing.T) {
 	if response.Environment != "prod" || len(response.UploadProtocols) != 0 {
 		t.Fatalf("capabilities = %#v", response)
 	}
-	if len(response.VisualShapes) != 12 {
-		t.Fatalf("visual shapes=%v", response.VisualShapes)
+	if response.Visualization.SchemaVersion != visualizationir.CurrentSchemaVersion || len(response.Visualization.Renderers) != 5 {
+		t.Fatalf("visualization capabilities=%#v", response.Visualization)
+	}
+	for _, renderer := range response.Visualization.Renderers {
+		if renderer.SchemaVersion != response.Visualization.SchemaVersion {
+			t.Fatalf("renderer schema version=%d, want %d: %#v", renderer.SchemaVersion, response.Visualization.SchemaVersion, renderer)
+		}
 	}
 }

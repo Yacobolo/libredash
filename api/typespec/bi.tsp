@@ -89,85 +89,12 @@ model DashboardPageResponse {
   components: DashboardComponentResponse[];
 }
 
-model DashboardVisualFieldRef {
-  field: string;
-  `alias`?: string;
-}
-
-model DashboardVisualQueryTime {
-  field: string;
-  grain: string;
-  `alias`?: string;
-}
-
-model DashboardVisualQuerySort {
-  field: string;
-  direction: string;
-  expr?: string;
-}
-
-model DashboardVisualQueryDefinition {
-  table?: string;
-  dimensions?: DashboardVisualFieldRef[];
-  series?: DashboardVisualFieldRef;
-  measures?: DashboardVisualFieldRef[];
-  time?: DashboardVisualQueryTime;
-  sort?: DashboardVisualQuerySort[];
-  limit?: QueryLimit;
-}
-
-model DashboardSelectionMappingDefinition {
-  field: string;
-  fact?: string;
-  grain?: string;
-  value: string;
-  label?: string;
-}
-
-model DashboardSelectionInteractionDefinition {
-  toggle?: boolean;
-  mappings?: DashboardSelectionMappingDefinition[];
-  targets?: string[];
-}
-
-model DashboardVisualInteractionDefinition {
-  pointSelection?: DashboardSelectionInteractionDefinition;
-  rowSelection?: DashboardSelectionInteractionDefinition;
-}
-
-model DashboardVisualInteractionConfig {
-  kind: string;
-  toggle: boolean;
-  mappings: DashboardSelectionMappingDefinition[];
-  targets?: string[];
-}
-
-model DashboardVisualSelectionMapping {
-  field: string;
-  fact?: string;
-  grain?: string;
-  value: DashboardVisualValue;
-  label?: string;
-}
-
-model DashboardVisualSelectionEntry {
-  mappings: DashboardVisualSelectionMapping[];
-  label?: string;
-}
-
 model DashboardVisualDescribeResponse {
   id: string;
   componentId?: string;
-  type: string;
-  shape?: string;
-  renderer?: string;
-  title?: string;
-  description?: string;
-  query?: DashboardVisualQueryDefinition;
-  extensions?: Record<Record<unknown>>;
-  interaction?: DashboardVisualInteractionDefinition;
-  columns?: DashboardTableColumn[];
-  cardinality?: string;
+  rendererID: string;
+  specRevision: string;
+  spec: LeapViewVisualization.VisualizationSpec;
   placement?: DashboardComponentPlacement;
   x?: float64;
   y?: float64;
@@ -419,6 +346,23 @@ model SemanticModelDescriptionResponse {
 model DashboardFilters {
   controls?: Record<unknown>;
   selections?: Record<unknown>[];
+  spatialSelections?: DashboardSpatialInteractionSelection[];
+}
+
+model DashboardSpatialInteractionSelection {
+  visualID: string;
+  interactionID: string;
+  gesture: LeapViewVisualization.VisualizationSpatialSelectionGesture;
+  geometry: DashboardSpatialSelectionGeometry;
+  order: int32;
+}
+
+model DashboardSpatialSelectionGeometry {
+  kind: "box" | "lasso" | "radius";
+  bounds?: LeapViewVisualization.VisualizationSpatialBounds;
+  points?: LeapViewVisualization.VisualizationSpatialCoordinate[];
+  center?: LeapViewVisualization.VisualizationSpatialCoordinate;
+  radiusMeters?: float64;
 }
 
 model DashboardPageQueryRequest {
@@ -435,57 +379,7 @@ model DashboardPageQueryResponse {
   filters: Record<unknown>;
   filterOptions?: Record<unknown>;
   status?: Record<unknown>;
-  visuals: Record<DashboardVisualDataResponse>;
-}
-
-alias DashboardVisualValue = unknown;
-
-model DashboardVisualDatum {
-  label?: string;
-  series?: string;
-  value?: DashboardVisualValue;
-  selected?: boolean;
-  start?: float64;
-  end?: float64;
-  positive?: boolean;
-  binStart?: float64;
-  binEnd?: float64;
-  path?: string[];
-  row?: string;
-  column?: string;
-  source?: string;
-  target?: string;
-  name?: string;
-  open?: DashboardVisualValue;
-  close?: DashboardVisualValue;
-  low?: DashboardVisualValue;
-  high?: DashboardVisualValue;
-  min?: float64;
-  q1?: float64;
-  median?: float64;
-  q3?: float64;
-  max?: float64;
-  extensions?: Record<Record<unknown>>;
-}
-
-model DashboardVisualDataResponse {
-  version?: int32;
-  id?: string;
-  shape: string;
-  renderer?: string;
-  type: string;
-  title?: string;
-  unit?: string;
-  format?: string;
-  interaction?: DashboardVisualInteractionConfig;
-  dimensions?: string[];
-  measure?: string;
-  measures?: string[];
-  series?: string[];
-  extensions?: Record<Record<unknown>>;
-  selection?: DashboardVisualSelectionEntry[];
-  @maxItems(1000)
-  data: DashboardVisualDatum[];
+  visuals: Record<LeapViewVisualization.VisualizationEnvelope>;
 }
 
 model DashboardTableColumn {
@@ -506,60 +400,6 @@ model DashboardTableQueryResponse {
   page: PageInfo;
 }
 
-@discriminator("type")
-model DashboardVisualQueryResponse {
-  type: string;
-  id?: string;
-  title?: string;
-}
-
-model DashboardChartVisualQueryResponseBase extends DashboardVisualQueryResponse {
-  shape: string;
-  renderer?: string;
-  unit?: string;
-  format?: string;
-  dimensions?: string[];
-  measure?: string;
-  measures?: string[];
-  series?: string[];
-  data: DashboardVisualDatum[];
-}
-
-model DashboardTabularVisualQueryResponseBase extends DashboardVisualQueryResponse {
-  queryId: string;
-  servingSnapshot: string;
-  columns: QueryColumn[];
-  rows: string[][];
-  availableRows: int32;
-  page: PageInfo;
-}
-
-model LineDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "line"; }
-model AreaDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "area"; }
-model BarDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "bar"; }
-model ColumnDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "column"; }
-model PieDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "pie"; }
-model DonutDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "donut"; }
-model ScatterDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "scatter"; }
-model FunnelDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "funnel"; }
-model TreemapDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "treemap"; }
-model GaugeDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "gauge"; }
-model HeatmapDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "heatmap"; }
-model SankeyDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "sankey"; }
-model GraphDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "graph"; }
-model MapDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "map"; }
-model CandlestickDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "candlestick"; }
-model BoxplotDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "boxplot"; }
-model ComboDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "combo"; }
-model WaterfallDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "waterfall"; }
-model HistogramDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "histogram"; }
-model RadarDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "radar"; }
-model TreeDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "tree"; }
-model SunburstDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "sunburst"; }
-model KPIDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "kpi"; }
-model TableDashboardVisualQueryResponse extends DashboardTabularVisualQueryResponseBase { type: "table"; }
-model MatrixDashboardVisualQueryResponse extends DashboardTabularVisualQueryResponseBase { type: "matrix"; }
-model PivotDashboardVisualQueryResponse extends DashboardTabularVisualQueryResponseBase { type: "pivot"; }
 
 model DashboardFilterOptionResponse {
   value: string;
@@ -622,7 +462,7 @@ op getDashboardPage(@path workspace: string, @path dashboard: string, @path page
 @apigen.tool(#{
   name: "describe_dashboard_visual", effect: "read", tags: #["dashboard", "visual"],
   input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }] },
-  output: #{ mode: "project", select: #[#{ source: "/id" }, #{ source: "/title" }, #{ source: "/description" }, #{ source: "/shape" }, #{ source: "/type" }, #{ source: "/query" }, #{ source: "/columns" }] },
+  output: #{ mode: "raw" },
 })
 op getDashboardVisual(@path workspace: string, @path dashboard: string, @path page: string, @path visual: string): OkJson<DashboardVisualDescribeResponse> | CommonErrors;
 
@@ -801,7 +641,7 @@ op explainSemanticPreview(@path workspace: string, @path("model") modelName: str
 @apigen.tool(#{
   name: "query_dashboard_page", effect: "read", tags: #["dashboard", "query"],
   input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }] },
-  output: #{ mode: "project", select: #[#{ source: "/visuals", select: #[#{ source: "/id" }, #{ source: "/title" }, #{ source: "/shape" }, #{ source: "/type" }, #{ source: "/unit" }, #{ source: "/format" }, #{ source: "/dimensions" }, #{ source: "/measure" }, #{ source: "/measures" }, #{ source: "/series" }, #{ source: "/data", countAs: "count" }] }] },
+  output: #{ mode: "raw" },
 })
 op queryDashboardPage(@path workspace: string, @path dashboard: string, @path page: string, @body body?: DashboardPageQueryRequest): OkJson<DashboardPageQueryResponse> | CommonErrors;
 
@@ -818,7 +658,7 @@ op queryDashboardPage(@path workspace: string, @path dashboard: string, @path pa
   input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }] },
   output: #{ mode: "raw" },
 })
-op queryDashboardVisualData(@path workspace: string, @path dashboard: string, @path page: string, @path visual: string, @header accept?: string, @body body?: DashboardVisualQueryRequest): RowsetResponse<DashboardVisualQueryResponse> | CommonErrors;
+op queryDashboardVisualData(@path workspace: string, @path dashboard: string, @path page: string, @path visual: string, @header accept?: string, @body body?: DashboardVisualQueryRequest): RowsetResponse<LeapViewVisualization.VisualizationEnvelope> | CommonErrors;
 
 @tag("BI")
 @summary("List dashboard filter values")

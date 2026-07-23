@@ -50,7 +50,7 @@ visuals:
 
 ## Center label
 
-Set `options.center_label` to state the total represented by the ring, and adjust `options.radius` to control the inner and outer diameters.
+Set `presentation.center_label` to state the total represented by the ring, and adjust the typed inner and outer radii to control the ring diameters.
 
 {{< visual id="orders_donut_center" >}}
 
@@ -59,11 +59,10 @@ visuals:
   orders_donut_center:
     title: Orders donut with center label
     type: donut
-    options:
+    presentation:
       center_label: Orders
-      radius:
-        - 54%
-        - 76%
+      inner_radius: 0.54
+      outer_radius: 0.76
     query:
       dimensions:
         status: orders.status

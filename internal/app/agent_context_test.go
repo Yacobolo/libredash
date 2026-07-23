@@ -8,9 +8,10 @@ import (
 	"github.com/Yacobolo/leapview/internal/access"
 	"github.com/Yacobolo/leapview/internal/agent"
 	"github.com/Yacobolo/leapview/internal/dashboard"
-	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 	productsearch "github.com/Yacobolo/leapview/internal/search"
 	servingstate "github.com/Yacobolo/leapview/internal/servingstate"
+	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
+	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 )
 
 func TestAgentReferenceSignalIncludesSearchVisualSubtype(t *testing.T) {
@@ -130,8 +131,8 @@ func TestResolveAgentTurnContextRejectsExcessReferences(t *testing.T) {
 
 func TestResolveDashboardTurnReferencesUsesCompiledMetadata(t *testing.T) {
 	page := dashboard.Page{ID: "overview", Title: "Overview", Visuals: []dashboard.PageVisual{
-		{ID: "orders-chart", Visual: "orders_chart"},
-		{ID: "orders-table", Table: "orders", Title: "Recent orders"},
+		{ID: "orders-chart", Kind: "visual", Visual: "orders_chart"},
+		{ID: "orders-table", Kind: "visual", Visual: "orders", Title: "Recent orders"},
 	}}
 	resolved := resolveDashboardTurnReferences([]agent.TurnReference{
 		{Reference: agent.TurnReferenceKey{WorkspaceID: "test", Type: "visual", ID: "executive-sales.orders_chart"}, Name: "Ignore browser title", VisualType: "script", Href: "javascript:alert(1)", Hierarchy: []string{"Forged"}},
@@ -142,11 +143,10 @@ func TestResolveDashboardTurnReferencesUsesCompiledMetadata(t *testing.T) {
 	}, dashboardTurnReferenceContext{
 		Workspace:   agent.TurnReferenceWorkspace{ID: "test", Name: "Test workspace"},
 		DashboardID: "executive-sales", DashboardTitle: "Executive Sales", Page: page,
-	}, map[string]reportdef.Visual{
-		"orders_chart": {Title: "Orders by status", Type: "bar"},
-		"secret":       {Title: "Secret", Type: "line"},
-	}, map[string]reportdef.TableVisual{
-		"orders": {Title: "Orders", Kind: "table"},
+	}, map[string]visualizationdefinition.Definition{
+		"orders_chart": {ID: "orders_chart", Spec: visualizationir.VisualizationSpec{Value: &visualizationir.CartesianVisualizationSpec{VisualizationSpecBase: visualizationir.VisualizationSpecBase{Kind: "cartesian", Title: "Orders by status"}, Mark: visualizationir.VisualizationCartesianMarkBar}}},
+		"secret":       {ID: "secret", Spec: visualizationir.VisualizationSpec{Value: &visualizationir.CartesianVisualizationSpec{VisualizationSpecBase: visualizationir.VisualizationSpecBase{Kind: "cartesian", Title: "Secret"}, Mark: visualizationir.VisualizationCartesianMarkLine}}},
+		"orders":       {ID: "orders", Spec: visualizationir.VisualizationSpec{Value: &visualizationir.TableVisualizationSpec{VisualizationSpecBase: visualizationir.VisualizationSpecBase{Kind: "table", Title: "Orders"}, Kind: "table"}}},
 	})
 
 	wantReference := func(id, componentID, visualID, name, visualType string) agent.TurnReference {

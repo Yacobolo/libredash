@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 3,
+  "visualID": "monthly_revenue",
+  "rendererID": "echarts",
+  "specRevision": "sha256:f0623dcac4a8c8d1d26a8fbf380b4ade798ad7015992982fba8a4ac34f0ff073",
+  "spec": {
+    "kind": "cartesian",
+    "title": "Revenue",
+    "datasets": [
+      {
+        "id": "primary",
+        "fields": [
+          {
+            "id": "order_month",
+            "sourceRef": "orders.order_month",
+            "role": "identity",
+            "dataType": "temporal",
+            "nullable": false,
+            "label": "Order month",
+            "time": {
+              "grain": "month",
+              "timezone": "UTC",
+              "calendar": "gregorian",
+              "weekStart": "monday",
+              "meaning": "bucket"
+            }
+          },
+          {
+            "id": "revenue",
+            "sourceRef": "orders.revenue",
+            "role": "measure",
+            "dataType": "decimal",
+            "nullable": true,
+            "label": "Revenue",
+            "format": {
+              "kind": "currency",
+              "currency": "USD"
+            }
+          }
+        ]
+      }
+    ],
+    "dataBudget": {
+      "maxRows": 5000,
+      "requiredCompleteness": "complete"
+    },
+    "accessibility": {
+      "title": "Monthly revenue",
+      "description": "Revenue by order month"
+    },
+    "interactions": [],
+    "mark": "line",
+    "x": {
+      "dataset": "primary",
+      "field": "order_month"
+    },
+    "y": [
+      {
+        "dataset": "primary",
+        "field": "revenue"
+      }
+    ],
+    "presentation": {
+      "legend": "bottom",
+      "showLabels": false,
+      "smooth": false,
+      "stacked": false,
+      "showSymbols": true,
+      "dataZoom": false,
+      "area": false,
+      "step": false
+    }
+  },
+  "dataRevision": 7,
+  "dataState": {
+    "kind": "inline",
+    "specRevision": "sha256:f0623dcac4a8c8d1d26a8fbf380b4ade798ad7015992982fba8a4ac34f0ff073",
+    "dataRevision": 7,
+    "generation": 3,
+    "datasets": [
+      {
+        "id": "primary",
+        "specRevision": "sha256:f0623dcac4a8c8d1d26a8fbf380b4ade798ad7015992982fba8a4ac34f0ff073",
+        "dataRevision": 7,
+        "generation": 3,
+        "columns": ["order_month", "revenue"],
+        "rows": [
+          ["2026-01-01", 1250.5],
+          ["2026-02-01", null]
+        ],
+        "completeness": "complete"
+      }
+    ]
+  },
+  "selection": [
+    {
+      "datum": {
+        "dataset": "primary",
+        "dataRevision": 7,
+        "identity": {"order_month": "2026-01-01"}
+      },
+      "label": "January 2026"
+    }
+  ],
+  "status": {
+    "kind": "ready"
+  },
+  "diagnostics": []
+}

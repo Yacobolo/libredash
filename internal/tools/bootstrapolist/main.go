@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/zip"
+	"crypto/sha256"
 	"flag"
 	"fmt"
 	"io"
@@ -19,6 +20,7 @@ const (
 	datasetHandle  = "olistbr/brazilian-ecommerce"
 	datasetVersion = "2"
 	archiveName    = "olistbr-brazilian-ecommerce-v2.zip"
+	archiveDigest  = "967e41e04fc306fe604e2a693f488995a8b41e5047418f8a5c8e4abd6deca784"
 	downloadURL    = "https://www.kaggle.com/api/v1/datasets/download/" + datasetHandle + "?dataset_version_number=" + datasetVersion
 )
 
@@ -28,6 +30,8 @@ var expectedCSVs = []string{
 	"olist_order_payments_dataset.csv",
 	"olist_products_dataset.csv",
 	"olist_customers_dataset.csv",
+	"olist_geolocation_dataset.csv",
+	"olist_sellers_dataset.csv",
 	"olist_order_reviews_dataset.csv",
 	"product_category_name_translation.csv",
 }
@@ -72,6 +76,9 @@ func run(client *http.Client, out string) error {
 			return err
 		}
 	}
+	if err := verifyArchiveDigest(archivePath, archiveDigest); err != nil {
+		return err
+	}
 
 	copied, err := extractExpectedCSVs(archivePath, target)
 	if err != nil {
@@ -87,6 +94,24 @@ func run(client *http.Client, out string) error {
 	fmt.Printf("Bootstrapped %s version %s\n", datasetHandle, datasetVersion)
 	fmt.Printf("Source archive: %s\n", archivePath)
 	fmt.Printf("Copied %d CSV files to %s\n", copied, target)
+	return nil
+}
+
+func verifyArchiveDigest(archivePath, expected string) error {
+	archive, err := os.Open(archivePath)
+	if err != nil {
+		return fmt.Errorf("open Olist archive for verification %s: %w", archivePath, err)
+	}
+	defer archive.Close()
+
+	digest := sha256.New()
+	if _, err := io.Copy(digest, archive); err != nil {
+		return fmt.Errorf("hash Olist archive %s: %w", archivePath, err)
+	}
+	actual := fmt.Sprintf("%x", digest.Sum(nil))
+	if actual != expected {
+		return fmt.Errorf("Olist archive digest mismatch: got sha256:%s, want sha256:%s", actual, expected)
+	}
 	return nil
 }
 
