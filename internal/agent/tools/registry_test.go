@@ -9,8 +9,8 @@ import (
 
 func TestAPIGenOperationsUseGeneratedReadOnlyToolContracts(t *testing.T) {
 	operations := APIGenOperations()
-	if len(operations) != 25 {
-		t.Fatalf("APIGenOperations() count = %d, want 25", len(operations))
+	if len(operations) != 2 {
+		t.Fatalf("APIGenOperations() count = %d, want 2", len(operations))
 	}
 	operationsByName := make(map[string]APIGenOperation, len(operations))
 	for _, operation := range operations {
@@ -23,9 +23,8 @@ func TestAPIGenOperationsUseGeneratedReadOnlyToolContracts(t *testing.T) {
 		}
 	}
 	for name, operationID := range map[string]string{
-		"list_semantic_model_fields":   "listSemanticModelFields",
-		"query_semantic_model":         "querySemanticModel",
-		"explain_semantic_model_query": "explainSemanticModelQuery",
+		"query_semantic_model":   "querySemanticModel",
+		"query_dashboard_visual": "queryDashboardVisualData",
 	} {
 		operation, ok := operationsByName[name]
 		if !ok {
@@ -38,25 +37,23 @@ func TestAPIGenOperationsUseGeneratedReadOnlyToolContracts(t *testing.T) {
 			t.Fatalf("tool %q effect = %q, want read", name, operation.Tool.Effect)
 		}
 	}
-	if !slices.Contains(APIGenToolNames(), "query_dashboard_page") {
-		t.Fatalf("APIGenToolNames() = %#v, want query_dashboard_page", APIGenToolNames())
+	if slices.Contains(APIGenToolNames(), "query_dashboard_page") {
+		t.Fatalf("APIGenToolNames() = %#v, must not contain query_dashboard_page", APIGenToolNames())
 	}
 }
 
-func TestWorkspaceBindingIsTrustedContext(t *testing.T) {
-	for _, operation := range APIGenOperations() {
-		if operation.Tool.Name != "list_dashboards" {
-			continue
-		}
-		for _, binding := range operation.Tool.Bindings {
-			if binding.WireName == "workspace" {
-				if binding.Mode != "context" || binding.ContextKey != "workspace" {
-					t.Fatalf("workspace binding = %#v", binding)
-				}
-				return
-			}
-		}
-		t.Fatal("list_dashboards has no workspace binding")
+func TestToolNamesAreTheCuratedSurface(t *testing.T) {
+	want := []string{
+		"catalog_get",
+		"catalog_list",
+		"catalog_search",
+		"docs_read",
+		"docs_search",
+		"query_dashboard_visual",
+		"query_semantic_model",
+		"query_visual",
 	}
-	t.Fatal("list_dashboards tool not found")
+	if got := ToolNames(); !slices.Equal(got, want) {
+		t.Fatalf("ToolNames() = %#v, want %#v", got, want)
+	}
 }

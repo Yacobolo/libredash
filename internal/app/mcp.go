@@ -67,6 +67,7 @@ func (s *Server) mcpServer(r *http.Request) (*mcp.Server, error) {
 			Annotations: &mcp.ToolAnnotations{
 				ReadOnlyHint:    readOnly,
 				DestructiveHint: &destructive,
+				IdempotentHint:  true,
 				OpenWorldHint:   &closedWorld,
 			},
 		}, func(ctx context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {

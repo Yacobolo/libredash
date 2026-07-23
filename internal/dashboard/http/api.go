@@ -57,7 +57,7 @@ func (h Handler) GetDashboard(w nethttp.ResponseWriter, r *nethttp.Request) {
 		writeJSONError(w, fmt.Errorf("dashboard %q not found", dashboardID), nethttp.StatusNotFound)
 		return
 	}
-	writeJSON(w, nethttp.StatusOK, dashboardManifest(report, model, metrics.Pages(dashboardID)))
+	writeJSON(w, nethttp.StatusOK, DashboardManifestProjection(report, model, metrics.Pages(dashboardID)))
 }
 
 func (h Handler) ListDashboardComponents(w nethttp.ResponseWriter, r *nethttp.Request) {
@@ -67,7 +67,7 @@ func (h Handler) ListDashboardComponents(w nethttp.ResponseWriter, r *nethttp.Re
 	}
 	out := make([]api.DashboardComponentResponse, 0, len(page.Visuals))
 	for _, component := range page.PlacedVisuals() {
-		out = append(out, dashboardComponentDTO(component, report))
+		out = append(out, DashboardComponentProjection(component, report))
 	}
 	items, nextCursor, ok := pageSliceForRequest(w, r, out)
 	if !ok {
@@ -81,13 +81,7 @@ func (h Handler) GetDashboardPage(w nethttp.ResponseWriter, r *nethttp.Request) 
 	if !ok {
 		return
 	}
-	components := make([]api.DashboardComponentResponse, 0, len(page.Visuals))
-	for _, component := range page.PlacedVisuals() {
-		components = append(components, dashboardComponentDTO(component, report))
-	}
-	writeJSON(w, nethttp.StatusOK, api.DashboardPageResponse{
-		ID: page.ID, Title: page.Title, Description: page.Description, Components: components,
-	})
+	writeJSON(w, nethttp.StatusOK, DashboardPageProjection(report, page))
 }
 
 func (h Handler) GetDashboardFilter(w nethttp.ResponseWriter, r *nethttp.Request) {
@@ -106,12 +100,7 @@ func (h Handler) GetDashboardFilter(w nethttp.ResponseWriter, r *nethttp.Request
 		writeJSONError(w, fmt.Errorf("filter %q not found on page %q", filterID, page.ID), nethttp.StatusNotFound)
 		return
 	}
-	multiSelect := filter.Type == "multi_select"
-	writeJSON(w, nethttp.StatusOK, api.DashboardFilterDescribeResponse{
-		ID: filterID, ComponentID: component.ID, Title: firstNonEmpty(component.Title, filter.Label),
-		Description: firstNonEmpty(component.Description, filter.Description), Field: filter.Dimension,
-		MultiSelect: multiSelect, Placement: componentPlacement(component),
-	})
+	writeJSON(w, nethttp.StatusOK, DashboardFilterProjection(filterID, filter, component))
 }
 
 func (h Handler) GetDashboardVisual(w nethttp.ResponseWriter, r *nethttp.Request) {
@@ -130,7 +119,7 @@ func (h Handler) GetDashboardVisual(w nethttp.ResponseWriter, r *nethttp.Request
 		writeJSONError(w, fmt.Errorf("visual %q not found on page %q", visualID, page.ID), nethttp.StatusNotFound)
 		return
 	}
-	writeJSON(w, nethttp.StatusOK, dashboardVisualizationDefinitionDTO(definition, component))
+	writeJSON(w, nethttp.StatusOK, DashboardVisualProjection(definition, component))
 }
 
 func (h Handler) QueryDashboardPage(w nethttp.ResponseWriter, r *nethttp.Request) {
@@ -437,7 +426,7 @@ func dashboardSummaryDTO(row dashboard.CatalogDashboard) api.DashboardSummary {
 	}
 }
 
-func dashboardComponentDTO(component dashboard.PageVisual, report dashboarddefinition.Definition) api.DashboardComponentResponse {
+func DashboardComponentProjection(component dashboard.PageVisual, report dashboarddefinition.Definition) api.DashboardComponentResponse {
 	summary := dashboardComponentSummary(component, report)
 	out := api.DashboardComponentResponse{
 		ID:          component.ID,
@@ -477,12 +466,16 @@ func componentPlacement(component dashboard.PageVisual) *api.DashboardComponentP
 	}
 }
 
-func dashboardVisualizationDefinitionDTO(definition visualizationdefinition.Definition, component dashboard.PageVisual) api.DashboardVisualDescribeResponse {
+func DashboardVisualProjection(definition visualizationdefinition.Definition, component dashboard.PageVisual) api.DashboardVisualDescribeResponse {
 	return api.DashboardVisualDescribeResponse{
 		ID: definition.ID, ComponentID: component.ID, RendererID: definition.RendererID,
 		SpecRevision: definition.SpecRevision, Spec: definition.Spec, Placement: componentPlacement(component),
 		X: component.X, Y: component.Y, Width: component.Width, Height: component.Height,
 	}
+}
+
+func dashboardVisualizationDefinitionDTO(definition visualizationdefinition.Definition, component dashboard.PageVisual) api.DashboardVisualDescribeResponse {
+	return DashboardVisualProjection(definition, component)
 }
 
 func modelSummary(model *semanticmodel.Model) *api.ModelRef {
@@ -492,7 +485,7 @@ func modelSummary(model *semanticmodel.Model) *api.ModelRef {
 	return &api.ModelRef{ID: model.Name, Title: model.Title}
 }
 
-func dashboardManifest(report dashboarddefinition.Definition, model *semanticmodel.Model, pages []dashboard.Page) api.DashboardManifestResponse {
+func DashboardManifestProjection(report dashboarddefinition.Definition, model *semanticmodel.Model, pages []dashboard.Page) api.DashboardManifestResponse {
 	if pages == nil {
 		pages = report.Pages
 	}
@@ -509,8 +502,8 @@ func dashboardManifest(report dashboarddefinition.Definition, model *semanticmod
 		},
 		Pages: make([]api.DashboardManifestPage, 0, len(pages)),
 		DetailTools: map[string]string{
-			"model":       "describe_model",
-			"page_data":   "query_dashboard_page",
+			"model":       "catalog_get",
+			"page_data":   "catalog_get",
 			"visual_data": "query_dashboard_visual",
 		},
 	}
@@ -527,6 +520,24 @@ func dashboardManifest(report dashboarddefinition.Definition, model *semanticmod
 		out.Pages = append(out.Pages, pageSummary)
 	}
 	return out
+}
+
+func DashboardPageProjection(report dashboarddefinition.Definition, page dashboard.Page) api.DashboardPageResponse {
+	components := make([]api.DashboardComponentResponse, 0, len(page.Visuals))
+	for _, component := range page.PlacedVisuals() {
+		components = append(components, DashboardComponentProjection(component, report))
+	}
+	return api.DashboardPageResponse{
+		ID: page.ID, Title: page.Title, Description: page.Description, Components: components,
+	}
+}
+
+func DashboardFilterProjection(filterID string, filter dashboarddefinition.FilterDefinition, component dashboard.PageVisual) api.DashboardFilterDescribeResponse {
+	return api.DashboardFilterDescribeResponse{
+		ID: filterID, ComponentID: component.ID, Title: firstNonEmpty(component.Title, filter.Label),
+		Description: firstNonEmpty(component.Description, filter.Description), Field: filter.Dimension,
+		MultiSelect: filter.Type == "multi_select", Placement: componentPlacement(component),
+	}
 }
 
 func dashboardComponentSummary(component dashboard.PageVisual, report dashboarddefinition.Definition) api.DashboardManifestComponent {

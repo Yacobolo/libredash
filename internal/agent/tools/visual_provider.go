@@ -187,11 +187,28 @@ func decodeAgentVisualInput(rawArgs json.RawMessage) (agentVisualInput, error) {
 	if input.Model == "" {
 		return agentVisualInput{}, fmt.Errorf("model is required")
 	}
+	input.Dataset = stripCatalogRefString(input.Dataset, input.Model)
+	normalizeAgentVisualFieldRefs(input.Dimensions, input.Model)
+	normalizeAgentVisualFieldRefs(input.Measures, input.Model)
+	normalizeAgentVisualFieldRefs(input.Fields, input.Model)
+	normalizeAgentVisualFieldRefs(input.Rows, input.Model)
+	if input.Series != nil {
+		input.Series.Field = stripCatalogRefString(input.Series.Field, input.Model)
+	}
+	for index := range input.Sort {
+		input.Sort[index].Field = stripCatalogRefString(input.Sort[index].Field, input.Model)
+	}
 	if input.Dataset == "" {
 		return agentVisualInput{}, fmt.Errorf("dataset is required")
 	}
 	input.Limit = agentVisualLimit(input.Limit)
 	return input, nil
+}
+
+func normalizeAgentVisualFieldRefs(values []agentVisualFieldRef, modelID string) {
+	for index := range values {
+		values[index].Field = stripCatalogRefString(values[index].Field, modelID)
+	}
 }
 
 func isAgentVisualType(value string) bool {

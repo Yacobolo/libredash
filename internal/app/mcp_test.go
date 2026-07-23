@@ -58,7 +58,10 @@ func TestMCPRequiresBearerAndSupportsInitializeAndTools(t *testing.T) {
 				InputSchema  map[string]any `json:"inputSchema"`
 				OutputSchema map[string]any `json:"outputSchema"`
 				Annotations  struct {
-					ReadOnly bool `json:"readOnlyHint"`
+					ReadOnly    bool `json:"readOnlyHint"`
+					Destructive bool `json:"destructiveHint"`
+					Idempotent  bool `json:"idempotentHint"`
+					OpenWorld   bool `json:"openWorldHint"`
 				} `json:"annotations"`
 			} `json:"tools"`
 		} `json:"result"`
@@ -90,14 +93,22 @@ func TestMCPRequiresBearerAndSupportsInitializeAndTools(t *testing.T) {
 	if len(listResponse.Result.Tools) != len(builtIn) {
 		t.Fatalf("MCP tool count = %d, built-in count = %d", len(listResponse.Result.Tools), len(builtIn))
 	}
+	if len(listResponse.Result.Tools) != 8 {
+		t.Fatalf("MCP tool count = %d, want 8", len(listResponse.Result.Tools))
+	}
 	foundVisual := false
+	foundNames := map[string]bool{}
 	for _, tool := range listResponse.Result.Tools {
+		foundNames[tool.Name] = true
 		expected, ok := builtIn[tool.Name]
 		if !ok {
 			t.Fatalf("MCP exposed tool absent from built-in catalog: %s", tool.Name)
 		}
 		if tool.Description != expected.description || !jsonObjectsEqual(tool.InputSchema, expected.input) || !jsonObjectsEqual(tool.OutputSchema, expected.output) || tool.Annotations.ReadOnly != (expected.effect == "read") {
 			t.Fatalf("MCP metadata differs for %s", tool.Name)
+		}
+		if !tool.Annotations.ReadOnly || tool.Annotations.Destructive || !tool.Annotations.Idempotent || tool.Annotations.OpenWorld {
+			t.Fatalf("MCP safety annotations differ for %s: %#v", tool.Name, tool.Annotations)
 		}
 		if tool.Name == "query_visual" {
 			foundVisual = true
@@ -113,8 +124,18 @@ func TestMCPRequiresBearerAndSupportsInitializeAndTools(t *testing.T) {
 	if !foundVisual {
 		t.Fatalf("tools/list omitted query_visual: %s", listed.Body.String())
 	}
+	for _, name := range []string{"catalog_search", "catalog_list", "catalog_get", "query_semantic_model", "query_dashboard_visual", "query_visual", "docs_search", "docs_read"} {
+		if !foundNames[name] {
+			t.Fatalf("tools/list omitted %s: %s", name, listed.Body.String())
+		}
+	}
+	for _, legacy := range []string{"list_workspaces", "list_dashboards", "search", "describe_dashboard", "query_dashboard_page"} {
+		if foundNames[legacy] {
+			t.Fatalf("tools/list exposed legacy tool %s", legacy)
+		}
+	}
 
-	called := mcpRequest(t, handler, "mcp-secret", "2025-11-25", `{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_workspaces","arguments":{}}}`)
+	called := mcpRequest(t, handler, "mcp-secret", "2025-11-25", `{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"catalog_list","arguments":{}}}`)
 	if called.Code != http.StatusOK {
 		t.Fatalf("tools/call = %d body=%s", called.Code, called.Body.String())
 	}
@@ -302,7 +323,7 @@ func TestMCPAcceptsOAuthTokensAndRejectsGeneralAPITokens(t *testing.T) {
 		t.Fatalf("restricted OAuth token status = %d body=%s", response.Code, response.Body.String())
 	}
 
-	foreignWorkspace := mcpRequest(t, handler, oauthToken, "2025-11-25", `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"list_dashboards","arguments":{"workspace":"other"}}}`)
+	foreignWorkspace := mcpRequest(t, handler, oauthToken, "2025-11-25", `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"catalog_get","arguments":{"ref":{"workspaceId":"other","type":"workspace","id":"other"}}}}`)
 	if foreignWorkspace.Code != http.StatusOK || !strings.Contains(foreignWorkspace.Body.String(), `"isError":true`) {
 		t.Fatalf("foreign workspace response = %d body=%s", foreignWorkspace.Code, foreignWorkspace.Body.String())
 	}
@@ -310,7 +331,7 @@ func TestMCPAcceptsOAuthTokensAndRejectsGeneralAPITokens(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list MCP tool audits: %v", err)
 	}
-	if len(audits) != 1 || audits[0].Status != "denied" || audits[0].TargetID != "listDashboards" {
+	if len(audits) != 1 || audits[0].Status != "denied" || audits[0].TargetID != "catalog_get" {
 		t.Fatalf("MCP credential denial was not audited: %#v", audits)
 	}
 

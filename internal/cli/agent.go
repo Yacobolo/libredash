@@ -14,7 +14,6 @@ import (
 
 	agenttools "github.com/Yacobolo/leapview/internal/agent/tools"
 	"github.com/Yacobolo/leapview/internal/api"
-	apigenapi "github.com/Yacobolo/leapview/internal/api/gen"
 	agentcore "github.com/Yacobolo/leapview/pkg/agent"
 	apigenagenttool "github.com/Yacobolo/toolbelt/apigen/runtime/agenttool"
 	"github.com/spf13/cobra"
@@ -49,7 +48,7 @@ func agentCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 
 	tools := &cobra.Command{
 		Use:   "tools",
-		Short: "List generated agent tools",
+		Short: "List the canonical agent tools",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAgentTools()
 		},
@@ -139,9 +138,13 @@ func runAgentTools() error {
 		defaults    string
 		inputSchema string
 	}
-	operationContracts := apigenapi.GetAPIGenOperationContracts()
-	toolContracts := apigenapi.GetAPIGenToolContracts()
 	definitions := map[string]agentcore.ToolDefinition{}
+	for _, definition := range (agenttools.DocsProvider{}).Definitions() {
+		definitions[definition.Name] = definition
+	}
+	for _, definition := range (agenttools.CatalogProvider{}).Definitions(agenttools.Scope{}) {
+		definitions[definition.Name] = definition
+	}
 	for _, definition := range (agenttools.APIGenProvider{}).Definitions(agenttools.Scope{}) {
 		definitions[definition.Name] = definition
 	}
@@ -149,11 +152,8 @@ func runAgentTools() error {
 		definitions[definition.Name] = definition
 	}
 	rows := make([]row, 0, len(definitions))
-	for _, tool := range toolContracts {
-		contract, ok := operationContracts[tool.OperationID]
-		if !ok {
-			continue
-		}
+	for _, operation := range agenttools.APIGenOperations() {
+		tool, contract := operation.Tool, operation.Contract
 		authz, _ := contract.Extensions["x-authz"].(map[string]any)
 		definition := definitions[tool.Name]
 		rows = append(rows, row{
@@ -162,17 +162,29 @@ func runAgentTools() error {
 			privilege:   cliStringFromMap(authz, "privilege"),
 			effect:      string(tool.Effect),
 			defaults:    cliAgentToolDefaults(tool.Bindings),
-			inputSchema: string(definition.InputSchema),
+			inputSchema: cliCompactJSON(definition.InputSchema),
 		})
 	}
-	if visual, ok := definitions[agenttools.QueryVisualToolName]; ok {
+	manualPrivileges := map[string]string{
+		agenttools.CatalogSearchToolName: "VIEW_ITEM",
+		agenttools.CatalogListToolName:   "VIEW_ITEM",
+		agenttools.CatalogGetToolName:    "VIEW_ITEM",
+		agenttools.QueryVisualToolName:   "QUERY_DATA",
+		agenttools.DocsSearchToolName:    "USE_AGENT",
+		agenttools.DocsReadToolName:      "USE_AGENT",
+	}
+	for name, privilege := range manualPrivileges {
+		definition, ok := definitions[name]
+		if !ok {
+			continue
+		}
 		rows = append(rows, row{
-			name:        visual.Name,
+			name:        definition.Name,
 			operationID: "manual",
-			privilege:   "QUERY_DATA",
-			effect:      visual.Effect,
+			privilege:   privilege,
+			effect:      definition.Effect,
 			defaults:    `{}`,
-			inputSchema: string(visual.InputSchema),
+			inputSchema: cliCompactJSON(definition.InputSchema),
 		})
 	}
 	sort.Slice(rows, func(i, j int) bool {
@@ -184,6 +196,14 @@ func runAgentTools() error {
 		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", row.name, row.privilege, row.effect, row.defaults, row.inputSchema, row.operationID)
 	}
 	return tw.Flush()
+}
+
+func cliCompactJSON(value json.RawMessage) string {
+	var output bytes.Buffer
+	if err := json.Compact(&output, value); err != nil {
+		return string(value)
+	}
+	return output.String()
 }
 
 func cliAgentToolDefaults(bindings []apigenagenttool.Binding) string {

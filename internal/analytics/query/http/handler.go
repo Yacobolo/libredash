@@ -116,7 +116,7 @@ func (h Handler) GetSemanticModel(w nethttp.ResponseWriter, r *nethttp.Request) 
 		return
 	}
 	modelID := chi.URLParam(r, "model")
-	model, ok := modelDescription(metrics, modelID)
+	model, ok := SemanticModelProjection(metrics, modelID)
 	if !ok {
 		writeJSONError(w, fmt.Errorf("model %q not found", modelID), nethttp.StatusNotFound)
 		return
@@ -129,7 +129,7 @@ func (h Handler) ListSemanticModelFields(w nethttp.ResponseWriter, r *nethttp.Re
 	if !ok {
 		return
 	}
-	fields := semanticModelFields(model)
+	fields := SemanticModelFieldsProjection(model)
 	items, nextCursor, ok := pageSliceForRequest(w, r, fields)
 	if !ok {
 		return
@@ -289,7 +289,7 @@ func (h Handler) GetSemanticDataset(w nethttp.ResponseWriter, r *nethttp.Request
 	if !ok {
 		return
 	}
-	writeJSON(w, nethttp.StatusOK, semanticDatasetDTO(model, datasetID, table))
+	writeJSON(w, nethttp.StatusOK, SemanticTableProjection(model, datasetID, table))
 }
 
 func (h Handler) ListSemanticFields(w nethttp.ResponseWriter, r *nethttp.Request) {
@@ -297,7 +297,7 @@ func (h Handler) ListSemanticFields(w nethttp.ResponseWriter, r *nethttp.Request
 	if !ok {
 		return
 	}
-	fields := semanticDatasetFields(model, datasetID, table)
+	fields := SemanticTableFieldsProjection(model, datasetID, table)
 	items, nextCursor, ok := pageSliceForRequest(w, r, fields)
 	if !ok {
 		return
@@ -487,7 +487,7 @@ func semanticModelSummaryDTO(row dashboard.CatalogModel) api.SemanticModelSummar
 	return api.SemanticModelSummary{ID: row.ID, Title: row.Title, Description: row.Description}
 }
 
-func semanticDatasetDTO(model *semanticmodel.Model, datasetID string, table semanticmodel.Table) api.SemanticDatasetResponse {
+func SemanticTableProjection(model *semanticmodel.Model, datasetID string, table semanticmodel.Table) api.SemanticDatasetResponse {
 	sources := append([]string{}, table.Sources...)
 	if table.Source != "" && len(sources) == 0 {
 		sources = []string{table.Source}
@@ -537,7 +537,7 @@ func semanticTableRoles(model *semanticmodel.Model, tableID string) []string {
 	return roles
 }
 
-func semanticDatasetFields(model *semanticmodel.Model, datasetID string, table semanticmodel.Table) []api.SemanticFieldResponse {
+func SemanticTableFieldsProjection(model *semanticmodel.Model, datasetID string, table semanticmodel.Table) []api.SemanticFieldResponse {
 	out := make([]api.SemanticFieldResponse, 0, len(table.Dimensions)+semanticDatasetMeasureCount(model, datasetID))
 	for _, fieldID := range sortedMapKeys(table.Dimensions) {
 		dimension := table.Dimensions[fieldID]
@@ -561,7 +561,7 @@ func semanticDatasetFields(model *semanticmodel.Model, datasetID string, table s
 	return out
 }
 
-func semanticModelFields(model *semanticmodel.Model) []api.SemanticFieldResponse {
+func SemanticModelFieldsProjection(model *semanticmodel.Model) []api.SemanticFieldResponse {
 	out := make([]api.SemanticFieldResponse, 0, len(model.Dimensions)+len(model.Measures)+len(model.Metrics))
 	for _, name := range sortedMapKeys(model.Dimensions) {
 		dimension := model.Dimensions[name]
@@ -614,7 +614,7 @@ func semanticRelationshipEndpoint(value string) (string, string, error) {
 	return parts[0], parts[1], nil
 }
 
-func modelDescription(metrics Metrics, id string) (api.SemanticModelDescriptionResponse, bool) {
+func SemanticModelProjection(metrics Metrics, id string) (api.SemanticModelDescriptionResponse, bool) {
 	catalog := metrics.Catalog()
 	var catalogModel dashboard.CatalogModel
 	for _, model := range catalog.Models {

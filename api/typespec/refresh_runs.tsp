@@ -37,20 +37,6 @@ alias ListRefreshRunsOK = OkJson<RefreshRunListResponse>;
 @route("/workspaces/{workspace}/refresh-runs")
 @get
 @apigen.authz(#{ mode: "privilege", privilege: "USE_WORKSPACE" })
-@apigen.tool(#{
-  name: "list_refresh_runs",
-  effect: "read",
-  tags: #["refresh"],
-  input: #{ fields: #[
-    #{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" },
-    #{ source: "query", name: "limit", default: 25 },
-  ] },
-  output: #{
-    mode: "project",
-    select: #[#{ source: "/items", countAs: "count", select: #[#{ source: "/id" }, #{ source: "/pipelineId" }, #{ source: "/semanticModel" }, #{ source: "/status" }, #{ source: "/createdAt" }] }],
-    cursor: #{ source: "/page/nextCursor" },
-  },
-})
 op listRefreshRuns(@path workspace: string, @query limit?: ListLimit, @query pageToken?: PageToken): ListRefreshRunsOK | CommonErrors;
 
 alias CreateRefreshRunAccepted = AcceptedJson<RefreshRunResponse>;
@@ -69,13 +55,6 @@ alias GetRefreshRunOK = OkJson<RefreshRunResponse>;
 @route("/workspaces/{workspace}/refresh-runs/{run}")
 @get
 @apigen.authz(#{ mode: "privilege", privilege: "USE_WORKSPACE" })
-@apigen.tool(#{
-  name: "get_refresh_run",
-  effect: "read",
-  tags: #["refresh"],
-  input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }] },
-  output: #{ mode: "project", select: #[#{ source: "/id" }, #{ source: "/pipelineId" }, #{ source: "/semanticModel" }, #{ source: "/trigger" }, #{ source: "/status" }, #{ source: "/error" }, #{ source: "/createdAt" }, #{ source: "/startedAt" }, #{ source: "/finishedAt" }] },
-})
 op getRefreshRun(@path workspace: string, @path run: string): GetRefreshRunOK | CommonErrors;
 
 @tag("Refresh Runs")

@@ -6,5 +6,5 @@ import "embed"
 // Files contains the unified catalog, FTS5 search index, authored articles, generated
 // references, downloadable schemas, and API contract.
 //
-//go:embed *.md *.json *.txt *.sqlite3 articles api guides reference visuals
+//go:embed *
 var Files embed.FS

@@ -202,7 +202,7 @@ func (s *Service) ResumePrompt(ctx context.Context, scope Scope, conversationID,
 	if err != nil {
 		return nil, err
 	}
-	runContext, cancel := context.WithCancel(context.Background())
+	runContext, cancel := context.WithCancel(ctx)
 	s.attachRun(conversationID, runID, cancel)
 	release = false
 	return &StartedPrompt{Scope: scope, ConversationID: conversationID, RunID: runID, Input: input, CorrelationID: correlationID, service: s, systemPrompt: systemPrompt, initial: initial, runContext: runContext, cancel: cancel}, nil

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/Yacobolo/leapview/internal/productdocs"
 	_ "modernc.org/sqlite"
 	"modernc.org/sqlite/vfs"
 )
@@ -39,12 +40,6 @@ type Document struct {
 	Category  string
 	Body      string
 	Generated bool
-}
-
-// Result identifies one ranked documentation match.
-type Result struct {
-	Slug    string
-	Excerpt string
 }
 
 // Build writes a complete immutable search index to path.
@@ -175,7 +170,7 @@ func (index *Index) Slugs(ctx context.Context) ([]string, error) {
 
 // Search returns ranked matches. User input is compiled into an FTS expression
 // instead of being passed through as FTS syntax.
-func (index *Index) Search(ctx context.Context, query string, limit int) ([]Result, error) {
+func (index *Index) Search(ctx context.Context, query string, limit int) ([]productdocs.SearchMatch, error) {
 	expression := matchExpression(query)
 	if expression == "" || limit <= 0 {
 		return nil, nil
@@ -194,9 +189,9 @@ func (index *Index) Search(ctx context.Context, query string, limit int) ([]Resu
 		return nil, fmt.Errorf("query documentation search index: %w", err)
 	}
 	defer rows.Close()
-	results := make([]Result, 0)
+	results := make([]productdocs.SearchMatch, 0)
 	for rows.Next() {
-		var result Result
+		var result productdocs.SearchMatch
 		if err := rows.Scan(&result.Slug, &result.Excerpt); err != nil {
 			return nil, fmt.Errorf("read documentation search result: %w", err)
 		}
