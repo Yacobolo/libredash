@@ -392,7 +392,7 @@ func loadWorkspaceDashboards(workspaceProject *WorkspaceProject, baseDir string,
 			SemanticModel: spec.SemanticModel,
 			Filters:       spec.Filters,
 			Visuals:       spec.Visuals,
-			Pages:         projectDashboardPages(spec.Pages, spec.Visuals),
+			Pages:         projectDashboardPages(spec.Pages),
 		}
 		workspaceProject.Dashboards[name] = dashboard
 		workspaceProject.DashboardTitles[name] = envelope.Metadata.Title

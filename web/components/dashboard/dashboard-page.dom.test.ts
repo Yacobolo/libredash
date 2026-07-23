@@ -764,6 +764,7 @@ test('dashboard agent restores its open state and active conversation after relo
       }))
     })
     await page.reload()
+    await page.waitForLoadState('networkidle')
     await page.waitForFunction(() => (
       customElements.get('lv-dashboard-page')
         && (window as any).__agentRestoreRequests?.length === 1
@@ -805,6 +806,7 @@ test('dashboard agent restores its open state and active conversation after relo
     })
 
     await page.reload()
+    await page.waitForLoadState('networkidle')
     await page.waitForFunction(() => (
       customElements.get('lv-dashboard-page')
         && (window as any).__agentRestoreRequests?.length === 1

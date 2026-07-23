@@ -396,9 +396,9 @@ func (fakeMetrics) Pages(dashboardID string) []dashboard.Page {
 			Height: 940,
 			Visuals: []dashboard.PageVisual{
 				{ID: "header", Kind: "header", X: 0, Y: 0, Width: 100, Height: 40, Title: "Test"},
-				{ID: "state-filter", Kind: "filter_card", Filter: "state", X: 0, Y: 42, Width: 100, Height: 32},
-				{ID: "orders-chart", Kind: "donut_chart", Visual: "orders", X: 0, Y: 48, Width: 100, Height: 100},
-				{ID: "orders-table", Kind: "table", Visual: "order_rows", X: 0, Y: 160, Width: 100, Height: 100},
+				{ID: "state-filter", Kind: "filter", Filter: "state", X: 0, Y: 42, Width: 100, Height: 32},
+				{ID: "orders-chart", Kind: "visual", Visual: "orders", X: 0, Y: 48, Width: 100, Height: 100},
+				{ID: "orders-table", Kind: "visual", Visual: "order_rows", X: 0, Y: 160, Width: 100, Height: 100},
 			},
 		},
 		{
@@ -407,8 +407,8 @@ func (fakeMetrics) Pages(dashboardID string) []dashboard.Page {
 			Width:  1366,
 			Height: 940,
 			Visuals: []dashboard.PageVisual{
-				{ID: "category-filter", Kind: "filter_card", Filter: "category", X: 0, Y: 8, Width: 100, Height: 32},
-				{ID: "ops-pipeline-chart", Kind: "bar_chart", Visual: "ops_pipeline", X: 0, Y: 48, Width: 100, Height: 100},
+				{ID: "category-filter", Kind: "filter", Filter: "category", X: 0, Y: 8, Width: 100, Height: 32},
+				{ID: "ops-pipeline-chart", Kind: "visual", Visual: "ops_pipeline", X: 0, Y: 48, Width: 100, Height: 100},
 			},
 		},
 	}

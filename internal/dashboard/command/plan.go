@@ -217,9 +217,7 @@ func (s Service) PrepareVisualSpatialWindow(request Request, authoritative dashb
 		return PreparedRefresh{}, fmt.Errorf("unknown spatial visual %q", spatial.VisualID)
 	}
 	if _, ok := visual.Spec.Value.(*visualizationir.GeographicVisualizationSpec); !ok {
-		if _, valueOK := visual.Spec.Value.(visualizationir.GeographicVisualizationSpec); !valueOK {
-			return PreparedRefresh{}, fmt.Errorf("visual %q is not geographic", spatial.VisualID)
-		}
+		return PreparedRefresh{}, fmt.Errorf("visual %q is not geographic", spatial.VisualID)
 	}
 	if visual.Query.Kind != visualizationdefinition.QuerySpatial || visual.Query.Spatial == nil || visual.Query.Spatial.Viewport == nil {
 		return PreparedRefresh{}, fmt.Errorf("visual %q does not use spatial windowing", spatial.VisualID)
@@ -258,7 +256,7 @@ func (s Service) fullPlan(request Request, commandName string) RefreshPlan {
 	for _, item := range page.Visuals {
 		var target Target
 		switch {
-		case item.Kind == "filter_card" && item.Filter != "":
+		case item.Kind == "filter" && item.Filter != "":
 			target = Target{Kind: TargetFilterOptions, ID: item.Filter}
 		case item.Visual != "":
 			if compiled, ok := definition.Visualizations[item.Visual]; ok {

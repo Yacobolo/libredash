@@ -269,35 +269,27 @@ type TableVisualizationFormattingRule struct {
 	Value TableVisualizationFormattingRuleVariant
 }
 
-func (TableBackgroundScaleFormattingRule) isTableVisualizationFormattingRuleVariant() {}
-func (TableBadgeFormattingRule) isTableVisualizationFormattingRuleVariant()           {}
-func (TableDataBarFormattingRule) isTableVisualizationFormattingRuleVariant()         {}
-func (TableTextColorFormattingRule) isTableVisualizationFormattingRuleVariant()       {}
+func (*TableBackgroundScaleFormattingRule) isTableVisualizationFormattingRuleVariant() {}
+func (*TableBadgeFormattingRule) isTableVisualizationFormattingRuleVariant()           {}
+func (*TableDataBarFormattingRule) isTableVisualizationFormattingRuleVariant()         {}
+func (*TableTextColorFormattingRule) isTableVisualizationFormattingRuleVariant()       {}
 
 func (value TableVisualizationFormattingRule) MarshalJSON() ([]byte, error) {
 	switch variant := value.Value.(type) {
-	case TableBackgroundScaleFormattingRule:
-		return json.Marshal(variant)
 	case *TableBackgroundScaleFormattingRule:
 		if variant == nil {
 			return nil, fmt.Errorf("TableVisualizationFormattingRule variant is nil")
 		}
-		return json.Marshal(variant)
-	case TableBadgeFormattingRule:
 		return json.Marshal(variant)
 	case *TableBadgeFormattingRule:
 		if variant == nil {
 			return nil, fmt.Errorf("TableVisualizationFormattingRule variant is nil")
 		}
 		return json.Marshal(variant)
-	case TableDataBarFormattingRule:
-		return json.Marshal(variant)
 	case *TableDataBarFormattingRule:
 		if variant == nil {
 			return nil, fmt.Errorf("TableVisualizationFormattingRule variant is nil")
 		}
-		return json.Marshal(variant)
-	case TableTextColorFormattingRule:
 		return json.Marshal(variant)
 	case *TableTextColorFormattingRule:
 		if variant == nil {
@@ -383,6 +375,112 @@ func (value *TableVisualizationFormattingRule) UnmarshalJSON(data []byte) error 
 		return fmt.Errorf("unknown TableVisualizationFormattingRule discriminator %q", tag.Value)
 	}
 	return nil
+}
+
+type TableVisualizationFormattingRuleVisitor interface {
+	VisitTableBackgroundScaleFormattingRule(*TableBackgroundScaleFormattingRule) error
+	VisitTableBadgeFormattingRule(*TableBadgeFormattingRule) error
+	VisitTableDataBarFormattingRule(*TableDataBarFormattingRule) error
+	VisitTableTextColorFormattingRule(*TableTextColorFormattingRule) error
+}
+
+func (value *TableVisualizationFormattingRule) Visit(visitor TableVisualizationFormattingRuleVisitor) error {
+	if value == nil {
+		return fmt.Errorf("cannot visit nil TableVisualizationFormattingRule")
+	}
+	if visitor == nil {
+		return fmt.Errorf("TableVisualizationFormattingRule visitor is required")
+	}
+	switch variant := value.Value.(type) {
+	case *TableBackgroundScaleFormattingRule:
+		if variant == nil {
+			return fmt.Errorf("TableVisualizationFormattingRule variant is nil")
+		}
+		return visitor.VisitTableBackgroundScaleFormattingRule(variant)
+	case *TableBadgeFormattingRule:
+		if variant == nil {
+			return fmt.Errorf("TableVisualizationFormattingRule variant is nil")
+		}
+		return visitor.VisitTableBadgeFormattingRule(variant)
+	case *TableDataBarFormattingRule:
+		if variant == nil {
+			return fmt.Errorf("TableVisualizationFormattingRule variant is nil")
+		}
+		return visitor.VisitTableDataBarFormattingRule(variant)
+	case *TableTextColorFormattingRule:
+		if variant == nil {
+			return fmt.Errorf("TableVisualizationFormattingRule variant is nil")
+		}
+		return visitor.VisitTableTextColorFormattingRule(variant)
+	case nil:
+		return fmt.Errorf("TableVisualizationFormattingRule variant is required")
+	default:
+		return fmt.Errorf("unsupported TableVisualizationFormattingRule variant %T", variant)
+	}
+}
+
+func (value *TableVisualizationFormattingRule) Kind() (string, error) {
+	if value == nil {
+		return "", fmt.Errorf("cannot inspect nil TableVisualizationFormattingRule")
+	}
+	switch variant := value.Value.(type) {
+	case *TableBackgroundScaleFormattingRule:
+		if variant == nil {
+			return "", fmt.Errorf("TableVisualizationFormattingRule variant is nil")
+		}
+		return "background_scale", nil
+	case *TableBadgeFormattingRule:
+		if variant == nil {
+			return "", fmt.Errorf("TableVisualizationFormattingRule variant is nil")
+		}
+		return "badge", nil
+	case *TableDataBarFormattingRule:
+		if variant == nil {
+			return "", fmt.Errorf("TableVisualizationFormattingRule variant is nil")
+		}
+		return "data_bar", nil
+	case *TableTextColorFormattingRule:
+		if variant == nil {
+			return "", fmt.Errorf("TableVisualizationFormattingRule variant is nil")
+		}
+		return "text_color", nil
+	case nil:
+		return "", fmt.Errorf("TableVisualizationFormattingRule variant is required")
+	default:
+		return "", fmt.Errorf("unsupported TableVisualizationFormattingRule variant %T", variant)
+	}
+}
+
+func (value *TableVisualizationFormattingRule) Base() (*TableVisualizationFormattingRuleBase, error) {
+	if value == nil {
+		return nil, fmt.Errorf("cannot inspect nil TableVisualizationFormattingRule")
+	}
+	switch variant := value.Value.(type) {
+	case *TableBackgroundScaleFormattingRule:
+		if variant == nil {
+			return nil, fmt.Errorf("TableVisualizationFormattingRule variant is nil")
+		}
+		return &variant.TableVisualizationFormattingRuleBase, nil
+	case *TableBadgeFormattingRule:
+		if variant == nil {
+			return nil, fmt.Errorf("TableVisualizationFormattingRule variant is nil")
+		}
+		return &variant.TableVisualizationFormattingRuleBase, nil
+	case *TableDataBarFormattingRule:
+		if variant == nil {
+			return nil, fmt.Errorf("TableVisualizationFormattingRule variant is nil")
+		}
+		return &variant.TableVisualizationFormattingRuleBase, nil
+	case *TableTextColorFormattingRule:
+		if variant == nil {
+			return nil, fmt.Errorf("TableVisualizationFormattingRule variant is nil")
+		}
+		return &variant.TableVisualizationFormattingRuleBase, nil
+	case nil:
+		return nil, fmt.Errorf("TableVisualizationFormattingRule variant is required")
+	default:
+		return nil, fmt.Errorf("unsupported TableVisualizationFormattingRule variant %T", variant)
+	}
 }
 
 type TableVisualizationFormattingRuleBase struct {
@@ -494,27 +592,21 @@ type VisualizationDataState struct {
 	Value VisualizationDataStateVariant
 }
 
-func (InlineVisualizationDataState) isVisualizationDataStateVariant()          {}
-func (SpatialWindowedVisualizationDataState) isVisualizationDataStateVariant() {}
-func (WindowedVisualizationDataState) isVisualizationDataStateVariant()        {}
+func (*InlineVisualizationDataState) isVisualizationDataStateVariant()          {}
+func (*SpatialWindowedVisualizationDataState) isVisualizationDataStateVariant() {}
+func (*WindowedVisualizationDataState) isVisualizationDataStateVariant()        {}
 
 func (value VisualizationDataState) MarshalJSON() ([]byte, error) {
 	switch variant := value.Value.(type) {
-	case InlineVisualizationDataState:
-		return json.Marshal(variant)
 	case *InlineVisualizationDataState:
 		if variant == nil {
 			return nil, fmt.Errorf("VisualizationDataState variant is nil")
 		}
 		return json.Marshal(variant)
-	case SpatialWindowedVisualizationDataState:
-		return json.Marshal(variant)
 	case *SpatialWindowedVisualizationDataState:
 		if variant == nil {
 			return nil, fmt.Errorf("VisualizationDataState variant is nil")
 		}
-		return json.Marshal(variant)
-	case WindowedVisualizationDataState:
 		return json.Marshal(variant)
 	case *WindowedVisualizationDataState:
 		if variant == nil {
@@ -656,6 +748,96 @@ func (value *VisualizationDataState) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+type VisualizationDataStateVisitor interface {
+	VisitInlineVisualizationDataState(*InlineVisualizationDataState) error
+	VisitSpatialWindowedVisualizationDataState(*SpatialWindowedVisualizationDataState) error
+	VisitWindowedVisualizationDataState(*WindowedVisualizationDataState) error
+}
+
+func (value *VisualizationDataState) Visit(visitor VisualizationDataStateVisitor) error {
+	if value == nil {
+		return fmt.Errorf("cannot visit nil VisualizationDataState")
+	}
+	if visitor == nil {
+		return fmt.Errorf("VisualizationDataState visitor is required")
+	}
+	switch variant := value.Value.(type) {
+	case *InlineVisualizationDataState:
+		if variant == nil {
+			return fmt.Errorf("VisualizationDataState variant is nil")
+		}
+		return visitor.VisitInlineVisualizationDataState(variant)
+	case *SpatialWindowedVisualizationDataState:
+		if variant == nil {
+			return fmt.Errorf("VisualizationDataState variant is nil")
+		}
+		return visitor.VisitSpatialWindowedVisualizationDataState(variant)
+	case *WindowedVisualizationDataState:
+		if variant == nil {
+			return fmt.Errorf("VisualizationDataState variant is nil")
+		}
+		return visitor.VisitWindowedVisualizationDataState(variant)
+	case nil:
+		return fmt.Errorf("VisualizationDataState variant is required")
+	default:
+		return fmt.Errorf("unsupported VisualizationDataState variant %T", variant)
+	}
+}
+
+func (value *VisualizationDataState) Kind() (string, error) {
+	if value == nil {
+		return "", fmt.Errorf("cannot inspect nil VisualizationDataState")
+	}
+	switch variant := value.Value.(type) {
+	case *InlineVisualizationDataState:
+		if variant == nil {
+			return "", fmt.Errorf("VisualizationDataState variant is nil")
+		}
+		return "inline", nil
+	case *SpatialWindowedVisualizationDataState:
+		if variant == nil {
+			return "", fmt.Errorf("VisualizationDataState variant is nil")
+		}
+		return "spatial_windowed", nil
+	case *WindowedVisualizationDataState:
+		if variant == nil {
+			return "", fmt.Errorf("VisualizationDataState variant is nil")
+		}
+		return "windowed", nil
+	case nil:
+		return "", fmt.Errorf("VisualizationDataState variant is required")
+	default:
+		return "", fmt.Errorf("unsupported VisualizationDataState variant %T", variant)
+	}
+}
+
+func (value *VisualizationDataState) Base() (*VisualizationDataStateBase, error) {
+	if value == nil {
+		return nil, fmt.Errorf("cannot inspect nil VisualizationDataState")
+	}
+	switch variant := value.Value.(type) {
+	case *InlineVisualizationDataState:
+		if variant == nil {
+			return nil, fmt.Errorf("VisualizationDataState variant is nil")
+		}
+		return &variant.VisualizationDataStateBase, nil
+	case *SpatialWindowedVisualizationDataState:
+		if variant == nil {
+			return nil, fmt.Errorf("VisualizationDataState variant is nil")
+		}
+		return &variant.VisualizationDataStateBase, nil
+	case *WindowedVisualizationDataState:
+		if variant == nil {
+			return nil, fmt.Errorf("VisualizationDataState variant is nil")
+		}
+		return &variant.VisualizationDataStateBase, nil
+	case nil:
+		return nil, fmt.Errorf("VisualizationDataState variant is required")
+	default:
+		return nil, fmt.Errorf("unsupported VisualizationDataState variant %T", variant)
+	}
+}
+
 type VisualizationDataStateBase struct {
 	Kind         string `json:"kind"`
 	SpecRevision string `json:"specRevision"`
@@ -787,51 +969,39 @@ type VisualizationFormat struct {
 	Value VisualizationFormatVariant
 }
 
-func (CompactVisualizationFormat) isVisualizationFormatVariant()  {}
-func (CurrencyVisualizationFormat) isVisualizationFormatVariant() {}
-func (DurationVisualizationFormat) isVisualizationFormatVariant() {}
-func (NumberVisualizationFormat) isVisualizationFormatVariant()   {}
-func (PercentVisualizationFormat) isVisualizationFormatVariant()  {}
-func (TemporalVisualizationFormat) isVisualizationFormatVariant() {}
+func (*CompactVisualizationFormat) isVisualizationFormatVariant()  {}
+func (*CurrencyVisualizationFormat) isVisualizationFormatVariant() {}
+func (*DurationVisualizationFormat) isVisualizationFormatVariant() {}
+func (*NumberVisualizationFormat) isVisualizationFormatVariant()   {}
+func (*PercentVisualizationFormat) isVisualizationFormatVariant()  {}
+func (*TemporalVisualizationFormat) isVisualizationFormatVariant() {}
 
 func (value VisualizationFormat) MarshalJSON() ([]byte, error) {
 	switch variant := value.Value.(type) {
-	case CompactVisualizationFormat:
-		return json.Marshal(variant)
 	case *CompactVisualizationFormat:
 		if variant == nil {
 			return nil, fmt.Errorf("VisualizationFormat variant is nil")
 		}
-		return json.Marshal(variant)
-	case CurrencyVisualizationFormat:
 		return json.Marshal(variant)
 	case *CurrencyVisualizationFormat:
 		if variant == nil {
 			return nil, fmt.Errorf("VisualizationFormat variant is nil")
 		}
 		return json.Marshal(variant)
-	case DurationVisualizationFormat:
-		return json.Marshal(variant)
 	case *DurationVisualizationFormat:
 		if variant == nil {
 			return nil, fmt.Errorf("VisualizationFormat variant is nil")
 		}
-		return json.Marshal(variant)
-	case NumberVisualizationFormat:
 		return json.Marshal(variant)
 	case *NumberVisualizationFormat:
 		if variant == nil {
 			return nil, fmt.Errorf("VisualizationFormat variant is nil")
 		}
 		return json.Marshal(variant)
-	case PercentVisualizationFormat:
-		return json.Marshal(variant)
 	case *PercentVisualizationFormat:
 		if variant == nil {
 			return nil, fmt.Errorf("VisualizationFormat variant is nil")
 		}
-		return json.Marshal(variant)
-	case TemporalVisualizationFormat:
 		return json.Marshal(variant)
 	case *TemporalVisualizationFormat:
 		if variant == nil {
@@ -934,6 +1104,144 @@ func (value *VisualizationFormat) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+type VisualizationFormatVisitor interface {
+	VisitCompactVisualizationFormat(*CompactVisualizationFormat) error
+	VisitCurrencyVisualizationFormat(*CurrencyVisualizationFormat) error
+	VisitDurationVisualizationFormat(*DurationVisualizationFormat) error
+	VisitNumberVisualizationFormat(*NumberVisualizationFormat) error
+	VisitPercentVisualizationFormat(*PercentVisualizationFormat) error
+	VisitTemporalVisualizationFormat(*TemporalVisualizationFormat) error
+}
+
+func (value *VisualizationFormat) Visit(visitor VisualizationFormatVisitor) error {
+	if value == nil {
+		return fmt.Errorf("cannot visit nil VisualizationFormat")
+	}
+	if visitor == nil {
+		return fmt.Errorf("VisualizationFormat visitor is required")
+	}
+	switch variant := value.Value.(type) {
+	case *CompactVisualizationFormat:
+		if variant == nil {
+			return fmt.Errorf("VisualizationFormat variant is nil")
+		}
+		return visitor.VisitCompactVisualizationFormat(variant)
+	case *CurrencyVisualizationFormat:
+		if variant == nil {
+			return fmt.Errorf("VisualizationFormat variant is nil")
+		}
+		return visitor.VisitCurrencyVisualizationFormat(variant)
+	case *DurationVisualizationFormat:
+		if variant == nil {
+			return fmt.Errorf("VisualizationFormat variant is nil")
+		}
+		return visitor.VisitDurationVisualizationFormat(variant)
+	case *NumberVisualizationFormat:
+		if variant == nil {
+			return fmt.Errorf("VisualizationFormat variant is nil")
+		}
+		return visitor.VisitNumberVisualizationFormat(variant)
+	case *PercentVisualizationFormat:
+		if variant == nil {
+			return fmt.Errorf("VisualizationFormat variant is nil")
+		}
+		return visitor.VisitPercentVisualizationFormat(variant)
+	case *TemporalVisualizationFormat:
+		if variant == nil {
+			return fmt.Errorf("VisualizationFormat variant is nil")
+		}
+		return visitor.VisitTemporalVisualizationFormat(variant)
+	case nil:
+		return fmt.Errorf("VisualizationFormat variant is required")
+	default:
+		return fmt.Errorf("unsupported VisualizationFormat variant %T", variant)
+	}
+}
+
+func (value *VisualizationFormat) Kind() (string, error) {
+	if value == nil {
+		return "", fmt.Errorf("cannot inspect nil VisualizationFormat")
+	}
+	switch variant := value.Value.(type) {
+	case *CompactVisualizationFormat:
+		if variant == nil {
+			return "", fmt.Errorf("VisualizationFormat variant is nil")
+		}
+		return "compact", nil
+	case *CurrencyVisualizationFormat:
+		if variant == nil {
+			return "", fmt.Errorf("VisualizationFormat variant is nil")
+		}
+		return "currency", nil
+	case *DurationVisualizationFormat:
+		if variant == nil {
+			return "", fmt.Errorf("VisualizationFormat variant is nil")
+		}
+		return "duration", nil
+	case *NumberVisualizationFormat:
+		if variant == nil {
+			return "", fmt.Errorf("VisualizationFormat variant is nil")
+		}
+		return "number", nil
+	case *PercentVisualizationFormat:
+		if variant == nil {
+			return "", fmt.Errorf("VisualizationFormat variant is nil")
+		}
+		return "percent", nil
+	case *TemporalVisualizationFormat:
+		if variant == nil {
+			return "", fmt.Errorf("VisualizationFormat variant is nil")
+		}
+		return "temporal", nil
+	case nil:
+		return "", fmt.Errorf("VisualizationFormat variant is required")
+	default:
+		return "", fmt.Errorf("unsupported VisualizationFormat variant %T", variant)
+	}
+}
+
+func (value *VisualizationFormat) Base() (*VisualizationFormatBase, error) {
+	if value == nil {
+		return nil, fmt.Errorf("cannot inspect nil VisualizationFormat")
+	}
+	switch variant := value.Value.(type) {
+	case *CompactVisualizationFormat:
+		if variant == nil {
+			return nil, fmt.Errorf("VisualizationFormat variant is nil")
+		}
+		return &variant.VisualizationFormatBase, nil
+	case *CurrencyVisualizationFormat:
+		if variant == nil {
+			return nil, fmt.Errorf("VisualizationFormat variant is nil")
+		}
+		return &variant.VisualizationFormatBase, nil
+	case *DurationVisualizationFormat:
+		if variant == nil {
+			return nil, fmt.Errorf("VisualizationFormat variant is nil")
+		}
+		return &variant.VisualizationFormatBase, nil
+	case *NumberVisualizationFormat:
+		if variant == nil {
+			return nil, fmt.Errorf("VisualizationFormat variant is nil")
+		}
+		return &variant.VisualizationFormatBase, nil
+	case *PercentVisualizationFormat:
+		if variant == nil {
+			return nil, fmt.Errorf("VisualizationFormat variant is nil")
+		}
+		return &variant.VisualizationFormatBase, nil
+	case *TemporalVisualizationFormat:
+		if variant == nil {
+			return nil, fmt.Errorf("VisualizationFormat variant is nil")
+		}
+		return &variant.VisualizationFormatBase, nil
+	case nil:
+		return nil, fmt.Errorf("VisualizationFormat variant is required")
+	default:
+		return nil, fmt.Errorf("unsupported VisualizationFormat variant %T", variant)
+	}
+}
+
 type VisualizationFormatBase struct {
 	Kind string `json:"kind"`
 }
@@ -946,51 +1254,39 @@ type VisualizationGeographicLayer struct {
 	Value VisualizationGeographicLayerVariant
 }
 
-func (VisualizationChoroplethLayer) isVisualizationGeographicLayerVariant() {}
-func (VisualizationDensityLayer) isVisualizationGeographicLayerVariant()    {}
-func (VisualizationHeatLayer) isVisualizationGeographicLayerVariant()       {}
-func (VisualizationPathLayer) isVisualizationGeographicLayerVariant()       {}
-func (VisualizationPointLayer) isVisualizationGeographicLayerVariant()      {}
-func (VisualizationReferenceLayer) isVisualizationGeographicLayerVariant()  {}
+func (*VisualizationChoroplethLayer) isVisualizationGeographicLayerVariant() {}
+func (*VisualizationDensityLayer) isVisualizationGeographicLayerVariant()    {}
+func (*VisualizationHeatLayer) isVisualizationGeographicLayerVariant()       {}
+func (*VisualizationPathLayer) isVisualizationGeographicLayerVariant()       {}
+func (*VisualizationPointLayer) isVisualizationGeographicLayerVariant()      {}
+func (*VisualizationReferenceLayer) isVisualizationGeographicLayerVariant()  {}
 
 func (value VisualizationGeographicLayer) MarshalJSON() ([]byte, error) {
 	switch variant := value.Value.(type) {
-	case VisualizationChoroplethLayer:
-		return json.Marshal(variant)
 	case *VisualizationChoroplethLayer:
 		if variant == nil {
 			return nil, fmt.Errorf("VisualizationGeographicLayer variant is nil")
 		}
-		return json.Marshal(variant)
-	case VisualizationDensityLayer:
 		return json.Marshal(variant)
 	case *VisualizationDensityLayer:
 		if variant == nil {
 			return nil, fmt.Errorf("VisualizationGeographicLayer variant is nil")
 		}
 		return json.Marshal(variant)
-	case VisualizationHeatLayer:
-		return json.Marshal(variant)
 	case *VisualizationHeatLayer:
 		if variant == nil {
 			return nil, fmt.Errorf("VisualizationGeographicLayer variant is nil")
 		}
-		return json.Marshal(variant)
-	case VisualizationPathLayer:
 		return json.Marshal(variant)
 	case *VisualizationPathLayer:
 		if variant == nil {
 			return nil, fmt.Errorf("VisualizationGeographicLayer variant is nil")
 		}
 		return json.Marshal(variant)
-	case VisualizationPointLayer:
-		return json.Marshal(variant)
 	case *VisualizationPointLayer:
 		if variant == nil {
 			return nil, fmt.Errorf("VisualizationGeographicLayer variant is nil")
 		}
-		return json.Marshal(variant)
-	case VisualizationReferenceLayer:
 		return json.Marshal(variant)
 	case *VisualizationReferenceLayer:
 		if variant == nil {
@@ -1259,6 +1555,144 @@ func (value *VisualizationGeographicLayer) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("unknown VisualizationGeographicLayer discriminator %q", tag.Value)
 	}
 	return nil
+}
+
+type VisualizationGeographicLayerVisitor interface {
+	VisitVisualizationChoroplethLayer(*VisualizationChoroplethLayer) error
+	VisitVisualizationDensityLayer(*VisualizationDensityLayer) error
+	VisitVisualizationHeatLayer(*VisualizationHeatLayer) error
+	VisitVisualizationPathLayer(*VisualizationPathLayer) error
+	VisitVisualizationPointLayer(*VisualizationPointLayer) error
+	VisitVisualizationReferenceLayer(*VisualizationReferenceLayer) error
+}
+
+func (value *VisualizationGeographicLayer) Visit(visitor VisualizationGeographicLayerVisitor) error {
+	if value == nil {
+		return fmt.Errorf("cannot visit nil VisualizationGeographicLayer")
+	}
+	if visitor == nil {
+		return fmt.Errorf("VisualizationGeographicLayer visitor is required")
+	}
+	switch variant := value.Value.(type) {
+	case *VisualizationChoroplethLayer:
+		if variant == nil {
+			return fmt.Errorf("VisualizationGeographicLayer variant is nil")
+		}
+		return visitor.VisitVisualizationChoroplethLayer(variant)
+	case *VisualizationDensityLayer:
+		if variant == nil {
+			return fmt.Errorf("VisualizationGeographicLayer variant is nil")
+		}
+		return visitor.VisitVisualizationDensityLayer(variant)
+	case *VisualizationHeatLayer:
+		if variant == nil {
+			return fmt.Errorf("VisualizationGeographicLayer variant is nil")
+		}
+		return visitor.VisitVisualizationHeatLayer(variant)
+	case *VisualizationPathLayer:
+		if variant == nil {
+			return fmt.Errorf("VisualizationGeographicLayer variant is nil")
+		}
+		return visitor.VisitVisualizationPathLayer(variant)
+	case *VisualizationPointLayer:
+		if variant == nil {
+			return fmt.Errorf("VisualizationGeographicLayer variant is nil")
+		}
+		return visitor.VisitVisualizationPointLayer(variant)
+	case *VisualizationReferenceLayer:
+		if variant == nil {
+			return fmt.Errorf("VisualizationGeographicLayer variant is nil")
+		}
+		return visitor.VisitVisualizationReferenceLayer(variant)
+	case nil:
+		return fmt.Errorf("VisualizationGeographicLayer variant is required")
+	default:
+		return fmt.Errorf("unsupported VisualizationGeographicLayer variant %T", variant)
+	}
+}
+
+func (value *VisualizationGeographicLayer) Kind() (string, error) {
+	if value == nil {
+		return "", fmt.Errorf("cannot inspect nil VisualizationGeographicLayer")
+	}
+	switch variant := value.Value.(type) {
+	case *VisualizationChoroplethLayer:
+		if variant == nil {
+			return "", fmt.Errorf("VisualizationGeographicLayer variant is nil")
+		}
+		return "choropleth", nil
+	case *VisualizationDensityLayer:
+		if variant == nil {
+			return "", fmt.Errorf("VisualizationGeographicLayer variant is nil")
+		}
+		return "density", nil
+	case *VisualizationHeatLayer:
+		if variant == nil {
+			return "", fmt.Errorf("VisualizationGeographicLayer variant is nil")
+		}
+		return "heat", nil
+	case *VisualizationPathLayer:
+		if variant == nil {
+			return "", fmt.Errorf("VisualizationGeographicLayer variant is nil")
+		}
+		return "path", nil
+	case *VisualizationPointLayer:
+		if variant == nil {
+			return "", fmt.Errorf("VisualizationGeographicLayer variant is nil")
+		}
+		return "point", nil
+	case *VisualizationReferenceLayer:
+		if variant == nil {
+			return "", fmt.Errorf("VisualizationGeographicLayer variant is nil")
+		}
+		return "reference", nil
+	case nil:
+		return "", fmt.Errorf("VisualizationGeographicLayer variant is required")
+	default:
+		return "", fmt.Errorf("unsupported VisualizationGeographicLayer variant %T", variant)
+	}
+}
+
+func (value *VisualizationGeographicLayer) Base() (*VisualizationGeographicLayerBase, error) {
+	if value == nil {
+		return nil, fmt.Errorf("cannot inspect nil VisualizationGeographicLayer")
+	}
+	switch variant := value.Value.(type) {
+	case *VisualizationChoroplethLayer:
+		if variant == nil {
+			return nil, fmt.Errorf("VisualizationGeographicLayer variant is nil")
+		}
+		return &variant.VisualizationGeographicLayerBase, nil
+	case *VisualizationDensityLayer:
+		if variant == nil {
+			return nil, fmt.Errorf("VisualizationGeographicLayer variant is nil")
+		}
+		return &variant.VisualizationGeographicLayerBase, nil
+	case *VisualizationHeatLayer:
+		if variant == nil {
+			return nil, fmt.Errorf("VisualizationGeographicLayer variant is nil")
+		}
+		return &variant.VisualizationGeographicLayerBase, nil
+	case *VisualizationPathLayer:
+		if variant == nil {
+			return nil, fmt.Errorf("VisualizationGeographicLayer variant is nil")
+		}
+		return &variant.VisualizationGeographicLayerBase, nil
+	case *VisualizationPointLayer:
+		if variant == nil {
+			return nil, fmt.Errorf("VisualizationGeographicLayer variant is nil")
+		}
+		return &variant.VisualizationGeographicLayerBase, nil
+	case *VisualizationReferenceLayer:
+		if variant == nil {
+			return nil, fmt.Errorf("VisualizationGeographicLayer variant is nil")
+		}
+		return &variant.VisualizationGeographicLayerBase, nil
+	case nil:
+		return nil, fmt.Errorf("VisualizationGeographicLayer variant is required")
+	default:
+		return nil, fmt.Errorf("unsupported VisualizationGeographicLayer variant %T", variant)
+	}
 }
 
 type VisualizationGeographicLayerBase struct {
@@ -1660,27 +2094,21 @@ type VisualizationSpatialSelectionGeometry struct {
 	Value VisualizationSpatialSelectionGeometryVariant
 }
 
-func (VisualizationSpatialBoxSelection) isVisualizationSpatialSelectionGeometryVariant()    {}
-func (VisualizationSpatialLassoSelection) isVisualizationSpatialSelectionGeometryVariant()  {}
-func (VisualizationSpatialRadiusSelection) isVisualizationSpatialSelectionGeometryVariant() {}
+func (*VisualizationSpatialBoxSelection) isVisualizationSpatialSelectionGeometryVariant()    {}
+func (*VisualizationSpatialLassoSelection) isVisualizationSpatialSelectionGeometryVariant()  {}
+func (*VisualizationSpatialRadiusSelection) isVisualizationSpatialSelectionGeometryVariant() {}
 
 func (value VisualizationSpatialSelectionGeometry) MarshalJSON() ([]byte, error) {
 	switch variant := value.Value.(type) {
-	case VisualizationSpatialBoxSelection:
-		return json.Marshal(variant)
 	case *VisualizationSpatialBoxSelection:
 		if variant == nil {
 			return nil, fmt.Errorf("VisualizationSpatialSelectionGeometry variant is nil")
 		}
 		return json.Marshal(variant)
-	case VisualizationSpatialLassoSelection:
-		return json.Marshal(variant)
 	case *VisualizationSpatialLassoSelection:
 		if variant == nil {
 			return nil, fmt.Errorf("VisualizationSpatialSelectionGeometry variant is nil")
 		}
-		return json.Marshal(variant)
-	case VisualizationSpatialRadiusSelection:
 		return json.Marshal(variant)
 	case *VisualizationSpatialRadiusSelection:
 		if variant == nil {
@@ -1762,6 +2190,96 @@ func (value *VisualizationSpatialSelectionGeometry) UnmarshalJSON(data []byte) e
 	return nil
 }
 
+type VisualizationSpatialSelectionGeometryVisitor interface {
+	VisitVisualizationSpatialBoxSelection(*VisualizationSpatialBoxSelection) error
+	VisitVisualizationSpatialLassoSelection(*VisualizationSpatialLassoSelection) error
+	VisitVisualizationSpatialRadiusSelection(*VisualizationSpatialRadiusSelection) error
+}
+
+func (value *VisualizationSpatialSelectionGeometry) Visit(visitor VisualizationSpatialSelectionGeometryVisitor) error {
+	if value == nil {
+		return fmt.Errorf("cannot visit nil VisualizationSpatialSelectionGeometry")
+	}
+	if visitor == nil {
+		return fmt.Errorf("VisualizationSpatialSelectionGeometry visitor is required")
+	}
+	switch variant := value.Value.(type) {
+	case *VisualizationSpatialBoxSelection:
+		if variant == nil {
+			return fmt.Errorf("VisualizationSpatialSelectionGeometry variant is nil")
+		}
+		return visitor.VisitVisualizationSpatialBoxSelection(variant)
+	case *VisualizationSpatialLassoSelection:
+		if variant == nil {
+			return fmt.Errorf("VisualizationSpatialSelectionGeometry variant is nil")
+		}
+		return visitor.VisitVisualizationSpatialLassoSelection(variant)
+	case *VisualizationSpatialRadiusSelection:
+		if variant == nil {
+			return fmt.Errorf("VisualizationSpatialSelectionGeometry variant is nil")
+		}
+		return visitor.VisitVisualizationSpatialRadiusSelection(variant)
+	case nil:
+		return fmt.Errorf("VisualizationSpatialSelectionGeometry variant is required")
+	default:
+		return fmt.Errorf("unsupported VisualizationSpatialSelectionGeometry variant %T", variant)
+	}
+}
+
+func (value *VisualizationSpatialSelectionGeometry) Kind() (string, error) {
+	if value == nil {
+		return "", fmt.Errorf("cannot inspect nil VisualizationSpatialSelectionGeometry")
+	}
+	switch variant := value.Value.(type) {
+	case *VisualizationSpatialBoxSelection:
+		if variant == nil {
+			return "", fmt.Errorf("VisualizationSpatialSelectionGeometry variant is nil")
+		}
+		return "box", nil
+	case *VisualizationSpatialLassoSelection:
+		if variant == nil {
+			return "", fmt.Errorf("VisualizationSpatialSelectionGeometry variant is nil")
+		}
+		return "lasso", nil
+	case *VisualizationSpatialRadiusSelection:
+		if variant == nil {
+			return "", fmt.Errorf("VisualizationSpatialSelectionGeometry variant is nil")
+		}
+		return "radius", nil
+	case nil:
+		return "", fmt.Errorf("VisualizationSpatialSelectionGeometry variant is required")
+	default:
+		return "", fmt.Errorf("unsupported VisualizationSpatialSelectionGeometry variant %T", variant)
+	}
+}
+
+func (value *VisualizationSpatialSelectionGeometry) Base() (*VisualizationSpatialSelectionGeometryBase, error) {
+	if value == nil {
+		return nil, fmt.Errorf("cannot inspect nil VisualizationSpatialSelectionGeometry")
+	}
+	switch variant := value.Value.(type) {
+	case *VisualizationSpatialBoxSelection:
+		if variant == nil {
+			return nil, fmt.Errorf("VisualizationSpatialSelectionGeometry variant is nil")
+		}
+		return &variant.VisualizationSpatialSelectionGeometryBase, nil
+	case *VisualizationSpatialLassoSelection:
+		if variant == nil {
+			return nil, fmt.Errorf("VisualizationSpatialSelectionGeometry variant is nil")
+		}
+		return &variant.VisualizationSpatialSelectionGeometryBase, nil
+	case *VisualizationSpatialRadiusSelection:
+		if variant == nil {
+			return nil, fmt.Errorf("VisualizationSpatialSelectionGeometry variant is nil")
+		}
+		return &variant.VisualizationSpatialSelectionGeometryBase, nil
+	case nil:
+		return nil, fmt.Errorf("VisualizationSpatialSelectionGeometry variant is required")
+	default:
+		return nil, fmt.Errorf("unsupported VisualizationSpatialSelectionGeometry variant %T", variant)
+	}
+}
+
 type VisualizationSpatialSelectionGeometryBase struct {
 	Kind string `json:"kind"`
 }
@@ -1821,83 +2339,63 @@ type VisualizationSpec struct {
 	Value VisualizationSpecVariant
 }
 
-func (CartesianVisualizationSpec) isVisualizationSpecVariant()    {}
-func (CustomVisualizationSpec) isVisualizationSpecVariant()       {}
-func (GeographicVisualizationSpec) isVisualizationSpecVariant()   {}
-func (HierarchyVisualizationSpec) isVisualizationSpecVariant()    {}
-func (KPIVisualizationSpec) isVisualizationSpecVariant()          {}
-func (MatrixVisualizationSpec) isVisualizationSpecVariant()       {}
-func (PivotVisualizationSpec) isVisualizationSpecVariant()        {}
-func (PolarVisualizationSpec) isVisualizationSpecVariant()        {}
-func (ProportionalVisualizationSpec) isVisualizationSpecVariant() {}
-func (TableVisualizationSpec) isVisualizationSpecVariant()        {}
+func (*CartesianVisualizationSpec) isVisualizationSpecVariant()    {}
+func (*CustomVisualizationSpec) isVisualizationSpecVariant()       {}
+func (*GeographicVisualizationSpec) isVisualizationSpecVariant()   {}
+func (*HierarchyVisualizationSpec) isVisualizationSpecVariant()    {}
+func (*KPIVisualizationSpec) isVisualizationSpecVariant()          {}
+func (*MatrixVisualizationSpec) isVisualizationSpecVariant()       {}
+func (*PivotVisualizationSpec) isVisualizationSpecVariant()        {}
+func (*PolarVisualizationSpec) isVisualizationSpecVariant()        {}
+func (*ProportionalVisualizationSpec) isVisualizationSpecVariant() {}
+func (*TableVisualizationSpec) isVisualizationSpecVariant()        {}
 
 func (value VisualizationSpec) MarshalJSON() ([]byte, error) {
 	switch variant := value.Value.(type) {
-	case CartesianVisualizationSpec:
-		return json.Marshal(variant)
 	case *CartesianVisualizationSpec:
 		if variant == nil {
 			return nil, fmt.Errorf("VisualizationSpec variant is nil")
 		}
-		return json.Marshal(variant)
-	case CustomVisualizationSpec:
 		return json.Marshal(variant)
 	case *CustomVisualizationSpec:
 		if variant == nil {
 			return nil, fmt.Errorf("VisualizationSpec variant is nil")
 		}
 		return json.Marshal(variant)
-	case GeographicVisualizationSpec:
-		return json.Marshal(variant)
 	case *GeographicVisualizationSpec:
 		if variant == nil {
 			return nil, fmt.Errorf("VisualizationSpec variant is nil")
 		}
-		return json.Marshal(variant)
-	case HierarchyVisualizationSpec:
 		return json.Marshal(variant)
 	case *HierarchyVisualizationSpec:
 		if variant == nil {
 			return nil, fmt.Errorf("VisualizationSpec variant is nil")
 		}
 		return json.Marshal(variant)
-	case KPIVisualizationSpec:
-		return json.Marshal(variant)
 	case *KPIVisualizationSpec:
 		if variant == nil {
 			return nil, fmt.Errorf("VisualizationSpec variant is nil")
 		}
-		return json.Marshal(variant)
-	case MatrixVisualizationSpec:
 		return json.Marshal(variant)
 	case *MatrixVisualizationSpec:
 		if variant == nil {
 			return nil, fmt.Errorf("VisualizationSpec variant is nil")
 		}
 		return json.Marshal(variant)
-	case PivotVisualizationSpec:
-		return json.Marshal(variant)
 	case *PivotVisualizationSpec:
 		if variant == nil {
 			return nil, fmt.Errorf("VisualizationSpec variant is nil")
 		}
-		return json.Marshal(variant)
-	case PolarVisualizationSpec:
 		return json.Marshal(variant)
 	case *PolarVisualizationSpec:
 		if variant == nil {
 			return nil, fmt.Errorf("VisualizationSpec variant is nil")
 		}
 		return json.Marshal(variant)
-	case ProportionalVisualizationSpec:
-		return json.Marshal(variant)
 	case *ProportionalVisualizationSpec:
 		if variant == nil {
 			return nil, fmt.Errorf("VisualizationSpec variant is nil")
 		}
-		return json.Marshal(variant)
-	case TableVisualizationSpec:
 		return json.Marshal(variant)
 	case *TableVisualizationSpec:
 		if variant == nil {
@@ -2280,6 +2778,208 @@ func (value *VisualizationSpec) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("unknown VisualizationSpec discriminator %q", tag.Value)
 	}
 	return nil
+}
+
+type VisualizationSpecVisitor interface {
+	VisitCartesianVisualizationSpec(*CartesianVisualizationSpec) error
+	VisitCustomVisualizationSpec(*CustomVisualizationSpec) error
+	VisitGeographicVisualizationSpec(*GeographicVisualizationSpec) error
+	VisitHierarchyVisualizationSpec(*HierarchyVisualizationSpec) error
+	VisitKPIVisualizationSpec(*KPIVisualizationSpec) error
+	VisitMatrixVisualizationSpec(*MatrixVisualizationSpec) error
+	VisitPivotVisualizationSpec(*PivotVisualizationSpec) error
+	VisitPolarVisualizationSpec(*PolarVisualizationSpec) error
+	VisitProportionalVisualizationSpec(*ProportionalVisualizationSpec) error
+	VisitTableVisualizationSpec(*TableVisualizationSpec) error
+}
+
+func (value *VisualizationSpec) Visit(visitor VisualizationSpecVisitor) error {
+	if value == nil {
+		return fmt.Errorf("cannot visit nil VisualizationSpec")
+	}
+	if visitor == nil {
+		return fmt.Errorf("VisualizationSpec visitor is required")
+	}
+	switch variant := value.Value.(type) {
+	case *CartesianVisualizationSpec:
+		if variant == nil {
+			return fmt.Errorf("VisualizationSpec variant is nil")
+		}
+		return visitor.VisitCartesianVisualizationSpec(variant)
+	case *CustomVisualizationSpec:
+		if variant == nil {
+			return fmt.Errorf("VisualizationSpec variant is nil")
+		}
+		return visitor.VisitCustomVisualizationSpec(variant)
+	case *GeographicVisualizationSpec:
+		if variant == nil {
+			return fmt.Errorf("VisualizationSpec variant is nil")
+		}
+		return visitor.VisitGeographicVisualizationSpec(variant)
+	case *HierarchyVisualizationSpec:
+		if variant == nil {
+			return fmt.Errorf("VisualizationSpec variant is nil")
+		}
+		return visitor.VisitHierarchyVisualizationSpec(variant)
+	case *KPIVisualizationSpec:
+		if variant == nil {
+			return fmt.Errorf("VisualizationSpec variant is nil")
+		}
+		return visitor.VisitKPIVisualizationSpec(variant)
+	case *MatrixVisualizationSpec:
+		if variant == nil {
+			return fmt.Errorf("VisualizationSpec variant is nil")
+		}
+		return visitor.VisitMatrixVisualizationSpec(variant)
+	case *PivotVisualizationSpec:
+		if variant == nil {
+			return fmt.Errorf("VisualizationSpec variant is nil")
+		}
+		return visitor.VisitPivotVisualizationSpec(variant)
+	case *PolarVisualizationSpec:
+		if variant == nil {
+			return fmt.Errorf("VisualizationSpec variant is nil")
+		}
+		return visitor.VisitPolarVisualizationSpec(variant)
+	case *ProportionalVisualizationSpec:
+		if variant == nil {
+			return fmt.Errorf("VisualizationSpec variant is nil")
+		}
+		return visitor.VisitProportionalVisualizationSpec(variant)
+	case *TableVisualizationSpec:
+		if variant == nil {
+			return fmt.Errorf("VisualizationSpec variant is nil")
+		}
+		return visitor.VisitTableVisualizationSpec(variant)
+	case nil:
+		return fmt.Errorf("VisualizationSpec variant is required")
+	default:
+		return fmt.Errorf("unsupported VisualizationSpec variant %T", variant)
+	}
+}
+
+func (value *VisualizationSpec) Kind() (string, error) {
+	if value == nil {
+		return "", fmt.Errorf("cannot inspect nil VisualizationSpec")
+	}
+	switch variant := value.Value.(type) {
+	case *CartesianVisualizationSpec:
+		if variant == nil {
+			return "", fmt.Errorf("VisualizationSpec variant is nil")
+		}
+		return "cartesian", nil
+	case *CustomVisualizationSpec:
+		if variant == nil {
+			return "", fmt.Errorf("VisualizationSpec variant is nil")
+		}
+		return "custom", nil
+	case *GeographicVisualizationSpec:
+		if variant == nil {
+			return "", fmt.Errorf("VisualizationSpec variant is nil")
+		}
+		return "geographic", nil
+	case *HierarchyVisualizationSpec:
+		if variant == nil {
+			return "", fmt.Errorf("VisualizationSpec variant is nil")
+		}
+		return "hierarchy", nil
+	case *KPIVisualizationSpec:
+		if variant == nil {
+			return "", fmt.Errorf("VisualizationSpec variant is nil")
+		}
+		return "kpi", nil
+	case *MatrixVisualizationSpec:
+		if variant == nil {
+			return "", fmt.Errorf("VisualizationSpec variant is nil")
+		}
+		return "matrix", nil
+	case *PivotVisualizationSpec:
+		if variant == nil {
+			return "", fmt.Errorf("VisualizationSpec variant is nil")
+		}
+		return "pivot", nil
+	case *PolarVisualizationSpec:
+		if variant == nil {
+			return "", fmt.Errorf("VisualizationSpec variant is nil")
+		}
+		return "polar", nil
+	case *ProportionalVisualizationSpec:
+		if variant == nil {
+			return "", fmt.Errorf("VisualizationSpec variant is nil")
+		}
+		return "proportional", nil
+	case *TableVisualizationSpec:
+		if variant == nil {
+			return "", fmt.Errorf("VisualizationSpec variant is nil")
+		}
+		return "table", nil
+	case nil:
+		return "", fmt.Errorf("VisualizationSpec variant is required")
+	default:
+		return "", fmt.Errorf("unsupported VisualizationSpec variant %T", variant)
+	}
+}
+
+func (value *VisualizationSpec) Base() (*VisualizationSpecBase, error) {
+	if value == nil {
+		return nil, fmt.Errorf("cannot inspect nil VisualizationSpec")
+	}
+	switch variant := value.Value.(type) {
+	case *CartesianVisualizationSpec:
+		if variant == nil {
+			return nil, fmt.Errorf("VisualizationSpec variant is nil")
+		}
+		return &variant.VisualizationSpecBase, nil
+	case *CustomVisualizationSpec:
+		if variant == nil {
+			return nil, fmt.Errorf("VisualizationSpec variant is nil")
+		}
+		return &variant.VisualizationSpecBase, nil
+	case *GeographicVisualizationSpec:
+		if variant == nil {
+			return nil, fmt.Errorf("VisualizationSpec variant is nil")
+		}
+		return &variant.VisualizationSpecBase, nil
+	case *HierarchyVisualizationSpec:
+		if variant == nil {
+			return nil, fmt.Errorf("VisualizationSpec variant is nil")
+		}
+		return &variant.VisualizationSpecBase, nil
+	case *KPIVisualizationSpec:
+		if variant == nil {
+			return nil, fmt.Errorf("VisualizationSpec variant is nil")
+		}
+		return &variant.VisualizationSpecBase, nil
+	case *MatrixVisualizationSpec:
+		if variant == nil {
+			return nil, fmt.Errorf("VisualizationSpec variant is nil")
+		}
+		return &variant.VisualizationSpecBase, nil
+	case *PivotVisualizationSpec:
+		if variant == nil {
+			return nil, fmt.Errorf("VisualizationSpec variant is nil")
+		}
+		return &variant.VisualizationSpecBase, nil
+	case *PolarVisualizationSpec:
+		if variant == nil {
+			return nil, fmt.Errorf("VisualizationSpec variant is nil")
+		}
+		return &variant.VisualizationSpecBase, nil
+	case *ProportionalVisualizationSpec:
+		if variant == nil {
+			return nil, fmt.Errorf("VisualizationSpec variant is nil")
+		}
+		return &variant.VisualizationSpecBase, nil
+	case *TableVisualizationSpec:
+		if variant == nil {
+			return nil, fmt.Errorf("VisualizationSpec variant is nil")
+		}
+		return &variant.VisualizationSpecBase, nil
+	case nil:
+		return nil, fmt.Errorf("VisualizationSpec variant is required")
+	default:
+		return nil, fmt.Errorf("unsupported VisualizationSpec variant %T", variant)
+	}
 }
 
 type VisualizationSpecBase struct {

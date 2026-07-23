@@ -490,7 +490,7 @@ func sidebarConfig(catalog dashboard.Catalog, active, dashboardID, workspaceTitl
 
 func DefaultTableRequest(report dashboarddefinition.Definition, page dashboard.Page) dashboard.TableRequest {
 	request := dashboard.TableRequest{Block: "all", Start: 0, Count: dashboard.TableChunkSize}
-	for _, name := range pageTableIDs(page) {
+	for _, name := range pageVisualIDs(page) {
 		table, ok := report.Visualizations[name]
 		if !ok || table.Query.Kind != visualizationdefinition.QueryDetail {
 			continue
@@ -505,7 +505,7 @@ func DefaultTableRequest(report dashboarddefinition.Definition, page dashboard.P
 }
 
 func InitialVisualizationEnvelopes(definitions map[string]visualizationdefinition.Definition, page dashboard.Page, request dashboard.TableRequest) map[string]DashboardVisualizationSignal {
-	ids := append(pageVisualIDs(page), pageTableIDs(page)...)
+	ids := pageVisualIDs(page)
 	out := make(map[string]DashboardVisualizationSignal, len(ids))
 	for _, id := range ids {
 		definition, ok := definitions[id]
@@ -603,17 +603,10 @@ func dashboardPageNav(workspaceID, reportID string, pages []dashboard.Page, acti
 func dashboardComponents(page dashboard.Page) []DashboardComponentSignal {
 	components := make([]DashboardComponentSignal, 0, len(page.Visuals))
 	for _, visual := range page.PlacedVisuals() {
-		kind := visual.Kind
-		visualID := visual.Visual
-		if visual.Visual != "" {
-			kind = "visual"
-		} else if visual.Filter != "" {
-			kind = "filter"
-		}
 		components = append(components, DashboardComponentSignal{
 			ID:          visual.ID,
-			Kind:        kind,
-			Visual:      optionalValue(visualID),
+			Kind:        visual.Kind,
+			Visual:      optionalValue(visual.Visual),
 			Filter:      optionalValue(visual.Filter),
 			Description: optionalValue(visual.Description),
 			Placement:   DashboardPagePlacementFromDashboard(visual.Placement),
@@ -673,23 +666,6 @@ func pageVisualIDs(page dashboard.Page) []string {
 	ids := []string{}
 	for _, item := range page.Visuals {
 		if item.Visual == "" {
-			continue
-		}
-		if _, ok := seen[item.Visual]; ok {
-			continue
-		}
-		seen[item.Visual] = struct{}{}
-		ids = append(ids, item.Visual)
-	}
-	sort.Strings(ids)
-	return ids
-}
-
-func pageTableIDs(page dashboard.Page) []string {
-	seen := map[string]struct{}{}
-	ids := []string{}
-	for _, item := range page.Visuals {
-		if item.Kind != "table" || item.Visual == "" {
 			continue
 		}
 		if _, ok := seen[item.Visual]; ok {

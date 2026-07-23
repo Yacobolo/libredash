@@ -549,42 +549,28 @@ func (d *Dashboard) validatePages() error {
 			}
 			switch visual.Kind {
 			case "header":
-			case "filter_card":
+				if visual.Visual != "" || visual.Filter != "" {
+					return fmt.Errorf("page %q header %q must not reference a visual or filter", page.ID, visual.ID)
+				}
+			case "filter":
 				if visual.Filter == "" {
 					return fmt.Errorf("page %q visual %q requires filter", page.ID, visual.ID)
 				}
 				if _, ok := d.Filters[visual.Filter]; !ok {
 					return fmt.Errorf("page %q references unknown filter %q", page.ID, visual.Filter)
 				}
-			case "kpi_card":
+				if visual.Visual != "" {
+					return fmt.Errorf("page %q filter %q must not reference a visual", page.ID, visual.ID)
+				}
+			case "visual":
 				if visual.Visual == "" {
 					return fmt.Errorf("page %q visual %q requires visual", page.ID, visual.ID)
 				}
-				target, ok := d.Visuals[visual.Visual]
-				if !ok {
+				if _, ok := d.Visuals[visual.Visual]; !ok {
 					return fmt.Errorf("page %q references unknown visual %q", page.ID, visual.Visual)
 				}
-				if target.Chart == nil || target.Chart.KindOrDefault() != "kpi" {
-					return fmt.Errorf("page %q visual %q requires a kpi visual", page.ID, visual.ID)
-				}
-			case "line_chart", "area_chart", "bar_chart", "column_chart", "pie_chart", "donut_chart", "scatter_chart", "funnel_chart", "treemap_chart", "gauge_chart", "heatmap_chart", "sankey_chart", "graph_chart", "map_chart", "candlestick_chart", "boxplot_chart", "combo_chart", "waterfall_chart", "histogram_chart", "radar_chart", "tree_chart", "sunburst_chart", "custom_chart":
-				if visual.Visual == "" {
-					return fmt.Errorf("page %q visual %q requires visual", page.ID, visual.ID)
-				}
-				target, ok := d.Visuals[visual.Visual]
-				if !ok {
-					return fmt.Errorf("page %q references unknown visual %q", page.ID, visual.Visual)
-				}
-				if target.Chart == nil || target.Chart.KindOrDefault() == "kpi" {
-					return fmt.Errorf("page %q visual %q requires a chart visual", page.ID, visual.ID)
-				}
-			case "table":
-				if visual.Visual == "" {
-					return fmt.Errorf("page %q visual %q requires visual", page.ID, visual.ID)
-				}
-				target, ok := d.Visuals[visual.Visual]
-				if !ok || target.Tabular == nil {
-					return fmt.Errorf("page %q references unknown tabular visual %q", page.ID, visual.Visual)
+				if visual.Filter != "" {
+					return fmt.Errorf("page %q visual %q must not reference a filter", page.ID, visual.ID)
 				}
 			default:
 				return fmt.Errorf("page %q visual %q has unsupported kind %q", page.ID, visual.ID, visual.Kind)

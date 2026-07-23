@@ -1240,7 +1240,11 @@ func assertVisualShowcaseCoverage(t *testing.T, report *dashboarddefinition.Defi
 		case *visualizationir.GeographicVisualizationSpec:
 			visualTypes["map"] = struct{}{}
 			for _, layer := range spec.Layers {
-				geographicLayers[layer.GetKind()] = struct{}{}
+				kind, err := layer.Kind()
+				if err != nil {
+					t.Fatal(err)
+				}
+				geographicLayers[kind] = struct{}{}
 			}
 		case *visualizationir.CustomVisualizationSpec:
 			visualTypes["custom"] = struct{}{}

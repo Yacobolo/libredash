@@ -295,16 +295,12 @@ func agentReportVisual(input agentVisualInput) reportdef.Visual {
 
 func validateAgentChartContract(input agentVisualInput) error {
 	visual := agentReportVisual(input)
-	componentKind := visual.Type + "_chart"
-	if visual.Type == "kpi" {
-		componentKind = "kpi_card"
-	}
 	definition := reportdef.Dashboard{
 		ID: "agent-visual", Title: "Agent visual", SemanticModel: "agent",
 		Visuals: reportdef.ChartVisualizations(map[string]reportdef.Visual{"visual": visual}),
 		Pages: []dashboard.Page{{
 			ID: "page", Title: "Page",
-			Visuals: []dashboard.PageVisual{{ID: "visual", Kind: componentKind, Visual: "visual", Placement: dashboard.PagePlacement{Col: 1, Row: 1, ColSpan: 6, RowSpan: 4}}},
+			Visuals: []dashboard.PageVisual{{ID: "visual", Kind: "visual", Visual: "visual", Placement: dashboard.PagePlacement{Col: 1, Row: 1, ColSpan: 6, RowSpan: 4}}},
 		}},
 	}
 	if err := definition.ValidateContract(); err != nil {

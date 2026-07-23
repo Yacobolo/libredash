@@ -401,7 +401,7 @@ func ExtractLineage(workspaceID workspace.WorkspaceID, servingStateID workspace.
 					}
 				}
 			}
-			if geographic, ok := compiledVisual.Spec.Value.(visualizationir.GeographicVisualizationSpec); ok {
+			if geographic, ok := compiledVisual.Spec.Value.(*visualizationir.GeographicVisualizationSpec); ok {
 				for _, interaction := range geographic.SpatialInteractions {
 					for _, mapping := range []visualizationir.VisualizationSpatialFieldMapping{interaction.Latitude, interaction.Longitude} {
 						if err := addFieldUse(visualID, mapping.TargetFieldID, workspace.AssetEdgeFiltersField); err != nil {

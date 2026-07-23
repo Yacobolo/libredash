@@ -230,7 +230,7 @@ func (d *Dashboard) PageFilterIDs(pageID string) []string {
 			continue
 		}
 		for _, visual := range page.Visuals {
-			if visual.Kind != "filter_card" || visual.Filter == "" {
+			if visual.Kind != "filter" || visual.Filter == "" {
 				continue
 			}
 			if _, ok := seen[visual.Filter]; ok {

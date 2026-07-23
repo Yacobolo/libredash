@@ -201,8 +201,6 @@ func spatialFilterFromSelection(selection reportmodel.ResolvedSpatialSelectionIn
 			break
 		}
 		filter.Kind, filter.West, filter.South, filter.East, filter.North = "box", value.Bounds.West, value.Bounds.South, value.Bounds.East, value.Bounds.North
-	case visualizationir.VisualizationSpatialBoxSelection:
-		filter.Kind, filter.West, filter.South, filter.East, filter.North = "box", value.Bounds.West, value.Bounds.South, value.Bounds.East, value.Bounds.North
 	case *visualizationir.VisualizationSpatialLassoSelection:
 		if value == nil {
 			break
@@ -211,17 +209,10 @@ func spatialFilterFromSelection(selection reportmodel.ResolvedSpatialSelectionIn
 		for _, point := range value.Points {
 			filter.Points = append(filter.Points, reportdef.SpatialPoint{Longitude: point.Longitude, Latitude: point.Latitude})
 		}
-	case visualizationir.VisualizationSpatialLassoSelection:
-		filter.Kind = "lasso"
-		for _, point := range value.Points {
-			filter.Points = append(filter.Points, reportdef.SpatialPoint{Longitude: point.Longitude, Latitude: point.Latitude})
-		}
 	case *visualizationir.VisualizationSpatialRadiusSelection:
 		if value == nil {
 			break
 		}
-		filter.Kind, filter.Center, filter.RadiusMeters = "radius", reportdef.SpatialPoint{Longitude: value.Center.Longitude, Latitude: value.Center.Latitude}, value.RadiusMeters
-	case visualizationir.VisualizationSpatialRadiusSelection:
 		filter.Kind, filter.Center, filter.RadiusMeters = "radius", reportdef.SpatialPoint{Longitude: value.Center.Longitude, Latitude: value.Center.Latitude}, value.RadiusMeters
 	}
 	if filter.Kind == "" {

@@ -171,7 +171,7 @@ func benchmarkDashboardFixture() (reportdef.Dashboard, *semanticmodel.Model, das
 	}
 	visuals := map[string]reportdef.Visual{}
 	components := []dashboard.PageVisual{}
-	for i, kind := range []string{"bar_chart", "line_chart", "area_chart", "column_chart", "pie_chart", "donut_chart", "scatter_chart", "treemap_chart"} {
+	for i := range 8 {
 		id := "visual_" + string(rune('a'+i))
 		visuals[id] = reportdef.Visual{
 			Title: "Benchmark Visual " + string(rune('A'+i)),
@@ -181,10 +181,10 @@ func benchmarkDashboardFixture() (reportdef.Dashboard, *semanticmodel.Model, das
 				Measures:   fieldRefs("order_count"),
 			},
 		}
-		components = append(components, dashboard.PageVisual{ID: id, Kind: kind, Visual: id, X: float64((i % 4) * 300), Y: float64((i / 4) * 180), Width: 280, Height: 160})
+		components = append(components, dashboard.PageVisual{ID: id, Kind: "visual", Visual: id, X: float64((i % 4) * 300), Y: float64((i / 4) * 180), Width: 280, Height: 160})
 	}
 	for i, filterID := range []string{"state", "category", "status", "channel"} {
-		components = append(components, dashboard.PageVisual{ID: filterID + "_filter", Kind: "filter_card", Filter: filterID, X: float64(i * 220), Y: 390, Width: 200, Height: 120})
+		components = append(components, dashboard.PageVisual{ID: filterID + "_filter", Kind: "filter", Filter: filterID, X: float64(i * 220), Y: 390, Width: 200, Height: 120})
 	}
 	tables := map[string]reportdef.TableVisual{}
 	for i := 0; i < 4; i++ {
@@ -200,7 +200,7 @@ func benchmarkDashboardFixture() (reportdef.Dashboard, *semanticmodel.Model, das
 				{Key: "category", Label: "Category", Width: 180, Format: "text"},
 			},
 		}
-		components = append(components, dashboard.PageVisual{ID: id, Kind: "table", Visual: id, X: float64(i * 300), Y: 540, Width: 280, Height: 220})
+		components = append(components, dashboard.PageVisual{ID: id, Kind: "visual", Visual: id, X: float64(i * 300), Y: 540, Width: 280, Height: 220})
 	}
 	report := reportdef.Dashboard{
 		ID:            "benchmark-dashboard",

@@ -47,8 +47,8 @@ github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym
 github.com/CAFxX/httpcompression v0.0.9 h1:0ue2X8dOLEpxTm8tt+OdHcgA+gbDge0OqFQWGKSqgrg=
 github.com/CAFxX/httpcompression v0.0.9/go.mod h1:XX8oPZA+4IDcfZ0A71Hz0mZsv/YJOgYygkFhizVPilM=
 github.com/Masterminds/semver/v3 v3.1.1/go.mod h1:VPu/7SZ7ePZ3QOrcuXROw5FAcLl4a0cBrbBpGY/8hQs=
-github.com/Yacobolo/toolbelt/apigen v0.6.4 h1:Wvu5uGYXZDNtXnO7YIEPAZ32mDTZw2LMQam31glMdzk=
-github.com/Yacobolo/toolbelt/apigen v0.6.4/go.mod h1:iKKpG2gMSuLNegtRpL5la1z5s9YrBsZwdAHaRBsmvtE=
+github.com/Yacobolo/toolbelt/apigen v0.6.5 h1:aO2u5gIliKcz80Iw3cjGQvih0EaqkcZuHDwZfHsbxL4=
+github.com/Yacobolo/toolbelt/apigen v0.6.5/go.mod h1:iKKpG2gMSuLNegtRpL5la1z5s9YrBsZwdAHaRBsmvtE=
 github.com/alexedwards/argon2id v1.0.0 h1:wJzDx66hqWX7siL/SRUmgz3F8YMrd/nfX/xHHcQQP0w=
 github.com/alexedwards/argon2id v1.0.0/go.mod h1:tYKkqIjzXvZdzPvADMWOEZ+l6+BD6CtBXMj5fnJppiw=
 github.com/andybalholm/brotli v1.0.5/go.mod h1:fO7iG3H7G2nSZ7m0zPUDn85XEX2GTukHGRSepvi9Eig=

@@ -61,9 +61,9 @@ func (m fakeMetrics) Report(string) (dashboarddefinition.Definition, *semanticmo
 		}), reportdef.TabularVisualizations("table", map[string]reportdef.TableVisual{"orders": {Query: reportdef.TableQuery{Table: "orders", Fields: []string{"orders.state"}}}})),
 		Pages: []dashboard.Page{
 			{ID: "overview", Visuals: []dashboard.PageVisual{
-				{Kind: "filter_card", Filter: "state"}, {Kind: "visual", Visual: "chart"}, {Kind: "visual", Visual: "customer_map"}, {Kind: "table", Visual: "orders"},
+				{Kind: "filter", Filter: "state"}, {Kind: "visual", Visual: "chart"}, {Kind: "visual", Visual: "customer_map"}, {Kind: "visual", Visual: "orders"},
 			}},
-			{ID: "boolean", Visuals: []dashboard.PageVisual{{Kind: "visual", Visual: "boolean_chart"}, {Kind: "table", Visual: "orders"}}},
+			{ID: "boolean", Visuals: []dashboard.PageVisual{{Kind: "visual", Visual: "boolean_chart"}, {Kind: "visual", Visual: "orders"}}},
 		},
 	}
 	model := &semanticmodel.Model{

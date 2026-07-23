@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-APIGEN=github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.6.4
+APIGEN=github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.6.5
 
 go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 generate
 go run ./internal/tools/configgen

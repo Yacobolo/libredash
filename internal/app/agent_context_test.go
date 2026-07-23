@@ -131,8 +131,8 @@ func TestResolveAgentTurnContextRejectsExcessReferences(t *testing.T) {
 
 func TestResolveDashboardTurnReferencesUsesCompiledMetadata(t *testing.T) {
 	page := dashboard.Page{ID: "overview", Title: "Overview", Visuals: []dashboard.PageVisual{
-		{ID: "orders-chart", Visual: "orders_chart"},
-		{ID: "orders-table", Kind: "table", Visual: "orders", Title: "Recent orders"},
+		{ID: "orders-chart", Kind: "visual", Visual: "orders_chart"},
+		{ID: "orders-table", Kind: "visual", Visual: "orders", Title: "Recent orders"},
 	}}
 	resolved := resolveDashboardTurnReferences([]agent.TurnReference{
 		{Reference: agent.TurnReferenceKey{WorkspaceID: "test", Type: "visual", ID: "executive-sales.orders_chart"}, Name: "Ignore browser title", VisualType: "script", Href: "javascript:alert(1)", Hierarchy: []string{"Forged"}},

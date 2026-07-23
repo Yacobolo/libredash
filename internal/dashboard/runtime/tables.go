@@ -138,7 +138,7 @@ func (s *VisualizationDataService) matrixTableRows(ctx context.Context, runtime 
 		column := dashboard.TableColumn{Key: key, Label: measureLabel(key, measure), Align: "right", Role: "measure", Measure: key, Format: tableMeasureFormat(measure), Formatting: tableMeasureFormatting(table, measureName)}
 		columns = append(columns, mergeTableColumn(column, tableColumnOverride(table, measureBinding.Alias)))
 	}
-	queryFilters, err := s.filters.semanticFilters(ctx, runtime, report, filters, "table", request.Table)
+	queryFilters, err := s.filters.semanticFilters(ctx, runtime, report, filters, "visual", request.Table)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -188,7 +188,7 @@ func (s *VisualizationDataService) crossTabTableRows(ctx context.Context, runtim
 		measures = append(measures, fieldRef(measureName, key))
 		valueColumns = append(valueColumns, key)
 	}
-	queryFilters, err := s.filters.semanticFilters(ctx, runtime, report, filters, "table", request.Table)
+	queryFilters, err := s.filters.semanticFilters(ctx, runtime, report, filters, "visual", request.Table)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -465,7 +465,7 @@ func (s *VisualizationDataService) tableRowRequest(ctx context.Context, runtime 
 		}
 		measures = append(measures, fieldRef(column.FieldID, column.Alias))
 	}
-	queryFilters, err := s.filters.semanticFilters(ctx, runtime, report, filters, "table", request.Table)
+	queryFilters, err := s.filters.semanticFilters(ctx, runtime, report, filters, "visual", request.Table)
 	if err != nil {
 		return reportdef.RowQuery{}, err
 	}

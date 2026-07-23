@@ -82,8 +82,6 @@ func semanticSpatialFilterForGeometry(geometry visualizationir.VisualizationSpat
 			break
 		}
 		return semanticquery.SpatialFilter{Kind: "box", West: value.Bounds.West, South: value.Bounds.South, East: value.Bounds.East, North: value.Bounds.North}, nil
-	case visualizationir.VisualizationSpatialBoxSelection:
-		return semanticquery.SpatialFilter{Kind: "box", West: value.Bounds.West, South: value.Bounds.South, East: value.Bounds.East, North: value.Bounds.North}, nil
 	case *visualizationir.VisualizationSpatialLassoSelection:
 		if value == nil {
 			break
@@ -93,18 +91,10 @@ func semanticSpatialFilterForGeometry(geometry visualizationir.VisualizationSpat
 			points[index] = semanticquery.SpatialPoint{Longitude: point.Longitude, Latitude: point.Latitude}
 		}
 		return semanticquery.SpatialFilter{Kind: "lasso", Points: points}, nil
-	case visualizationir.VisualizationSpatialLassoSelection:
-		points := make([]semanticquery.SpatialPoint, len(value.Points))
-		for index, point := range value.Points {
-			points[index] = semanticquery.SpatialPoint{Longitude: point.Longitude, Latitude: point.Latitude}
-		}
-		return semanticquery.SpatialFilter{Kind: "lasso", Points: points}, nil
 	case *visualizationir.VisualizationSpatialRadiusSelection:
 		if value == nil {
 			break
 		}
-		return semanticquery.SpatialFilter{Kind: "radius", Center: semanticquery.SpatialPoint{Longitude: value.Center.Longitude, Latitude: value.Center.Latitude}, RadiusMeters: value.RadiusMeters}, nil
-	case visualizationir.VisualizationSpatialRadiusSelection:
 		return semanticquery.SpatialFilter{Kind: "radius", Center: semanticquery.SpatialPoint{Longitude: value.Center.Longitude, Latitude: value.Center.Latitude}, RadiusMeters: value.RadiusMeters}, nil
 	}
 	return semanticquery.SpatialFilter{}, fmt.Errorf("spatial selection geometry is required")

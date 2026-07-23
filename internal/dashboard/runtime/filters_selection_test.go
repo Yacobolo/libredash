@@ -68,6 +68,33 @@ func TestSemanticFiltersTranslateConformedAndFactLocalSelections(t *testing.T) {
 	}
 }
 
+func TestSemanticFiltersTargetGridThroughVisualNamespace(t *testing.T) {
+	report, model := selectionFilterFixture()
+	source := report.Visualizations["decades"]
+	base, err := source.Spec.Base()
+	if err != nil {
+		t.Fatal(err)
+	}
+	base.Interactions[0].Targets = []string{"plain_table"}
+	report.Visualizations["decades"] = source
+
+	selection := filterSelection("decades", dashboard.InteractionSelectionMapping{Field: "release_decade", Value: "1990s"})
+	filters, err := (&FilterService{}).semanticFilters(
+		context.Background(),
+		&modelRuntime{model: model},
+		report,
+		dashboard.Filters{Selections: []dashboard.InteractionSelection{selection}},
+		"visual",
+		"plain_table",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(filters) != 1 || filters[0].Field != "release_decade" {
+		t.Fatalf("grid visual filters = %#v, want conformed selection", filters)
+	}
+}
+
 func TestSelectionMappingFiltersBuildHalfOpenRangesForEveryTimeGrain(t *testing.T) {
 	for _, test := range []struct {
 		grain string

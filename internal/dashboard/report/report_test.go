@@ -73,8 +73,8 @@ func TestNormalizeFiltersUsesActivePageDefinitions(t *testing.T) {
 			"category": {Type: "text", Label: "Category", URLParam: "category", DefaultOperator: "contains"},
 		},
 		Pages: []dashboard.Page{
-			{ID: "overview", Visuals: []dashboard.PageVisual{{Kind: "filter_card", Filter: "state"}}},
-			{ID: "ops", Visuals: []dashboard.PageVisual{{Kind: "filter_card", Filter: "category"}}},
+			{ID: "overview", Visuals: []dashboard.PageVisual{{Kind: "filter", Filter: "state"}}},
+			{ID: "ops", Visuals: []dashboard.PageVisual{{Kind: "filter", Filter: "category"}}},
 		},
 	}}
 

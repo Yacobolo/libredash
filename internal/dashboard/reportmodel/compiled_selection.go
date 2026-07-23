@@ -6,7 +6,6 @@ import (
 
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
-	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
 	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 )
 
@@ -37,15 +36,10 @@ func ResolveCompiledSelectionInteraction(definition *dashboarddefinition.Definit
 		resolved.Mappings = append(resolved.Mappings, item)
 	}
 	for _, targetID := range interaction.Targets {
-		target, ok := definition.Visualizations[targetID]
-		if !ok {
+		if _, ok := definition.Visualizations[targetID]; !ok {
 			return ResolvedSelectionInteraction{}, fmt.Errorf("interaction references unknown target %q", targetID)
 		}
-		kind := "visual"
-		if target.Query.Kind == visualizationdefinition.QueryDetail || target.Query.Kind == visualizationdefinition.QueryMatrix || target.Query.Kind == visualizationdefinition.QueryPivot {
-			kind = "table"
-		}
-		resolved.Targets = append(resolved.Targets, ResolvedSelectionTarget{Kind: kind, ID: targetID})
+		resolved.Targets = append(resolved.Targets, ResolvedSelectionTarget{Kind: "visual", ID: targetID})
 	}
 	return resolved, nil
 }
@@ -59,11 +53,7 @@ func ResolveCompiledSpatialSelectionInteraction(definition *dashboarddefinition.
 	}
 	spec, ok := source.Spec.Value.(*visualizationir.GeographicVisualizationSpec)
 	if !ok {
-		if value, valueOK := source.Spec.Value.(visualizationir.GeographicVisualizationSpec); valueOK {
-			spec = &value
-		} else {
-			return ResolvedSpatialSelectionInteraction{}, fmt.Errorf("visualization %q is not geographic", sourceID)
-		}
+		return ResolvedSpatialSelectionInteraction{}, fmt.Errorf("visualization %q is not geographic", sourceID)
 	}
 	var interaction *visualizationir.VisualizationSpatialSelectionInteraction
 	for index := range spec.SpatialInteractions {
@@ -96,15 +86,10 @@ func ResolveCompiledSpatialSelectionInteraction(definition *dashboarddefinition.
 	}
 	resolved := ResolvedSpatialSelectionInteraction{Latitude: latitude, Longitude: longitude}
 	for _, targetID := range interaction.Targets {
-		target, ok := definition.Visualizations[targetID]
-		if !ok {
+		if _, ok := definition.Visualizations[targetID]; !ok {
 			return ResolvedSpatialSelectionInteraction{}, fmt.Errorf("spatial interaction references unknown target %q", targetID)
 		}
-		kind := "visual"
-		if target.Query.Kind == visualizationdefinition.QueryDetail || target.Query.Kind == visualizationdefinition.QueryMatrix || target.Query.Kind == visualizationdefinition.QueryPivot {
-			kind = "table"
-		}
-		resolved.Targets = append(resolved.Targets, ResolvedSelectionTarget{Kind: kind, ID: targetID})
+		resolved.Targets = append(resolved.Targets, ResolvedSelectionTarget{Kind: "visual", ID: targetID})
 	}
 	return resolved, nil
 }

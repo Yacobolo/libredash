@@ -72,28 +72,17 @@ func WithStreamRevision(envelope VisualizationEnvelope, dataRevision, generation
 	revised := envelope
 	revised.DataRevision = dataRevision
 	switch value := envelope.DataState.Value.(type) {
-	case InlineVisualizationDataState:
-		state := cloneInlineState(value, dataRevision, generation)
-		revised.DataState.Value = &state
 	case *InlineVisualizationDataState:
 		if value == nil {
 			return VisualizationEnvelope{}, fmt.Errorf("visualization inline data state is nil")
 		}
 		state := cloneInlineState(*value, dataRevision, generation)
 		revised.DataState.Value = &state
-	case WindowedVisualizationDataState:
-		state := value
-		state.DataRevision, state.Generation = dataRevision, generation
-		revised.DataState.Value = &state
 	case *WindowedVisualizationDataState:
 		if value == nil {
 			return VisualizationEnvelope{}, fmt.Errorf("visualization windowed data state is nil")
 		}
 		state := *value
-		state.DataRevision, state.Generation = dataRevision, generation
-		revised.DataState.Value = &state
-	case SpatialWindowedVisualizationDataState:
-		state := value
 		state.DataRevision, state.Generation = dataRevision, generation
 		revised.DataState.Value = &state
 	case *SpatialWindowedVisualizationDataState:
@@ -136,39 +125,41 @@ func cloneInlineState(value InlineVisualizationDataState, dataRevision, generati
 }
 
 func dataStateRevisions(state VisualizationDataState) (specRevision string, dataRevision, generation int64, err error) {
-	switch value := state.Value.(type) {
-	case InlineVisualizationDataState:
-		if err := validateInlineDatasetRevisions(value); err != nil {
-			return "", 0, 0, err
-		}
-		return value.SpecRevision, value.DataRevision, value.Generation, nil
-	case *InlineVisualizationDataState:
-		if value == nil {
-			return "", 0, 0, fmt.Errorf("visualization inline data state is nil")
-		}
-		if err := validateInlineDatasetRevisions(*value); err != nil {
-			return "", 0, 0, err
-		}
-		return value.SpecRevision, value.DataRevision, value.Generation, nil
-	case WindowedVisualizationDataState:
-		return value.SpecRevision, value.DataRevision, value.Generation, nil
-	case *WindowedVisualizationDataState:
-		if value == nil {
-			return "", 0, 0, fmt.Errorf("visualization windowed data state is nil")
-		}
-		return value.SpecRevision, value.DataRevision, value.Generation, nil
-	case SpatialWindowedVisualizationDataState:
-		return value.SpecRevision, value.DataRevision, value.Generation, nil
-	case *SpatialWindowedVisualizationDataState:
-		if value == nil {
-			return "", 0, 0, fmt.Errorf("visualization spatial windowed data state is nil")
-		}
-		return value.SpecRevision, value.DataRevision, value.Generation, nil
-	case nil:
-		return "", 0, 0, fmt.Errorf("visualization data state variant is required")
-	default:
-		return "", 0, 0, fmt.Errorf("unsupported visualization data state variant %T", value)
+	visitor := &dataStateRevisionVisitor{}
+	if err := state.Visit(visitor); err != nil {
+		return "", 0, 0, err
 	}
+	return visitor.specRevision, visitor.dataRevision, visitor.generation, nil
+}
+
+type dataStateRevisionVisitor struct {
+	specRevision string
+	dataRevision int64
+	generation   int64
+}
+
+func (visitor *dataStateRevisionVisitor) set(specRevision string, dataRevision, generation int64) {
+	visitor.specRevision = specRevision
+	visitor.dataRevision = dataRevision
+	visitor.generation = generation
+}
+
+func (visitor *dataStateRevisionVisitor) VisitInlineVisualizationDataState(value *InlineVisualizationDataState) error {
+	if err := validateInlineDatasetRevisions(*value); err != nil {
+		return err
+	}
+	visitor.set(value.SpecRevision, value.DataRevision, value.Generation)
+	return nil
+}
+
+func (visitor *dataStateRevisionVisitor) VisitWindowedVisualizationDataState(value *WindowedVisualizationDataState) error {
+	visitor.set(value.SpecRevision, value.DataRevision, value.Generation)
+	return nil
+}
+
+func (visitor *dataStateRevisionVisitor) VisitSpatialWindowedVisualizationDataState(value *SpatialWindowedVisualizationDataState) error {
+	visitor.set(value.SpecRevision, value.DataRevision, value.Generation)
+	return nil
 }
 
 func validateInlineDatasetRevisions(state InlineVisualizationDataState) error {

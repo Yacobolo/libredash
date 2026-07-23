@@ -624,13 +624,10 @@ func buildExampleDashboard(catalog visualCatalog, examplesByPage map[string][]vi
 			component := dashboard.PageVisual{ID: example.ID, Placement: dashboard.PagePlacement{Col: 1, Row: 1 + index*8, ColSpan: 6, RowSpan: 7}}
 			if example.Chart != nil {
 				report.Visuals[example.ID] = reportdef.ChartVisualization(*example.Chart)
-				component.Kind, component.Visual = example.Chart.Type+"_chart", example.ID
-				if example.Chart.KindOrDefault() == "kpi" {
-					component.Kind = "kpi_card"
-				}
+				component.Kind, component.Visual = "visual", example.ID
 			} else {
 				report.Visuals[example.ID] = reportdef.TabularVisualization(example.Type, *example.Tabular)
-				component.Kind, component.Visual = "table", example.ID
+				component.Kind, component.Visual = "visual", example.ID
 			}
 			page.Visuals = append(page.Visuals, component)
 		}

@@ -117,7 +117,7 @@ func (definition Definition) PageFilterIDs(pageID string) []string {
 			continue
 		}
 		for _, item := range page.Visuals {
-			if item.Kind != "filter_card" || item.Filter == "" {
+			if item.Kind != "filter" || item.Filter == "" {
 				continue
 			}
 			if _, ok := seen[item.Filter]; ok {

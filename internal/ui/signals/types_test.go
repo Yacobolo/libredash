@@ -299,8 +299,8 @@ func testDashboardReport() reportdef.Dashboard {
 				Title:  "Overview",
 				Canvas: dashboard.PageCanvas{Width: 1200, Height: 800},
 				Visuals: []dashboard.PageVisual{
-					{ID: "state-filter", Kind: "filter_card", Filter: "state", X: 0, Y: 0, Width: 100, Height: 40},
-					{ID: "chart", Kind: "bar_chart", Visual: "active_chart", X: 0, Y: 48, Width: 100, Height: 100},
+					{ID: "state-filter", Kind: "filter", Filter: "state", X: 0, Y: 0, Width: 100, Height: 40},
+					{ID: "chart", Kind: "visual", Visual: "active_chart", X: 0, Y: 48, Width: 100, Height: 100},
 				},
 			},
 			{
@@ -308,7 +308,7 @@ func testDashboardReport() reportdef.Dashboard {
 				Title:  "Detail",
 				Canvas: dashboard.PageCanvas{Width: 1200, Height: 800},
 				Visuals: []dashboard.PageVisual{
-					{ID: "orders", Kind: "table", Visual: "orders", X: 0, Y: 0, Width: 100, Height: 100},
+					{ID: "orders", Kind: "visual", Visual: "orders", X: 0, Y: 0, Width: 100, Height: 100},
 				},
 			},
 		},

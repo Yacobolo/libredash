@@ -35,19 +35,10 @@ func ValidateEnvelope(envelope VisualizationEnvelope) error {
 			return err
 		}
 		return validateInlineSemantics(envelope.Spec, *state)
-	case InlineVisualizationDataState:
-		if err := validateInlineState(state, schemas, base.DataBudget); err != nil {
-			return err
-		}
-		return validateInlineSemantics(envelope.Spec, state)
 	case *WindowedVisualizationDataState:
 		return validateWindowedState(*state, base.DataBudget)
-	case WindowedVisualizationDataState:
-		return validateWindowedState(state, base.DataBudget)
 	case *SpatialWindowedVisualizationDataState:
 		return validateSpatialWindowedState(*state, base.DataBudget)
-	case SpatialWindowedVisualizationDataState:
-		return validateSpatialWindowedState(state, base.DataBudget)
 	default:
 		return fmt.Errorf("unsupported visualization data state %T", state)
 	}
@@ -56,11 +47,7 @@ func ValidateEnvelope(envelope VisualizationEnvelope) error {
 func validateInlineSemantics(spec VisualizationSpec, state InlineVisualizationDataState) error {
 	hierarchy, ok := spec.Value.(*HierarchyVisualizationSpec)
 	if !ok {
-		if value, valueOK := spec.Value.(HierarchyVisualizationSpec); valueOK {
-			hierarchy = &value
-		} else {
-			return nil
-		}
+		return nil
 	}
 	if hierarchy.Mark == VisualizationHierarchyMarkGraph || hierarchy.Mark == VisualizationHierarchyMarkSankey {
 		return validateNetworkRows(*hierarchy, state)
@@ -226,44 +213,11 @@ func ValidateSpec(spec VisualizationSpec) error {
 }
 
 func specificationBase(spec VisualizationSpec) (VisualizationSpecBase, error) {
-	base, err := SpecificationBaseRef(&spec)
+	base, err := spec.Base()
 	if err != nil {
 		return VisualizationSpecBase{}, err
 	}
 	return *base, nil
-}
-
-// SpecificationBaseRef returns the embedded base owned by a pointer-normalized
-// visualization union. Generated and decoded specifications must use pointer
-// variants so callers never mutate a detached union value.
-func SpecificationBaseRef(spec *VisualizationSpec) (*VisualizationSpecBase, error) {
-	if spec == nil {
-		return nil, fmt.Errorf("visualization specification is nil")
-	}
-	switch value := spec.Value.(type) {
-	case *CartesianVisualizationSpec:
-		return &value.VisualizationSpecBase, nil
-	case *ProportionalVisualizationSpec:
-		return &value.VisualizationSpecBase, nil
-	case *HierarchyVisualizationSpec:
-		return &value.VisualizationSpecBase, nil
-	case *PolarVisualizationSpec:
-		return &value.VisualizationSpecBase, nil
-	case *TableVisualizationSpec:
-		return &value.VisualizationSpecBase, nil
-	case *MatrixVisualizationSpec:
-		return &value.VisualizationSpecBase, nil
-	case *PivotVisualizationSpec:
-		return &value.VisualizationSpecBase, nil
-	case *KPIVisualizationSpec:
-		return &value.VisualizationSpecBase, nil
-	case *GeographicVisualizationSpec:
-		return &value.VisualizationSpecBase, nil
-	case *CustomVisualizationSpec:
-		return &value.VisualizationSpecBase, nil
-	default:
-		return nil, fmt.Errorf("unsupported visualization specification %T; union values must be pointers", value)
-	}
 }
 
 // SpecificationBase returns the common, renderer-independent contract shared
@@ -325,81 +279,118 @@ func validateSpecification(spec VisualizationSpec, base VisualizationSpecBase) (
 }
 
 func specificationRefs(spec VisualizationSpec) []VisualizationFieldRef {
-	refs := make([]VisualizationFieldRef, 0, 8)
-	add := func(ref *VisualizationFieldRef) {
-		if ref != nil {
-			refs = append(refs, *ref)
+	visitor := &specificationReferenceVisitor{refs: make([]VisualizationFieldRef, 0, 8)}
+	if err := spec.Visit(visitor); err != nil {
+		return nil
+	}
+	return visitor.refs
+}
+
+type specificationReferenceVisitor struct {
+	refs []VisualizationFieldRef
+}
+
+func (visitor *specificationReferenceVisitor) add(ref *VisualizationFieldRef) {
+	if ref != nil {
+		visitor.refs = append(visitor.refs, *ref)
+	}
+}
+
+func (visitor *specificationReferenceVisitor) VisitCartesianVisualizationSpec(value *CartesianVisualizationSpec) error {
+	visitor.refs = append(visitor.refs, value.X)
+	visitor.refs = append(visitor.refs, value.Y...)
+	visitor.add(value.Series)
+	return nil
+}
+
+func (visitor *specificationReferenceVisitor) VisitProportionalVisualizationSpec(value *ProportionalVisualizationSpec) error {
+	visitor.refs = append(visitor.refs, value.Category, value.Value)
+	visitor.add(value.Series)
+	return nil
+}
+
+func (visitor *specificationReferenceVisitor) VisitHierarchyVisualizationSpec(value *HierarchyVisualizationSpec) error {
+	visitor.refs = append(visitor.refs, value.Node)
+	visitor.add(value.Parent)
+	visitor.add(value.Source)
+	visitor.add(value.Target)
+	visitor.add(value.Value)
+	return nil
+}
+
+func (visitor *specificationReferenceVisitor) VisitPolarVisualizationSpec(value *PolarVisualizationSpec) error {
+	visitor.add(value.Category)
+	visitor.refs = append(visitor.refs, value.Value)
+	visitor.add(value.Series)
+	return nil
+}
+
+func (visitor *specificationReferenceVisitor) VisitTableVisualizationSpec(value *TableVisualizationSpec) error {
+	for _, column := range value.Columns {
+		visitor.refs = append(visitor.refs, column.Field)
+	}
+	if value.DefaultSort != nil {
+		for _, sort := range *value.DefaultSort {
+			visitor.refs = append(visitor.refs, sort.Field)
 		}
 	}
-	switch value := spec.Value.(type) {
-	case *CartesianVisualizationSpec:
-		refs = append(refs, value.X)
-		refs = append(refs, value.Y...)
-		add(value.Series)
-	case *ProportionalVisualizationSpec:
-		refs = append(refs, value.Category, value.Value)
-		add(value.Series)
-	case *HierarchyVisualizationSpec:
-		refs = append(refs, value.Node)
-		add(value.Parent)
-		add(value.Source)
-		add(value.Target)
-		add(value.Value)
-	case *PolarVisualizationSpec:
-		add(value.Category)
-		refs = append(refs, value.Value)
-		add(value.Series)
-	case *TableVisualizationSpec:
-		for _, column := range value.Columns {
-			refs = append(refs, column.Field)
+	return nil
+}
+
+func (visitor *specificationReferenceVisitor) VisitMatrixVisualizationSpec(value *MatrixVisualizationSpec) error {
+	visitor.refs = append(visitor.refs, value.Rows...)
+	visitor.refs = append(visitor.refs, value.Columns...)
+	visitor.refs = append(visitor.refs, value.Measures...)
+	return nil
+}
+
+func (visitor *specificationReferenceVisitor) VisitPivotVisualizationSpec(value *PivotVisualizationSpec) error {
+	visitor.refs = append(visitor.refs, value.Rows...)
+	visitor.refs = append(visitor.refs, value.Columns...)
+	visitor.refs = append(visitor.refs, value.Measures...)
+	return nil
+}
+
+func (visitor *specificationReferenceVisitor) VisitKPIVisualizationSpec(value *KPIVisualizationSpec) error {
+	visitor.refs = append(visitor.refs, value.Value)
+	visitor.add(value.Comparison)
+	visitor.add(value.Trend)
+	return nil
+}
+
+func (visitor *specificationReferenceVisitor) VisitGeographicVisualizationSpec(value *GeographicVisualizationSpec) error {
+	for _, layer := range value.Layers {
+		base, err := layer.Base()
+		if err == nil {
+			visitor.add(base.Label)
+			visitor.refs = append(visitor.refs, base.Tooltip...)
 		}
-		if value.DefaultSort != nil {
-			for _, sort := range *value.DefaultSort {
-				refs = append(refs, sort.Field)
-			}
-		}
-	case *MatrixVisualizationSpec:
-		refs = append(refs, value.Rows...)
-		refs = append(refs, value.Columns...)
-		refs = append(refs, value.Measures...)
-	case *PivotVisualizationSpec:
-		refs = append(refs, value.Rows...)
-		refs = append(refs, value.Columns...)
-		refs = append(refs, value.Measures...)
-	case *KPIVisualizationSpec:
-		refs = append(refs, value.Value)
-		add(value.Comparison)
-		add(value.Trend)
-	case *GeographicVisualizationSpec:
-		for _, layer := range value.Layers {
-			base := geographicLayerBase(layer)
-			if base != nil {
-				add(base.Label)
-				refs = append(refs, base.Tooltip...)
-			}
-			switch layer := layer.Value.(type) {
-			case *VisualizationPointLayer:
-				refs = append(refs, layer.Latitude, layer.Longitude)
-				add(layer.Value)
-				add(layer.Category)
-			case *VisualizationChoroplethLayer:
-				refs = append(refs, layer.Join)
-				add(layer.Value)
-				add(layer.Category)
-			case *VisualizationHeatLayer:
-				refs = append(refs, layer.Latitude, layer.Longitude)
-				add(layer.Value)
-			case *VisualizationDensityLayer:
-				refs = append(refs, layer.Latitude, layer.Longitude)
-				add(layer.Value)
-			case *VisualizationPathLayer:
-				refs = append(refs, layer.Latitude, layer.Longitude, layer.Path, layer.Order)
-				add(layer.Value)
-				add(layer.Category)
-			}
+		switch layer := layer.Value.(type) {
+		case *VisualizationPointLayer:
+			visitor.refs = append(visitor.refs, layer.Latitude, layer.Longitude)
+			visitor.add(layer.Value)
+			visitor.add(layer.Category)
+		case *VisualizationChoroplethLayer:
+			visitor.refs = append(visitor.refs, layer.Join)
+			visitor.add(layer.Value)
+			visitor.add(layer.Category)
+		case *VisualizationHeatLayer:
+			visitor.refs = append(visitor.refs, layer.Latitude, layer.Longitude)
+			visitor.add(layer.Value)
+		case *VisualizationDensityLayer:
+			visitor.refs = append(visitor.refs, layer.Latitude, layer.Longitude)
+			visitor.add(layer.Value)
+		case *VisualizationPathLayer:
+			visitor.refs = append(visitor.refs, layer.Latitude, layer.Longitude, layer.Path, layer.Order)
+			visitor.add(layer.Value)
+			visitor.add(layer.Category)
 		}
 	}
-	return refs
+	return nil
+}
+
+func (visitor *specificationReferenceVisitor) VisitCustomVisualizationSpec(*CustomVisualizationSpec) error {
+	return nil
 }
 
 func validateGeographicSpecification(spec VisualizationSpec) error {
@@ -412,8 +403,11 @@ func validateGeographicSpecification(spec VisualizationSpec) error {
 	}
 	seen := map[string]struct{}{}
 	for _, layer := range value.Layers {
-		base := geographicLayerBase(layer)
-		if base == nil || base.ID == "" {
+		base, err := layer.Base()
+		if err != nil {
+			return err
+		}
+		if base.ID == "" {
 			return fmt.Errorf("geographic layer ID is required")
 		}
 		if _, exists := seen[base.ID]; exists {
@@ -441,7 +435,8 @@ func validateGeographicSpecification(spec VisualizationSpec) error {
 			}
 		case *VisualizationHeatLayer, *VisualizationDensityLayer, *VisualizationPathLayer:
 		default:
-			return fmt.Errorf("unsupported geographic layer kind %q", layer.GetKind())
+			kind, _ := layer.Kind()
+			return fmt.Errorf("unsupported geographic layer kind %q", kind)
 		}
 	}
 	if value.Presentation.Basemap != nil {

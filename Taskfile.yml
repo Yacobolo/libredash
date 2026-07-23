@@ -362,8 +362,8 @@ tasks:
       - docs/api/openapi.yaml
       - docs/api/operations.json
     cmds:
-      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.6.4 typespec-compile -manifest api/apigen.yaml -target leapview-v1
-      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.6.4 all -manifest api/apigen.yaml -target leapview-v1
+      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.6.5 typespec-compile -manifest api/apigen.yaml -target leapview-v1
+      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.6.5 all -manifest api/apigen.yaml -target leapview-v1
       - go run ./internal/tools/openapidocgen
 
   schema:generate:
@@ -405,8 +405,8 @@ tasks:
       - internal/ui/signals/models.gen.go
       - web/generated/signals/index.ts
     cmds:
-      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.6.4 typespec-compile -manifest api/apigen.yaml -target ui-signals
-      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.6.4 all -manifest api/apigen.yaml -target ui-signals
+      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.6.5 typespec-compile -manifest api/apigen.yaml -target ui-signals
+      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.6.5 all -manifest api/apigen.yaml -target ui-signals
 
   visualization-ir:generate:
     desc: Generate renderer-independent visualization IR contracts from TypeSpec
@@ -429,8 +429,8 @@ tasks:
       - web/generated/vega-lite/validate.ts
       - api/gen/visualization.schema.json
     cmds:
-      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.6.4 typespec-compile -manifest api/apigen.yaml -target visualization-ir
-      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.6.4 all -manifest api/apigen.yaml -target visualization-ir
+      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.6.5 typespec-compile -manifest api/apigen.yaml -target visualization-ir
+      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.6.5 all -manifest api/apigen.yaml -target visualization-ir
       - bun scripts/generate_visualization_validator.ts
       - bun scripts/generate_vega_lite_validator.ts
 

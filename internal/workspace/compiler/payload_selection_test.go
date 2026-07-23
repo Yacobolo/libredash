@@ -162,7 +162,11 @@ func TestGeographicVisualCompilesEveryLayerKind(t *testing.T) {
 		"heat",
 		"density",
 	} {
-		if got := spec.Layers[index].GetKind(); got != want {
+		got, err := spec.Layers[index].Kind()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != want {
 			t.Fatalf("layer %d kind = %q, want %q", index, got, want)
 		}
 	}

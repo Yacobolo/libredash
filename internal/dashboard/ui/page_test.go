@@ -49,9 +49,9 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 				Title:  "Showcase",
 				Canvas: dashboard.PageCanvas{Width: 1200, Height: 800},
 				Visuals: []dashboard.PageVisual{
-					{ID: "state-filter", Kind: "filter_card", Filter: "state", X: 0, Y: 0, Width: 100, Height: 40},
-					{ID: "kpi", Kind: "kpi_card", Visual: "active_kpi", X: 0, Y: 0, Width: 100, Height: 100},
-					{ID: "chart", Kind: "bar_chart", Visual: "active_chart", X: 0, Y: 0, Width: 100, Height: 100},
+					{ID: "state-filter", Kind: "filter", Filter: "state", X: 0, Y: 0, Width: 100, Height: 40},
+					{ID: "kpi", Kind: "visual", Visual: "active_kpi", X: 0, Y: 0, Width: 100, Height: 100},
+					{ID: "chart", Kind: "visual", Visual: "active_chart", X: 0, Y: 0, Width: 100, Height: 100},
 				},
 			},
 			{
@@ -59,9 +59,9 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 				Title:  "Tables",
 				Canvas: dashboard.PageCanvas{Width: 1200, Height: 800},
 				Visuals: []dashboard.PageVisual{
-					{ID: "orders", Kind: "table", Visual: "orders", X: 0, Y: 0, Width: 100, Height: 100},
-					{ID: "matrix", Kind: "table", Visual: "matrix", X: 0, Y: 120, Width: 100, Height: 100},
-					{ID: "pivot", Kind: "table", Visual: "pivot", X: 120, Y: 120, Width: 100, Height: 100},
+					{ID: "orders", Kind: "visual", Visual: "orders", X: 0, Y: 0, Width: 100, Height: 100},
+					{ID: "matrix", Kind: "visual", Visual: "matrix", X: 0, Y: 120, Width: 100, Height: 100},
+					{ID: "pivot", Kind: "visual", Visual: "pivot", X: 120, Y: 120, Width: 100, Height: 100},
 				},
 			},
 		},

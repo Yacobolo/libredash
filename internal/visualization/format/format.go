@@ -34,8 +34,6 @@ func Value(locale string, format ir.VisualizationFormat, value any) (string, err
 	switch spec := format.Value.(type) {
 	case *ir.NumberVisualizationFormat:
 		return number(data, value, digits(spec.MinimumFractionDigits, 0), digits(spec.MaximumFractionDigits, 3), "")
-	case ir.NumberVisualizationFormat:
-		return Value(locale, ir.VisualizationFormat{Value: &spec}, value)
 	case *ir.CurrencyVisualizationFormat:
 		symbol, ok := currencies[locale][spec.Currency]
 		if !ok {
@@ -46,16 +44,12 @@ func Value(locale string, format ir.VisualizationFormat, value any) (string, err
 			return "", err
 		}
 		return symbol + data.currencySpace + formatted, nil
-	case ir.CurrencyVisualizationFormat:
-		return Value(locale, ir.VisualizationFormat{Value: &spec}, value)
 	case *ir.PercentVisualizationFormat:
 		value, err := numeric(value)
 		if err != nil {
 			return "", err
 		}
 		return number(data, value*100, digits(spec.MinimumFractionDigits, 0), digits(spec.MaximumFractionDigits, 1), "%")
-	case ir.PercentVisualizationFormat:
-		return Value(locale, ir.VisualizationFormat{Value: &spec}, value)
 	case *ir.CompactVisualizationFormat:
 		value, err := numeric(value)
 		if err != nil {
@@ -71,16 +65,12 @@ func Value(locale string, format ir.VisualizationFormat, value any) (string, err
 			scale, suffix = 1_000, "K"
 		}
 		return number(data, value/scale, 0, digits(spec.MaximumFractionDigits, 1), suffix)
-	case ir.CompactVisualizationFormat:
-		return Value(locale, ir.VisualizationFormat{Value: &spec}, value)
 	case *ir.DurationVisualizationFormat:
 		value, err := numeric(value)
 		if err != nil {
 			return "", err
 		}
 		return duration(data, value, spec.Unit)
-	case ir.DurationVisualizationFormat:
-		return Value(locale, ir.VisualizationFormat{Value: &spec}, value)
 	case *ir.TemporalVisualizationFormat:
 		text, ok := value.(string)
 		if !ok {
@@ -94,8 +84,6 @@ func Value(locale string, format ir.VisualizationFormat, value any) (string, err
 			return parsed.UTC().Format("15:04:05"), nil
 		}
 		return parsed.UTC().Format("2006-01-02"), nil
-	case ir.TemporalVisualizationFormat:
-		return Value(locale, ir.VisualizationFormat{Value: &spec}, value)
 	default:
 		return "", fmt.Errorf("unsupported visualization format %T", format.Value)
 	}

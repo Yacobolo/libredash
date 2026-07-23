@@ -4,7 +4,7 @@ go 1.25.12
 
 require (
 	cuelang.org/go v0.16.1
-	github.com/Yacobolo/toolbelt/apigen v0.6.4
+	github.com/Yacobolo/toolbelt/apigen v0.6.5
 	github.com/alexedwards/argon2id v1.0.0
 	github.com/apache/arrow-go/v18 v18.5.1
 	github.com/aws/aws-sdk-go-v2 v1.42.1

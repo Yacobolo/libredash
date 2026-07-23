@@ -937,7 +937,7 @@ func fakeAgentAuthoringReport() reportdef.Dashboard {
 		}), reportdef.TabularVisualizations("table", map[string]reportdef.TableVisual{
 			"orders_table": {Title: "Orders", Query: reportdef.TableQuery{Table: "orders", Fields: []string{"orders.order_id"}}},
 		})),
-		Pages: []dashboard.Page{{ID: "overview", Title: "Overview", Visuals: []dashboard.PageVisual{{ID: "orders", Visual: "orders"}, {ID: "orders-table", Kind: "table", Visual: "orders_table"}}}},
+		Pages: []dashboard.Page{{ID: "overview", Title: "Overview", Visuals: []dashboard.PageVisual{{ID: "orders", Kind: "visual", Visual: "orders"}, {ID: "orders-table", Kind: "visual", Visual: "orders_table"}}}},
 	}
 }
 
@@ -1033,9 +1033,9 @@ func (largeDashboardMetrics) Report(id string) (dashboarddefinition.Definition, 
 			ID:    fmt.Sprintf("page_%02d", pageIndex),
 			Title: fmt.Sprintf("Page %02d", pageIndex),
 			Visuals: []dashboard.PageVisual{
-				{ID: chartID, Visual: chartID},
-				{ID: kpiID, Visual: kpiID},
-				{ID: tableID, Kind: "table", Visual: tableID},
+				{ID: chartID, Kind: "visual", Visual: chartID},
+				{ID: kpiID, Kind: "visual", Visual: kpiID},
+				{ID: tableID, Kind: "visual", Visual: tableID},
 			},
 		})
 	}

@@ -36,7 +36,7 @@ func TestCompiledDashboardOwnsPageFilterNormalization(t *testing.T) {
 			"region": {Type: "multi_select", Default: FilterDefault{Values: []string{"EU"}}},
 			"hidden": {Type: "text", Default: FilterDefault{Value: "ignored"}},
 		},
-		Pages: []dashboard.Page{{ID: "overview", Visuals: []dashboard.PageVisual{{Kind: "filter_card", Filter: "region"}}}},
+		Pages: []dashboard.Page{{ID: "overview", Visuals: []dashboard.PageVisual{{Kind: "filter", Filter: "region"}}}},
 	}
 	filters := compiled.NormalizeFiltersForPage("overview", dashboard.Filters{})
 	if got := filters.Controls["region"].Values; len(got) != 1 || got[0] != "EU" {

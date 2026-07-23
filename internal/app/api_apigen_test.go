@@ -50,7 +50,7 @@ func (r apiSnapshotWorkspaceRepository) AssetVersions(context.Context, workspace
 	return nil, nil
 }
 
-func TestAPIGenUsesTypeSpecV064(t *testing.T) {
+func TestAPIGenUsesTypeSpecV065(t *testing.T) {
 	root := projectRoot(t)
 	manifest, err := os.ReadFile(filepath.Join(root, "api", "apigen.yaml"))
 	if err != nil {
@@ -80,16 +80,16 @@ func TestAPIGenUsesTypeSpecV064(t *testing.T) {
 		}
 	}
 	for _, want := range []string{
-		"github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.6.4 typespec-compile",
-		"github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.6.4 all",
+		"github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.6.5 typespec-compile",
+		"github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.6.5 all",
 	} {
 		if !strings.Contains(taskText, want) {
 			t.Fatalf("Taskfile.yml missing generation command %q", want)
 		}
 	}
-	for _, forbidden := range []string{"cue-compile", "apigen@v0.2.0", "apigen@v0.3.0", "apigen@v0.3.2", "apigen@v0.3.3", "apigen@v0.4.0", "apigen@v0.5.0", "apigen@v0.5.1", "apigen@v0.5.2", "apigen@v0.5.3", "apigen@v0.6.0", "apigen@v0.6.1", "apigen@v0.6.2", "apigen@v0.6.3", "apigenpostprocess"} {
+	for _, forbidden := range []string{"cue-compile", "apigen@v0.2.0", "apigen@v0.3.0", "apigen@v0.3.2", "apigen@v0.3.3", "apigen@v0.4.0", "apigen@v0.5.0", "apigen@v0.5.1", "apigen@v0.5.2", "apigen@v0.5.3", "apigen@v0.6.0", "apigen@v0.6.1", "apigen@v0.6.2", "apigen@v0.6.3", "apigen@v0.6.4", "apigenpostprocess"} {
 		if strings.Contains(taskText, forbidden) {
-			t.Fatalf("Taskfile.yml should not contain %q after APIGen v0.6.4 migration", forbidden)
+			t.Fatalf("Taskfile.yml should not contain %q after APIGen v0.6.5 migration", forbidden)
 		}
 	}
 
@@ -106,7 +106,7 @@ func TestAPIGenUsesTypeSpecV064(t *testing.T) {
 	}
 
 	if _, err := os.Stat(filepath.Join(root, "internal", "tools", "apigenpostprocess")); !os.IsNotExist(err) {
-		t.Fatalf("APIGen v0.6.4 should not require a postprocessor, stat error = %v", err)
+		t.Fatalf("APIGen v0.6.5 should not require a postprocessor, stat error = %v", err)
 	}
 	for path, forbidden := range map[string]string{
 		filepath.Join(root, "api", "typespec", "bi.tsp"):                        "toolbelt#34",
@@ -117,7 +117,7 @@ func TestAPIGenUsesTypeSpecV064(t *testing.T) {
 			t.Fatalf("read %s: %v", path, err)
 		}
 		if strings.Contains(string(content), forbidden) {
-			t.Fatalf("APIGen v0.6.4 superseded workaround %q in %s", forbidden, path)
+			t.Fatalf("APIGen v0.6.5 superseded workaround %q in %s", forbidden, path)
 		}
 	}
 }

@@ -50,29 +50,5 @@ func EncodeDataStateTransport(state VisualizationDataState) (EncodedDataStateTra
 }
 
 func dataStateKind(state VisualizationDataState) (string, error) {
-	switch value := state.Value.(type) {
-	case InlineVisualizationDataState:
-		return "inline", nil
-	case *InlineVisualizationDataState:
-		if value == nil {
-			return "", fmt.Errorf("visualization inline data state is nil")
-		}
-		return "inline", nil
-	case WindowedVisualizationDataState:
-		return "windowed", nil
-	case *WindowedVisualizationDataState:
-		if value == nil {
-			return "", fmt.Errorf("visualization windowed data state is nil")
-		}
-		return "windowed", nil
-	case SpatialWindowedVisualizationDataState:
-		return "spatial_windowed", nil
-	case *SpatialWindowedVisualizationDataState:
-		if value == nil {
-			return "", fmt.Errorf("visualization spatial windowed data state is nil")
-		}
-		return "spatial_windowed", nil
-	default:
-		return "", fmt.Errorf("unsupported visualization data state variant %T", state.Value)
-	}
+	return state.Kind()
 }

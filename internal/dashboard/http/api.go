@@ -126,13 +126,7 @@ func (h Handler) GetDashboardVisual(w nethttp.ResponseWriter, r *nethttp.Request
 		writeJSONError(w, fmt.Errorf("visual %q not found", visualID), nethttp.StatusNotFound)
 		return
 	}
-	if isGridQueryKind(definition.Query.Kind) {
-		component, onPage = pageComponentForTable(page, visualID)
-		if !onPage {
-			writeJSONError(w, fmt.Errorf("visual %q not found on page %q", visualID, page.ID), nethttp.StatusNotFound)
-			return
-		}
-	} else if !onPage {
+	if !onPage {
 		writeJSONError(w, fmt.Errorf("visual %q not found on page %q", visualID, page.ID), nethttp.StatusNotFound)
 		return
 	}
@@ -188,12 +182,7 @@ func (h Handler) QueryDashboardVisualData(w nethttp.ResponseWriter, r *nethttp.R
 		writeJSONError(w, fmt.Errorf("visual %q not found", visualID), nethttp.StatusNotFound)
 		return
 	}
-	onPage := false
-	if !isGridQueryKind(definition.Query.Kind) {
-		_, onPage = pageComponentForVisual(page, visualID)
-	} else {
-		_, onPage = pageComponentForTable(page, visualID)
-	}
+	_, onPage := pageComponentForVisual(page, visualID)
 	if !onPage {
 		writeJSONError(w, fmt.Errorf("visual %q not found on page %q", visualID, page.ID), nethttp.StatusNotFound)
 		return
@@ -566,15 +555,6 @@ func dashboardComponentSummary(component dashboard.PageVisual, report dashboardd
 func pageComponentForVisual(page dashboard.Page, visualID string) (dashboard.PageVisual, bool) {
 	for _, component := range page.PlacedVisuals() {
 		if component.Visual == visualID {
-			return component, true
-		}
-	}
-	return dashboard.PageVisual{}, false
-}
-
-func pageComponentForTable(page dashboard.Page, tableID string) (dashboard.PageVisual, bool) {
-	for _, component := range page.PlacedVisuals() {
-		if component.Kind == "table" && component.Visual == tableID {
 			return component, true
 		}
 	}
