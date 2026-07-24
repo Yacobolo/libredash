@@ -21,7 +21,7 @@ LEAPVIEW_ALLOWED_HOSTS=bi.example.com
 
 The origin must have no path, query, fragment, or credentials. Reverse proxies must preserve the public scheme and host. The resulting OAuth resource and audience are exactly `https://bi.example.com/mcp`; changing the public URL creates a different resource identity.
 
-An interactive user needs browser authentication and permission to use the agent. Grant `USE_AGENT` through at least one workspace the principal may access. Each tool call then checks the selected workspace and the tool's resource privileges and data policies. A workspace is not encoded in the MCP connection URL; workspace-aware tools require an explicit `workspace` argument.
+An interactive user needs browser authentication and permission to use the agent. Grant `USE_AGENT` through at least one workspace the principal may access. Each tool call then checks the referenced workspace and the tool's resource privileges and data policies. A workspace is not encoded in the MCP connection URL: query tools accept an explicit `workspace`, while catalog tools carry workspace identity in returned refs.
 
 The MCP endpoint is independent of `LEAPVIEW_AGENT_MODEL` and `LEAPVIEW_AGENT_API_KEY`. External MCP hosts can use LeapView when the built-in model is disabled.
 
@@ -40,6 +40,25 @@ Claude connects to LeapView as a remote custom connector:
 Organization owners may need to add the custom connector before members can connect it. Claude's UI and plan availability can change; use Anthropic's current [remote MCP custom connector guide](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp) when its labels differ from the steps above.
 
 Other remote MCP clients use the same URL and OAuth discovery flow. The client must support Streamable HTTP and OAuth for protected MCP resources.
+
+## Confirm the tool catalog
+
+After connecting, the host's `tools/list` response contains exactly eight tools:
+
+```text
+catalog_search
+catalog_list
+catalog_get
+query_semantic_model
+query_dashboard_visual
+query_visual
+docs_search
+docs_read
+```
+
+The same names, input schemas, output schemas, read-only annotations, and handlers are used by built-in chat. There are no model-visible compatibility aliases for the superseded tool catalog. Rediscover tools after upgrading LeapView.
+
+Use `catalog_search` when the workspace or parent is unknown, `catalog_list` to browse a known parent, and `catalog_get` before querying when an exact definition is needed. Follow [Use the agent tool catalog](/docs/guides/integrate/agent-tools) for refs, hierarchy, locations, pagination, errors, and query-tool selection. The generated [Agent tool reference](/docs/agent-tools) publishes the same schemas and annotations as `tools/list`.
 
 ## Understand the sign-in flow
 
@@ -94,7 +113,7 @@ LeapView still performs live RBAC and data-policy checks for every tool call. In
 | Sign-in loops or returns to the wrong host | Check reverse-proxy scheme and host handling, allowed hosts, secure cookies, and registered browser-auth callback URLs. |
 | MCP returns `401` | Acquire a fresh OAuth token with `mcp:use` and the exact MCP resource. Do not substitute a LeapView API token. |
 | MCP returns `403` before a tool runs | Grant the principal `USE_AGENT` through an allowed workspace. |
-| A tool returns an authorization error | Check the explicit `workspace` argument, the principal's resource privilege, data policy, and any service-principal restrictions. |
+| A tool returns an authorization error | Check the query's `workspace` or catalog ref, the principal's resource privilege, data policy, and any service-principal restrictions. |
 | Claude cannot reach an internally healthy deployment | Remote connectors run outside your private network. Expose a trusted HTTPS endpoint or use a client that can reach the deployment. |
 | A browser-origin request is rejected | Connect through an MCP host. LeapView rejects cross-origin MCP transport requests deliberately. |
 

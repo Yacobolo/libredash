@@ -9,6 +9,7 @@ LeapView exposes CLI, HTTP API, built-in agent, and remote MCP surfaces backed b
 - Use [Headless BI queries](/docs/guides/integrate/headless-bi) for governed dashboard or semantic-model results without the LeapView browser UI.
 - Use [Public and embedded dashboards](/docs/guides/integrate/public-dashboards) for anonymous, governed dashboard presentations on approved origins.
 - Use [Agent integrations](/docs/guides/integrate/agent) for iterative natural-language exploration through the governed tool catalog.
+- Use the [agent tool catalog reference](/docs/guides/integrate/agent-tools) when implementing direct MCP calls or evaluating agent tool traces.
 - Use [MCP](/docs/guides/integrate/mcp) to expose the same governed tools to Claude or another remote MCP host.
 
 ## Design a reliable boundary

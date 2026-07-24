@@ -39,7 +39,6 @@ func (p APIGenProvider) Definitions(scope Scope) []agentcore.ToolDefinition {
 	operations := APIGenOperations()
 	definitions := make([]agentcore.ToolDefinition, 0, len(operations))
 	for _, operation := range operations {
-		operation := operationForScope(operation, scope)
 		definitions = append(definitions, agentcore.ToolDefinition{
 			Name:         operation.Tool.Name,
 			Description:  operation.Tool.Description,
@@ -75,15 +74,14 @@ func (p APIGenProvider) Run(ctx context.Context, scope Scope, operation APIGenOp
 	if p.Authorize == nil {
 		return apigenAgentToolError("authorization_failed", "agent tool authorizer is not configured")
 	}
-	request, err := agenttool.BuildRequest(operation.Tool, call.Arguments, agenttool.Context{"workspace": scope.WorkspaceID})
+	arguments := normalizeCuratedQueryArguments(operation.Tool.Name, call.Arguments)
+	request, err := agenttool.BuildRequest(operation.Tool, arguments, agenttool.Context{"workspace": scope.WorkspaceID})
 	if err != nil {
 		return agentToolRuntimeError(err)
 	}
 	request = withAPIGenRouteContext(request, operation.Tool.Path)
 	runScope := scope
-	if runScope.WorkspaceID == "" {
-		runScope.WorkspaceID = strings.TrimSpace(chi.URLParam(request, "workspace"))
-	}
+	runScope.WorkspaceID = strings.TrimSpace(chi.URLParam(request, "workspace"))
 	if errResult, ok := p.Authorize(ctx, runScope, operation.Contract.OperationID); !ok {
 		return errResult
 	}
@@ -109,31 +107,81 @@ func (p APIGenProvider) Run(ctx context.Context, scope Scope, operation APIGenOp
 	if err != nil {
 		return agentToolRuntimeError(err)
 	}
+	if operation.Tool.Name == "query_dashboard_visual" {
+		omitNilDashboardVisualFields(result.Content)
+	}
 	return agentcore.ToolResult{Content: result.Content, IsError: result.IsError}
 }
 
-func operationForScope(operation APIGenOperation, scope Scope) APIGenOperation {
-	if strings.TrimSpace(scope.WorkspaceID) != "" {
-		return operation
+func omitNilDashboardVisualFields(content any) {
+	object, ok := content.(map[string]any)
+	if !ok {
+		return
 	}
-	tool := agenttool.CloneContract(operation.Tool)
-	promoted := false
-	for index := range tool.Bindings {
-		binding := &tool.Bindings[index]
-		if binding.Mode != "context" || binding.ContextKey != "workspace" {
-			continue
+	for _, name := range []string{"dimensions", "measures", "series", "selection"} {
+		if object[name] == nil {
+			delete(object, name)
 		}
-		binding.Argument = "workspace"
-		binding.Mode = "model"
-		binding.ContextKey = ""
-		binding.Required = true
-		promoted = true
 	}
-	if promoted {
-		tool.InputSchema = requireToolStringProperty(tool.InputSchema, "workspace")
+	if interaction, ok := object["interaction"].(map[string]any); ok && interaction["mappings"] == nil {
+		interaction["mappings"] = []any{}
 	}
-	operation.Tool = tool
-	return operation
+}
+
+func normalizeCuratedQueryArguments(toolName string, arguments json.RawMessage) json.RawMessage {
+	var input map[string]any
+	if err := json.Unmarshal(arguments, &input); err != nil {
+		return arguments
+	}
+	switch toolName {
+	case "query_dashboard_visual":
+		dashboardID, _ := input["dashboard"].(string)
+		input["page"] = stripCatalogRefPrefix(input["page"], dashboardID)
+		input["visual"] = stripCatalogRefPrefix(input["visual"], dashboardID)
+	case "query_semantic_model":
+		modelID, _ := input["model"].(string)
+		for _, key := range []string{"dimensions", "measures", "time", "sort", "filters"} {
+			normalizeCatalogFieldValues(input[key], modelID)
+		}
+	}
+	normalized, err := json.Marshal(input)
+	if err != nil {
+		return arguments
+	}
+	return normalized
+}
+
+func normalizeCatalogFieldValues(value any, modelID string) {
+	switch current := value.(type) {
+	case []any:
+		for _, item := range current {
+			normalizeCatalogFieldValues(item, modelID)
+		}
+	case map[string]any:
+		for key, item := range current {
+			if key == "field" || key == "fact" {
+				current[key] = stripCatalogRefPrefix(item, modelID)
+				continue
+			}
+			normalizeCatalogFieldValues(item, modelID)
+		}
+	}
+}
+
+func stripCatalogRefPrefix(value any, parentID string) any {
+	text, ok := value.(string)
+	if !ok || strings.TrimSpace(parentID) == "" {
+		return value
+	}
+	if local, ok := strings.CutPrefix(text, strings.TrimSpace(parentID)+"."); ok && strings.TrimSpace(local) != "" {
+		return local
+	}
+	return value
+}
+
+func stripCatalogRefString(value, parentID string) string {
+	normalized, _ := stripCatalogRefPrefix(value, parentID).(string)
+	return normalized
 }
 
 func requireToolStringProperty(input json.RawMessage, name string) json.RawMessage {

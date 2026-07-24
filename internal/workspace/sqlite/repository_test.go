@@ -2,6 +2,7 @@ package sqlite_test
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -12,6 +13,23 @@ import (
 	"github.com/Yacobolo/leapview/internal/workspace"
 	workspacesqlite "github.com/Yacobolo/leapview/internal/workspace/sqlite"
 )
+
+func TestRepositoryWorkspaceLookupsReturnDomainNotFound(t *testing.T) {
+	ctx := context.Background()
+	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "leapview.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	repository := workspacesqlite.NewRepository(store.SQLDB())
+	if _, err := repository.ByID(ctx, "missing"); !errors.Is(err, workspace.ErrNotFound) {
+		t.Fatalf("ByID error = %v, want workspace.ErrNotFound", err)
+	}
+	if _, err := repository.ByIDWithActiveMetadata(ctx, "missing", "default"); !errors.Is(err, workspace.ErrNotFound) {
+		t.Fatalf("ByIDWithActiveMetadata error = %v, want workspace.ErrNotFound", err)
+	}
+}
 
 func TestRepositoryEnsureRejectsBlankWorkspaceID(t *testing.T) {
 	ctx := context.Background()

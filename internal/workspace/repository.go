@@ -1,6 +1,11 @@
 package workspace
 
-import "context"
+import (
+	"context"
+	"errors"
+)
+
+var ErrNotFound = errors.New("workspace not found")
 
 type Summary struct {
 	ID                   WorkspaceID

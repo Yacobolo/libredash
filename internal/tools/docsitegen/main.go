@@ -238,10 +238,11 @@ func renderLLMs(catalog generatedCatalog) string {
 	out.WriteString("> Dashboards-as-code BI with generated, machine-readable CLI, API, configuration, and visual documentation.\n\n")
 	out.WriteString("## Agent entry points\n\n")
 	out.WriteString("- [Documentation MCP](/mcp): read-only Streamable HTTP MCP with docs_catalog, docs_search, and docs_read tools.\n")
+	out.WriteString("- [Agent tool manifest](/docs/agent-tools/manifest.json): generated names, privileges, defaults, annotations, and input/output schemas.\n")
 	out.WriteString("- [CLI manifest](/docs/cli/manifest.json): versioned command syntax, arguments, flags, defaults, side effects, and confirmation behavior.\n")
 	out.WriteString("- [API operation manifest](/docs/api/operations.json): versioned operation IDs, routes, authorization, safety metadata, and request/response schemas.\n")
 	out.WriteString("- [OpenAPI schema](/docs/openapi.yaml): complete generated OpenAPI contract.\n\n")
-	out.WriteString("Focused slices are available at `/docs/cli/commands/{id}.json|md` and `/docs/api/operations/{operationId}.json|md`. Prefer search and focused reads over loading complete manifests. Public documentation tools never execute commands or API operations.\n\n")
+	out.WriteString("Focused slices are available at `/docs/agent-tools/tools/{name}.json|md`, `/docs/cli/commands/{id}.json|md`, and `/docs/api/operations/{operationId}.json|md`. Prefer search and focused reads over loading complete manifests. Public documentation tools never execute tools, commands, or API operations.\n\n")
 	out.WriteString("## Documentation\n")
 	for _, section := range catalog.Sections {
 		out.WriteString("\n### " + section.Title + "\n\n")
@@ -505,6 +506,24 @@ func validateInternalLinks(root string, seenSources, seenSlugs map[string]struct
 
 func loadMachineDocumentationLinks(root string) (map[string]struct{}, error) {
 	links := map[string]struct{}{}
+	agentToolPath := filepath.Join(root, "reference", "agent-tools", "manifest.json")
+	if contents, err := os.ReadFile(agentToolPath); err == nil {
+		var manifest struct {
+			Tools []struct {
+				Name string `json:"name"`
+			} `json:"tools"`
+		}
+		if err := json.Unmarshal(contents, &manifest); err != nil {
+			return nil, fmt.Errorf("decode %s: %w", agentToolPath, err)
+		}
+		links["/docs/agent-tools/manifest.json"] = struct{}{}
+		for _, tool := range manifest.Tools {
+			links["/docs/agent-tools/tools/"+tool.Name+".json"] = struct{}{}
+			links["/docs/agent-tools/tools/"+tool.Name+".md"] = struct{}{}
+		}
+	} else if !os.IsNotExist(err) {
+		return nil, err
+	}
 	cliPath := filepath.Join(root, "reference", "cli", "manifest.json")
 	if contents, err := os.ReadFile(cliPath); err == nil {
 		var manifest struct {

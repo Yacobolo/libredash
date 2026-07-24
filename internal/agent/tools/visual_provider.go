@@ -90,10 +90,7 @@ type agentVisualResult struct {
 }
 
 func (p VisualProvider) Definitions(scope Scope) []agentcore.ToolDefinition {
-	inputSchema := json.RawMessage(agentVisualToolSchema)
-	if strings.TrimSpace(scope.WorkspaceID) == "" {
-		inputSchema = requireToolStringProperty(inputSchema, "workspace")
-	}
+	inputSchema := requireToolStringProperty(json.RawMessage(agentVisualToolSchema), "workspace")
 	return []agentcore.ToolDefinition{{
 		Name:         agentVisualToolName,
 		Description:  "Create one read-only visual from LeapView semantic model fields. Data is queried from semantic models; do not provide inline data.",
@@ -116,9 +113,7 @@ func (p VisualProvider) Run(ctx context.Context, scope Scope, call agentcore.Too
 		return apigenAgentToolError("invalid_arguments", err.Error())
 	}
 	runScope := scope
-	if runScope.WorkspaceID == "" {
-		runScope.WorkspaceID = strings.TrimSpace(input.Workspace)
-	}
+	runScope.WorkspaceID = strings.TrimSpace(input.Workspace)
 	if runScope.WorkspaceID == "" {
 		return apigenAgentToolError("invalid_arguments", "workspace is required")
 	}
@@ -187,11 +182,28 @@ func decodeAgentVisualInput(rawArgs json.RawMessage) (agentVisualInput, error) {
 	if input.Model == "" {
 		return agentVisualInput{}, fmt.Errorf("model is required")
 	}
+	input.Dataset = stripCatalogRefString(input.Dataset, input.Model)
+	normalizeAgentVisualFieldRefs(input.Dimensions, input.Model)
+	normalizeAgentVisualFieldRefs(input.Measures, input.Model)
+	normalizeAgentVisualFieldRefs(input.Fields, input.Model)
+	normalizeAgentVisualFieldRefs(input.Rows, input.Model)
+	if input.Series != nil {
+		input.Series.Field = stripCatalogRefString(input.Series.Field, input.Model)
+	}
+	for index := range input.Sort {
+		input.Sort[index].Field = stripCatalogRefString(input.Sort[index].Field, input.Model)
+	}
 	if input.Dataset == "" {
 		return agentVisualInput{}, fmt.Errorf("dataset is required")
 	}
 	input.Limit = agentVisualLimit(input.Limit)
 	return input, nil
+}
+
+func normalizeAgentVisualFieldRefs(values []agentVisualFieldRef, modelID string) {
+	for index := range values {
+		values[index].Field = stripCatalogRefString(values[index].Field, modelID)
+	}
 }
 
 func isAgentVisualType(value string) bool {

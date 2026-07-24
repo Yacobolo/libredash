@@ -13,13 +13,16 @@ import (
 )
 
 type machineDocumentation struct {
-	cliManifest   []byte
-	apiOperations []byte
-	cliByID       map[string]json.RawMessage
-	apiByID       map[string]json.RawMessage
-	apiSchemas    map[string]json.RawMessage
-	cli           []machineCLICommand
-	api           []machineAPIOperation
+	cliManifest       []byte
+	agentToolManifest []byte
+	apiOperations     []byte
+	cliByID           map[string]json.RawMessage
+	agentToolByName   map[string]json.RawMessage
+	apiByID           map[string]json.RawMessage
+	apiSchemas        map[string]json.RawMessage
+	cli               []machineCLICommand
+	agentTools        []machineAgentTool
+	api               []machineAPIOperation
 }
 
 type machineCLICommand struct {
@@ -46,6 +49,26 @@ type machineCLIOption struct {
 	Default     string `json:"default"`
 	Description string `json:"description"`
 	Required    bool   `json:"required"`
+}
+
+type machineAgentTool struct {
+	Name         string                 `json:"name"`
+	Description  string                 `json:"description"`
+	Privilege    string                 `json:"privilege"`
+	Effect       string                 `json:"effect"`
+	OperationID  string                 `json:"operationId"`
+	Defaults     map[string]any         `json:"defaults"`
+	Tags         []string               `json:"tags"`
+	Annotations  machineToolAnnotations `json:"annotations"`
+	InputSchema  json.RawMessage        `json:"inputSchema"`
+	OutputSchema json.RawMessage        `json:"outputSchema"`
+}
+
+type machineToolAnnotations struct {
+	ReadOnlyHint    bool `json:"readOnlyHint"`
+	DestructiveHint bool `json:"destructiveHint"`
+	IdempotentHint  bool `json:"idempotentHint"`
+	OpenWorldHint   bool `json:"openWorldHint"`
 }
 
 type machineAPIOperation struct {
@@ -92,12 +115,19 @@ var machineDocs = loadMachineDocumentation()
 
 func loadMachineDocumentation() machineDocumentation {
 	cliManifest := mustReadDocumentationArtifact("reference/cli/manifest.json")
+	agentToolManifest := mustReadDocumentationArtifact("reference/agent-tools/manifest.json")
 	apiOperations := mustReadDocumentationArtifact("api/operations.json")
 	var cliManifestDecoded struct {
 		Commands []json.RawMessage `json:"commands"`
 	}
 	if err := json.Unmarshal(cliManifest, &cliManifestDecoded); err != nil {
 		panic(fmt.Sprintf("decode CLI machine manifest: %v", err))
+	}
+	var agentToolManifestDecoded struct {
+		Tools []json.RawMessage `json:"tools"`
+	}
+	if err := json.Unmarshal(agentToolManifest, &agentToolManifestDecoded); err != nil {
+		panic(fmt.Sprintf("decode agent tool machine manifest: %v", err))
 	}
 	var apiManifestDecoded struct {
 		Operations []json.RawMessage          `json:"operations"`
@@ -107,10 +137,22 @@ func loadMachineDocumentation() machineDocumentation {
 		panic(fmt.Sprintf("decode API operation manifest: %v", err))
 	}
 	loaded := machineDocumentation{
-		cliManifest: cliManifest, apiOperations: apiOperations,
-		cliByID:    make(map[string]json.RawMessage, len(cliManifestDecoded.Commands)),
-		apiByID:    make(map[string]json.RawMessage, len(apiManifestDecoded.Operations)),
-		apiSchemas: apiManifestDecoded.Schemas,
+		cliManifest: cliManifest, agentToolManifest: agentToolManifest, apiOperations: apiOperations,
+		cliByID:         make(map[string]json.RawMessage, len(cliManifestDecoded.Commands)),
+		agentToolByName: make(map[string]json.RawMessage, len(agentToolManifestDecoded.Tools)),
+		apiByID:         make(map[string]json.RawMessage, len(apiManifestDecoded.Operations)),
+		apiSchemas:      apiManifestDecoded.Schemas,
+	}
+	for _, raw := range agentToolManifestDecoded.Tools {
+		var tool machineAgentTool
+		if err := json.Unmarshal(raw, &tool); err != nil {
+			panic(fmt.Sprintf("decode agent tool machine contract: %v", err))
+		}
+		if tool.Name == "" || loaded.agentToolByName[tool.Name] != nil {
+			panic(fmt.Sprintf("invalid or duplicate agent tool machine contract %q", tool.Name))
+		}
+		loaded.agentToolByName[tool.Name] = raw
+		loaded.agentTools = append(loaded.agentTools, tool)
 	}
 	for _, raw := range cliManifestDecoded.Commands {
 		var command machineCLICommand
@@ -149,6 +191,10 @@ func docsCLIManifest(w stdhttp.ResponseWriter, _ *stdhttp.Request) {
 	writeMachineArtifact(w, "application/json; charset=utf-8", machineDocs.cliManifest)
 }
 
+func docsAgentToolManifest(w stdhttp.ResponseWriter, _ *stdhttp.Request) {
+	writeMachineArtifact(w, "application/json; charset=utf-8", machineDocs.agentToolManifest)
+}
+
 func docsAPIOperations(w stdhttp.ResponseWriter, _ *stdhttp.Request) {
 	writeMachineArtifact(w, "application/json; charset=utf-8", machineDocs.apiOperations)
 }
@@ -174,6 +220,55 @@ func docsCLICommand(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		return
 	}
 	writeMachineArtifact(w, "text/markdown; charset=utf-8", []byte(renderMachineCLICommand(command)))
+}
+
+func docsAgentTool(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	name, format, ok := machineItemPath(r.PathValue("tool"))
+	if !ok {
+		stdhttp.NotFound(w, r)
+		return
+	}
+	raw, exists := machineDocs.agentToolByName[name]
+	if !exists {
+		stdhttp.NotFound(w, r)
+		return
+	}
+	if format == "json" {
+		writeMachineArtifact(w, "application/json; charset=utf-8", prettyJSON(raw))
+		return
+	}
+	var tool machineAgentTool
+	if err := json.Unmarshal(raw, &tool); err != nil {
+		stdhttp.Error(w, "decode generated agent tool", stdhttp.StatusInternalServerError)
+		return
+	}
+	writeMachineArtifact(w, "text/markdown; charset=utf-8", []byte(renderMachineAgentTool(tool)))
+}
+
+func renderMachineAgentTool(tool machineAgentTool) string {
+	var out strings.Builder
+	out.WriteString("# `" + tool.Name + "`\n\n")
+	out.WriteString(strings.TrimSpace(tool.Description) + "\n\n")
+	out.WriteString("## Contract\n\n")
+	out.WriteString("- Required privilege: `" + tool.Privilege + "`\n")
+	out.WriteString("- Effect: `" + tool.Effect + "`\n")
+	out.WriteString("- Operation: `" + tool.OperationID + "`\n")
+	out.WriteString("- Read-only: `" + strconv.FormatBool(tool.Annotations.ReadOnlyHint) + "`\n")
+	out.WriteString("- Idempotent: `" + strconv.FormatBool(tool.Annotations.IdempotentHint) + "`\n")
+	out.WriteString("- Destructive: `" + strconv.FormatBool(tool.Annotations.DestructiveHint) + "`\n")
+	out.WriteString("- Open-world: `" + strconv.FormatBool(tool.Annotations.OpenWorldHint) + "`\n")
+	writeMachineAgentToolSchema(&out, "Input schema", tool.InputSchema, tool.Name)
+	writeMachineAgentToolSchema(&out, "Output schema", tool.OutputSchema, tool.Name)
+	return out.String()
+}
+
+func writeMachineAgentToolSchema(out *strings.Builder, heading string, schema json.RawMessage, toolName string) {
+	out.WriteString("\n## " + heading + "\n\n")
+	if len(schema) > 32*1024 {
+		out.WriteString("This closed schema is too large to inline usefully. Read it in the [focused JSON contract](/docs/agent-tools/tools/" + toolName + ".json).\n")
+		return
+	}
+	out.WriteString("```json\n" + strings.TrimSpace(string(prettyJSON(schema))) + "\n```\n")
 }
 
 func renderMachineCLICommand(command machineCLICommand) string {

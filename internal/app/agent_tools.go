@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 
+	documentcontent "github.com/Yacobolo/leapview/docs"
 	"github.com/Yacobolo/leapview/internal/access"
 	agentcap "github.com/Yacobolo/leapview/internal/agent"
 	agenttools "github.com/Yacobolo/leapview/internal/agent/tools"
@@ -15,8 +17,34 @@ import (
 	apigenapi "github.com/Yacobolo/leapview/internal/api/gen"
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 	"github.com/Yacobolo/leapview/internal/dataquery"
+	"github.com/Yacobolo/leapview/internal/productdocs"
+	docsearch "github.com/Yacobolo/leapview/internal/site/search/sqlite"
 	agentcore "github.com/Yacobolo/leapview/pkg/agent"
 )
+
+var embeddedProductDocumentation struct {
+	once    sync.Once
+	service *productdocs.Service
+	err     error
+}
+
+func mustLoadProductDocumentation() *productdocs.Service {
+	embeddedProductDocumentation.once.Do(func() {
+		index, err := docsearch.Open(documentcontent.Files, docsearch.Filename)
+		if err != nil {
+			embeddedProductDocumentation.err = err
+			return
+		}
+		embeddedProductDocumentation.service, embeddedProductDocumentation.err = productdocs.New(documentcontent.Files, index)
+		if embeddedProductDocumentation.err != nil {
+			_ = index.Close()
+		}
+	})
+	if embeddedProductDocumentation.err != nil {
+		panic(fmt.Sprintf("load embedded product documentation: %v", embeddedProductDocumentation.err))
+	}
+	return embeddedProductDocumentation.service
+}
 
 func (s *Server) configureAgentTools() {
 	if s.agent != nil && s.store != nil {
@@ -36,9 +64,18 @@ func (s *Server) configureAgentTools() {
 // built-in agent and protocol adapters such as MCP.
 func (s *Server) agentToolDefinitions(scope agentcap.Scope) []agentcore.ToolDefinition {
 	toolScope := agentToolsScope(scope)
-	definitions := s.agentVisualToolProvider().Definitions(toolScope)
-	definitions = append(definitions, s.agentAPIGenToolProvider().Definitions(toolScope)...)
-	return definitions
+	return (agenttools.ProviderSet{
+		Docs: s.agentDocsToolProvider(), Catalog: s.agentCatalogToolProvider(),
+		Visual: s.agentVisualToolProvider(), APIGen: s.agentAPIGenToolProvider(),
+	}).Definitions(toolScope)
+}
+
+func (s *Server) agentDocsToolProvider() agenttools.DocsProvider {
+	return agenttools.DocsProvider{Documentation: mustLoadProductDocumentation()}
+}
+
+func (s *Server) agentCatalogToolProvider() agenttools.CatalogProvider {
+	return agenttools.CatalogProvider{Catalog: agentCatalogService{server: s}}
 }
 
 func (s *Server) agentVisualToolProvider() agenttools.VisualProvider {

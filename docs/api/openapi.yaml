@@ -16528,35 +16528,6 @@ paths:
                 type: example
       tags:
         - Search
-      x-apigen-tool:
-        confirmation: never
-        effect: read
-        input:
-          fields:
-            - default: !!float 10
-              name: limit
-              source: query
-        name: search
-        output:
-          cursor:
-            source: /page/nextCursor
-          mode: project
-          select:
-            - count_as: count
-              select:
-                - source: /reference/workspaceId
-                  target: workspaceId
-                - source: /reference/type
-                  target: type
-                - source: /reference/id
-                  target: id
-                - source: /name
-                - source: /description
-                - source: /href
-              source: /items
-        tags:
-          - search
-          - discovery
       x-authz:
         mode: privilege
         privilege: VIEW_ITEM
@@ -19293,28 +19264,6 @@ paths:
                 type: example
       tags:
         - Workspaces
-      x-apigen-tool:
-        confirmation: never
-        effect: read
-        input:
-          fields:
-            - default: !!float 25
-              name: limit
-              source: query
-        name: list_workspaces
-        output:
-          cursor:
-            source: /page/nextCursor
-          mode: project
-          select:
-            - count_as: count
-              select:
-                - source: /id
-                - source: /title
-                - source: /description
-              source: /items
-        tags:
-          - workspace
       x-authz:
         mode: privilege
         privilege: USE_WORKSPACE
@@ -20145,33 +20094,6 @@ paths:
                 type: example
       tags:
         - Workspaces
-      x-apigen-tool:
-        confirmation: never
-        effect: read
-        input:
-          fields:
-            - context_key: workspace
-              mode: context
-              name: workspace
-              source: path
-            - default: !!float 25
-              name: limit
-              source: query
-        name: list_workspace_asset_edges
-        output:
-          cursor:
-            source: /page/nextCursor
-          mode: project
-          select:
-            - count_as: count
-              select:
-                - source: /fromAssetId
-                - source: /toAssetId
-                - source: /type
-              source: /items
-        tags:
-          - workspace
-          - lineage
       x-authz:
         mode: privilege
         privilege: USE_WORKSPACE
@@ -20479,35 +20401,6 @@ paths:
                 type: example
       tags:
         - Workspaces
-      x-apigen-tool:
-        confirmation: never
-        effect: read
-        input:
-          fields:
-            - context_key: workspace
-              mode: context
-              name: workspace
-              source: path
-            - default: !!float 25
-              name: limit
-              source: query
-        name: list_assets
-        output:
-          cursor:
-            source: /page/nextCursor
-          mode: project
-          select:
-            - count_as: count
-              select:
-                - source: /id
-                - source: /type
-                - source: /title
-                - source: /description
-              source: /items
-        tags:
-          - workspace
-          - asset
-          - lineage
       x-authz:
         mode: privilege
         privilege: USE_WORKSPACE
@@ -20786,28 +20679,6 @@ paths:
                 type: example
       tags:
         - Workspaces
-      x-apigen-tool:
-        confirmation: never
-        effect: read
-        input:
-          fields:
-            - context_key: workspace
-              mode: context
-              name: workspace
-              source: path
-        name: describe_asset
-        output:
-          mode: project
-          select:
-            - source: /id
-            - source: /type
-            - source: /title
-            - source: /description
-            - source: /payloadSchema
-            - source: /href
-        tags:
-          - workspace
-          - asset
       x-authz:
         mode: privilege
         privilege: VIEW_ITEM
@@ -21078,26 +20949,6 @@ paths:
                 type: example
       tags:
         - Workspaces
-      x-apigen-tool:
-        confirmation: never
-        effect: read
-        input:
-          fields:
-            - context_key: workspace
-              mode: context
-              name: workspace
-              source: path
-        name: asset_lineage
-        output:
-          mode: project
-          select:
-            - source: /assetId
-            - source: /upstream
-            - source: /downstream
-        tags:
-          - workspace
-          - asset
-          - lineage
       x-authz:
         mode: privilege
         privilege: VIEW_ITEM
@@ -23444,34 +23295,6 @@ paths:
                 type: example
       tags:
         - BI
-      x-apigen-tool:
-        confirmation: never
-        effect: read
-        input:
-          fields:
-            - context_key: workspace
-              mode: context
-              name: workspace
-              source: path
-            - default: !!float 25
-              name: limit
-              source: query
-        name: list_dashboards
-        output:
-          cursor:
-            source: /page/nextCursor
-          mode: project
-          select:
-            - count_as: count
-              select:
-                - source: /id
-                - source: /title
-                - source: /description
-                - source: /pageCount
-              source: /items
-        tags:
-          - dashboard
-          - catalog
       x-authz:
         mode: privilege
         privilege: VIEW_ITEM
@@ -23758,30 +23581,6 @@ paths:
                 type: example
       tags:
         - BI
-      x-apigen-tool:
-        confirmation: never
-        effect: read
-        input:
-          fields:
-            - context_key: workspace
-              mode: context
-              name: workspace
-              source: path
-        name: describe_dashboard
-        output:
-          mode: project
-          select:
-            - source: /id
-            - source: /title
-            - source: /description
-            - source: /semantic_model
-            - source: /model
-            - source: /counts
-            - source: /pages
-            - source: /detail_tools
-        tags:
-          - dashboard
-          - catalog
       x-authz:
         mode: privilege
         privilege: VIEW_ITEM
@@ -24057,21 +23856,6 @@ paths:
                 type: example
       tags:
         - BI
-      x-apigen-tool:
-        confirmation: never
-        effect: read
-        input:
-          fields:
-            - context_key: workspace
-              mode: context
-              name: workspace
-              source: path
-        name: describe_dashboard_page
-        output:
-          mode: raw
-        tags:
-          - dashboard
-          - page
       x-authz:
         mode: privilege
         privilege: VIEW_ITEM
@@ -24692,32 +24476,6 @@ paths:
                     interactionID: example
                     order: 1
                     visualID: example
-      x-apigen-tool:
-        confirmation: never
-        effect: read
-        input:
-          fields:
-            - context_key: workspace
-              mode: context
-              name: workspace
-              source: path
-            - default: !!float 25
-              name: limit
-              source: query
-        name: list_dashboard_filter_values
-        output:
-          cursor:
-            source: /page/nextCursor
-          mode: project
-          select:
-            - count_as: count
-              select:
-                - source: /value
-                - source: /label
-              source: /items
-        tags:
-          - dashboard
-          - filter
       x-authz:
         mode: privilege
         privilege: QUERY_DATA
@@ -25053,21 +24811,6 @@ paths:
                     interactionID: example
                     order: 1
                     visualID: example
-      x-apigen-tool:
-        confirmation: never
-        effect: read
-        input:
-          fields:
-            - context_key: workspace
-              mode: context
-              name: workspace
-              source: path
-        name: query_dashboard_page
-        output:
-          mode: raw
-        tags:
-          - dashboard
-          - query
       x-authz:
         mode: privilege
         privilege: QUERY_DATA
@@ -25358,21 +25101,6 @@ paths:
                 type: example
       tags:
         - BI
-      x-apigen-tool:
-        confirmation: never
-        effect: read
-        input:
-          fields:
-            - context_key: workspace
-              mode: context
-              name: workspace
-              source: path
-        name: describe_dashboard_visual
-        output:
-          mode: raw
-        tags:
-          - dashboard
-          - visual
       x-authz:
         mode: privilege
         privilege: VIEW_ITEM
@@ -25387,6 +25115,7 @@ paths:
           required: true
           schema:
             type: string
+            minLength: 1
           example: example
         - name: dashboard
           in: path
@@ -25724,8 +25453,8 @@ paths:
         effect: read
         input:
           fields:
-            - context_key: workspace
-              mode: context
+            - description: Workspace ID to query.
+              mode: model
               name: workspace
               source: path
         name: query_dashboard_visual
@@ -32048,34 +31777,6 @@ paths:
                 type: example
       tags:
         - Refresh Runs
-      x-apigen-tool:
-        confirmation: never
-        effect: read
-        input:
-          fields:
-            - context_key: workspace
-              mode: context
-              name: workspace
-              source: path
-            - default: !!float 25
-              name: limit
-              source: query
-        name: list_refresh_runs
-        output:
-          cursor:
-            source: /page/nextCursor
-          mode: project
-          select:
-            - count_as: count
-              select:
-                - source: /id
-                - source: /pipelineId
-                - source: /semanticModel
-                - source: /status
-                - source: /createdAt
-              source: /items
-        tags:
-          - refresh
       x-authz:
         mode: privilege
         privilege: USE_WORKSPACE
@@ -32645,30 +32346,6 @@ paths:
                 type: example
       tags:
         - Refresh Runs
-      x-apigen-tool:
-        confirmation: never
-        effect: read
-        input:
-          fields:
-            - context_key: workspace
-              mode: context
-              name: workspace
-              source: path
-        name: get_refresh_run
-        output:
-          mode: project
-          select:
-            - source: /id
-            - source: /pipelineId
-            - source: /semanticModel
-            - source: /trigger
-            - source: /status
-            - source: /error
-            - source: /createdAt
-            - source: /startedAt
-            - source: /finishedAt
-        tags:
-          - refresh
       x-authz:
         mode: privilege
         privilege: USE_WORKSPACE
@@ -35256,33 +34933,6 @@ paths:
                 type: example
       tags:
         - BI
-      x-apigen-tool:
-        confirmation: never
-        effect: read
-        input:
-          fields:
-            - context_key: workspace
-              mode: context
-              name: workspace
-              source: path
-            - default: !!float 25
-              name: limit
-              source: query
-        name: list_semantic_models
-        output:
-          cursor:
-            source: /page/nextCursor
-          mode: project
-          select:
-            - count_as: count
-              select:
-                - source: /id
-                - source: /title
-                - source: /description
-              source: /items
-        tags:
-          - semantic-model
-          - catalog
       x-authz:
         mode: privilege
         privilege: VIEW_ITEM
@@ -35571,28 +35221,6 @@ paths:
                 type: example
       tags:
         - BI
-      x-apigen-tool:
-        confirmation: never
-        effect: read
-        input:
-          fields:
-            - context_key: workspace
-              mode: context
-              name: workspace
-              source: path
-        name: describe_model
-        output:
-          mode: project
-          select:
-            - source: /id
-            - source: /title
-            - source: /description
-            - source: /dashboards
-            - source: /counts
-            - source: /tables
-        tags:
-          - semantic-model
-          - catalog
       x-authz:
         mode: privilege
         privilege: VIEW_ITEM
@@ -35886,33 +35514,6 @@ paths:
                 type: example
       tags:
         - BI
-      x-apigen-tool:
-        confirmation: never
-        effect: read
-        input:
-          fields:
-            - context_key: workspace
-              mode: context
-              name: workspace
-              source: path
-            - default: !!float 25
-              name: limit
-              source: query
-        name: list_semantic_datasets
-        output:
-          cursor:
-            source: /page/nextCursor
-          mode: project
-          select:
-            - count_as: count
-              select:
-                - source: /id
-                - source: /kind
-                - source: /description
-              source: /items
-        tags:
-          - semantic-model
-          - dataset
       x-authz:
         mode: privilege
         privilege: VIEW_ITEM
@@ -36194,31 +35795,6 @@ paths:
                 type: example
       tags:
         - BI
-      x-apigen-tool:
-        confirmation: never
-        effect: read
-        input:
-          fields:
-            - context_key: workspace
-              mode: context
-              name: workspace
-              source: path
-        name: describe_semantic_dataset
-        output:
-          mode: project
-          select:
-            - source: /id
-            - source: /kind
-            - source: /source
-            - source: /sources
-            - source: /description
-            - source: /primaryKey
-            - source: /grain
-            - source: /fieldCount
-            - source: /measureCount
-        tags:
-          - semantic-model
-          - dataset
       x-authz:
         mode: privilege
         privilege: VIEW_ITEM
@@ -36525,35 +36101,6 @@ paths:
                 type: example
       tags:
         - BI
-      x-apigen-tool:
-        confirmation: never
-        effect: read
-        input:
-          fields:
-            - context_key: workspace
-              mode: context
-              name: workspace
-              source: path
-            - default: !!float 25
-              name: limit
-              source: query
-        name: list_semantic_fields
-        output:
-          cursor:
-            source: /page/nextCursor
-          mode: project
-          select:
-            - count_as: count
-              select:
-                - source: /kind
-                - source: /id
-                - source: /label
-                - source: /description
-              source: /items
-        tags:
-          - semantic-model
-          - dataset
-          - field
       x-authz:
         mode: privilege
         privilege: VIEW_ITEM
@@ -36872,31 +36419,6 @@ paths:
               sort:
                 - direction: example
                   field: example
-      x-apigen-tool:
-        confirmation: never
-        effect: read
-        input:
-          fields:
-            - context_key: workspace
-              mode: context
-              name: workspace
-              source: path
-            - default: !!float 25
-              name: limit
-              source: body
-        name: preview_semantic_dataset
-        output:
-          cursor:
-            source: /page/nextCursor
-          mode: project
-          select:
-            - source: /columns
-            - count_as: count
-              source: /rows
-        tags:
-          - semantic-model
-          - dataset
-          - query
       x-authz:
         mode: privilege
         privilege: PREVIEW_DATA
@@ -37212,28 +36734,6 @@ paths:
               sort:
                 - direction: example
                   field: example
-      x-apigen-tool:
-        confirmation: never
-        effect: read
-        input:
-          fields:
-            - context_key: workspace
-              mode: context
-              name: workspace
-              source: path
-        name: explain_semantic_preview
-        output:
-          mode: project
-          select:
-            - source: /mode
-            - source: /sql
-            - source: /args
-            - source: /columns
-            - source: /warnings
-        tags:
-          - semantic-model
-          - dataset
-          - query
       x-authz:
         mode: privilege
         privilege: PREVIEW_DATA
@@ -37534,34 +37034,6 @@ paths:
                 type: example
       tags:
         - BI
-      x-apigen-tool:
-        confirmation: never
-        effect: read
-        input:
-          fields:
-            - context_key: workspace
-              mode: context
-              name: workspace
-              source: path
-            - default: !!float 25
-              name: limit
-              source: query
-        name: list_semantic_model_fields
-        output:
-          cursor:
-            source: /page/nextCursor
-          mode: project
-          select:
-            - count_as: count
-              select:
-                - source: /kind
-                - source: /id
-                - source: /label
-                - source: /description
-              source: /items
-        tags:
-          - semantic-model
-          - field
       x-authz:
         mode: privilege
         privilege: VIEW_ITEM
@@ -37576,6 +37048,7 @@ paths:
           required: true
           schema:
             type: string
+            minLength: 1
           example: example
         - name: model
           in: path
@@ -37883,8 +37356,8 @@ paths:
         effect: read
         input:
           fields:
-            - context_key: workspace
-              mode: context
+            - description: Workspace ID to query.
+              mode: model
               name: workspace
               source: path
             - default: !!float 25
@@ -38215,31 +37688,6 @@ paths:
                 alias: example
                 field: example
                 grain: example
-      x-apigen-tool:
-        confirmation: never
-        effect: read
-        input:
-          fields:
-            - context_key: workspace
-              mode: context
-              name: workspace
-              source: path
-        name: explain_semantic_model_query
-        output:
-          mode: project
-          select:
-            - source: /mode
-            - source: /facts
-            - source: /stitchDimensions
-            - source: /physicalDependencies
-            - source: /relationshipPaths
-            - source: /sql
-            - source: /args
-            - source: /columns
-            - source: /warnings
-        tags:
-          - semantic-model
-          - query
       x-authz:
         mode: privilege
         privilege: QUERY_DATA

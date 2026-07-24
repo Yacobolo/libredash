@@ -10,6 +10,7 @@ import (
 
 	"github.com/Yacobolo/leapview/internal/access"
 	agentcap "github.com/Yacobolo/leapview/internal/agent"
+	agenttools "github.com/Yacobolo/leapview/internal/agent/tools"
 	"github.com/Yacobolo/leapview/internal/brand"
 	"github.com/Yacobolo/leapview/internal/staticasset"
 	agentcore "github.com/Yacobolo/leapview/pkg/agent"
@@ -56,18 +57,17 @@ func (s *Server) mcpServer(r *http.Request) (*mcp.Server, error) {
 	}, &mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{}})
 	for _, definition := range catalog.Definitions() {
 		definition := definition
-		readOnly := definition.Effect == "" || definition.Effect == "read"
-		closedWorld := false
-		destructive := false
+		annotations := agenttools.AnnotationsForEffect(definition.Effect)
 		server.AddTool(&mcp.Tool{
 			Name:         definition.Name,
 			Description:  definition.Description,
 			InputSchema:  definition.InputSchema,
 			OutputSchema: definition.OutputSchema,
 			Annotations: &mcp.ToolAnnotations{
-				ReadOnlyHint:    readOnly,
-				DestructiveHint: &destructive,
-				OpenWorldHint:   &closedWorld,
+				ReadOnlyHint:    annotations.ReadOnlyHint,
+				DestructiveHint: &annotations.DestructiveHint,
+				IdempotentHint:  annotations.IdempotentHint,
+				OpenWorldHint:   &annotations.OpenWorldHint,
 			},
 		}, func(ctx context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			arguments := request.Params.Arguments

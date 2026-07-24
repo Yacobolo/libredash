@@ -472,6 +472,8 @@ func documentationSourceLink(document siteDocument) (string, string) {
 		return "View source contract on GitHub", repository + "blob/main/internal/configspec/spec.go"
 	case strings.HasPrefix(document.source, "reference/config/"):
 		return "View source contract on GitHub", repository + "blob/main/internal/configschema/contracts/contracts.cue"
+	case strings.HasPrefix(document.source, "reference/agent-tools/"):
+		return "View source contract on GitHub", repository + "tree/main/internal/agent/tools"
 	case strings.HasPrefix(document.source, "reference/cli/"):
 		return "View source contract on GitHub", repository + "tree/main/internal/cli"
 	case strings.HasPrefix(document.source, "api/"):

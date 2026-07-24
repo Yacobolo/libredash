@@ -656,13 +656,21 @@ function titleFromToolName(name: string): string {
 }
 
 const toolIconContent: Record<string, IconNode> = {
+  catalog_search: LayoutDashboard,
+  catalog_list: LayoutDashboard,
+  catalog_get: FileText,
+  docs_search: FileText,
+  docs_read: FileText,
+  query_semantic_model: Box,
+  query_dashboard_visual: LayoutPanelTop,
+  query_visual: LayoutPanelTop,
+  // Historical transcript entries retain their original icons after the
+  // curated catalog cutover.
   list_dashboards: LayoutDashboard,
   describe_dashboard: FileText,
   list_semantic_models: Box,
   describe_model: Box,
   query_dashboard_page: LayoutPanelTop,
-  query_dashboard_visual: LayoutPanelTop,
-  query_visual: LayoutPanelTop,
 }
 
 function toolIcon(name = '') {

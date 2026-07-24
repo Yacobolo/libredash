@@ -69,24 +69,6 @@ alias SearchOK = OkJson<SearchResponse>;
 @get
 @apigen.authz(#{ mode: "privilege", privilege: "VIEW_ITEM" })
 @apigen.cli(#{ command: #["search"], args: #[#{ source: "query", name: "q", displayName: "query" }], output: #{ mode: "raw" } })
-@apigen.tool(#{
-  name: "search",
-  effect: "read",
-  tags: #["search", "discovery"],
-  input: #{ fields: #[#{ source: "query", name: "limit", default: 10 }] },
-  output: #{
-    mode: "project",
-    select: #[#{ source: "/items", countAs: "count", select: #[
-      #{ source: "/reference/workspaceId", target: "workspaceId" },
-      #{ source: "/reference/type", target: "type" },
-      #{ source: "/reference/id", target: "id" },
-      #{ source: "/name" },
-      #{ source: "/description" },
-      #{ source: "/href" },
-    ] }],
-    cursor: #{ source: "/page/nextCursor" },
-  },
-})
 op search(
   @query q?: string,
   @query workspace?: string[],

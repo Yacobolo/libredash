@@ -477,31 +477,8 @@ func TestAPIGenOperationExtensions(t *testing.T) {
 		toolsByOperation[tool.OperationID] = name
 	}
 	agentTools := map[string]string{
-		"getDashboard":              "describe_dashboard",
-		"getDashboardVisual":        "describe_dashboard_visual",
-		"getWorkspaceAsset":         "describe_asset",
-		"getWorkspaceAssetLineage":  "asset_lineage",
-		"getSemanticModel":          "describe_model",
-		"listSemanticModelFields":   "list_semantic_model_fields",
-		"querySemanticModel":        "query_semantic_model",
-		"explainSemanticModelQuery": "explain_semantic_model_query",
-		"getSemanticDataset":        "describe_semantic_dataset",
-		"getRefreshRun":             "get_refresh_run",
-		"getDashboardPage":          "describe_dashboard_page",
-		"listDashboards":            "list_dashboards",
-		"listDashboardFilterValues": "list_dashboard_filter_values",
-		"listRefreshRuns":           "list_refresh_runs",
-		"listSemanticDatasets":      "list_semantic_datasets",
-		"listSemanticFields":        "list_semantic_fields",
-		"listSemanticModels":        "list_semantic_models",
-		"listWorkspaceAssetEdges":   "list_workspace_asset_edges",
-		"listWorkspaceAssets":       "list_assets",
-		"listWorkspaces":            "list_workspaces",
-		"search":                    "search",
-		"queryDashboardVisualData":  "query_dashboard_visual",
-		"queryDashboardPage":        "query_dashboard_page",
-		"previewSemanticDataset":    "preview_semantic_dataset",
-		"explainSemanticPreview":    "explain_semantic_preview",
+		"querySemanticModel":       "query_semantic_model",
+		"queryDashboardVisualData": "query_dashboard_visual",
 	}
 	for operationID, contract := range contracts {
 		authz, ok := contract.Extensions["x-authz"].(map[string]any)

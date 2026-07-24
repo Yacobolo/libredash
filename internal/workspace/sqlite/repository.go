@@ -71,6 +71,9 @@ func (r *Repository) List(ctx context.Context) ([]workspace.Summary, error) {
 func (r *Repository) ByID(ctx context.Context, id workspace.WorkspaceID) (workspace.Summary, error) {
 	row, err := r.q.GetWorkspace(ctx, string(id))
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return workspace.Summary{}, workspace.ErrNotFound
+		}
 		return workspace.Summary{}, err
 	}
 	return mapWorkspace(row), nil
@@ -94,6 +97,9 @@ func (r *Repository) ByIDWithActiveMetadata(ctx context.Context, id workspace.Wo
 		ID:          string(id),
 	})
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return workspace.Summary{}, workspace.ErrNotFound
+		}
 		return workspace.Summary{}, err
 	}
 	return mapWorkspaceWithActiveMetadata(row.ID, queryText(row.Title), queryText(row.Description), row.ActiveServingStateID, row.CreatedAt, row.UpdatedAt), nil

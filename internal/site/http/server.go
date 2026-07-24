@@ -59,6 +59,8 @@ func NewHandlerWithOptions(options Options) http.Handler {
 	mux.HandleFunc("GET /docs/search", server.docsSearch)
 	mux.HandleFunc("GET /docs/search/active", docsActiveSearch)
 	mux.HandleFunc("GET /docs/openapi.yaml", docsOpenAPISpecification)
+	mux.HandleFunc("GET /docs/agent-tools/manifest.json", docsAgentToolManifest)
+	mux.HandleFunc("GET /docs/agent-tools/tools/{tool}", docsAgentTool)
 	mux.HandleFunc("GET /docs/cli/manifest.json", docsCLIManifest)
 	mux.HandleFunc("GET /docs/cli/commands/{command}", docsCLICommand)
 	mux.HandleFunc("GET /docs/api/operations.json", docsAPIOperations)

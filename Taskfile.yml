@@ -186,6 +186,7 @@ tasks:
       - task: visualization-ir:generate
       - task: map-style:generate
       - task: cli-docs:generate
+      - task: agent-tool-docs:generate
       - task: node:deps
       - task: docs:render
 
@@ -194,6 +195,7 @@ tasks:
     cmds:
       - task: schema:generate
       - task: cli-docs:generate
+      - task: agent-tool-docs:generate
       - task: node:deps
       - task: docs:render
 
@@ -202,6 +204,7 @@ tasks:
     method: checksum
     deps:
       - visual-docs:generate
+      - agent-tool-docs:generate
     sources:
       - Taskfile.yml
       - docs/navigation.yaml
@@ -214,6 +217,9 @@ tasks:
       - docs/reference/cli/*.md
       - docs/reference/cli/catalog.json
       - docs/reference/cli/manifest.json
+      - docs/reference/agent-tools/*.md
+      - docs/reference/agent-tools/catalog.json
+      - docs/reference/agent-tools/manifest.json
       - docs/reference/config/*.md
       - docs/reference/config/catalog.json
       - docs/visuals/*.md
@@ -233,6 +239,7 @@ tasks:
       - node:deps
     cmds:
       - bun run docs:validate-diagrams
+      - go run ./internal/tools/agenttooldocgen --check
       - go run ./internal/tools/visualdocgen --check
       - go run ./internal/tools/docsitegen --check
       - go test ./internal/site/http -run '^TestEveryRenderedDocumentationLinkResolves$' -count=1
@@ -278,6 +285,24 @@ tasks:
     cmds:
       - go run ./internal/tools/clidocgen
 
+  agent-tool-docs:generate:
+    desc: Generate the public agent tool reference from the canonical runtime catalog
+    deps:
+      - api:generate
+    method: checksum
+    sources:
+      - Taskfile.yml
+      - api/typespec/**/*.tsp
+      - internal/api/gen/**/*.go
+      - internal/agent/tools/**/*.go
+      - internal/tools/agenttooldocgen/**/*.go
+    generates:
+      - docs/reference/agent-tools/*.md
+      - docs/reference/agent-tools/catalog.json
+      - docs/reference/agent-tools/manifest.json
+    cmds:
+      - go run ./internal/tools/agenttooldocgen
+
   db:generate:
     desc: Generate SQLite adapter code from the checked-in schema and queries
     method: checksum
@@ -321,7 +346,7 @@ tasks:
     cmds:
       - task: config:check
       - |
-        changed="$(git status --porcelain -- .env.example docs/api/openapi.yaml docs/llms.txt schemas/config schemas/json)"
+        changed="$(git status --porcelain -- .env.example docs/api/openapi.yaml docs/llms.txt docs/reference/agent-tools schemas/config schemas/json)"
         test -z "$changed" || { printf 'public contract snapshots are stale:\n%s\n' "$changed" >&2; exit 1; }
 
   api:generate:

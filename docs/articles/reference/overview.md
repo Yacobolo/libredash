@@ -10,6 +10,7 @@ Reference pages describe exact accepted syntax and supported machine contracts. 
 
 ## Commands and APIs
 
+- Use [Agent tool reference](/docs/agent-tools) for generated names, privileges, defaults, MCP annotations, and input and output schemas.
 - Use [CLI command reference](/docs/cli/reference) for generated usage, arguments, flags, defaults, and inherited options.
 - Use [API reference](/docs/api) for generated operation groups and the downloadable OpenAPI contract.
 - Use [API conventions](/docs/guides/integrate/api-conventions) for shared authentication, pagination, error, retry, timeout, and compatibility rules.
@@ -20,4 +21,4 @@ Use [Visual types](/docs/visuals/overview) for every supported renderer-neutral 
 
 ## Keep generated reference authoritative
 
-When a guide and generated reference disagree on exact syntax, follow the reference for the deployed version and report the guide drift. Do not hand-edit generated pages. Contributors should use [Write documentation](/docs/contributing/documentation) and the [Repository and development workflow](/docs/contributing/repository) to regenerate and verify reference artifacts.
+When a guide and generated reference disagree on exact syntax, follow the reference for the deployed version and report the guide drift. Agent tool contracts are generated from the same provider composition used by built-in chat and MCP. Do not hand-edit generated pages. Contributors should use [Write documentation](/docs/contributing/documentation) and the [Repository and development workflow](/docs/contributing/repository) to regenerate and verify reference artifacts.

@@ -10,7 +10,7 @@ import (
 	agentcore "github.com/Yacobolo/leapview/pkg/agent"
 )
 
-func TestGlobalAPIGenDefinitionsRequireWorkspaceForWorkspaceRoutes(t *testing.T) {
+func TestAPIGenDefinitionsRequireAndUseExplicitWorkspace(t *testing.T) {
 	var authorizedScope Scope
 	var dispatchedPath string
 	provider := APIGenProvider{
@@ -29,14 +29,14 @@ func TestGlobalAPIGenDefinitionsRequireWorkspaceForWorkspaceRoutes(t *testing.T)
 	}
 
 	var definition agentcore.ToolDefinition
-	for _, candidate := range provider.Definitions(Scope{PrincipalID: "principal-1"}) {
-		if candidate.Name == "list_dashboards" {
+	for _, candidate := range provider.Definitions(Scope{WorkspaceID: "embedded", PrincipalID: "principal-1"}) {
+		if candidate.Name == "query_semantic_model" {
 			definition = candidate
 			break
 		}
 	}
 	if definition.Name == "" {
-		t.Fatal("list_dashboards definition not found")
+		t.Fatal("query_semantic_model definition not found")
 	}
 	var schema struct {
 		Properties map[string]any `json:"properties"`
@@ -46,10 +46,10 @@ func TestGlobalAPIGenDefinitionsRequireWorkspaceForWorkspaceRoutes(t *testing.T)
 		t.Fatalf("decode input schema: %v", err)
 	}
 	if _, ok := schema.Properties["workspace"]; !ok || !containsString(schema.Required, "workspace") {
-		t.Fatalf("global input schema = %s, want required workspace", definition.InputSchema)
+		t.Fatalf("input schema = %s, want required workspace", definition.InputSchema)
 	}
 
-	result, err := definition.Handler.Run(context.Background(), agentcore.ToolCall{ID: "call-1", Arguments: json.RawMessage(`{"workspace":"sales"}`)})
+	result, err := definition.Handler.Run(context.Background(), agentcore.ToolCall{ID: "call-1", Arguments: json.RawMessage(`{"workspace":"sales","model":"orders"}`)})
 	if err != nil {
 		t.Fatalf("run tool: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestGlobalAPIGenDefinitionsRequireWorkspaceForWorkspaceRoutes(t *testing.T)
 	if authorizedScope.WorkspaceID != "sales" {
 		t.Fatalf("authorized workspace = %q, want sales", authorizedScope.WorkspaceID)
 	}
-	if dispatchedPath != "/api/v1/workspaces/sales/dashboards" {
+	if dispatchedPath != "/api/v1/workspaces/sales/semantic-models/orders/query" {
 		t.Fatalf("dispatched path = %q", dispatchedPath)
 	}
 }
@@ -97,8 +97,43 @@ func TestAPIGenDefinitionsExposeClosedVisualizationEnvelopeOutputSchemas(t *test
 	t.Fatal("query_dashboard_visual definition not found")
 }
 
-func TestGlobalVisualDefinitionRequiresWorkspace(t *testing.T) {
-	definition := (VisualProvider{}).Definitions(Scope{PrincipalID: "principal-1"})[0]
+func TestCuratedQueryArgumentsAcceptCatalogReferenceIDs(t *testing.T) {
+	semantic := normalizeCuratedQueryArguments("query_semantic_model", json.RawMessage(`{
+		"model":"sales",
+		"dimensions":[{"field":"sales.orders.status"}],
+		"measures":[{"field":"sales.order_count"}],
+		"filters":[{"fact":"sales.orders","field":"sales.orders.state","groups":[{"filters":[{"field":"sales.orders.city"}]}]}]
+	}`))
+	var semanticInput map[string]any
+	if err := json.Unmarshal(semantic, &semanticInput); err != nil {
+		t.Fatal(err)
+	}
+	encoded, _ := json.Marshal(semanticInput)
+	for _, want := range []string{`"field":"orders.status"`, `"field":"order_count"`, `"fact":"orders"`, `"field":"orders.city"`} {
+		if !strings.Contains(string(encoded), want) {
+			t.Fatalf("normalized semantic arguments missing %s: %s", want, encoded)
+		}
+	}
+
+	visual := normalizeCuratedQueryArguments("query_dashboard_visual", json.RawMessage(`{
+		"dashboard":"executive-sales",
+		"page":"executive-sales.overview",
+		"visual":"executive-sales.revenue_kpi"
+	}`))
+	if string(visual) != `{"dashboard":"executive-sales","page":"overview","visual":"revenue_kpi"}` {
+		t.Fatalf("normalized dashboard arguments = %s", visual)
+	}
+}
+
+func TestVisualDefinitionRequiresAndUsesExplicitWorkspace(t *testing.T) {
+	var authorizedScope Scope
+	provider := VisualProvider{
+		Authorize: func(_ context.Context, scope Scope, _ VisualAuthorizationRequest) (agentcore.ToolResult, bool) {
+			authorizedScope = scope
+			return apigenAgentToolError("authorization_failed", "stop after scope capture"), false
+		},
+	}
+	definition := provider.Definitions(Scope{WorkspaceID: "embedded", PrincipalID: "principal-1"})[0]
 	var schema struct {
 		Properties map[string]any `json:"properties"`
 		Required   []string       `json:"required"`
@@ -107,7 +142,17 @@ func TestGlobalVisualDefinitionRequiresWorkspace(t *testing.T) {
 		t.Fatalf("decode input schema: %v", err)
 	}
 	if _, ok := schema.Properties["workspace"]; !ok || !containsString(schema.Required, "workspace") {
-		t.Fatalf("global visual schema = %s, want required workspace", definition.InputSchema)
+		t.Fatalf("visual schema = %s, want required workspace", definition.InputSchema)
+	}
+	_, err := definition.Handler.Run(context.Background(), agentcore.ToolCall{
+		ID:        "call-visual",
+		Arguments: json.RawMessage(`{"workspace":"sales","type":"bar","model":"orders","dataset":"orders"}`),
+	})
+	if err != nil {
+		t.Fatalf("run tool: %v", err)
+	}
+	if authorizedScope.WorkspaceID != "sales" {
+		t.Fatalf("authorized workspace = %q, want sales", authorizedScope.WorkspaceID)
 	}
 }
 

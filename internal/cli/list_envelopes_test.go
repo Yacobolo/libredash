@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -358,7 +359,7 @@ func TestSemanticModelDatasetCommandsUseGeneratedURLsAndBodies(t *testing.T) {
 	}
 }
 
-func TestAgentToolsCommandListsGeneratedTools(t *testing.T) {
+func TestAgentToolsCommandListsCanonicalTools(t *testing.T) {
 	output := captureStdout(t, func() {
 		cmd := agentCommand(context.Background(), &rootOptions{})
 		cmd.SetArgs([]string{"tools"})
@@ -366,10 +367,29 @@ func TestAgentToolsCommandListsGeneratedTools(t *testing.T) {
 			t.Fatalf("agent tools: %v", err)
 		}
 	})
-	for _, want := range []string{"NAME", "PRIVILEGE", "list_dashboards", "VIEW_ITEM", "list_assets", "describe_asset", "asset_lineage", "search", "query_dashboard_visual", "query_semantic_model", "explain_semantic_model_query", "query_visual"} {
+	for _, want := range []string{"NAME", "PRIVILEGE", "catalog_search", "catalog_list", "catalog_get", "docs_search", "docs_read", "query_dashboard_visual", "query_semantic_model", "query_visual"} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("agent tools output missing %q:\n%s", want, output)
 		}
+	}
+	for _, legacy := range []string{"list_dashboards", "list_assets", "describe_asset", "asset_lineage", "explain_semantic_model_query"} {
+		if strings.Contains(output, legacy) {
+			t.Fatalf("agent tools output contains legacy tool %q:\n%s", legacy, output)
+		}
+	}
+	names := []string{}
+	for index, line := range strings.Split(strings.TrimSpace(output), "\n") {
+		if index == 0 {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) > 0 {
+			names = append(names, fields[0])
+		}
+	}
+	wantNames := []string{"catalog_get", "catalog_list", "catalog_search", "docs_read", "docs_search", "query_dashboard_visual", "query_semantic_model", "query_visual"}
+	if !slices.Equal(names, wantNames) {
+		t.Fatalf("agent tools names = %#v, want %#v\n%s", names, wantNames, output)
 	}
 }
 

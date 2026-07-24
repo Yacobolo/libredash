@@ -8,15 +8,11 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"sort"
 	"text/tabwriter"
 	"time"
 
 	agenttools "github.com/Yacobolo/leapview/internal/agent/tools"
 	"github.com/Yacobolo/leapview/internal/api"
-	apigenapi "github.com/Yacobolo/leapview/internal/api/gen"
-	agentcore "github.com/Yacobolo/leapview/pkg/agent"
-	apigenagenttool "github.com/Yacobolo/toolbelt/apigen/runtime/agenttool"
 	"github.com/spf13/cobra"
 )
 
@@ -49,7 +45,8 @@ func agentCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 
 	tools := &cobra.Command{
 		Use:   "tools",
-		Short: "List generated agent tools",
+		Short: "List the canonical agent tools",
+		Long:  "List the canonical agent tools exposed by built-in chat and deployment MCP, including each tool's privilege, effect, defaults, closed input schema, and backing operation.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAgentTools()
 		},
@@ -131,70 +128,26 @@ func runAgentConversations(ctx context.Context, opts *rootOptions) error {
 }
 
 func runAgentTools() error {
-	type row struct {
-		name        string
-		operationID string
-		privilege   string
-		effect      string
-		defaults    string
-		inputSchema string
+	reference, err := agenttools.ReferenceCatalog()
+	if err != nil {
+		return err
 	}
-	operationContracts := apigenapi.GetAPIGenOperationContracts()
-	toolContracts := apigenapi.GetAPIGenToolContracts()
-	definitions := map[string]agentcore.ToolDefinition{}
-	for _, definition := range (agenttools.APIGenProvider{}).Definitions(agenttools.Scope{}) {
-		definitions[definition.Name] = definition
-	}
-	for _, definition := range (agenttools.VisualProvider{}).Definitions(agenttools.Scope{}) {
-		definitions[definition.Name] = definition
-	}
-	rows := make([]row, 0, len(definitions))
-	for _, tool := range toolContracts {
-		contract, ok := operationContracts[tool.OperationID]
-		if !ok {
-			continue
-		}
-		authz, _ := contract.Extensions["x-authz"].(map[string]any)
-		definition := definitions[tool.Name]
-		rows = append(rows, row{
-			name:        tool.Name,
-			operationID: contract.OperationID,
-			privilege:   cliStringFromMap(authz, "privilege"),
-			effect:      string(tool.Effect),
-			defaults:    cliAgentToolDefaults(tool.Bindings),
-			inputSchema: string(definition.InputSchema),
-		})
-	}
-	if visual, ok := definitions[agenttools.QueryVisualToolName]; ok {
-		rows = append(rows, row{
-			name:        visual.Name,
-			operationID: "manual",
-			privilege:   "QUERY_DATA",
-			effect:      visual.Effect,
-			defaults:    `{}`,
-			inputSchema: string(visual.InputSchema),
-		})
-	}
-	sort.Slice(rows, func(i, j int) bool {
-		return rows[i].name < rows[j].name
-	})
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(tw, "NAME\tPRIVILEGE\tEFFECT\tDEFAULTS\tINPUT_SCHEMA\tOPERATION")
-	for _, row := range rows {
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", row.name, row.privilege, row.effect, row.defaults, row.inputSchema, row.operationID)
+	for _, tool := range reference {
+		defaults, _ := json.Marshal(tool.Defaults)
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n",
+			tool.Name, tool.Privilege, tool.Effect, defaults, cliCompactJSON(tool.InputSchema), tool.OperationID)
 	}
 	return tw.Flush()
 }
 
-func cliAgentToolDefaults(bindings []apigenagenttool.Binding) string {
-	defaults := map[string]any{}
-	for _, binding := range bindings {
-		if binding.Argument != "" && binding.Default != nil {
-			defaults[binding.Argument] = binding.Default
-		}
+func cliCompactJSON(value json.RawMessage) string {
+	var output bytes.Buffer
+	if err := json.Compact(&output, value); err != nil {
+		return string(value)
 	}
-	encoded, _ := json.Marshal(defaults)
-	return string(encoded)
+	return output.String()
 }
 
 func agentConversationEndpoint(target string, query url.Values) string {
@@ -216,11 +169,4 @@ func agentRunEndpoint(target, conversationID, runID string) string {
 func agentMessagesEndpoint(target, conversationID string) string {
 	u, _ := apiOperationURL(target, "listAgentMessages", map[string]string{"conversation": conversationID}, nil)
 	return u
-}
-
-func cliStringFromMap(values map[string]any, key string) string {
-	if value, ok := values[key].(string); ok {
-		return value
-	}
-	return ""
 }

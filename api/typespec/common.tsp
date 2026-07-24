@@ -7,6 +7,9 @@ namespace LeapViewAPI;
 @maxLength(200)
 scalar ResourceId extends string;
 
+@minLength(1)
+scalar WorkspaceId extends string;
+
 @minValue(1)
 @maxValue(200)
 scalar ListLimit extends int32;

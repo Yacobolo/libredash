@@ -1,0 +1,45 @@
+{
+  "title": "Agent tool reference",
+  "documents": [
+    {
+      "slug": "catalog_get",
+      "title": "catalog_get",
+      "summary": "Get the compact definition and type-specific metadata for one exact catalog ref."
+    },
+    {
+      "slug": "catalog_list",
+      "title": "catalog_list",
+      "summary": "Browse one deterministic level of the authorized LeapView catalog hierarchy."
+    },
+    {
+      "slug": "catalog_search",
+      "title": "catalog_search",
+      "summary": "Search the complete authorized LeapView BI catalog across workspaces."
+    },
+    {
+      "slug": "docs_read",
+      "title": "docs_read",
+      "summary": "Read a bounded line window from one LeapView document returned by docs_search."
+    },
+    {
+      "slug": "docs_search",
+      "title": "docs_search",
+      "summary": "Search LeapView's version-matched product documentation."
+    },
+    {
+      "slug": "query_dashboard_visual",
+      "title": "query_dashboard_visual",
+      "summary": "Query dashboard visual"
+    },
+    {
+      "slug": "query_semantic_model",
+      "title": "query_semantic_model",
+      "summary": "Query semantic model"
+    },
+    {
+      "slug": "query_visual",
+      "title": "query_visual",
+      "summary": "Create one read-only visual from LeapView semantic model fields."
+    }
+  ]
+}

@@ -295,6 +295,11 @@ sections:
         type: how-to
         summary: Use global conversations and the shared governed tool catalog.
         source: articles/integrate/agent.md
+      - slug: guides/integrate/agent-tools
+        title: Use the agent tool catalog
+        type: reference
+        summary: Find, inspect, and query governed resources through the curated tool surface.
+        source: articles/integrate/agent-tools.md
       - slug: guides/integrate/mcp
         title: Connect an MCP host
         type: how-to
@@ -334,6 +339,22 @@ sections:
         summary: Diagnose local validation and remote operation failures.
         source: guides/cli/troubleshooting.md
     groups:
+      - id: agent-tools
+        title: Agent tools
+        summary: Names, privileges, defaults, annotations, and schemas generated from the canonical runtime catalog.
+        collection:
+          kind: catalog
+          catalog: reference/agent-tools/catalog.json
+          sourceDir: reference/agent-tools
+          slugPrefix: agent-tools
+          index:
+            slug: agent-tools
+            title: Agent tool reference
+            type: reference
+            navigationTitle: Overview
+            summary: Browse the exact tool contracts exposed by built-in chat and deployment MCP.
+            source: reference/agent-tools/index.md
+            generated: true
       - id: configuration
         title: Configuration
         summary: Generated fields and JSON Schemas for every resource kind.

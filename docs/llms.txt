@@ -5,11 +5,12 @@
 ## Agent entry points
 
 - [Documentation MCP](/mcp): read-only Streamable HTTP MCP with docs_catalog, docs_search, and docs_read tools.
+- [Agent tool manifest](/docs/agent-tools/manifest.json): generated names, privileges, defaults, annotations, and input/output schemas.
 - [CLI manifest](/docs/cli/manifest.json): versioned command syntax, arguments, flags, defaults, side effects, and confirmation behavior.
 - [API operation manifest](/docs/api/operations.json): versioned operation IDs, routes, authorization, safety metadata, and request/response schemas.
 - [OpenAPI schema](/docs/openapi.yaml): complete generated OpenAPI contract.
 
-Focused slices are available at `/docs/cli/commands/{id}.json|md` and `/docs/api/operations/{operationId}.json|md`. Prefer search and focused reads over loading complete manifests. Public documentation tools never execute commands or API operations.
+Focused slices are available at `/docs/agent-tools/tools/{name}.json|md`, `/docs/cli/commands/{id}.json|md`, and `/docs/api/operations/{operationId}.json|md`. Prefer search and focused reads over loading complete manifests. Public documentation tools never execute tools, commands, or API operations.
 
 ## Documentation
 
@@ -84,6 +85,7 @@ Focused slices are available at `/docs/cli/commands/{id}.json|md` and `/docs/api
 - [Headless BI queries](/docs/guides/integrate/headless-bi): Query dashboards and semantic models through stable contracts.
 - [Public and embedded dashboards](/docs/guides/integrate/public-dashboards): Publish an anonymous governed dashboard and embed it on an allowed origin.
 - [Agent integrations](/docs/guides/integrate/agent): Use global conversations and the shared governed tool catalog.
+- [Use the agent tool catalog](/docs/guides/integrate/agent-tools): Find, inspect, and query governed resources through the curated tool surface.
 - [Connect an MCP host](/docs/guides/integrate/mcp): Connect Claude and other MCP hosts to a LeapView deployment over OAuth.
 - [Automation and CI](/docs/cli/automation): Run validation and deployments safely in CI.
 
@@ -93,6 +95,18 @@ Focused slices are available at `/docs/cli/commands/{id}.json|md` and `/docs/api
 - [Environment variable reference](/docs/configuration): Process-wide settings generated from the runtime configuration specification.
 - [Supported capabilities](/docs/reference/capabilities): Review supported resource, data, visual, and integration surfaces.
 - [CLI troubleshooting](/docs/cli/troubleshooting): Diagnose local validation and remote operation failures.
+
+#### Agent tools
+
+- [Agent tool reference](/docs/agent-tools): Browse the exact tool contracts exposed by built-in chat and deployment MCP.
+- [catalog_get](/docs/agent-tools/catalog_get): Get the compact definition and type-specific metadata for one exact catalog ref.
+- [catalog_list](/docs/agent-tools/catalog_list): Browse one deterministic level of the authorized LeapView catalog hierarchy.
+- [catalog_search](/docs/agent-tools/catalog_search): Search the complete authorized LeapView BI catalog across workspaces.
+- [docs_read](/docs/agent-tools/docs_read): Read a bounded line window from one LeapView document returned by docs_search.
+- [docs_search](/docs/agent-tools/docs_search): Search LeapView's version-matched product documentation.
+- [query_dashboard_visual](/docs/agent-tools/query_dashboard_visual): Query dashboard visual
+- [query_semantic_model](/docs/agent-tools/query_semantic_model): Query semantic model
+- [query_visual](/docs/agent-tools/query_visual): Create one read-only visual from LeapView semantic model fields.
 
 #### Configuration
 
