@@ -16,8 +16,8 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func (s *applicationAssembly) registerAPIGenRoutes(r chi.Router) {
-	apigenapi.RegisterAPIGenRoutes(r, apiGenRouteHandler{handler: s.platform.apiGenHandler})
+func registerAPIGenRoutes(routes *capabilityRoutes, runtime *runtimeServices, platform *platformServices, policy *httpPolicy, r chi.Router) {
+	apigenapi.RegisterAPIGenRoutes(r, apiGenRouteHandler{handler: platform.apiGenHandler})
 }
 
 type apiGenOperationHandler interface {

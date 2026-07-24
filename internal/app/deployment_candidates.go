@@ -19,21 +19,21 @@ type servingStateRepository interface {
 	ListActiveScopes(context.Context) ([]servingstatemodule.ActiveScope, error)
 }
 
-func (s *applicationAssembly) servingStateRepository(inputs moduleAssemblyInputs) (servingStateRepository, error) {
-	if inputs.persistence.servingStateRepo != nil {
-		return inputs.persistence.servingStateRepo, nil
+func resolveServingStateRepository(routes *capabilityRoutes, runtime *runtimeServices, platform *platformServices, policy *httpPolicy, persistence persistenceInputs) (servingStateRepository, error) {
+	if persistence.servingStateRepo != nil {
+		return persistence.servingStateRepo, nil
 	}
 	return nil, fmt.Errorf("serving state repository is not configured")
 }
 
-func (s *applicationAssembly) workspaceID(value string) string {
+func workspaceID(routes *capabilityRoutes, runtime *runtimeServices, platform *platformServices, policy *httpPolicy, value string) string {
 	return value
 }
 
-func (s *applicationAssembly) defaultServingEnvironment() servingstatemodule.Environment {
-	return servingstatemodule.NormalizeEnvironment(servingstatemodule.Environment(s.policy.defaultEnvironment))
+func defaultServingEnvironment(routes *capabilityRoutes, runtime *runtimeServices, platform *platformServices, policy *httpPolicy) servingstatemodule.Environment {
+	return servingstatemodule.NormalizeEnvironment(servingstatemodule.Environment(policy.defaultEnvironment))
 }
 
-func (s *applicationAssembly) requestServingEnvironment(r *http.Request) servingstatemodule.Environment {
-	return s.defaultServingEnvironment()
+func requestServingEnvironment(routes *capabilityRoutes, runtime *runtimeServices, platform *platformServices, policy *httpPolicy, r *http.Request) servingstatemodule.Environment {
+	return defaultServingEnvironment(routes, runtime, platform, policy)
 }

@@ -179,57 +179,13 @@ func TestApplicationHasNoServerShapedDependencyContainer(t *testing.T) {
 		}
 		for name, structure := range localStructs {
 			switch name {
-			case "runtimeRouter", "assemblyConfig", "capabilityConstruction":
+			case "runtimeRouter", "assemblyConfig", "capabilityConstruction", "applicationAssembly", "assemblyInputs", "moduleAssemblyInputs":
 				t.Errorf("%s retains transitional dependency container %s", file.path, name)
-			}
-			if expected, ok := allowedCompositionSurfaces[name]; ok {
-				assertCompositionSurfaceFields(t, file.path, name, structure, expected)
-				continue
 			}
 			fields := expandedStructFieldCount(structure, localStructs, map[string]bool{name: true})
 			if fields > 12 {
 				t.Errorf("%s struct %s has %d transitive fields; split composition state into narrow route, lifecycle, health, and cleanup surfaces", file.path, name, fields)
 			}
-		}
-	}
-}
-
-var allowedCompositionSurfaces = map[string]map[string]string{
-	"applicationAssembly": {
-		"routes": "capabilityRoutes", "runtime": "runtimeServices",
-		"platform": "platformServices", "policy": "httpPolicy",
-	},
-	"assemblyInputs": {
-		"data": "dataAssemblyInputs", "capabilities": "capabilityAssemblyInputs",
-		"workflow": "workflowAssemblyInputs", "runtime": "runtimeAssemblyInputs",
-		"http": "httpAssemblyInputs",
-	},
-	"moduleAssemblyInputs": {
-		"persistence": "persistenceInputs", "workflow": "workflowInputs", "storage": "storageInputs",
-	},
-}
-
-func assertCompositionSurfaceFields(t *testing.T, path, name string, structure *ast.StructType, expected map[string]string) {
-	t.Helper()
-	actual := map[string]string{}
-	for _, field := range structure.Fields.List {
-		if len(field.Names) != 1 {
-			t.Errorf("%s struct %s must use named composition surfaces", path, name)
-			continue
-		}
-		identifier, ok := field.Type.(*ast.Ident)
-		if !ok {
-			t.Errorf("%s struct %s field %s must name a declared surface", path, name, field.Names[0].Name)
-			continue
-		}
-		actual[field.Names[0].Name] = identifier.Name
-	}
-	if len(actual) != len(expected) {
-		t.Errorf("%s struct %s has %d surfaces, want %d", path, name, len(actual), len(expected))
-	}
-	for field, typ := range expected {
-		if actual[field] != typ {
-			t.Errorf("%s struct %s surface %s = %q, want %q", path, name, field, actual[field], typ)
 		}
 	}
 }

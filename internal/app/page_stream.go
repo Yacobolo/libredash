@@ -10,24 +10,24 @@ import (
 	"github.com/Yacobolo/leapview/pkg/pagestream"
 )
 
-func (s *applicationAssembly) configurePageStream() {
-	s.runtime.pageStreams = uitransport.NewPageStream(uitransport.PageStreamConfig{
-		Trace: s.runtime.pageStreamTrace,
+func configurePageStream(routes *capabilityRoutes, runtime *runtimeServices, platform *platformServices, policy *httpPolicy) {
+	runtime.pageStreams = uitransport.NewPageStream(uitransport.PageStreamConfig{
+		Trace: runtime.pageStreamTrace,
 		Protect: func(privilege string, next http.Handler) http.Handler {
-			return s.routes.accessModule.ProtectNamed(privilege, next)
+			return routes.accessModule.ProtectNamed(privilege, next)
 		},
 		ProtectGlobal: func(privilege string, next http.Handler) http.Handler {
-			return s.routes.accessModule.ProtectGlobalNamed(privilege, next)
+			return routes.accessModule.ProtectGlobalNamed(privilege, next)
 		},
 		ProtectAnyWorkspace: func(privilege string, next http.Handler) http.Handler {
-			return s.routes.accessModule.ProtectAnyWorkspaceNamed(privilege, next)
+			return routes.accessModule.ProtectAnyWorkspaceNamed(privilege, next)
 		},
 		Handlers: map[uisignals.RouteKind]http.Handler{
-			uisignals.RouteDashboard: http.HandlerFunc(s.routes.dashboardModule.HTTP().Updates),
-			uisignals.RouteChat:      http.HandlerFunc(s.routes.agentModule.HTTP().ChatUpdates),
-			uisignals.RouteData:      http.HandlerFunc(s.routes.workspaceModule.HTTP().DataExplorerUpdates),
+			uisignals.RouteDashboard: http.HandlerFunc(routes.dashboardModule.HTTP().Updates),
+			uisignals.RouteChat:      http.HandlerFunc(routes.agentModule.HTTP().ChatUpdates),
+			uisignals.RouteData:      http.HandlerFunc(routes.workspaceModule.HTTP().DataExplorerUpdates),
 			uisignals.RouteAdmin: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				adminHTTP := s.routes.adminModule.HTTP()
+				adminHTTP := routes.adminModule.HTTP()
 				switch strings.TrimSpace(r.URL.Query().Get("section")) {
 				case "queries":
 					adminHTTP.QueryUpdates(w, r)
@@ -37,26 +37,30 @@ func (s *applicationAssembly) configurePageStream() {
 					adminHTTP.BootstrapUpdates(w, r)
 				}
 			}),
-			uisignals.RouteWorkspaceAsset:  http.HandlerFunc(s.workspaceAssetUpdates),
-			uisignals.RouteConnectionAsset: http.HandlerFunc(s.workspaceAssetUpdates),
+			uisignals.RouteWorkspaceAsset: http.HandlerFunc(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				workspaceAssetUpdates(routes, runtime, platform, policy, w, r)
+			})),
+			uisignals.RouteConnectionAsset: http.HandlerFunc(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				workspaceAssetUpdates(routes, runtime, platform, policy, w, r)
+			})),
 			uisignals.RouteLogin: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				uitransport.PatchAndWait(s.runtime.pageStreamTrace, w, r, ui.LoginBootstrapSignalsForOptions(s.routes.accessModule.LoginPageOptions(r)))
+				uitransport.PatchAndWait(runtime.pageStreamTrace, w, r, ui.LoginBootstrapSignalsForOptions(routes.accessModule.LoginPageOptions(r)))
 			}),
 			uisignals.RouteCatalog: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				uitransport.PatchAndWait(s.runtime.pageStreamTrace, w, r, ui.CatalogBootstrapSignalsForCatalogs(
-					s.routes.workspaceModule.CatalogsForVisibleWorkspaces(r), s.routes.agentModule.ChromeOption(r),
+				uitransport.PatchAndWait(runtime.pageStreamTrace, w, r, ui.CatalogBootstrapSignalsForCatalogs(
+					routes.workspaceModule.CatalogsForVisibleWorkspaces(r), routes.agentModule.ChromeOption(r),
 				))
 			}),
-			uisignals.RouteWorkspace:   http.HandlerFunc(s.routes.workspaceModule.HTTP().WorkspaceBootstrapUpdates),
-			uisignals.RouteConnections: http.HandlerFunc(s.routes.workspaceModule.HTTP().ConnectionsBootstrapUpdates),
+			uisignals.RouteWorkspace:   http.HandlerFunc(routes.workspaceModule.HTTP().WorkspaceBootstrapUpdates),
+			uisignals.RouteConnections: http.HandlerFunc(routes.workspaceModule.HTTP().ConnectionsBootstrapUpdates),
 		},
 	})
 }
 
-func (s *applicationAssembly) workspaceAssetUpdates(w http.ResponseWriter, r *http.Request) {
+func workspaceAssetUpdates(routes *capabilityRoutes, runtime *runtimeServices, platform *platformServices, policy *httpPolicy, w http.ResponseWriter, r *http.Request) {
 	if strings.TrimSpace(r.URL.Query().Get("asset")) != "" {
-		s.routes.workspaceModule.HTTP().AssetUpdatesStream(w, r)
+		routes.workspaceModule.HTTP().AssetUpdatesStream(w, r)
 		return
 	}
-	uitransport.PatchAndWait(s.runtime.pageStreamTrace, w, r, pagestream.SignalPatch{"status": map[string]any{"loading": false, "error": ""}})
+	uitransport.PatchAndWait(runtime.pageStreamTrace, w, r, pagestream.SignalPatch{"status": map[string]any{"loading": false, "error": ""}})
 }

@@ -72,6 +72,47 @@ type assemblyConfig struct {
 	QueryAudit            *analyticsmodule.QueryAuditSurface
 }
 
+// applicationAssembly is a test fixture facade for legacy app-package tests.
+// Production composition exposes only the final handler and lifecycle.
+type applicationAssembly struct {
+	routes   capabilityRoutes
+	runtime  runtimeServices
+	platform platformServices
+	policy   httpPolicy
+}
+
+func (s *applicationAssembly) Routes() http.Handler {
+	return Routes(&s.routes, &s.runtime, &s.platform, &s.policy)
+}
+
+func (s *applicationAssembly) StartBackgroundJobs(ctx context.Context) error {
+	return StartBackgroundJobs(&s.routes, &s.runtime, &s.platform, &s.policy, ctx)
+}
+
+func (s *applicationAssembly) StopBackgroundJobs(ctx context.Context) error {
+	return StopBackgroundJobs(&s.routes, &s.runtime, &s.platform, &s.policy, ctx)
+}
+
+func (s *applicationAssembly) workloadController() workloadControl {
+	return workloadController(&s.routes, &s.runtime, &s.platform, &s.policy)
+}
+
+func (s *applicationAssembly) workspaceID(value string) string {
+	return workspaceID(&s.routes, &s.runtime, &s.platform, &s.policy, value)
+}
+
+func (s *applicationAssembly) requestServingEnvironment(r *http.Request) servingstatemodule.Environment {
+	return requestServingEnvironment(&s.routes, &s.runtime, &s.platform, &s.policy, r)
+}
+
+func (s *applicationAssembly) publicProtocolMiddleware(next http.Handler) http.Handler {
+	return publicProtocolMiddleware(&s.routes, &s.runtime, &s.platform, &s.policy, next)
+}
+
+func (s *applicationAssembly) metricsForWorkspace(workspaceID string) (QueryMetrics, bool) {
+	return metricsForWorkspace(&s.routes, &s.runtime, &s.platform, &s.policy, workspaceID)
+}
+
 func assembleRuntime(metrics QueryMetrics, options assemblyConfig) *applicationAssembly {
 	server, err := assembleRuntimeChecked(context.Background(), metrics, options)
 	if err != nil {
@@ -106,41 +147,47 @@ func assembleRuntimeChecked(ctx context.Context, metrics QueryMetrics, options a
 			return nil, err
 		}
 	}
-	return buildApplicationAssembly(ctx, metrics, assemblyInputs{
-		data: dataAssemblyInputs{
+	routes, runtime, platform, policy, err := buildApplicationSurfaces(ctx, metrics,
+		dataAssemblyInputs{
 			Database: options.Database, PlatformHealth: options.PlatformHealth,
 			AdminDatabase: options.AdminDatabase, ServingStateRepo: options.ServingStateRepo,
 			StorageRetention: options.StorageRetention, WorkspaceReadModel: options.WorkspaceRepo,
 			WorkspaceDirectory: options.WorkspaceDirectory, AssetCatalog: options.AssetCatalog,
 			AccessRepo: options.AccessRepo,
 		},
-		capabilities: capabilityAssemblyInputs{
+		capabilityAssemblyInputs{
 			ReleaseModule: options.ReleaseModule, JobModule: options.JobModule,
 			AccessModule: options.AccessModule, Agent: options.Agent,
 			ManagedDataModule: options.ManagedDataModule, AnalyticsModule: options.AnalyticsModule,
 			DashboardAssets: options.DashboardAssets,
 		},
-		workflow: workflowAssemblyInputs{
+		workflowAssemblyInputs{
 			AgentSettings: options.AgentSettings, ManagedDataValidation: options.ManagedDataValidation,
 			ManagedDataResolver: options.ManagedDataResolver, AgentConfig: options.AgentConfig,
 			Auth: options.Auth, Reloader: options.Reloader, Workload: options.Workload,
 			DeploymentConfig: options.DeploymentConfig, RefreshPipelineClock: options.RefreshPipelineClock,
 			QueryAudit: options.QueryAudit,
 		},
-		runtime: runtimeAssemblyInputs{
+		runtimeAssemblyInputs{
 			DuckDBDir: options.DuckDBDir, DuckLakeCatalogPath: options.DuckLakeCatalogPath,
 			DuckLakeDataPath: options.DuckLakeDataPath, DefaultWorkspaceID: options.DefaultWorkspaceID,
 			DefaultEnvironment: options.DefaultEnvironment, SCIMBearerToken: options.SCIMBearerToken,
 			MetricsBearerToken: options.MetricsBearerToken, AllowedHosts: options.AllowedHosts,
 		},
-		http: httpAssemblyInputs{
+		httpAssemblyInputs{
 			RateLimits: options.RateLimits, SecurityHeaders: options.SecurityHeaders,
 			RequestBodyLimit: options.RequestBodyLimit, RequestLogging: options.RequestLogging,
 			Logger: options.Logger, JobLeaseTimeout: options.JobLeaseTimeout,
 			ManagedDataTus: options.ManagedDataTus, MCPOAuth: options.MCPOAuth,
 			PublicURL: options.PublicURL,
 		},
-	})
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &applicationAssembly{
+		routes: *routes, runtime: *runtime, platform: *platform, policy: *policy,
+	}, nil
 }
 
 func NewRuntimeMetrics(provider runtimehost.Provider, workspaceID string) QueryMetrics {

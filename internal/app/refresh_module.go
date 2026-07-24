@@ -10,56 +10,60 @@ import (
 	refreshmodule "github.com/Yacobolo/leapview/internal/refresh/module"
 )
 
-func (s *applicationAssembly) configureRefreshModule(ctx context.Context, database *sql.DB, inputs moduleAssemblyInputs) error {
-	if s == nil || s.routes.refreshModule != nil {
+func configureRefreshModule(routes *capabilityRoutes, runtime *runtimeServices, platform *platformServices, policy *httpPolicy, ctx context.Context, database *sql.DB, persistence persistenceInputs, workflow workflowInputs, storage storageInputs) error {
+	if routes == nil || routes.refreshModule != nil {
 		return nil
 	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	service, err := s.workspaceRefreshService(inputs)
+	service, err := workspaceRefreshService(routes, runtime, platform, policy, persistence, workflow)
 	if err != nil && database != nil {
 		return fmt.Errorf("configure refresh service: %w", err)
 	}
 	config := refreshmodule.Config{
 		Database: database, Service: service,
-		Analytics: s.runtime.analyticsModule.WorkspaceMaterializer(), ManagedData: inputs.workflow.managedDataResolver,
+		Analytics: runtime.analyticsModule.WorkspaceMaterializer(), ManagedData: workflow.managedDataResolver,
 		HTTP: refreshmodule.HTTPConfig{
-			RunnerConfigured: func() bool { return s.runtime.metrics != nil },
+			RunnerConfigured: func() bool { return runtime.metrics != nil },
 			CurrentPrincipal: func(r *http.Request) (refreshmodule.HTTPPrincipal, bool) {
-				principal, ok := s.routes.accessModule.CurrentPrincipal(r)
+				principal, ok := routes.accessModule.CurrentPrincipal(r)
 				return refreshmodule.HTTPPrincipal{ID: principal.ID}, ok
 			},
-			WorkspaceID: s.workspaceID,
-			Environment: func(*http.Request) string { return string(s.defaultServingEnvironment()) },
+			WorkspaceID: func(value string) string {
+				return workspaceID(routes, runtime, platform, policy, value)
+			},
+			Environment: func(*http.Request) string {
+				return string(defaultServingEnvironment(routes, runtime, platform, policy))
+			},
 		},
 		Authorization: refreshmodule.AuthorizationConfig{
 			CurrentPrincipal: func(r *http.Request) (refreshmodule.AuthorizationPrincipal, bool) {
-				principal, ok := s.routes.accessModule.CurrentPrincipal(r)
+				principal, ok := routes.accessModule.CurrentPrincipal(r)
 				return refreshmodule.AuthorizationPrincipal{ID: principal.ID, DevBypass: principal.DevBypass}, ok
 			},
 			CurrentCredential: func(r *http.Request) (accessmodule.APICredential, bool) {
 				return accessmodule.APICredentialFromContext(r.Context())
 			},
 			ResolvePipelineModel: refreshmodule.PipelineModelResolver(
-				inputs.persistence.servingStateRepo,
+				persistence.servingStateRepo,
 				nil,
-				s.defaultServingEnvironment(),
+				defaultServingEnvironment(routes, runtime, platform, policy),
 			),
-			AuthorizeObject: s.routes.accessModule.AuthorizeObject,
+			AuthorizeObject: routes.accessModule.AuthorizeObject,
 		},
 		ApplyAccessSnapshot: accessmodule.ApplySnapshot,
-		Admission:           s.workloadController(), LeaseTimeout: inputs.storage.jobLeaseTimeout,
-		Environment: string(s.defaultServingEnvironment()), Clock: inputs.workflow.refreshPipelineClock,
-		EnableDispatcher: database != nil && s.runtime.metrics != nil,
-		EnableScheduler:  database != nil && inputs.persistence.servingStateRepo != nil,
-		Logger:           s.platform.logger, Events: s.platform.asyncJobs,
+		Admission:           workloadController(routes, runtime, platform, policy), LeaseTimeout: storage.jobLeaseTimeout,
+		Environment: string(defaultServingEnvironment(routes, runtime, platform, policy)), Clock: workflow.refreshPipelineClock,
+		EnableDispatcher: database != nil && runtime.metrics != nil,
+		EnableScheduler:  database != nil && persistence.servingStateRepo != nil,
+		Logger:           platform.logger, Events: platform.asyncJobs,
 		WorkloadStats: func() refreshmodule.WorkloadStats {
-			return s.workloadController().Stats()
+			return workloadController(routes, runtime, platform, policy).Stats()
 		},
 		RunFinished: func(ctx context.Context, run refreshmodule.RunRecord) {
-			if run.Status == refreshmodule.RunStatusSucceeded && s.runtime.storageRetention != nil {
-				_ = s.runtime.storageRetention.Run(ctx, false)
+			if run.Status == refreshmodule.RunStatusSucceeded && runtime.storageRetention != nil {
+				_ = runtime.storageRetention.Run(ctx, false)
 			}
 		},
 	}
@@ -67,6 +71,6 @@ func (s *applicationAssembly) configureRefreshModule(ctx context.Context, databa
 	if err != nil {
 		return fmt.Errorf("build refresh module: %w", err)
 	}
-	s.routes.refreshModule = module
+	routes.refreshModule = module
 	return nil
 }

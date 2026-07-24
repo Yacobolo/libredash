@@ -40,23 +40,17 @@ func assemble(ctx context.Context, cfg config.Config) (http.Handler, Lifecycle, 
 			environment = servingstatemodule.DefaultEnvironment
 		}
 	}
-	runtime, cleanup, err := buildRuntime(ctx, cfg, production, environment)
+	return buildRuntime(ctx, cfg, production, environment)
+}
+
+func buildRuntime(ctx context.Context, cfg config.Config, production bool, environment servingstatemodule.Environment) (http.Handler, Lifecycle, cleanupFunc, error) {
+	dashboardAssets, err := dashboardmodule.BuildAssets(ctx, cfg.MapAssetDir)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	handler := runtime.Routes()
-	lifecycle := newRuntimeLifecycle(runtime.platform.workers, runtime.runtime.analyticsModule, runtime.runtime.workloads)
-	return handler, lifecycle, cleanup, nil
-}
-
-func buildRuntime(ctx context.Context, cfg config.Config, production bool, environment servingstatemodule.Environment) (*applicationAssembly, cleanupFunc, error) {
-	dashboardAssets, err := dashboardmodule.BuildAssets(ctx, cfg.MapAssetDir)
-	if err != nil {
-		return nil, nil, err
-	}
 	cookieSecure, err := cfg.CookieSecure()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	var allowedHosts []string
 	if production {
@@ -65,23 +59,23 @@ func buildRuntime(ctx context.Context, cfg config.Config, production bool, envir
 		allowedHosts, err = cfg.AllowedHostList()
 	}
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	duckLakeCatalogPath := cfg.DuckLakeCatalogPath()
 	for _, dir := range []string{cfg.HomeDir, cfg.ArtifactDir(), cfg.DuckDBDirPath(), cfg.RuntimeDir(), cfg.DuckLakeDataDir(), filepath.Dir(duckLakeCatalogPath)} {
 		if err := securefs.EnsurePrivateDir(dir); err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 	}
 	store, err := platform.Open(ctx, cfg.DBPath())
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	cleanup := &cleanupStack{}
 	cleanup.Push("sqlite", func(context.Context) error { return store.Close() })
-	fail := func(err error) (*applicationAssembly, cleanupFunc, error) {
+	fail := func(err error) (http.Handler, Lifecycle, cleanupFunc, error) {
 		cleanupErr := cleanup.Close(context.WithoutCancel(ctx))
-		return nil, nil, errors.Join(err, cleanupErr)
+		return nil, nil, nil, errors.Join(err, cleanupErr)
 	}
 	if err := store.BindInstanceEnvironment(ctx, string(environment)); err != nil {
 		return fail(err)
@@ -263,18 +257,18 @@ func buildRuntime(ctx context.Context, cfg config.Config, production bool, envir
 	rateLimits := apihttpmiddleware.ProductionRateLimitConfig()
 	rateLimits.Enabled = production && cfg.RateLimitingEnabled()
 	rateLimits.UseRealIP = cfg.RateLimitingUsesRealIP()
-	server, err := buildApplicationAssembly(ctx, runtimeMetrics, assemblyInputs{
-		data: dataAssemblyInputs{
+	routes, runtime, platformServices, policy, err := buildApplicationSurfaces(ctx, runtimeMetrics,
+		dataAssemblyInputs{
 			Database: store.SQLDB(), PlatformHealth: store, AdminDatabase: store.SQLDB(),
 			ServingStateRepo: servingStateRepo, StorageRetention: retention,
 			WorkspaceDirectory: workspaceDirectory,
 		},
-		capabilities: capabilityAssemblyInputs{
+		capabilityAssemblyInputs{
 			AnalyticsModule: analyticsModule, DashboardAssets: dashboardAssets,
 			ReleaseModule: releaseModule, JobModule: jobModule,
 			AccessModule: accessModule, ManagedDataModule: managedDataModule,
 		},
-		workflow: workflowAssemblyInputs{
+		workflowAssemblyInputs{
 			AgentSettings: store,
 			AgentConfig:   agentmodule.ModelConfig{APIKey: cfg.AgentAPIKey, BaseURL: cfg.AgentBaseURL, Model: cfg.AgentModel},
 			Auth:          auth, Reloader: runtimeHostModule, Workload: workloadController,
@@ -282,23 +276,25 @@ func buildRuntime(ctx context.Context, cfg config.Config, production bool, envir
 			ManagedDataResolver:   managedDataResolver,
 			DeploymentConfig:      deploymentConfig,
 		},
-		runtime: runtimeAssemblyInputs{
+		runtimeAssemblyInputs{
 			DuckLakeCatalogPath: duckLakeCatalogPath, DuckLakeDataPath: cfg.DuckLakeDataDir(),
 			DefaultEnvironment: string(environment), SCIMBearerToken: cfg.SCIMBearerToken,
 			MetricsBearerToken: cfg.MetricsBearerToken, AllowedHosts: allowedHosts,
 		},
-		http: httpAssemblyInputs{
+		httpAssemblyInputs{
 			PublicURL:       firstConfigured(cfg.PublicURL, configuredListenURL(cfg.ListenAddr())),
 			RateLimits:      rateLimits,
 			SecurityHeaders: apihttpmiddleware.SecurityHeaders(production && cfg.HSTSEnabled(cookieSecure)),
 			RequestLogging:  production && cfg.RequestLoggingEnabled(), Logger: slog.Default(),
 			JobLeaseTimeout: cfg.RefreshJobLeaseTimeout, ManagedDataTus: managedDataModule.TusHandler(),
 		},
-	})
+	)
 	if err != nil {
 		return fail(err)
 	}
-	return server, cleanup.Close, nil
+	handler := Routes(routes, runtime, platformServices, policy)
+	lifecycle := newRuntimeLifecycle(platformServices.workers, runtime.analyticsModule, runtime.workloads)
+	return handler, lifecycle, cleanup.Close, nil
 }
 
 func firstConfigured(values ...string) string {

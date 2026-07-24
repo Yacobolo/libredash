@@ -10,7 +10,7 @@ import (
 	apiprotocol "github.com/Yacobolo/leapview/internal/api/protocol"
 )
 
-func (s *applicationAssembly) configureAPIProtocol(ctx context.Context, database *sql.DB) error {
+func configureAPIProtocol(routes *capabilityRoutes, runtime *runtimeServices, platform *platformServices, policy *httpPolicy, ctx context.Context, database *sql.DB) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -18,37 +18,39 @@ func (s *applicationAssembly) configureAPIProtocol(ctx context.Context, database
 		Database:    database,
 		BearerToken: accessmodule.BearerToken,
 		AcceptsBearer: func(r *http.Request) bool {
-			return s.platform.auth == nil || s.platform.auth.AcceptsPublicBearer(r)
+			return platform.auth == nil || platform.auth.AcceptsPublicBearer(r)
 		},
 		PrincipalID: func(r *http.Request) (string, bool) {
-			if s.platform.auth == nil {
+			if platform.auth == nil {
 				return "", false
 			}
-			principal, _, ok := s.platform.auth.Authenticate(r)
+			principal, _, ok := platform.auth.Authenticate(r)
 			return principal.ID, ok
 		},
-		CursorSnapshot: s.cursorSnapshot,
+		CursorSnapshot: func(r *http.Request) string {
+			return cursorSnapshot(routes, runtime, platform, policy, r)
+		},
 	})
 	if err != nil {
 		return err
 	}
-	s.platform.apiProtocol = protocol
+	platform.apiProtocol = protocol
 	return nil
 }
 
-func (s *applicationAssembly) publicProtocolMiddleware(next http.Handler) http.Handler {
-	return s.platform.apiProtocol.Middleware(next)
+func publicProtocolMiddleware(routes *capabilityRoutes, runtime *runtimeServices, platform *platformServices, policy *httpPolicy, next http.Handler) http.Handler {
+	return platform.apiProtocol.Middleware(next)
 }
 
-func (s *applicationAssembly) openAPIDescription(w http.ResponseWriter, r *http.Request) {
-	s.platform.apiProtocol.OpenAPIDescription(w, r)
+func openAPIDescription(routes *capabilityRoutes, runtime *runtimeServices, platform *platformServices, policy *httpPolicy, w http.ResponseWriter, r *http.Request) {
+	platform.apiProtocol.OpenAPIDescription(w, r)
 }
 
-func (s *applicationAssembly) publicDocs(w http.ResponseWriter, r *http.Request) {
-	s.platform.apiProtocol.PublicDocs(w, r)
+func publicDocs(routes *capabilityRoutes, runtime *runtimeServices, platform *platformServices, policy *httpPolicy, w http.ResponseWriter, r *http.Request) {
+	platform.apiProtocol.PublicDocs(w, r)
 }
 
-func (s *applicationAssembly) cursorSnapshot(r *http.Request) string {
+func cursorSnapshot(routes *capabilityRoutes, runtime *runtimeServices, platform *platformServices, policy *httpPolicy, r *http.Request) string {
 	segments := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 	for index, segment := range segments {
 		if index+1 >= len(segments) {
@@ -56,14 +58,14 @@ func (s *applicationAssembly) cursorSnapshot(r *http.Request) string {
 		}
 		switch segment {
 		case "workspaces":
-			if s.routes.workspaceModule != nil {
-				snapshot, err := s.routes.workspaceModule.ActiveServingStateID(r.Context(), s.workspaceID(segments[index+1]))
+			if routes.workspaceModule != nil {
+				snapshot, err := routes.workspaceModule.ActiveServingStateID(r.Context(), workspaceID(routes, runtime, platform, policy, segments[index+1]))
 				if err == nil && snapshot != "" {
 					return snapshot
 				}
 			}
 		case "projects":
-			if snapshot := s.routes.releaseModule.ProjectCursorSnapshot(r, segments[index+1]); snapshot != "" {
+			if snapshot := routes.releaseModule.ProjectCursorSnapshot(r, segments[index+1]); snapshot != "" {
 				return snapshot
 			}
 		}

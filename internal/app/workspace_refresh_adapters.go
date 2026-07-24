@@ -11,56 +11,56 @@ import (
 	workspacemodule "github.com/Yacobolo/leapview/internal/workspace/module"
 )
 
-func (s *applicationAssembly) workspaceRefreshSupport() refreshmodule.WorkspaceSupport {
+func workspaceRefreshSupport(routes *capabilityRoutes, runtime *runtimeServices, platform *platformServices, policy *httpPolicy) refreshmodule.WorkspaceSupport {
 	support := refreshmodule.WorkspaceSupport{
 		Runs: func() (refreshmodule.RunReader, error) {
-			if s.routes.refreshModule == nil {
+			if routes.refreshModule == nil {
 				return nil, fmt.Errorf("refresh module is required")
 			}
-			return s.routes.refreshModule, nil
+			return routes.refreshModule, nil
 		},
 		QueuePipeline: func(ctx context.Context, input refreshmodule.QueuePipelineInput) (refreshmodule.QueueAssetResult, error) {
-			if s.routes.refreshModule == nil {
+			if routes.refreshModule == nil {
 				return refreshmodule.QueueAssetResult{}, fmt.Errorf("refresh module is required")
 			}
-			return s.routes.refreshModule.QueuePipelineRefresh(ctx, input)
+			return routes.refreshModule.QueuePipelineRefresh(ctx, input)
 		},
 		Environment: func(r *http.Request) servingstatemodule.Environment {
-			return s.requestServingEnvironment(r)
+			return requestServingEnvironment(routes, runtime, platform, policy, r)
 		},
 		PrincipalID: func(r *http.Request) string {
-			principal, _ := s.routes.accessModule.CurrentPrincipal(r)
+			principal, _ := routes.accessModule.CurrentPrincipal(r)
 			return principal.ID
 		},
 		DispatchQueued: func() {
-			if s.routes.refreshModule != nil {
-				s.routes.refreshModule.Dispatch(context.Background())
+			if routes.refreshModule != nil {
+				routes.refreshModule.Dispatch(context.Background())
 			}
 		},
-		Broker: s.runtime.broker,
+		Broker: runtime.broker,
 		AssetCatalog: func(ctx context.Context, workspaceID string) ([]workspacemodule.AssetView, []workspacemodule.AssetEdgeView, bool) {
-			assets, edges, err := s.routes.workspaceModule.WorkspaceAssetsAndEdgesForData(ctx, workspaceID, string(s.defaultServingEnvironment()))
+			assets, edges, err := routes.workspaceModule.WorkspaceAssetsAndEdgesForData(ctx, workspaceID, string(defaultServingEnvironment(routes, runtime, platform, policy)))
 			if err != nil || (len(assets) == 0 && len(edges) == 0) {
 				return nil, nil, false
 			}
 			return assets, edges, true
 		},
 		WorkspaceView: func(r *http.Request, workspaceID string) workspacemodule.WorkspaceView {
-			return s.routes.workspaceModule.WorkspaceResponse(r, workspaceID)
+			return routes.workspaceModule.WorkspaceResponse(r, workspaceID)
 		},
 		WorkspaceViewContext: func(ctx context.Context, workspaceID string) workspacemodule.WorkspaceView {
-			return s.routes.workspaceModule.WorkspaceViewContext(ctx, workspaceID)
+			return routes.workspaceModule.WorkspaceViewContext(ctx, workspaceID)
 		},
 		Presentation: workspacemodule.RefreshPresentation{},
 	}
-	if s.runtime.persistenceConfigured {
-		support.DataVersions = s.routes.refreshModule
+	if runtime.persistenceConfigured {
+		support.DataVersions = routes.refreshModule
 	}
 	return support
 }
 
-func (s *applicationAssembly) workspaceRefreshService(inputs moduleAssemblyInputs) (refreshmodule.Service, error) {
-	repo, err := s.servingStateRepository(inputs)
+func workspaceRefreshService(routes *capabilityRoutes, runtime *runtimeServices, platform *platformServices, policy *httpPolicy, persistence persistenceInputs, workflow workflowInputs) (refreshmodule.Service, error) {
+	repo, err := resolveServingStateRepository(routes, runtime, platform, policy, persistence)
 	if err != nil {
 		return refreshmodule.Service{}, err
 	}
@@ -68,23 +68,25 @@ func (s *applicationAssembly) workspaceRefreshService(inputs moduleAssemblyInput
 		return refreshmodule.Service{}, fmt.Errorf("serving state repository is required")
 	}
 	hooks := []refreshmodule.CandidateValidationHook{}
-	if inputs.workflow.managedDataValidation != nil {
-		hooks = append(hooks, inputs.workflow.managedDataValidation)
+	if workflow.managedDataValidation != nil {
+		hooks = append(hooks, workflow.managedDataValidation)
 	}
 	return refreshmodule.Service{
 		ServingStates: repo,
-		Runtime:       inputs.workflow.reloader,
+		Runtime:       workflow.reloader,
 		Publisher: refreshmodule.Publisher{
-			Workspace: s.workspaceRefreshSupport,
+			Workspace: func() refreshmodule.WorkspaceSupport {
+				return workspaceRefreshSupport(routes, runtime, platform, policy)
+			},
 			SemanticModelVersion: func(ctx context.Context, workspaceID, environment, modelID string) {
 				refreshedAt := ""
-				if s.routes.refreshModule != nil {
-					if version, ok, err := s.routes.refreshModule.DataVersion(ctx, workspaceID, environment, modelID); err == nil && ok {
+				if routes.refreshModule != nil {
+					if version, ok, err := routes.refreshModule.DataVersion(ctx, workspaceID, environment, modelID); err == nil && ok {
 						refreshedAt = version.RefreshedAt.Format(time.RFC3339)
 					}
 				}
-				if s.routes.dashboardModule != nil {
-					s.routes.dashboardModule.PublishSemanticModelRefresh(workspaceID, environment, modelID, refreshedAt)
+				if routes.dashboardModule != nil {
+					routes.dashboardModule.PublishSemanticModelRefresh(workspaceID, environment, modelID, refreshedAt)
 				}
 			},
 		},
