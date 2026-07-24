@@ -70,7 +70,6 @@ func TestDashboardTelemetryObservesAcceptedProgressiveTargetEvents(t *testing.T)
 			Spec:      visualizationir.VisualizationSpec{Value: &visualizationir.TableVisualizationSpec{Kind: "table"}},
 			DataState: visualizationir.VisualizationDataState{Value: &visualizationir.WindowedVisualizationDataState{Kind: "windowed", AvailableRows: 1, Cardinality: visualizationir.VisualizationCardinality{Kind: visualizationir.VisualizationCardinalityKindExact, Count: int64Pointer(1)}, Blocks: map[string]visualizationir.VisualizationWindowBlock{"a": {Rows: [][]any{{"o1"}}}}}},
 		}},
-		{Type: dashboardstream.RefreshEventFilterOptions, Target: "state"},
 		{Type: dashboardstream.RefreshEventTargetError, Target: "visual:broken"},
 		{Type: dashboardstream.RefreshEventTargetError, Target: "refresh"},
 		{Type: dashboardstream.RefreshEventComplete},
@@ -79,10 +78,9 @@ func TestDashboardTelemetryObservesAcceptedProgressiveTargetEvents(t *testing.T)
 	}
 
 	want := map[string]float64{
-		"filter_options:success": 1,
-		"refresh:error":          1,
-		"visual:error":           1,
-		"visual:success":         2,
+		"refresh:error":  1,
+		"visual:error":   1,
+		"visual:success": 2,
 	}
 	got := dashboardTargetMetricValues(t, telemetry)
 	if len(got) != len(want) {

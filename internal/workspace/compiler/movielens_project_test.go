@@ -38,10 +38,10 @@ func TestMovieLensExperimentProjectCompiles(t *testing.T) {
 		t.Fatalf("movie_title dimension = %#v, want conformed ratings/tags bindings", movieTitle)
 	}
 	ratingsOverview := workspaceProject.Definition.Dashboards["ratings-overview"]
-	if filter := ratingsOverview.Filters["rating_bucket"]; filter.Dimension != "ratings.rating_bucket" || filter.Fact != "ratings" {
+	if filter := ratingsOverview.FilterDefinitions["rating_bucket"]; filter.Field != "rating_bucket" || filter.Fact != "ratings" {
 		t.Fatalf("rating_bucket filter = %#v, want explicit ratings fact", filter)
 	}
-	if filter := ratingsOverview.Filters["title"]; filter.Dimension != "movie_title" || filter.Fact != "" {
+	if filter := ratingsOverview.FilterDefinitions["title"]; filter.Field != "movie_title" || filter.Fact != "" {
 		t.Fatalf("title filter = %#v, want conformed movie_title", filter)
 	}
 	assertGraphAsset(t, workspaceProject.Workspace.Graph, "connection:movielens")

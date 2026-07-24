@@ -37,7 +37,6 @@ func (s *QueryService) ExecuteConsumersPage(ctx context.Context, request consume
 	request.Filters = report.NormalizeFiltersForPage(page.ID, request.Filters)
 	logical := make([]consumer.LogicalQuery, 0, len(request.Targets))
 	pageVisuals := stringSetFromSlice(pageVisualizationIDs(page))
-	pageFilters := stringSetFromSlice(report.PageFilterIDs(page.ID))
 	for _, target := range request.Targets {
 		item := consumer.LogicalQuery{Target: target}
 		switch target.Kind {
@@ -58,10 +57,6 @@ func (s *QueryService) ExecuteConsumersPage(ctx context.Context, request consume
 				item.Query = reportAggregateDataQuery(report.SemanticModel, aggregate)
 			} else if !dataquery.IsBundleIncompatible(compileErr) {
 				return compileErr
-			}
-		case consumer.KindFilterOptions:
-			if !pageFilters[target.ID] {
-				return fmt.Errorf("filter %q is not on page %q", target.ID, page.ID)
 			}
 		case consumer.KindWindow:
 			table, ok := report.Visualizations[target.ID]
@@ -192,11 +187,6 @@ func (s *QueryService) executeConsumerJob(ctx context.Context, request consumer.
 	case consumer.KindSpatial:
 		for _, query := range job.Queries {
 			s.executeSpatialConsumer(jobCtx, request, query.Target, startedAt, emit)
-		}
-	case consumer.KindFilterOptions:
-		for _, query := range job.Queries {
-			options, err := s.snapshots.queryFilterOptionsPage(jobCtx, request.DashboardID, request.PageID, []string{query.Target.ID})
-			emit(consumer.Result{Target: query.Target, FilterOptions: options, Err: err, Duration: time.Since(startedAt)})
 		}
 	case consumer.KindWindow:
 		for _, query := range job.Queries {

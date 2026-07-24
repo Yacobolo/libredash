@@ -427,6 +427,11 @@ sections:
             type: explanation
             summary: Understand server-owned state and SSE response contracts.
             source: articles/architecture/datastar.md
+          - slug: architecture/filters-slicers
+            title: Filter and slicer target architecture
+            type: explanation
+            summary: Understand semantic filter definitions, scoped bindings, canonical state, pane controls, slicers, and governed option queries.
+            source: articles/architecture/filters-slicers.md
           - slug: architecture/visual-plugins
             title: Visualization architecture
             type: explanation

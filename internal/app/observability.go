@@ -255,8 +255,6 @@ func (t *httpTelemetry) dashboardRefreshEventObserved(event dashboardstream.Refr
 		return
 	}
 	switch event.Type {
-	case dashboardstream.RefreshEventFilterOptions:
-		t.dashboardTargetObserved("filter_options", "success")
 	case dashboardstream.RefreshEventVisual:
 		t.dashboardTargetObserved("visual", "success")
 		t.observeVisualizationEnvelope(event.Value)
@@ -366,7 +364,7 @@ func (t *httpTelemetry) publicRateLimitObserved(family string) {
 func dashboardCommandLabel(value string) string {
 	value = normalizedMetricLabel(value)
 	switch value {
-	case "initial", "reload", "reset_filters", "filter_change", "select", "clear_selection", "visual_window", "refresh_materializations":
+	case "initial", "filter_change", "navigate", "select", "clear_selection", "visual_window", "refresh_materializations":
 		return value
 	default:
 		return "other"

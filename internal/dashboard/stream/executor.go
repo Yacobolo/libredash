@@ -124,9 +124,6 @@ func executeConsumers(ctx context.Context, executor consumer.Executor, request W
 			return publish(event)
 		}
 		switch result.Target.Kind {
-		case consumer.KindFilterOptions:
-			event.Type = RefreshEventFilterOptions
-			event.Value = result.FilterOptions
 		case consumer.KindVisual, consumer.KindSpatial:
 			event.Type = RefreshEventVisual
 			event.Value = result.Envelope

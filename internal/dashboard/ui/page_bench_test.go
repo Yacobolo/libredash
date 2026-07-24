@@ -1,32 +1,34 @@
 package ui
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	"github.com/Yacobolo/leapview/internal/dashboard"
+	dashboardfilter "github.com/Yacobolo/leapview/internal/dashboard/filter"
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 	uiactions "github.com/Yacobolo/leapview/internal/ui/actions"
 	workspacecompiler "github.com/Yacobolo/leapview/internal/workspace/compiler"
 	"github.com/Yacobolo/leapview/pkg/pagestream"
 	g "maragu.dev/gomponents"
-	dsattr "maragu.dev/gomponents-datastar"
 	h "maragu.dev/gomponents/html"
 )
 
 func BenchmarkDashboardJSONAttributeBridge(b *testing.B) {
-	benchmarkDashboardBridge(b, true)
+	benchmarkDashboardBridge(b)
 }
 
 func BenchmarkDashboardDatastarLitBridge(b *testing.B) {
-	benchmarkDashboardBridge(b, false)
+	benchmarkDashboardBridge(b)
 }
 
-func benchmarkDashboardBridge(b *testing.B, legacy bool) {
+func benchmarkDashboardBridge(b *testing.B) {
 	report, model, catalog := benchmarkDashboardFixture()
 	activePage := report.Pages[0]
+	if err := workspacecompiler.ValidateDashboard(&report, map[string]*semanticmodel.Model{model.Name: model}); err != nil {
+		b.Fatal(err)
+	}
 	definitions, err := workspacecompiler.CompileVisualizationDefinitions(&report, model)
 	if err != nil {
 		b.Fatal(err)
@@ -36,47 +38,27 @@ func benchmarkDashboardBridge(b *testing.B, legacy bool) {
 		b.Fatal(err)
 	}
 	htmlBytes := 0
-	jsonAttrBytes := 0
 
 	b.ReportAllocs()
 	for b.Loop() {
 		signals := BootstrapSignals("client", "benchmark-stream", catalog, compiled, model, definitions, report.Pages, activePage, dashboard.Filters{})
-		node := benchmarkDashboardDocument(catalog, report, model, activePage, signals, legacy)
+		node := benchmarkDashboardDocument(catalog, report, model, activePage, signals)
 		var out strings.Builder
 		if err := node.Render(&out); err != nil {
 			b.Fatal(err)
 		}
 		htmlBytes = out.Len()
-		if legacy {
-			jsonAttrBytes = benchmarkDashboardJSONAttrBytes(signals)
-		}
 	}
 
 	b.ReportMetric(float64(htmlBytes), "html_bytes/op")
-	if legacy {
-		b.ReportMetric(float64(jsonAttrBytes), "json_attr_bytes/op")
-	}
 }
 
-func benchmarkDashboardDocument(catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model, activePage dashboard.Page, signals map[string]any, legacy bool) g.Node {
+func benchmarkDashboardDocument(catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model, activePage dashboard.Page, _ map[string]any) g.Node {
 	dashboardUpdatesURL := updatesURL(catalog.Workspace.ID, report.ID, activePage.ID)
-	reloadAction := uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/reload", "runtime", "filters.controls")
-	visualReset := visualResetExpression()
-	filtersUpdate := "$filters = evt.detail.filters; $urlParams = evt.detail.urlParams; window.DatastarURLSync && window.DatastarURLSync.replace($urlParams); " + visualReset
-	body := benchmarkDatastarLitDashboardRoot(catalog, report, model, filtersUpdate, reloadAction)
-	if legacy {
-		body = benchmarkLegacyDashboardRoot(catalog, report, model, signals, filtersUpdate, reloadAction)
-	}
+	body := benchmarkDatastarLitDashboardRoot(catalog, report, model)
 	mainAttrs := []g.Node{
 		h.ID("dashboard"),
 		h.Class(appRootClass),
-		g.Attr("data-on:datastar-url-params-sync__window", "$urlParams = evt.detail.params; $filters = window.LeapViewFilterURL.fromParams($filterConfig, $filters, $urlParams); "+visualReset+reloadAction),
-	}
-	if legacy {
-		mainAttrs = append(mainAttrs,
-			dsattr.Signals(signals),
-			g.Attr("data-url-param-shape", jsonString(signals["urlParamShape"])),
-		)
 	}
 	return pagestream.RenderPage(pagestream.PageSpec{
 		Title:             "LeapView",
@@ -101,73 +83,38 @@ func benchmarkDashboardDocument(catalog dashboard.Catalog, report reportdef.Dash
 	})
 }
 
-func jsonString(value any) string {
-	bytes, err := json.Marshal(value)
-	if err != nil {
-		return "{}"
-	}
-	return string(bytes)
-}
-
-func benchmarkDatastarLitDashboardRoot(catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model, filtersUpdate, reloadAction string) g.Node {
-	attrs := append([]g.Node{g.Attr("slot", "page")}, benchmarkDashboardCommandAttrs(catalog, report, model, filtersUpdate, reloadAction)...)
+func benchmarkDatastarLitDashboardRoot(catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model) g.Node {
+	attrs := append([]g.Node{g.Attr("slot", "page")}, benchmarkDashboardCommandAttrs(catalog, report, model)...)
 	return g.El("lv-app-shell",
 		g.El("lv-dashboard-page", attrs...),
 	)
 }
 
-func benchmarkLegacyDashboardRoot(catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model, signals map[string]any, filtersUpdate, reloadAction string) g.Node {
-	attrs := []g.Node{
-		g.Attr("slot", "page"),
-		g.Attr("page", jsonString(signals["page"])),
-		g.Attr("filterconfig", jsonString(signals["filterConfig"])),
-		g.Attr("filters", jsonString(signals["filters"])),
-		g.Attr("filteroptions", jsonString(signals["filterOptions"])),
-		g.Attr("visuals", jsonString(signals["visuals"])),
-		g.Attr("tables", jsonString(signals["tables"])),
-		g.Attr("status", jsonString(signals["status"])),
-		g.Attr("data-attr:page", "$page"),
-		g.Attr("data-attr:filterconfig", "$filterConfig"),
-		g.Attr("data-attr:filters", "$filters"),
-		g.Attr("data-attr:filteroptions", "$filterOptions"),
-		g.Attr("data-attr:visuals", "$visuals"),
-		g.Attr("data-attr:tables", "$tables"),
-		g.Attr("data-attr:status", "$status"),
-	}
-	attrs = append(attrs, benchmarkDashboardCommandAttrs(catalog, report, model, filtersUpdate, reloadAction)...)
-	return g.El("lv-app-shell",
-		g.Attr("chrome", jsonString(signals["chrome"])),
-		g.Attr("data-attr:chrome", "$chrome"),
-		g.El("lv-dashboard-page", attrs...),
-	)
-}
-
-func benchmarkDashboardCommandAttrs(catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model, filtersUpdate, reloadAction string) []g.Node {
+func benchmarkDashboardCommandAttrs(catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model) []g.Node {
 	return []g.Node{
-		g.Attr("data-on:lv-filters-change", filtersUpdate+reloadAction),
-		g.Attr("data-on:lv-filters-reset", filtersUpdate+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/reset-filters", "runtime")),
-		g.Attr("data-on:lv-filters-refresh", reloadAction),
-		g.Attr("data-on:lv-selection-clear", "$filters.selections = []; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/clear-selection", "runtime")),
+		g.Attr("data-on:lv-filter-command", "$filterCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/filter", "runtime", "filterCommand")),
+		g.Attr("data-on:lv-filter-options-request", "$filterOptionRequest = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/filter-options", "runtime", "filterOptionRequest")),
+		g.Attr("data-on:lv-selection-clear", "$interactionSelections = []; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/clear-selection", "runtime")),
 		g.Attr("data-on:lv-interaction-select", "$interactionCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/select", "runtime", "interactionCommand")),
 		g.Attr("data-on:lv-visualization-window-request", "$visualWindowCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/visual-window", "runtime", "visualWindowCommand")),
 	}
 }
 
-func benchmarkDashboardJSONAttrBytes(signals map[string]any) int {
-	total := 0
-	for _, key := range []string{"chrome", "page", "filterConfig", "filters", "filterOptions", "visuals", "tables", "status"} {
-		total += len(jsonString(signals[key]))
-	}
-	return total
-}
-
 func benchmarkDashboardFixture() (reportdef.Dashboard, *semanticmodel.Model, dashboard.Catalog) {
 	zebra := true
-	filters := map[string]reportdef.FilterDefinition{
-		"state":    {Type: "multi_select", Label: "State", Dimension: "orders.state", URLParam: "state", Operator: "in"},
-		"category": {Type: "multi_select", Label: "Category", Dimension: "orders.category", URLParam: "category", Operator: "in"},
-		"status":   {Type: "multi_select", Label: "Status", Dimension: "orders.status", URLParam: "status", Operator: "in"},
-		"channel":  {Type: "multi_select", Label: "Channel", Dimension: "orders.channel", URLParam: "channel", Operator: "in"},
+	filterDefinitions := map[string]dashboardfilter.Definition{}
+	filterBindings := map[string]dashboardfilter.Binding{}
+	for _, id := range []string{"state", "category", "status", "channel"} {
+		filterDefinitions[id] = dashboardfilter.Definition{
+			Label: strings.ToUpper(id[:1]) + id[1:], Field: "orders." + id,
+			Predicates: []dashboardfilter.PredicatePolicy{{Kind: dashboardfilter.ExpressionSet, Operators: []dashboardfilter.Operator{dashboardfilter.OperatorIn}}},
+			Options:    dashboardfilter.OptionSource{Kind: dashboardfilter.OptionSourceDistinct, Limit: 50},
+		}
+		filterBindings[id] = dashboardfilter.Binding{
+			Filter:  id,
+			Default: dashboardfilter.Expression{Kind: dashboardfilter.ExpressionUnfiltered},
+			URL:     dashboardfilter.URLPolicy{Param: id, Encoding: dashboardfilter.URLEncodingTypedV1},
+		}
 	}
 	visuals := map[string]reportdef.Visual{}
 	components := []dashboard.PageVisual{}
@@ -184,7 +131,11 @@ func benchmarkDashboardFixture() (reportdef.Dashboard, *semanticmodel.Model, das
 		components = append(components, dashboard.PageVisual{ID: id, Kind: "visual", Visual: id, X: float64((i % 4) * 300), Y: float64((i / 4) * 180), Width: 280, Height: 160})
 	}
 	for i, filterID := range []string{"state", "category", "status", "channel"} {
-		components = append(components, dashboard.PageVisual{ID: filterID + "_filter", Kind: "filter", Filter: filterID, X: float64(i * 220), Y: 390, Width: 200, Height: 120})
+		components = append(components, dashboard.PageVisual{
+			ID: filterID + "_slicer", Kind: "slicer",
+			Binding: dashboardfilter.BindingRef{Scope: dashboardfilter.ScopePage, ID: filterID},
+			X:       float64(i * 220), Y: 390, Width: 200, Height: 120,
+		})
 	}
 	tables := map[string]reportdef.TableVisual{}
 	for i := 0; i < 4; i++ {
@@ -203,17 +154,18 @@ func benchmarkDashboardFixture() (reportdef.Dashboard, *semanticmodel.Model, das
 		components = append(components, dashboard.PageVisual{ID: id, Kind: "visual", Visual: id, X: float64(i * 300), Y: 540, Width: 280, Height: 220})
 	}
 	report := reportdef.Dashboard{
-		ID:            "benchmark-dashboard",
-		Title:         "Benchmark Dashboard",
-		SemanticModel: "benchmark",
-		Filters:       filters,
-		Visuals:       reportdef.MergeVisualizations(reportdef.ChartVisualizations(visuals), reportdef.TabularVisualizations("table", tables)),
+		ID:                "benchmark-dashboard",
+		Title:             "Benchmark Dashboard",
+		SemanticModel:     "benchmark",
+		FilterDefinitions: filterDefinitions,
+		Visuals:           reportdef.MergeVisualizations(reportdef.ChartVisualizations(visuals), reportdef.TabularVisualizations("table", tables)),
 		Pages: []dashboard.Page{{
-			ID:      "overview",
-			Title:   "Overview",
-			Canvas:  dashboard.PageCanvas{Width: 1366, Height: 940},
-			Grid:    dashboard.PageGrid{Columns: 12, RowHeight: 48, Gap: 16, Padding: 16},
-			Visuals: components,
+			ID:             "overview",
+			Title:          "Overview",
+			Canvas:         dashboard.PageCanvas{Width: 1366, Height: 940},
+			Grid:           dashboard.PageGrid{Columns: 12, RowHeight: 48, Gap: 16, Padding: 16},
+			FilterBindings: filterBindings,
+			Visuals:        components,
 		}},
 	}
 	model := &semanticmodel.Model{
@@ -225,11 +177,11 @@ func benchmarkDashboardFixture() (reportdef.Dashboard, *semanticmodel.Model, das
 				PrimaryKey: "order_id",
 				Grain:      "order_id",
 				Dimensions: map[string]semanticmodel.MetricDimension{
-					"order_id": {Expr: "order_id"},
-					"status":   {Expr: "status"},
-					"state":    {Expr: "state"},
-					"category": {Expr: "category"},
-					"channel":  {Expr: "channel"},
+					"order_id": {Expr: "order_id", Type: "string"},
+					"status":   {Expr: "status", Type: "string"},
+					"state":    {Expr: "state", Type: "string"},
+					"category": {Expr: "category", Type: "string"},
+					"channel":  {Expr: "channel", Type: "string"},
 				},
 			},
 		},

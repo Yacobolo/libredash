@@ -7,39 +7,21 @@ import (
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
-	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
+	dashboardfilter "github.com/Yacobolo/leapview/internal/dashboard/filter"
 	"gopkg.in/yaml.v3"
 )
 
 type fakeMetrics struct {
-	report Dashboard
+	report dashboarddefinition.Definition
 }
 
 func (m *fakeMetrics) DefaultFilters(string) dashboard.Filters {
-	return dashboard.Filters{Controls: map[string]dashboard.FilterControl{
-		"state": {Type: "multi_select", Operator: "in"},
-	}}
+	return m.report.DefaultFilters()
 }
 
 func (m *fakeMetrics) Report(string) (dashboarddefinition.Definition, *semanticmodel.Model, bool) {
 	model := &semanticmodel.Model{Name: "model"}
-	filters := map[string]dashboarddefinition.FilterDefinition{}
-	for id, filter := range m.report.Filters {
-		filters[id] = dashboarddefinition.FilterDefinition{Type: filter.Type, Label: filter.Label, Dimension: filter.Dimension}
-	}
-	visualizations := map[string]visualizationdefinition.Definition{}
-	for id, authored := range m.report.Visuals {
-		if authored.Tabular == nil {
-			continue
-		}
-		table := *authored.Tabular
-		fields := make([]visualizationdefinition.FieldBinding, len(table.DataColumns))
-		if len(fields) == 0 {
-			fields = []visualizationdefinition.FieldBinding{{FieldID: "value", Alias: "value"}}
-		}
-		visualizations[id] = visualizationdefinition.Definition{ID: id, Query: visualizationdefinition.QueryBinding{Kind: visualizationdefinition.QueryDetail, ResultShape: visualizationdefinition.ResultDetailWindow, Detail: &visualizationdefinition.DetailQueryBinding{Fields: fields, DefaultSort: []visualizationdefinition.Sort{{FieldID: table.DefaultSort.Key, Direction: table.DefaultSort.Direction}}, Limit: 100}}}
-	}
-	return dashboarddefinition.Definition{ID: m.report.ID, Title: m.report.Title, SemanticModel: "model", Filters: filters, Pages: m.report.Pages, Visualizations: visualizations}, model, true
+	return m.report, model, true
 }
 
 func TestActivePageResolution(t *testing.T) {
@@ -67,26 +49,35 @@ func TestVisualQueryRejectsInlineMeasure(t *testing.T) {
 }
 
 func TestNormalizeFiltersUsesActivePageDefinitions(t *testing.T) {
-	metrics := &fakeMetrics{report: Dashboard{
-		Filters: map[string]FilterDefinition{
-			"state":    {Type: "multi_select", Label: "State", URLParam: "state", Operator: "in"},
-			"category": {Type: "text", Label: "Category", URLParam: "category", DefaultOperator: "contains"},
+	stateKey := dashboardfilter.BindingKey("dash", dashboardfilter.ScopePage, "overview", "state")
+	categoryKey := dashboardfilter.BindingKey("dash", dashboardfilter.ScopePage, "ops", "category")
+	metrics := &fakeMetrics{report: dashboarddefinition.Definition{
+		ID: "dash",
+		FilterDefinitions: map[string]dashboardfilter.Definition{
+			"state":    {ValueKind: dashboardfilter.ValueString},
+			"category": {ValueKind: dashboardfilter.ValueString},
 		},
 		Pages: []dashboard.Page{
-			{ID: "overview", Visuals: []dashboard.PageVisual{{Kind: "filter", Filter: "state"}}},
-			{ID: "ops", Visuals: []dashboard.PageVisual{{Kind: "filter", Filter: "category"}}},
+			{ID: "overview", FilterBindings: map[string]dashboardfilter.Binding{"state": {
+				Key: stateKey, ID: "state", Filter: "state", Scope: dashboardfilter.ScopePage, PageID: "overview",
+				Default: dashboardfilter.Expression{Kind: dashboardfilter.ExpressionUnfiltered},
+			}}},
+			{ID: "ops", FilterBindings: map[string]dashboardfilter.Binding{"category": {
+				Key: categoryKey, ID: "category", Filter: "category", Scope: dashboardfilter.ScopePage, PageID: "ops",
+				Default: dashboardfilter.Expression{Kind: dashboardfilter.ExpressionUnfiltered},
+			}}},
 		},
 	}}
 
-	filters := NormalizeFilters(metrics, "dash", "overview", dashboard.Filters{Controls: map[string]dashboard.FilterControl{
-		"state":    {Type: "multi_select", Operator: "in", Values: []string{"SP"}},
-		"category": {Type: "text", Operator: "contains", Value: "ignored"},
-	}})
+	filters := NormalizeFilters(metrics, "dash", "overview", dashboard.Filters{})
 
-	if _, ok := filters.Controls["state"]; !ok {
-		t.Fatalf("state filter missing: %#v", filters.Controls)
+	if filters.CompiledState == nil {
+		t.Fatal("canonical filter state missing")
 	}
-	if _, ok := filters.Controls["category"]; ok {
-		t.Fatalf("off-page category filter kept: %#v", filters.Controls)
+	if _, ok := filters.CompiledState.AppliedControls[stateKey]; !ok {
+		t.Fatalf("state binding missing: %#v", filters.CompiledState)
+	}
+	if _, ok := filters.CompiledState.AppliedControls[categoryKey]; !ok {
+		t.Fatalf("off-page dashboard session binding missing: %#v", filters.CompiledState)
 	}
 }

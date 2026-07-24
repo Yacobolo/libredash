@@ -103,11 +103,18 @@ spec:
   semanticModel: sales
   filters:
     state:
-      type: multi_select
       label: State
       field: customers.state
+      predicates:
+        - kind: set
+          operators: [in, not_in]
+      options: {kind: distinct, limit: 50}
+  filter_bindings:
+    state:
+      filter: state
       targets:
-        visuals: [revenue, orders, state_status, category_status]
+        include: [overview/revenue]
+      default: {kind: unfiltered}
   visuals:
     revenue:
       type: line
@@ -149,8 +156,9 @@ spec:
           visual: revenue
           placement: {col: 1, row: 1, col_span: 6, row_span: 4}
         - id: state
-          kind: filter
-          filter: state
+          kind: slicer
+          binding: {scope: report, id: state}
+          presentation: {style: dropdown}
           placement: {col: 7, row: 1, col_span: 3, row_span: 2}
         - id: heading
           kind: header

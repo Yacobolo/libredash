@@ -38,7 +38,7 @@ func TestPublicDashboardDocumentsAreAnonymousAndRouteAware(t *testing.T) {
 	}
 	for _, want := range []string{
 		`<lv-dashboard-page`, `presentation="public"`, `/public/dashboards/opaque-public-id-12345678901234/updates?`,
-		`/public/dashboards/opaque-public-id-12345678901234/commands/reload`,
+		`/public/dashboards/opaque-public-id-12345678901234/commands/filter`,
 	} {
 		if !strings.Contains(public.Body.String(), want) {
 			t.Fatalf("public document missing %q:\n%s", want, public.Body.String())

@@ -39,7 +39,14 @@ export class DashboardVisualizationSignalDecoder {
       dataState = { payload: signal.dataState.payload, value: decoded }
       this.dataStates.set(signal.visualID, dataState)
     }
-    const { dataState: _, ...envelope } = signal
+    const {
+      dataState: _,
+      servingStateID: _servingStateID,
+      streamGeneration: _streamGeneration,
+      filterRevision: _filterRevision,
+      consumerIdentity: _consumerIdentity,
+      ...envelope
+    } = signal
     return { ...envelope, dataState: dataState.value }
   }
 }

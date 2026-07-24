@@ -21,7 +21,7 @@ type rootOptions struct {
 	jsonOutput         bool
 	pageID             string
 	count              int
-	filtersJSON        string
+	filterStateJSON    string
 	bodyJSON           string
 	schemaFormat       string
 	schemaOut          string

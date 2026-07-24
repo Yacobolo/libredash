@@ -6,6 +6,7 @@ import (
 
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
+	dashboardfilter "github.com/Yacobolo/leapview/internal/dashboard/filter"
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
 	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
@@ -34,26 +35,20 @@ func newCompileContext(visualID, modelID, visualType string, model *semanticmode
 }
 
 func CompileDashboardDefinition(authored *reportdef.Dashboard, visualizations map[string]visualizationdefinition.Definition) (dashboarddefinition.Definition, error) {
-	filters := make(map[string]dashboarddefinition.FilterDefinition, len(authored.Filters))
-	for id, filter := range authored.Filters {
-		presets := make([]dashboarddefinition.FilterPreset, len(filter.Presets))
-		for index, preset := range filter.Presets {
-			presets[index] = dashboarddefinition.FilterPreset{Value: preset.Value, Label: preset.Label, From: preset.From, To: preset.To, RelativeDays: preset.RelativeDays}
-		}
-		options := make([]dashboarddefinition.FilterOption, len(filter.Options))
-		for index, option := range filter.Options {
-			options[index] = dashboarddefinition.FilterOption{Value: option.Value, Label: option.Label}
-		}
-		filters[id] = dashboarddefinition.FilterDefinition{
-			Type: filter.Type, Label: filter.Label, Description: filter.Description, Dimension: filter.Dimension, Fact: filter.Fact,
-			Default: dashboarddefinition.FilterDefault{Preset: filter.Default.Preset, From: filter.Default.From, To: filter.Default.To, Operator: filter.Default.Operator, Value: filter.Default.Value, Values: append([]string(nil), filter.Default.Values...)},
-			Custom:  filter.Custom, Presets: presets, Operator: filter.Operator, Values: dashboarddefinition.FilterValues{Source: filter.Values.Source, Limit: filter.Values.Limit},
-			DefaultOperator: filter.DefaultOperator, Operators: append([]string(nil), filter.Operators...), Options: options,
-			URLParam: filter.URLParam, FromURLParam: filter.FromURLParam, ToURLParam: filter.ToURLParam, OperatorURLParam: filter.OperatorURLParam,
-			Targets: dashboarddefinition.FilterTargets{Visuals: append([]string(nil), filter.Targets.Visuals...)},
-		}
+	compiled, err := dashboarddefinition.New(authored.ID, authored.Title, authored.Description, authored.SemanticModel, authored.Pages, visualizations)
+	if err != nil {
+		return dashboarddefinition.Definition{}, err
 	}
-	return dashboarddefinition.New(authored.ID, authored.Title, authored.Description, authored.SemanticModel, filters, authored.Pages, visualizations)
+	compiled.FilterDefinitions = make(map[string]dashboardfilter.Definition, len(authored.FilterDefinitions))
+	for id, definition := range authored.FilterDefinitions {
+		compiled.FilterDefinitions[id] = definition
+	}
+	compiled.FilterBindings = make(map[string]dashboardfilter.Binding, len(authored.FilterBindings))
+	for id, binding := range authored.FilterBindings {
+		compiled.FilterBindings[id] = binding
+	}
+	compiled.FilterApplication = authored.FilterApplication.WithDefaults()
+	return compiled, nil
 }
 
 // compileVisualizationDefinitions is the one-way boundary from mutable YAML

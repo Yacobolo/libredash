@@ -1,12 +1,7 @@
-import { filtersFromURLParams, type FilterConfig, type FiltersSignal, type URLParamsShape } from './filter-url'
-import { loadDatastarRuntime } from '../../shared/datastar-runtime'
-
 const dataStarURLSyncEvent = 'datastar-url-params-sync'
+export {}
 
-type DatastarRuntime = {
-  effect(fn: () => void): () => void
-  getPath<T = unknown>(path: string): T | undefined
-}
+type URLParamsShape = Record<string, string | string[]>
 
 type URLSyncDetail = {
   params: URLParamsShape
@@ -106,26 +101,8 @@ function bindPopstate(fallback: unknown): void {
   popstateBound = true
   window.addEventListener('popstate', () => {
     emit(readLocation(fallback))
+    window.location.reload()
   })
-}
-
-async function bindSignalPopstate(): Promise<void> {
-  try {
-    const runtime = await loadDatastarRuntime() as DatastarRuntime
-    let dispose: (() => void) | null = null
-    let bound = false
-    dispose = runtime.effect(() => {
-      if (bound) return
-      const fallback = normalizeURLParams(runtime.getPath('urlParamShape'))
-      if (Object.keys(fallback).length === 0) return
-      bindPopstate(fallback)
-      bound = true
-      dispose?.()
-      dispose = null
-    })
-  } catch (error) {
-    console.error('LeapView URL sync failed to bind Datastar signals', error)
-  }
 }
 
 const datastarURLSync = {
@@ -134,24 +111,16 @@ const datastarURLSync = {
   replace,
 }
 
-const leapViewFilterURL = {
-  fromParams(config: FilterConfig, filters: FiltersSignal, params: URLParamsShape): FiltersSignal {
-    return filtersFromURLParams(config, filters, params)
-  },
-}
-
 declare global {
   interface Window {
     DatastarURLSync?: typeof datastarURLSync
-    LeapViewFilterURL?: typeof leapViewFilterURL
   }
 }
 
 window.DatastarURLSync = datastarURLSync
-window.LeapViewFilterURL = leapViewFilterURL
 
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => void bindSignalPopstate(), { once: true })
+  document.addEventListener('DOMContentLoaded', () => bindPopstate({}), { once: true })
 } else {
-  void bindSignalPopstate()
+  bindPopstate({})
 }

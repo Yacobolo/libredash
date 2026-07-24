@@ -5,6 +5,7 @@ import (
 
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	"github.com/Yacobolo/leapview/internal/dashboard"
+	dashboardfilter "github.com/Yacobolo/leapview/internal/dashboard/filter"
 	"github.com/Yacobolo/leapview/internal/dashboard/report"
 )
 
@@ -27,12 +28,15 @@ func TestValidateDashboardPreservesFactOnLocalFilterForMultiFactTarget(t *testin
 	}
 	dashboardDefinition := &report.Dashboard{
 		ID: "dashboard", Title: "Dashboard", SemanticModel: "model",
-		Filters: map[string]report.FilterDefinition{
+		FilterDefinitions: map[string]dashboardfilter.Definition{
 			"rating_bucket": {
-				Type: "multi_select", Label: "Rating", Dimension: "ratings.rating_bucket",
-				Fact: "ratings", Operator: "in",
+				Label: "Rating", Field: "ratings.rating_bucket", Fact: "ratings",
+				Predicates: []dashboardfilter.PredicatePolicy{{
+					Kind: dashboardfilter.ExpressionSet, Operators: []dashboardfilter.Operator{dashboardfilter.OperatorIn},
+				}},
 			},
 		},
+		FilterBindings: map[string]dashboardfilter.Binding{"rating_bucket": {Filter: "rating_bucket"}},
 		Visuals: report.ChartVisualizations(map[string]report.Visual{
 			"target": {
 				Type:  "kpi",

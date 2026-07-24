@@ -1,10 +1,13 @@
 package signals
 
 import (
+	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
+	dashboardfilter "github.com/Yacobolo/leapview/internal/dashboard/filter"
 	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
 	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 	visualizationruntime "github.com/Yacobolo/leapview/internal/visualization/runtime"
@@ -77,28 +80,103 @@ func DashboardStatusFromDashboard(value dashboard.Status) DashboardStatus {
 	}
 }
 
-func DashboardFilterOptionsFromDashboard(values map[string][]dashboard.FilterOption) map[string][]DashboardFilterOption {
-	out := make(map[string][]DashboardFilterOption, len(values))
-	for key, options := range values {
-		converted := make([]DashboardFilterOption, len(options))
-		for index, option := range options {
-			converted[index] = DashboardFilterOption{Value: option.Value, Label: option.Label}
-		}
-		out[key] = converted
+func DashboardFilterExpressionFromDomain(value dashboardfilter.Expression) DashboardFilterExpression {
+	bytes, err := json.Marshal(value)
+	if err != nil {
+		panic(fmt.Sprintf("encode compiled filter expression: %v", err))
+	}
+	var out DashboardFilterExpression
+	if err := json.Unmarshal(bytes, &out); err != nil {
+		panic(fmt.Sprintf("convert compiled filter expression: %v", err))
 	}
 	return out
 }
 
-func DashboardFiltersFromDashboard(value dashboard.Filters) DashboardFilters {
-	value = value.WithDefaults()
-	controls := make(map[string]DashboardFilterControl, len(value.Controls))
-	for key, control := range value.Controls {
-		controls[key] = DashboardFilterControl{
-			Type: control.Type, Operator: optionalValue(control.Operator), Preset: optionalValue(control.Preset),
-			From: optionalValue(control.From), To: optionalValue(control.To), Value: optionalValue(control.Value), Values: optionalSlice(control.Values),
+func DashboardFilterValueFromDomain(value dashboardfilter.Value) DashboardFilterValue {
+	bytes, err := json.Marshal(value)
+	if err != nil {
+		panic(fmt.Sprintf("encode compiled filter value: %v", err))
+	}
+	var out DashboardFilterValue
+	if err := json.Unmarshal(bytes, &out); err != nil {
+		panic(fmt.Sprintf("convert compiled filter value: %v", err))
+	}
+	return out
+}
+
+func DashboardFilterStateFromDomain(value dashboardfilter.State) DashboardFilterState {
+	applied := make(map[string]DashboardAppliedFilterState, len(value.AppliedControls))
+	for key, item := range value.AppliedControls {
+		var evaluatedAt *string
+		if item.EvaluatedAt != nil {
+			text := item.EvaluatedAt.UTC().Format(time.RFC3339Nano)
+			evaluatedAt = &text
+		}
+		applied[key] = DashboardAppliedFilterState{
+			Expression:         DashboardFilterExpressionFromDomain(item.Expression),
+			ResolvedExpression: DashboardFilterExpressionFromDomain(item.ResolvedExpression),
+			EvaluatedAt:        evaluatedAt,
 		}
 	}
-	return DashboardFilters{Controls: controls, Selections: dashboardInteractionSelections(value.Selections), SpatialSelections: dashboardSpatialSelections(value.SpatialSelections)}
+	drafts := make(map[string]DashboardFilterExpression, len(value.DraftControls))
+	for key, expression := range value.DraftControls {
+		drafts[key] = DashboardFilterExpressionFromDomain(expression)
+	}
+	return DashboardFilterState{
+		Revision: int64(value.Revision), AppliedControls: applied, DraftControls: drafts,
+		DirtyBindings: append([]string{}, value.DirtyBindings...), DefaultsRevision: value.DefaultsRevision,
+	}
+}
+
+func DashboardFilterContractFromDefinition(definition dashboarddefinition.Definition) DashboardFilterContract {
+	definitions := make(map[string]DashboardCompiledFilterDefinition, len(definition.FilterDefinitions))
+	for id, item := range definition.FilterDefinitions {
+		predicates := make([]DashboardFilterPredicatePolicy, len(item.Predicates))
+		for index, predicate := range item.Predicates {
+			operators := make([]string, len(predicate.Operators))
+			for operatorIndex, operator := range predicate.Operators {
+				operators[operatorIndex] = string(operator)
+			}
+			predicates[index] = DashboardFilterPredicatePolicy{Kind: string(predicate.Kind), Operators: operators}
+		}
+		optionKind := string(item.Options.Kind)
+		if optionKind == "" {
+			optionKind = "none"
+		}
+		staticOptions := make([]DashboardFilterStaticOption, len(item.Options.Values))
+		for index, option := range item.Options.Values {
+			staticOptions[index] = DashboardFilterStaticOption{
+				Value: DashboardFilterValueFromDomain(option.Value), Label: option.Label,
+			}
+		}
+		definitions[id] = DashboardCompiledFilterDefinition{
+			ID: id, Label: item.Label, Description: optionalValue(item.Description), Field: item.Field,
+			Fact: optionalValue(item.Fact), ValueKind: string(item.ValueKind), Predicates: predicates,
+			Options:       DashboardFilterOptionSource{Kind: optionKind, Limit: int32(item.Options.Limit), Values: staticOptions},
+			FormatPattern: optionalValue(item.Formatting.Pattern), FormatUnit: optionalValue(item.Formatting.Unit),
+			Timezone: item.Time.Timezone, Calendar: item.Time.Calendar, WeekStart: item.Time.WeekStart,
+		}
+	}
+	bindings := make(map[string]DashboardCompiledFilterBinding)
+	for key, item := range definition.CompiledFilterBindings() {
+		dependencies := make([]DashboardFilterBindingRef, len(item.OptionDependencies))
+		for index, dependency := range item.OptionDependencies {
+			dependencies[index] = DashboardFilterBindingRef{Scope: string(dependency.Scope), ID: dependency.ID}
+		}
+		urlEncoding := string(item.URL.Encoding)
+		bindings[key] = DashboardCompiledFilterBinding{
+			Key: key, ID: item.ID, Filter: item.Filter, Scope: string(item.Scope), PageID: optionalValue(item.PageID),
+			Default: DashboardFilterExpressionFromDomain(item.Default), SelectionMode: string(item.Selection.Mode),
+			MaxSelectedValues: int32(item.Selection.MaxSelectedValues), ReaderEditable: item.Editable(),
+			URLParam: optionalValue(item.URL.Param), PaneVisible: item.Pane.IsVisible(), PaneOrder: int32(item.Pane.Order),
+			PaneLabel: optionalValue(item.Pane.Label), Targets: append([]string(nil), item.Targets...),
+			URLEncoding: optionalValue(urlEncoding), OptionDependencies: dependencies,
+		}
+	}
+	return DashboardFilterContract{
+		ApplicationMode: string(definition.FilterApplication.WithDefaults().Mode),
+		Definitions:     definitions, Bindings: bindings,
+	}
 }
 
 func DashboardInteractionCommandFromDashboard(value dashboard.InteractionCommand) DashboardInteractionCommand {
@@ -167,6 +245,10 @@ func dashboardSpatialSelections(values []dashboard.SpatialInteractionSelection) 
 	return out
 }
 
+func DashboardSpatialSelectionsFromDashboard(values []dashboard.SpatialInteractionSelection) []visualizationir.VisualizationSpatialSelectionState {
+	return dashboardSpatialSelections(values)
+}
+
 func visualizationDataStateTransport(value visualizationir.EncodedDataStateTransport) visualizationir.VisualizationDataStateTransport {
 	return visualizationir.VisualizationDataStateTransport{
 		SchemaVersion: value.SchemaVersion,
@@ -190,6 +272,10 @@ func dashboardInteractionSelections(values []dashboard.InteractionSelection) []D
 	return out
 }
 
+func DashboardInteractionSelectionsFromDashboard(values []dashboard.InteractionSelection) []DashboardInteractionSelection {
+	return dashboardInteractionSelections(values)
+}
+
 func dashboardInteractionSelectionEntries(values []dashboard.InteractionSelectionEntry) []DashboardInteractionSelectionEntry {
 	out := make([]DashboardInteractionSelectionEntry, len(values))
 	for index, value := range values {
@@ -201,45 +287,6 @@ func dashboardInteractionSelectionEntries(values []dashboard.InteractionSelectio
 			}
 		}
 		out[index] = DashboardInteractionSelectionEntry{Mappings: mappings, Label: optionalValue(value.Label)}
-	}
-	return out
-}
-
-func ReportFilterConfigsFromReport(values []dashboarddefinition.FilterConfig) []ReportFilterConfig {
-	out := make([]ReportFilterConfig, len(values))
-	for index, value := range values {
-		definition := value.FilterDefinition
-		options := make([]ReportFilterOption, len(definition.Options))
-		for optionIndex, option := range definition.Options {
-			options[optionIndex] = ReportFilterOption{Value: option.Value, Label: option.Label}
-		}
-		presets := make([]ReportFilterPreset, len(definition.Presets))
-		for presetIndex, preset := range definition.Presets {
-			relativeDays := int64(preset.RelativeDays)
-			presets[presetIndex] = ReportFilterPreset{
-				Value: preset.Value, Label: preset.Label, From: optionalValue(preset.From), To: optionalValue(preset.To), RelativeDays: optionalValue(relativeDays),
-			}
-		}
-		var targets *ReportFilterTargets
-		if len(definition.Targets.Visuals) > 0 {
-			targets = &ReportFilterTargets{Visuals: optionalSlice(definition.Targets.Visuals)}
-		}
-		var filterValues *ReportFilterValues
-		if definition.Values.Source != "" || definition.Values.Limit != 0 {
-			limit := int64(definition.Values.Limit)
-			filterValues = &ReportFilterValues{Source: optionalValue(definition.Values.Source), Limit: optionalValue(limit)}
-		}
-		out[index] = ReportFilterConfig{
-			ID: value.ID, Type: definition.Type, Label: definition.Label, Description: optionalValue(definition.Description),
-			Dimension: definition.Dimension, Fact: optionalValue(definition.Fact), Custom: optionalValue(definition.Custom), Operator: optionalValue(definition.Operator),
-			DefaultOperator: optionalValue(definition.DefaultOperator), Operators: optionalSlice(definition.Operators), Options: optionalSlice(options),
-			Presets: optionalSlice(presets), URLParam: optionalValue(definition.URLParam), FromURLParam: optionalValue(definition.FromURLParam),
-			ToURLParam: optionalValue(definition.ToURLParam), OperatorURLParam: optionalValue(definition.OperatorURLParam), Targets: targets, Values: filterValues,
-			Default: ReportFilterDefault{
-				Preset: optionalValue(definition.Default.Preset), From: optionalValue(definition.Default.From), To: optionalValue(definition.Default.To),
-				Operator: optionalValue(definition.Default.Operator), Value: optionalValue(definition.Default.Value), Values: optionalSlice(definition.Default.Values),
-			},
-		}
 	}
 	return out
 }

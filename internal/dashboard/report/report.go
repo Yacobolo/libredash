@@ -4,6 +4,7 @@ import (
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
+	dashboardfilter "github.com/Yacobolo/leapview/internal/dashboard/filter"
 )
 
 type Metrics interface {
@@ -72,10 +73,12 @@ func NormalizeFilters(metrics Metrics, dashboardID, pageID string, filters dashb
 	}
 	defaults := metrics.DefaultFilters(dashboardID)
 	filters = filters.WithDefaults()
-	for name, control := range filters.Controls {
-		defaults.Controls[name] = control
-	}
 	defaults.Selections = append([]dashboard.InteractionSelection{}, filters.Selections...)
 	defaults.SpatialSelections = append([]dashboard.SpatialInteractionSelection{}, filters.SpatialSelections...)
+	if filters.CompiledState != nil {
+		state := dashboardfilter.CloneState(*filters.CompiledState)
+		defaults.CompiledState = &state
+	}
+	defaults.ServingStateID = filters.ServingStateID
 	return defaults.WithDefaults()
 }

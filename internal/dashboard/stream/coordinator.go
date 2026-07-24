@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Yacobolo/leapview/internal/dashboard"
+	dashboardfilter "github.com/Yacobolo/leapview/internal/dashboard/filter"
 	"github.com/Yacobolo/leapview/internal/dataquery"
 	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 )
@@ -18,7 +19,6 @@ type RefreshEventType string
 
 const (
 	RefreshEventStart          RefreshEventType = "start"
-	RefreshEventFilterOptions  RefreshEventType = "filter_options"
 	RefreshEventVisual         RefreshEventType = "visual"
 	RefreshEventVisualMetadata RefreshEventType = "visual_metadata"
 	RefreshEventTargetError    RefreshEventType = "target_error"
@@ -32,6 +32,8 @@ type RefreshEvent struct {
 	RefreshID       string
 	Generation      uint64
 	DataRevision    int64
+	FilterRevision  int64
+	ServingStateID  string
 	Command         string
 	Filters         dashboard.Filters
 	Targets         []string
@@ -50,6 +52,7 @@ type Refresh struct {
 	Generation uint64
 	Command    string
 	Filters    dashboard.Filters
+	Targets    []string
 }
 
 type RefreshPreparation struct {
@@ -69,7 +72,14 @@ type RefreshSummary struct {
 	RefreshID          string             `json:"refreshId"`
 	Generation         uint64             `json:"generation"`
 	Command            string             `json:"command"`
+	ServingStateID     string             `json:"servingStateId,omitempty"`
+	FilterRevision     uint64             `json:"filterRevision,omitempty"`
+	AffectedTargets    []string           `json:"affectedTargets,omitempty"`
 	PlannedTargets     int                `json:"plannedTargets"`
+	VisualCount        int                `json:"visualCount"`
+	OptionCount        int                `json:"optionCount"`
+	CurrentCount       int                `json:"currentCount"`
+	StaleCount         int                `json:"staleCount"`
 	TargetSuccesses    int                `json:"targetSuccesses"`
 	TargetErrors       int                `json:"targetErrors"`
 	QueryCount         int                `json:"queryCount"`
@@ -129,6 +139,8 @@ type activeRefresh struct {
 	queryCount       int
 	targetSuccesses  int
 	targetErrors     int
+	visualCount      int
+	optionCount      int
 	plannedTargets   int
 	firstTargetErr   error
 	setupRequiredErr error
@@ -224,6 +236,7 @@ func (c *Coordinator) BeginPrepared(prepare RefreshPrepare, work func(RefreshPre
 		Generation: c.generation,
 		Command:    preparation.Command,
 		Filters:    cloneFilters(filters),
+		Targets:    append([]string(nil), preparation.Targets...),
 	}
 	c.active = &activeRefresh{
 		refresh: refresh, startedAt: time.Now(), plannedTargets: len(preparation.Targets),
@@ -333,6 +346,10 @@ func (c *Coordinator) emitCurrent(refresh Refresh, event RefreshEvent) bool {
 	}
 	event.RefreshID = refresh.ID
 	event.Generation = refresh.Generation
+	event.ServingStateID = refresh.Filters.ServingStateID
+	if refresh.Filters.CompiledState != nil {
+		event.FilterRevision = int64(refresh.Filters.CompiledState.Revision)
+	}
 	if event.Target != "" && carriesVisualizationData(event.Type) {
 		if refresh.Generation > math.MaxInt64 {
 			event.Type, event.Err = RefreshEventTargetError, fmt.Errorf("visualization stream generation overflow")
@@ -383,7 +400,8 @@ func (c *Coordinator) emitCurrent(refresh Refresh, event RefreshEvent) bool {
 			}
 		}
 		switch event.Type {
-		case RefreshEventFilterOptions, RefreshEventVisual:
+		case RefreshEventVisual:
+			c.active.visualCount++
 			c.active.targetSuccesses++
 		case RefreshEventTargetError:
 			if event.Target == "refresh" {
@@ -466,11 +484,22 @@ func (c *Coordinator) summaryLocked(active *activeRefresh, outcome string, cance
 	for cacheOutcome, count := range active.cacheOutcomes {
 		cacheOutcomes[cacheOutcome] = count
 	}
+	filterRevision := uint64(0)
+	if active.refresh.Filters.CompiledState != nil {
+		filterRevision = active.refresh.Filters.CompiledState.Revision
+	}
 	return RefreshSummary{
 		RefreshID:          active.refresh.ID,
 		Generation:         active.refresh.Generation,
 		Command:            active.refresh.Command,
+		ServingStateID:     active.refresh.Filters.ServingStateID,
+		FilterRevision:     filterRevision,
+		AffectedTargets:    append([]string(nil), active.refresh.Targets...),
 		PlannedTargets:     active.plannedTargets,
+		VisualCount:        active.visualCount,
+		OptionCount:        active.optionCount,
+		CurrentCount:       active.targetSuccesses,
+		StaleCount:         0,
 		TargetSuccesses:    active.targetSuccesses,
 		TargetErrors:       active.targetErrors,
 		QueryCount:         active.queryCount,
@@ -525,13 +554,14 @@ func (c *Coordinator) notifyStarted(refresh Refresh) {
 
 func cloneFilters(filters dashboard.Filters) dashboard.Filters {
 	clone := dashboard.Filters{
-		Controls:          make(map[string]dashboard.FilterControl, len(filters.Controls)),
 		Selections:        make([]dashboard.InteractionSelection, len(filters.Selections)),
 		SpatialSelections: make([]dashboard.SpatialInteractionSelection, len(filters.SpatialSelections)),
+		ServingStateID:    filters.ServingStateID,
+		ActivePageID:      filters.ActivePageID,
 	}
-	for id, control := range filters.Controls {
-		control.Values = append([]string(nil), control.Values...)
-		clone.Controls[id] = control
+	if filters.CompiledState != nil {
+		state := dashboardfilter.CloneState(*filters.CompiledState)
+		clone.CompiledState = &state
 	}
 	for index, selection := range filters.Selections {
 		selection.Entries = make([]dashboard.InteractionSelectionEntry, len(selection.Entries))

@@ -43,9 +43,9 @@ declare global {
 }
 
 const emptyPage = {}
-const emptyFilterConfig: any[] = []
-const emptyFilters = {}
-const emptyFilterOptions = {}
+const emptyFilterContract = { applicationMode: 'immediate', definitions: {}, bindings: {} }
+const emptyFilterState = { revision: 0, appliedControls: {}, draftControls: {}, dirtyBindings: [], defaultsRevision: '' }
+const emptyFilterOptionPages = {}
 const emptyVisuals = {}
 const emptyTables = {}
 const emptyStatus = {}
@@ -53,18 +53,18 @@ const emptyStatus = {}
 class BenchLegacyPage extends LitElement {
   static properties = {
     page: { attribute: 'page', converter: jsonAttribute(emptyPage) },
-    filterConfig: { attribute: 'filterconfig', converter: jsonAttribute(emptyFilterConfig) },
-    filters: { attribute: 'filters', converter: jsonAttribute(emptyFilters) },
-    filterOptions: { attribute: 'filteroptions', converter: jsonAttribute(emptyFilterOptions) },
+    filterContract: { attribute: 'filtercontract', converter: jsonAttribute(emptyFilterContract) },
+    filterState: { attribute: 'filterstate', converter: jsonAttribute(emptyFilterState) },
+    filterOptionPages: { attribute: 'filteroptionpages', converter: jsonAttribute(emptyFilterOptionPages) },
     visuals: { attribute: 'visuals', converter: jsonAttribute(emptyVisuals) },
     tables: { attribute: 'tables', converter: jsonAttribute(emptyTables) },
     status: { attribute: 'status', converter: jsonAttribute(emptyStatus) },
   }
 
   declare page: unknown
-  declare filterConfig: unknown
-  declare filters: unknown
-  declare filterOptions: unknown
+  declare filterContract: unknown
+  declare filterState: unknown
+  declare filterOptionPages: unknown
   declare visuals: unknown
   declare tables: unknown
   declare status: unknown
@@ -80,9 +80,9 @@ class BenchLegacyPage extends LitElement {
   private payload(): SignalPayload {
     return {
       page: this.page ?? emptyPage,
-      filterConfig: this.filterConfig ?? emptyFilterConfig,
-      filters: this.filters ?? emptyFilters,
-      filterOptions: this.filterOptions ?? emptyFilterOptions,
+      filterContract: this.filterContract ?? emptyFilterContract,
+      filterState: this.filterState ?? emptyFilterState,
+      filterOptionPages: this.filterOptionPages ?? emptyFilterOptionPages,
       visuals: this.visuals ?? emptyVisuals,
       tables: this.tables ?? emptyTables,
       status: this.status ?? emptyStatus,
@@ -106,9 +106,9 @@ class BenchDatastarLitPage extends DatastarLit(LitElement) {
   override render(): TemplateResult {
     return renderSummary(summaryFromPayload({
       page: this.signal('page', emptyPage),
-      filterConfig: this.signal('filterConfig', emptyFilterConfig),
-      filters: this.signal('filters', emptyFilters),
-      filterOptions: this.signal('filterOptions', emptyFilterOptions),
+      filterContract: this.signal('filterContract', emptyFilterContract),
+      filterState: this.signal('filterState', emptyFilterState),
+      filterOptionPages: this.signal('filterOptionPages', emptyFilterOptionPages),
       visuals: this.signal('visuals', emptyVisuals),
       tables: this.signal('tables', emptyTables),
       status: this.signal('status', emptyStatus),
@@ -195,11 +195,11 @@ function renderSummary(summary: Record<string, unknown>): TemplateResult {
 function summaryFromPayload(payload: SignalPayload): Record<string, unknown> {
   const visuals = Object.values(payload.visuals ?? {}) as Array<Record<string, any>>
   const tables = Object.values(payload.tables ?? {}) as Array<Record<string, any>>
-  const filterOptions = Object.values(payload.filterOptions ?? {}) as any[][]
+  const filterOptionPages = Object.values(payload.filterOptionPages ?? {}) as Array<{ items?: unknown[] }>
   return {
     title: payload.page?.title ?? '',
-    filters: (payload.filterConfig ?? []).length,
-    options: filterOptions.reduce((total, options) => total + (Array.isArray(options) ? options.length : 0), 0),
+    filters: Object.keys(payload.filterContract?.bindings ?? {}).length,
+    options: filterOptionPages.reduce((total, page) => total + (page.items?.length ?? 0), 0),
     visuals: visuals.length,
     visualPoints: visuals.reduce((total, visual) => total + (visual.data?.length ?? 0), 0),
     tables: tables.length,
@@ -218,9 +218,9 @@ function updatePatch(iteration: number): Record<string, unknown> {
   return {
     page: { title: `Benchmark Dashboard ${iteration}` },
     status: { lastUpdated: `iteration-${iteration}`, loading: iteration % 9 === 0 },
-    filterOptions: {
-      state: optionList('state', iteration, 8),
-      category: optionList('category', iteration, 12),
+    filterOptionPages: {
+      fb_state: { bindingKey: 'fb_state', items: optionList('state', iteration, 8) },
+      fb_category: { bindingKey: 'fb_category', items: optionList('category', iteration, 12) },
     },
     visuals: {
       [visual]: {
@@ -251,10 +251,12 @@ function updatePatch(iteration: number): Record<string, unknown> {
   }
 }
 
-function optionList(prefix: string, iteration: number, count: number): Array<{ value: string; label: string }> {
+function optionList(prefix: string, iteration: number, count: number): Array<{ value: { kind: 'string'; value: string }; label: string; selected: boolean; available: boolean }> {
   return Array.from({ length: count }, (_, index) => ({
-    value: `${prefix}-${iteration}-${index}`,
+    value: { kind: 'string', value: `${prefix}-${iteration}-${index}` },
     label: `${prefix.toUpperCase()} ${iteration}-${index}`,
+    selected: false,
+    available: true,
   }))
 }
 

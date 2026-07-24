@@ -18,6 +18,7 @@ import (
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	"github.com/Yacobolo/leapview/internal/dashboard/consumer"
 	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
+	dashboardfilter "github.com/Yacobolo/leapview/internal/dashboard/filter"
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 	"github.com/Yacobolo/leapview/internal/dataquery"
 	"github.com/Yacobolo/leapview/internal/testutil/dashboardfixture"
@@ -39,7 +40,41 @@ func fieldRefs(fields ...string) []reportdef.FieldRef {
 	return refs
 }
 
+func typedSetURLValue(t *testing.T, values ...string) string {
+	t.Helper()
+	typed := make([]dashboardfilter.Value, len(values))
+	for index, value := range values {
+		typed[index] = dashboardfilter.Value{Kind: dashboardfilter.ValueString, Value: value}
+	}
+	encoded, err := dashboardfilter.EncodeTypedV1(dashboardfilter.Expression{
+		Kind: dashboardfilter.ExpressionSet, Operator: dashboardfilter.OperatorIn, Values: typed,
+	}, dashboardfilter.ValueString)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return encoded
+}
+
+func typedComparisonURLValue(t *testing.T, operator dashboardfilter.Operator, value string) string {
+	t.Helper()
+	encoded, err := dashboardfilter.EncodeTypedV1(dashboardfilter.Expression{
+		Kind: dashboardfilter.ExpressionComparison, Operator: operator,
+		Value: &dashboardfilter.Value{Kind: dashboardfilter.ValueString, Value: value},
+	}, dashboardfilter.ValueString)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return encoded
+}
+
 type fakeMetrics struct{}
+
+func (fakeMetrics) QueryCompiledFilterOptions(_ context.Context, _ string, query dashboardfilter.OptionQuery) (dashboardfilter.OptionResult, error) {
+	return dashboardfilter.OptionResult{Items: []dashboardfilter.OptionItem{
+		{Value: dashboardfilter.Value{Kind: query.ValueKind, Value: "SP"}, Label: "SP", Available: true},
+		{Value: dashboardfilter.Value{Kind: query.ValueKind, Value: "RJ"}, Label: "RJ", Available: true},
+	}}, nil
+}
 
 func (fakeMetrics) ExecuteConsumersPage(ctx context.Context, request consumer.Request, publish consumer.Publisher) error {
 	for _, target := range request.Targets {
@@ -48,9 +83,6 @@ func (fakeMetrics) ExecuteConsumersPage(ctx context.Context, request consumer.Re
 			definition, _ := fakeMetrics{}.VisualizationDefinition(request.DashboardID, target.ID)
 			envelope, err := visualizationruntime.EnvelopeFromFrame(definition, visualizationruntime.Frame{Columns: []string{"label", "value"}, Rows: [][]any{{"delivered", 1}}}, nil, 0, 0)
 			publish(consumer.Result{Target: target, Envelope: envelope, Err: err})
-		case consumer.KindFilterOptions:
-			options, err := fakeMetrics{}.QueryFilterOptionsPage(ctx, request.DashboardID, request.PageID, []string{target.ID})
-			publish(consumer.Result{Target: target, FilterOptions: options, Err: err})
 		case consumer.KindWindow:
 			table, err := fakeMetrics{}.queryWindow(ctx, request.DashboardID, request.PageID, request.Filters, target.WindowRequest)
 			definition, _ := fakeMetrics{}.VisualizationDefinition(request.DashboardID, target.ID)
@@ -196,10 +228,18 @@ func (fakeMetrics) Report(dashboardID string) (dashboarddefinition.Definition, *
 		ID:            "executive-sales",
 		Title:         "Executive Sales Dashboard",
 		SemanticModel: "test",
-		Filters: map[string]reportdef.FilterDefinition{
-			"state":    {Type: "multi_select", Label: "State", Dimension: "orders.status", URLParam: "state", Operator: "in", Values: reportdef.FilterValues{Source: "distinct", Limit: 50}},
-			"category": {Type: "text", Label: "Category", Dimension: "orders.status", URLParam: "category", DefaultOperator: "contains", Operators: []string{"contains", "equals"}},
+		FilterDefinitions: map[string]dashboardfilter.Definition{
+			"state": {
+				Label: "State", Field: "orders.status", ValueKind: dashboardfilter.ValueString,
+				Predicates: []dashboardfilter.PredicatePolicy{{Kind: dashboardfilter.ExpressionSet, Operators: []dashboardfilter.Operator{dashboardfilter.OperatorIn}}},
+				Options:    dashboardfilter.OptionSource{Kind: dashboardfilter.OptionSourceDistinct, Limit: 50},
+			},
+			"category": {
+				Label: "Category", Field: "orders.status", ValueKind: dashboardfilter.ValueString,
+				Predicates: []dashboardfilter.PredicatePolicy{{Kind: dashboardfilter.ExpressionComparison, Operators: []dashboardfilter.Operator{dashboardfilter.OperatorContains, dashboardfilter.OperatorEquals}}},
+			},
 		},
+		FilterApplication: dashboardfilter.ApplicationPolicy{Mode: dashboardfilter.ApplicationImmediate},
 		Visuals: reportdef.MergeVisualizations(reportdef.ChartVisualizations(map[string]reportdef.Visual{
 			"orders":       {Title: "Orders", Type: "donut", Query: reportdef.VisualQuery{Dimensions: fieldRefs("orders.status"), Measures: fieldRefs("order_count")}, Interaction: pointInteraction("orders.status", "orders", "ops_pipeline")},
 			"ops_pipeline": {Title: "Ops Pipeline", Type: "bar", Query: reportdef.VisualQuery{Dimensions: fieldRefs("orders.status"), Measures: fieldRefs("order_count")}, Interaction: pointInteraction("orders.status", "orders", "ops_pipeline")},
@@ -344,13 +384,11 @@ func (fakeMetrics) mustSemanticModel() *semanticmodel.Model {
 }
 
 func (fakeMetrics) DefaultFilters(_ string) dashboard.Filters {
-	return dashboard.Filters{
-		Controls: map[string]dashboard.FilterControl{
-			"state":    {Type: "multi_select", Operator: "in", Values: []string{}},
-			"category": {Type: "text", Operator: "contains"},
-		},
-		Selections: []dashboard.InteractionSelection{},
+	definition, _, ok := (fakeMetrics{}).Report("executive-sales")
+	if !ok {
+		return dashboard.Filters{}.WithDefaults()
 	}
+	return definition.DefaultFilters()
 }
 
 func pointInteraction(field, fact string, targets ...string) reportdef.Interaction {
@@ -394,9 +432,17 @@ func (fakeMetrics) Pages(dashboardID string) []dashboard.Page {
 			Title:  "Overview",
 			Width:  1366,
 			Height: 940,
+			FilterBindings: map[string]dashboardfilter.Binding{
+				"state": {
+					ID: "state", Key: dashboardfilter.BindingKey("executive-sales", dashboardfilter.ScopePage, "overview", "state"),
+					Scope: dashboardfilter.ScopePage, PageID: "overview", Filter: "state", ValueKind: dashboardfilter.ValueString,
+					Default: dashboardfilter.Expression{Kind: dashboardfilter.ExpressionUnfiltered},
+					URL:     dashboardfilter.URLPolicy{Param: "state", Encoding: dashboardfilter.URLEncodingTypedV1},
+				},
+			},
 			Visuals: []dashboard.PageVisual{
 				{ID: "header", Kind: "header", X: 0, Y: 0, Width: 100, Height: 40, Title: "Test"},
-				{ID: "state-filter", Kind: "filter", Filter: "state", X: 0, Y: 42, Width: 100, Height: 32},
+				{ID: "state-filter", Kind: "slicer", Binding: dashboardfilter.BindingRef{Scope: dashboardfilter.ScopePage, ID: "state"}, Presentation: dashboardfilter.Presentation{Style: dashboardfilter.PresentationDropdown}, X: 0, Y: 42, Width: 100, Height: 32},
 				{ID: "orders-chart", Kind: "visual", Visual: "orders", X: 0, Y: 48, Width: 100, Height: 100},
 				{ID: "orders-table", Kind: "visual", Visual: "order_rows", X: 0, Y: 160, Width: 100, Height: 100},
 			},
@@ -406,8 +452,16 @@ func (fakeMetrics) Pages(dashboardID string) []dashboard.Page {
 			Title:  "Operations",
 			Width:  1366,
 			Height: 940,
+			FilterBindings: map[string]dashboardfilter.Binding{
+				"category": {
+					ID: "category", Key: dashboardfilter.BindingKey("executive-sales", dashboardfilter.ScopePage, "operations", "category"),
+					Scope: dashboardfilter.ScopePage, PageID: "operations", Filter: "category", ValueKind: dashboardfilter.ValueString,
+					Default: dashboardfilter.Expression{Kind: dashboardfilter.ExpressionUnfiltered},
+					URL:     dashboardfilter.URLPolicy{Param: "category", Encoding: dashboardfilter.URLEncodingTypedV1},
+				},
+			},
 			Visuals: []dashboard.PageVisual{
-				{ID: "category-filter", Kind: "filter", Filter: "category", X: 0, Y: 8, Width: 100, Height: 32},
+				{ID: "category-filter", Kind: "slicer", Binding: dashboardfilter.BindingRef{Scope: dashboardfilter.ScopePage, ID: "category"}, Presentation: dashboardfilter.Presentation{Style: dashboardfilter.PresentationInput}, X: 0, Y: 8, Width: 100, Height: 32},
 				{ID: "ops-pipeline-chart", Kind: "visual", Visual: "ops_pipeline", X: 0, Y: 48, Width: 100, Height: 100},
 			},
 		},
@@ -443,9 +497,6 @@ func (fakeMetrics) QueryDashboardPage(_ context.Context, _ string, pageID string
 	}
 	return dashboard.Patch{
 		Filters: filters.WithDefaults(),
-		FilterOptions: map[string][]dashboard.FilterOption{
-			"state": {{Value: "SP", Label: "SP"}},
-		},
 		Status: dashboard.Status{
 			Loading:     false,
 			LastUpdated: "12:00:00",
@@ -454,23 +505,9 @@ func (fakeMetrics) QueryDashboardPage(_ context.Context, _ string, pageID string
 	}, nil
 }
 
-func (fakeMetrics) QueryFilterOptionsPage(ctx context.Context, dashboardID, pageID string, filterIDs []string) (map[string][]dashboard.FilterOption, error) {
-	patch, err := fakeMetrics{}.QueryDashboardPage(ctx, dashboardID, pageID, dashboard.Filters{})
-	options := make(map[string][]dashboard.FilterOption, len(filterIDs))
-	for _, id := range filterIDs {
-		options[id] = patch.FilterOptions[id]
-	}
-	return options, err
-}
-
 func (m *recordingMetrics) QueryDashboardPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters) (dashboard.Patch, error) {
 	m.pageIDs <- pageID
 	return m.fakeMetrics.QueryDashboardPage(ctx, dashboardID, pageID, filters)
-}
-
-func (m *recordingMetrics) QueryFilterOptionsPage(ctx context.Context, dashboardID, pageID string, filterIDs []string) (map[string][]dashboard.FilterOption, error) {
-	m.pageIDs <- pageID
-	return m.fakeMetrics.QueryFilterOptionsPage(ctx, dashboardID, pageID, filterIDs)
 }
 
 func TestPageRouteRendersRequestedYamlPage(t *testing.T) {
@@ -521,7 +558,8 @@ func TestPageRouteRendersRequestedYamlPage(t *testing.T) {
 }
 
 func TestPageRouteSeedsPageScopedFiltersFromURL(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/workspaces/test-workspace/dashboards/executive-sales/pages/overview?state=SP&state=RJ&category=ignored", nil)
+	state := typedSetURLValue(t, "RJ", "SP")
+	req := httptest.NewRequest(http.MethodGet, "/workspaces/test-workspace/dashboards/executive-sales/pages/overview?state="+state+"&category=ignored", nil)
 	rec := httptest.NewRecorder()
 
 	server := New(fakeMetrics{})
@@ -534,19 +572,20 @@ func TestPageRouteSeedsPageScopedFiltersFromURL(t *testing.T) {
 	if !strings.Contains(body, `/static/url-sync.js`) {
 		t.Fatalf("page did not include url sync script:\n%s", body)
 	}
-	if !strings.Contains(body, `"state":["RJ","SP"]`) {
+	if !strings.Contains(body, `"state":"`+state+`"`) {
 		t.Fatalf("page did not seed state url params:\n%s", body)
 	}
-	if !strings.Contains(body, `"values":["RJ","SP"]`) {
+	if !strings.Contains(body, `"kind":"set","operator":"in","values":[{"kind":"string","value":"RJ"},{"kind":"string","value":"SP"}]`) {
 		t.Fatalf("page did not seed state filter values:\n%s", body)
 	}
-	if strings.Contains(body, `"id":"category"`) || strings.Contains(body, `"urlParam":"category"`) || strings.Contains(body, `"controls":{"category"`) || strings.Contains(body, `"urlParams":{"category"`) {
-		t.Fatalf("overview page seeded off-page category filter:\n%s", body)
+	if strings.Contains(body, `"urlParams":{"category"`) || !strings.Contains(body, `"id":"category"`) || !strings.Contains(body, `"kind":"unfiltered"`) {
+		t.Fatalf("overview page did not preserve off-page defaults while omitting their URL state:\n%s", body)
 	}
 }
 
 func TestPageRouteSeedsOperationsPageFiltersFromURL(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/workspaces/test-workspace/dashboards/executive-sales/pages/operations?state=SP&category=ops", nil)
+	category := typedComparisonURLValue(t, dashboardfilter.OperatorContains, "ops")
+	req := httptest.NewRequest(http.MethodGet, "/workspaces/test-workspace/dashboards/executive-sales/pages/operations?state=ignored&category="+category, nil)
 	rec := httptest.NewRecorder()
 
 	server := New(fakeMetrics{})
@@ -556,7 +595,7 @@ func TestPageRouteSeedsOperationsPageFiltersFromURL(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
 	body := renderedWithBootstrap(t, server, rec.Body.String(), "")
-	if !strings.Contains(body, `"category":"ops"`) && !strings.Contains(body, `"value":"ops"`) {
+	if !strings.Contains(body, `"kind":"comparison","operator":"contains","value":{"kind":"string","value":"ops"}`) {
 		t.Fatalf("operations page did not seed category URL filter:\n%s", body)
 	}
 	if strings.Contains(body, `"state":{"type"`) || strings.Contains(body, `"urlParams":{"state"`) || strings.Contains(body, `"urlParamShape":{"state"`) {
@@ -1059,7 +1098,7 @@ func TestUpdatesStreamsDatastarPatchSignals(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 
-	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/updates?route=dashboard&workspace=test-workspace&dashboard=executive-sales&page=overview&state=SP&category=ignored", nil)
+	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/updates?route=dashboard&workspace=test-workspace&dashboard=executive-sales&page=overview&state="+typedSetURLValue(t, "SP")+"&category=ignored", nil)
 	rec := httptest.NewRecorder()
 
 	New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
@@ -1082,34 +1121,30 @@ func TestUpdatesStreamsDatastarPatchSignals(t *testing.T) {
 		return ok && status["loading"] == false
 	})
 	ssetest.RequirePatchSignal(t, body, func(patch map[string]any) bool {
-		filters, ok := patch["filters"].(map[string]any)
+		filterState, ok := patch["filterState"].(map[string]any)
 		if !ok {
 			return false
 		}
-		controls, ok := filters["controls"].(map[string]any)
+		controls, ok := filterState["appliedControls"].(map[string]any)
 		if !ok {
 			return false
 		}
-		state, ok := controls["state"].(map[string]any)
+		key := dashboardfilter.BindingKey("executive-sales", dashboardfilter.ScopePage, "overview", "state")
+		state, ok := controls[key].(map[string]any)
 		if !ok {
 			return false
 		}
-		values, ok := state["values"].([]any)
-		return ok && len(values) == 1 && values[0] == "SP"
+		expression, ok := state["expression"].(map[string]any)
+		if !ok {
+			return false
+		}
+		values, ok := expression["values"].([]any)
+		if !ok || len(values) != 1 {
+			return false
+		}
+		value, ok := values[0].(map[string]any)
+		return ok && value["value"] == "SP"
 	})
-	for _, patch := range patches {
-		filters, ok := patch["filters"].(map[string]any)
-		if !ok {
-			continue
-		}
-		controls, ok := filters["controls"].(map[string]any)
-		if !ok {
-			continue
-		}
-		if _, ok := controls["category"]; ok {
-			t.Fatalf("patch streamed off-page category filter: %#v", patch)
-		}
-	}
 }
 
 func TestUpdatesStreamsPageScopedChartSignals(t *testing.T) {
@@ -1137,7 +1172,7 @@ func TestUpdatesStreamsPageScopedChartSignals(t *testing.T) {
 }
 
 func TestDashboardRefreshCommandRouteIsRemoved(t *testing.T) {
-	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"runtime":{"clientId":"test-client"},"visualWindowCommand":{"visualID":"order_rows","blockID":"all","start":0,"limit":50,"sort":[]}}`)
+	body := strings.NewReader(`{"runtime":{"clientId":"test-client"},"visualWindowCommand":{"visualID":"order_rows","blockID":"all","start":0,"limit":50,"sort":[]}}`)
 	req := httptest.NewRequest(http.MethodPost, "/workspaces/test-workspace/commands/refresh", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -1150,7 +1185,7 @@ func TestDashboardRefreshCommandRouteIsRemoved(t *testing.T) {
 }
 
 func TestSelectCommandAcceptsDatastarSignals(t *testing.T) {
-	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}},"selections":[]},"runtime":{"clientId":"test-client"},"interactionCommand":{"sourceKind":"visual","sourceId":"orders","interactionKind":"point_selection","action":"set","toggle":true,"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]},"visualWindowCommand":{"visualID":"order_rows","blockID":"all","start":0,"limit":50,"sort":[]}}`)
+	body := strings.NewReader(`{"interactionSelections":[],"runtime":{"clientId":"test-client"},"interactionCommand":{"sourceKind":"visual","sourceId":"orders","interactionKind":"point_selection","action":"set","toggle":true,"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]},"visualWindowCommand":{"visualID":"order_rows","blockID":"all","start":0,"limit":50,"sort":[]}}`)
 	req := httptest.NewRequest(http.MethodPost, "/workspaces/test-workspace/commands/select", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -1183,25 +1218,13 @@ func TestPageCommandsQueryActivePage(t *testing.T) {
 		{
 			name:    "interaction select",
 			path:    "/workspaces/test-workspace/commands/select",
-			body:    `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"selections":[]},"interactionCommand":{"sourceKind":"visual","sourceId":"ops_pipeline","interactionKind":"point_selection","action":"set","toggle":true,"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]},"visualWindowCommand":{"blockID":"all","start":0,"limit":50,"sort":[]}}`,
+			body:    `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"interactionSelections":[],"interactionCommand":{"sourceKind":"visual","sourceId":"ops_pipeline","interactionKind":"point_selection","action":"set","toggle":true,"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]},"visualWindowCommand":{"blockID":"all","start":0,"limit":50,"sort":[]}}`,
 			queries: 1,
 		},
 		{
 			name: "clear selection",
 			path: "/workspaces/test-workspace/commands/clear-selection",
-			body: `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"selections":[{"sourceKind":"visual","sourceId":"ops_pipeline","interactionKind":"point_selection","entries":[{"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]}]}]},"visualWindowCommand":{"blockID":"all","start":0,"limit":50,"sort":[]}}`,
-		},
-		{
-			name:    "reload",
-			path:    "/workspaces/test-workspace/commands/reload",
-			body:    `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"visualWindowCommand":{"blockID":"all","start":200,"limit":50,"sort":[]}}`,
-			queries: 2,
-		},
-		{
-			name:    "reset filters",
-			path:    "/workspaces/test-workspace/commands/reset-filters",
-			body:    `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"visualWindowCommand":{"blockID":"all","start":200,"limit":50,"sort":[]}}`,
-			queries: 2,
+			body: `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"interactionSelections":[{"sourceKind":"visual","sourceId":"ops_pipeline","interactionKind":"point_selection","entries":[{"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]}]}],"visualWindowCommand":{"blockID":"all","start":0,"limit":50,"sort":[]}}`,
 		},
 	}
 
@@ -1236,7 +1259,7 @@ func TestDashboardRefreshCommandDoesNotPersistRefreshRun(t *testing.T) {
 	token := testAPIToken(t, ctx, store, principal.ID, "dashboard-refresh")
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test"})
-	body := strings.NewReader(`{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations","modelId":"test"},"filters":{},"visualWindowCommand":{"blockID":"all","start":0,"limit":50,"sort":[]}}`)
+	body := strings.NewReader(`{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations","modelId":"test"},"visualWindowCommand":{"blockID":"all","start":0,"limit":50,"sort":[]}}`)
 	req := httptest.NewRequest(http.MethodPost, "/workspaces/test/commands/refresh", body)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -1321,7 +1344,7 @@ func TestLegacySemanticModelRefreshRouteIsRemoved(t *testing.T) {
 }
 
 func TestClearSelectionCommandAcceptsDatastarSignals(t *testing.T) {
-	body := strings.NewReader(`{"filters":{"selections":[{"sourceKind":"visual","sourceId":"orders","interactionKind":"point_selection","entries":[{"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]}]}]},"runtime":{"clientId":"test-client"},"visualWindowCommand":{"visualID":"order_rows","blockID":"all","start":0,"limit":50,"sort":[]}}`)
+	body := strings.NewReader(`{"interactionSelections":[{"sourceKind":"visual","sourceId":"orders","interactionKind":"point_selection","entries":[{"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]}]}],"runtime":{"clientId":"test-client"},"visualWindowCommand":{"visualID":"order_rows","blockID":"all","start":0,"limit":50,"sort":[]}}`)
 	req := httptest.NewRequest(http.MethodPost, "/workspaces/test-workspace/commands/clear-selection", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -1331,19 +1354,8 @@ func TestClearSelectionCommandAcceptsDatastarSignals(t *testing.T) {
 	assertDatastarCommandAccepted(t, rec)
 }
 
-func TestResetFiltersCommandAcceptsDatastarSignals(t *testing.T) {
-	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}},"selections":[{"sourceKind":"visual","sourceId":"orders","interactionKind":"point_selection","entries":[{"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]}]}]},"runtime":{"clientId":"test-client"},"visualWindowCommand":{"visualID":"order_rows","blockID":"all","start":200,"limit":50,"sort":[]}}`)
-	req := httptest.NewRequest(http.MethodPost, "/workspaces/test-workspace/commands/reset-filters", body)
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-
-	New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
-
-	assertDatastarCommandAccepted(t, rec)
-}
-
 func TestTableWindowCommandAcceptsDatastarSignals(t *testing.T) {
-	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"runtime":{"clientId":"test-client"},"visualWindowCommand":{"visualID":"order_rows","specRevision":"","dataRevision":3,"blockID":"a","start":400,"limit":50,"requestSeq":42,"resetVersion":0,"sort":[{"field":{"dataset":"primary","field":"revenue"},"direction":"descending"}]}}`)
+	body := strings.NewReader(`{"runtime":{"clientId":"test-client"},"visualWindowCommand":{"visualID":"order_rows","specRevision":"","dataRevision":3,"blockID":"a","start":400,"limit":50,"requestSeq":42,"resetVersion":0,"sort":[{"field":{"dataset":"primary","field":"revenue"},"direction":"descending"}]}}`)
 	req := httptest.NewRequest(http.MethodPost, "/workspaces/test-workspace/commands/visual-window", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()

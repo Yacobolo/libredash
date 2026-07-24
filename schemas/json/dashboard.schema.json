@@ -144,11 +144,23 @@
     "#DashboardSpec": {
       "additionalProperties": false,
       "properties": {
+        "filter_application": {
+          "$ref": "#/$defs/%23FilterApplication"
+        },
+        "filter_bindings": {
+          "additionalProperties": false,
+          "patternProperties": {
+            "^[A-Za-z_][A-Za-z0-9_]*$": {
+              "$ref": "#/$defs/%23FilterBinding"
+            }
+          },
+          "type": "object"
+        },
         "filters": {
           "additionalProperties": false,
           "patternProperties": {
             "^[A-Za-z_][A-Za-z0-9_]*$": {
-              "$ref": "#/$defs/%23Filter"
+              "$ref": "#/$defs/%23FilterDefinition"
             }
           },
           "type": "object"
@@ -287,18 +299,163 @@
         }
       ]
     },
-    "#Filter": {
+    "#FilterApplication": {
       "additionalProperties": false,
       "properties": {
-        "custom": {
+        "mode": {
+          "enum": [
+            "immediate",
+            "deferred"
+          ]
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "type": "object"
+    },
+    "#FilterBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "default": {
+          "$ref": "#/$defs/%23FilterExpression"
+        },
+        "filter": {
+          "$ref": "#/$defs/%23Identifier"
+        },
+        "option_interactions": {
+          "additionalProperties": false,
+          "properties": {
+            "exclude": {
+              "items": {
+                "$ref": "#/$defs/%23FilterBindingRef"
+              },
+              "type": "array"
+            },
+            "include": {
+              "items": {
+                "$ref": "#/$defs/%23FilterBindingRef"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "pane": {
+          "additionalProperties": false,
+          "properties": {
+            "label": {
+              "type": "string"
+            },
+            "order": {
+              "type": "integer"
+            },
+            "visible": {
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        },
+        "reader_editable": {
           "type": "boolean"
         },
-        "default": {
-          "$ref": "#/$defs/%23FilterDefault"
+        "selection": {
+          "additionalProperties": false,
+          "properties": {
+            "max_selected_values": {
+              "allOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              ]
+            },
+            "mode": {
+              "enum": [
+                "single",
+                "multiple"
+              ]
+            }
+          },
+          "type": "object"
         },
-        "default_operator": {
-          "type": "string"
+        "targets": {
+          "additionalProperties": false,
+          "properties": {
+            "exclude": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "include": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
         },
+        "url": {
+          "additionalProperties": false,
+          "properties": {
+            "encoding": {
+              "const": "typed_v1"
+            },
+            "param": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "filter"
+      ],
+      "type": "object"
+    },
+    "#FilterBindingRef": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/%23Identifier"
+        },
+        "scope": {
+          "enum": [
+            "page",
+            "report"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "scope"
+      ],
+      "type": "object"
+    },
+    "#FilterBound": {
+      "additionalProperties": false,
+      "properties": {
+        "inclusive": {
+          "type": "boolean"
+        },
+        "value": {
+          "$ref": "#/$defs/%23FilterValue"
+        }
+      },
+      "required": [
+        "inclusive",
+        "value"
+      ],
+      "type": "object"
+    },
+    "#FilterDefinition": {
+      "additionalProperties": false,
+      "properties": {
         "description": {
           "type": "string"
         },
@@ -315,25 +472,278 @@
             }
           ]
         },
-        "from_url_param": {
-          "type": "string"
+        "formatting": {
+          "additionalProperties": false,
+          "properties": {
+            "pattern": {
+              "type": "string"
+            },
+            "unit": {
+              "type": "string"
+            }
+          },
+          "type": "object"
         },
         "label": {
           "type": "string"
         },
-        "operator": {
-          "type": "string"
+        "options": {
+          "$ref": "#/$defs/%23FilterOptionSource"
         },
-        "operator_url_param": {
-          "type": "string"
-        },
-        "operators": {
+        "predicates": {
           "items": {
-            "type": "string"
+            "$ref": "#/$defs/%23FilterPredicate"
           },
           "type": "array"
+        }
+      },
+      "required": [
+        "field",
+        "label",
+        "predicates"
+      ],
+      "type": "object"
+    },
+    "#FilterExpression": {
+      "anyOf": [
+        {
+          "const": {
+            "kind": "unfiltered"
+          }
         },
-        "options": {
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "null_check"
+            },
+            "operator": {
+              "anyOf": [
+                {
+                  "const": "is_null"
+                },
+                {
+                  "const": "is_not_null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "operator"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "set"
+            },
+            "operator": {
+              "anyOf": [
+                {
+                  "const": "in"
+                },
+                {
+                  "const": "not_in"
+                }
+              ]
+            },
+            "values": {
+              "items": {
+                "$ref": "#/$defs/%23FilterValue"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "operator",
+            "values"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "comparison"
+            },
+            "operator": {
+              "anyOf": [
+                {
+                  "const": "equals"
+                },
+                {
+                  "const": "not_equals"
+                },
+                {
+                  "const": "contains"
+                },
+                {
+                  "const": "not_contains"
+                },
+                {
+                  "const": "starts_with"
+                },
+                {
+                  "const": "ends_with"
+                },
+                {
+                  "const": "greater_than"
+                },
+                {
+                  "const": "greater_than_or_equal"
+                },
+                {
+                  "const": "less_than"
+                },
+                {
+                  "const": "less_than_or_equal"
+                }
+              ]
+            },
+            "value": {
+              "$ref": "#/$defs/%23FilterValue"
+            }
+          },
+          "required": [
+            "kind",
+            "operator",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "range"
+            },
+            "lower": {
+              "$ref": "#/$defs/%23FilterBound"
+            },
+            "upper": {
+              "$ref": "#/$defs/%23FilterBound"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "anchor": {
+              "anyOf": [
+                {
+                  "const": "current_time"
+                },
+                {
+                  "const": "first_available"
+                },
+                {
+                  "const": "last_available"
+                },
+                {
+                  "const": "fixed"
+                }
+              ]
+            },
+            "anchor_value": {
+              "$ref": "#/$defs/%23FilterValue"
+            },
+            "count": {
+              "allOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "exclusiveMinimum": 0,
+                  "type": "integer"
+                }
+              ]
+            },
+            "direction": {
+              "anyOf": [
+                {
+                  "const": "previous"
+                },
+                {
+                  "const": "current"
+                },
+                {
+                  "const": "next"
+                }
+              ]
+            },
+            "include_current": {
+              "type": "boolean"
+            },
+            "kind": {
+              "const": "relative_period"
+            },
+            "unit": {
+              "anyOf": [
+                {
+                  "const": "minute"
+                },
+                {
+                  "const": "hour"
+                },
+                {
+                  "const": "day"
+                },
+                {
+                  "const": "week"
+                },
+                {
+                  "const": "month"
+                },
+                {
+                  "const": "quarter"
+                },
+                {
+                  "const": "year"
+                }
+              ]
+            }
+          },
+          "required": [
+            "anchor",
+            "count",
+            "direction",
+            "kind",
+            "unit"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "#FilterOptionSource": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "static",
+            "distinct"
+          ]
+        },
+        "limit": {
+          "allOf": [
+            {
+              "type": "number"
+            },
+            {
+              "maximum": 500,
+              "minimum": 0,
+              "type": "integer"
+            }
+          ]
+        },
+        "values": {
           "items": {
             "additionalProperties": false,
             "properties": {
@@ -341,7 +751,7 @@
                 "type": "string"
               },
               "value": {
-                "type": "string"
+                "$ref": "#/$defs/%23FilterValue"
               }
             },
             "required": [
@@ -351,126 +761,113 @@
             "type": "object"
           },
           "type": "array"
-        },
-        "presets": {
-          "items": {
-            "$ref": "#/$defs/%23FilterPreset"
-          },
-          "type": "array"
-        },
-        "targets": {
-          "additionalProperties": false,
-          "properties": {
-            "visuals": {
-              "items": {
-                "$ref": "#/$defs/%23Identifier"
-              },
-              "type": "array"
-            }
-          },
-          "type": "object"
-        },
-        "to_url_param": {
-          "type": "string"
-        },
-        "type": {
-          "enum": [
-            "date_range",
-            "multi_select",
-            "text"
-          ]
-        },
-        "url_param": {
-          "type": "string"
-        },
-        "values": {
-          "additionalProperties": false,
-          "properties": {
-            "limit": {
-              "type": "integer"
-            },
-            "source": {
-              "type": "string"
-            }
-          },
-          "type": "object"
         }
       },
-      "required": [
-        "field",
-        "label",
-        "type"
-      ],
       "type": "object"
     },
-    "#FilterComponent": {
-      "$ref": "#/$defs/%23PageComponentCommon",
+    "#FilterPredicate": {
       "additionalProperties": false,
       "properties": {
-        "filter": {
-          "$ref": "#/$defs/%23Identifier"
-        },
         "kind": {
-          "const": "filter"
+          "enum": [
+            "null_check",
+            "set",
+            "comparison",
+            "range",
+            "relative_period"
+          ]
+        },
+        "operators": {
+          "items": {
+            "enum": [
+              "is_null",
+              "is_not_null",
+              "in",
+              "not_in",
+              "equals",
+              "not_equals",
+              "contains",
+              "not_contains",
+              "starts_with",
+              "ends_with",
+              "greater_than",
+              "greater_than_or_equal",
+              "less_than",
+              "less_than_or_equal"
+            ]
+          },
+          "type": "array"
         }
       },
       "required": [
-        "filter",
         "kind"
       ],
       "type": "object"
     },
-    "#FilterDefault": {
-      "additionalProperties": false,
-      "properties": {
-        "from": {
-          "type": "string"
-        },
-        "operator": {
-          "type": "string"
-        },
-        "preset": {
-          "type": "string"
-        },
-        "to": {
-          "type": "string"
-        },
-        "value": {
-          "type": "string"
-        },
-        "values": {
-          "items": {
-            "type": "string"
+    "#FilterValue": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "string"
+            },
+            "value": {
+              "type": "string"
+            }
           },
-          "type": "array"
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "boolean"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "anyOf": [
+                {
+                  "const": "integer"
+                },
+                {
+                  "const": "decimal"
+                },
+                {
+                  "const": "date"
+                },
+                {
+                  "const": "timestamp"
+                }
+              ]
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
         }
-      },
-      "type": "object"
-    },
-    "#FilterPreset": {
-      "additionalProperties": false,
-      "properties": {
-        "from": {
-          "type": "string"
-        },
-        "label": {
-          "type": "string"
-        },
-        "relative_days": {
-          "type": "integer"
-        },
-        "to": {
-          "type": "string"
-        },
-        "value": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "label",
-        "value"
-      ],
-      "type": "object"
+      ]
     },
     "#GeographicLayer": {
       "anyOf": [
@@ -1201,6 +1598,15 @@
         "description": {
           "type": "string"
         },
+        "filter_bindings": {
+          "additionalProperties": false,
+          "patternProperties": {
+            "^[A-Za-z_][A-Za-z0-9_]*$": {
+              "$ref": "#/$defs/%23FilterBinding"
+            }
+          },
+          "type": "object"
+        },
         "grid": {
           "additionalProperties": false,
           "properties": {
@@ -1239,7 +1645,7 @@
           "$ref": "#/$defs/%23VisualComponent"
         },
         {
-          "$ref": "#/$defs/%23FilterComponent"
+          "$ref": "#/$defs/%23SlicerComponent"
         },
         {
           "$ref": "#/$defs/%23HeaderComponent"
@@ -1517,6 +1923,64 @@
           "type": "boolean"
         }
       },
+      "type": "object"
+    },
+    "#SlicerComponent": {
+      "$ref": "#/$defs/%23PageComponentCommon",
+      "additionalProperties": false,
+      "properties": {
+        "binding": {
+          "$ref": "#/$defs/%23FilterBindingRef"
+        },
+        "kind": {
+          "const": "slicer"
+        },
+        "presentation": {
+          "additionalProperties": false,
+          "properties": {
+            "aria_label": {
+              "type": "string"
+            },
+            "compact": {
+              "type": "boolean"
+            },
+            "description": {
+              "type": "string"
+            },
+            "search": {
+              "type": "boolean"
+            },
+            "select_all": {
+              "type": "boolean"
+            },
+            "show_counts": {
+              "type": "boolean"
+            },
+            "show_summary": {
+              "type": "boolean"
+            },
+            "style": {
+              "enum": [
+                "dropdown",
+                "list",
+                "buttons",
+                "input",
+                "numeric_range",
+                "date_range",
+                "relative_period"
+              ]
+            },
+            "title": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "binding",
+        "kind"
+      ],
       "type": "object"
     },
     "#Sort": {

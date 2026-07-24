@@ -26,6 +26,7 @@ try {
   }
   await verifyEChartsFirstNavigation()
   await verifyDashboardCommandDoesNotReopenUpdates()
+  await verifyFilterShowcase()
   await verifySpatialMapWindowing()
   console.log(`DatastarLit route QA passed for ${routes.length} routes at ${baseURL}`)
 } finally {
@@ -163,10 +164,18 @@ async function verifyDashboardCommandDoesNotReopenUpdates(): Promise<void> {
   const messages = collectBlockingConsoleMessages(page)
   const updates: string[] = []
   const commands: string[] = []
+  const failedResponses: Array<Promise<string>> = []
   page.on('request', (request) => {
     const url = new URL(request.url())
     if (url.pathname === '/updates') updates.push(request.url())
     if (url.pathname.includes('/commands/')) commands.push(`${request.method()} ${url.pathname}`)
+  })
+  page.on('response', (response) => {
+    if (response.status() >= 400) {
+      failedResponses.push(response.text()
+        .catch(() => '<response body unavailable>')
+        .then((body) => `${response.status()} ${response.url()}: ${body.trim()} request=${response.request().postData() ?? ''}`))
+    }
   })
 
   try {
@@ -175,19 +184,254 @@ async function verifyDashboardCommandDoesNotReopenUpdates(): Promise<void> {
     await page.waitForTimeout(1000)
     const beforeUpdates = updates.length
     await page.evaluate(() => {
-      document.querySelector('lv-dashboard-page')?.dispatchEvent(new CustomEvent('lv-filters-refresh', { bubbles: true, composed: true }))
+      const dashboard = document.querySelector('lv-dashboard-page') as any
+      const bindingKey = Object.keys(dashboard?.filterContract?.bindings ?? {})[0]
+      if (!bindingKey) throw new Error('dashboard exposes no compiled filter binding')
+      const baseRevision = dashboard?.canonicalFilterState?.revision
+      if (typeof baseRevision !== 'number') throw new Error('dashboard exposes no canonical filter revision')
+      dashboard.dispatchEvent(new CustomEvent('lv-filter-command', {
+        bubbles: true,
+        composed: true,
+        detail: {
+          kind: 'mutate',
+          operation: 'clear',
+          bindingKey,
+          baseRevision,
+          clientMutationID: 'route-qa-filter-command',
+        },
+      }))
     })
     await page.waitForTimeout(1000)
 
     if (beforeUpdates !== 1) throw new Error(`dashboard command: initial /updates count=${beforeUpdates}, want 1`)
     if (updates.length !== 1) throw new Error(`dashboard command reopened /updates: count=${updates.length}`)
-    if (!commands.includes('POST /workspaces/visuals/commands/reload')) {
-      throw new Error(`dashboard command requests=${JSON.stringify(commands)}, want reload POST`)
+    if (!commands.includes('POST /workspaces/visuals/commands/filter')) {
+      throw new Error(`dashboard command requests=${JSON.stringify(commands)}, want filter POST`)
+    }
+    if (failedResponses.length > 0) {
+      throw new Error(`dashboard command: failed responses=${JSON.stringify(await Promise.all(failedResponses))}`)
     }
     assertNoBlockingConsoleMessages('dashboard command', messages)
   } finally {
     await page.close()
   }
+}
+
+async function verifyFilterShowcase(): Promise<void> {
+  const path = '/workspaces/visuals/dashboards/visual-showcase/pages/filters'
+  const page = await browser.newPage({ viewport: { width: 1366, height: 900 } })
+  const messages = collectBlockingConsoleMessages(page)
+
+  try {
+    const response = await page.goto(new URL(path, baseURL).toString(), { waitUntil: 'domcontentloaded' })
+    if (!response?.ok()) throw new Error(`${path}: status ${response?.status() ?? 'unknown'}`)
+    await page.waitForSelector('lv-dashboard-page')
+    await page.waitForFunction(() => {
+      const dashboard = document.querySelector('lv-dashboard-page') as HTMLElement & { shadowRoot: ShadowRoot }
+      const slicers = Array.from(dashboard?.shadowRoot?.querySelectorAll('lv-slicer') ?? []) as any[]
+      return (dashboard as any)?.status?.loading === false
+        && slicers.length === 8
+        && slicers.every((slicer) => slicer.shadowRoot?.querySelector('lv-filter-leaf')?.shadowRoot?.querySelector('fieldset'))
+        && slicers
+          .filter((slicer) => slicer.definition?.id === 'order_status')
+          .every((slicer) => (slicer.options?.items?.length ?? 0) > 0)
+    }, undefined, { timeout: 30_000 })
+
+    const matrix = await page.evaluate(() => {
+      const dashboard = document.querySelector('lv-dashboard-page') as HTMLElement & { shadowRoot: ShadowRoot }
+      return Array.from(dashboard?.shadowRoot?.querySelectorAll('lv-slicer') ?? []).map((candidate) => {
+        const slicer = candidate as any
+        return {
+          binding: slicer.binding?.id,
+          definition: slicer.definition?.id,
+          valueKind: slicer.definition?.valueKind,
+          style: slicer.presentation?.style,
+        }
+      })
+    })
+    const expectedMatrix = [
+      'purchase_date:date:date_range',
+      'purchase_time:timestamp:relative_period',
+      'state:string:dropdown',
+      'category_text:string:input',
+      'order_status:string:list',
+      'delivered:boolean:buttons',
+      'delivery_days:integer:numeric_range',
+      'revenue_amount:decimal:numeric_range',
+    ]
+    const actualMatrix = matrix
+      .map((item) => `${item.definition}:${item.valueKind}:${item.style}`)
+      .sort()
+    if (JSON.stringify(actualMatrix) !== JSON.stringify([...expectedMatrix].sort())) {
+      throw new Error(`${path}: filter matrix=${JSON.stringify(matrix)}, want ${JSON.stringify(expectedMatrix)}`)
+    }
+
+    const mutationCases: Array<{
+      label: string
+      bindingID: string
+      mutate: () => Promise<void>
+      expressionKind: string
+    }> = [
+      {
+        label: 'state dropdown',
+        bindingID: 'state',
+        mutate: async () => {
+          const dropdown = page.getByRole('combobox', { name: 'Filter by customer state' })
+          await dropdown.focus()
+          await page.waitForFunction(() => {
+            const dashboard = document.querySelector('lv-dashboard-page') as HTMLElement & { shadowRoot: ShadowRoot }
+            const slicer = Array.from(dashboard?.shadowRoot?.querySelectorAll('lv-slicer') ?? [])
+              .find((candidate: any) => candidate.binding?.id === 'state') as any
+            return (slicer?.options?.items?.length ?? 0) > 0
+          }, undefined, { timeout: 30_000 })
+          await dropdown.selectOption({ index: 1 })
+        },
+        expressionKind: 'set',
+      },
+      {
+        label: 'status list',
+        bindingID: 'status_list',
+        mutate: async () => {
+          await page.getByRole('checkbox').first().check()
+        },
+        expressionKind: 'set',
+      },
+      {
+        label: 'category input',
+        bindingID: 'category_input',
+        mutate: async () => {
+          const input = page.getByRole('textbox', { name: 'Filter by category text' })
+          await input.fill('bed')
+          await input.press('Tab')
+        },
+        expressionKind: 'comparison',
+      },
+      {
+        label: 'boolean buttons',
+        bindingID: 'delivered_buttons',
+        mutate: async () => {
+          await page.getByRole('button', { name: 'Delivered', exact: true }).click()
+        },
+        expressionKind: 'set',
+      },
+      {
+        label: 'date range',
+        bindingID: 'purchase_date',
+        mutate: async () => {
+          const control = page.getByRole('region', { name: 'Filter by purchase date range' })
+          const from = control.getByLabel('Start date')
+          const to = control.getByLabel('End date')
+          await from.fill('2017-01-01')
+          await from.press('Tab')
+          await to.fill('2018-12-31')
+          await to.press('Tab')
+        },
+        expressionKind: 'range',
+      },
+      {
+        label: 'integer range',
+        bindingID: 'delivery_days_range',
+        mutate: async () => {
+          const control = page.getByRole('region', { name: 'Filter by delivery days' })
+          const minimum = control.getByLabel('Minimum')
+          const maximum = control.getByLabel('Maximum')
+          await minimum.fill('0')
+          await minimum.press('Tab')
+          await maximum.fill('60')
+          await maximum.press('Tab')
+        },
+        expressionKind: 'range',
+      },
+      {
+        label: 'decimal range',
+        bindingID: 'revenue_range',
+        mutate: async () => {
+          const control = page.getByRole('region', { name: 'Filter by order revenue' })
+          const minimum = control.getByLabel('Minimum')
+          const maximum = control.getByLabel('Maximum')
+          await minimum.fill('1.25')
+          await minimum.press('Tab')
+          await maximum.fill('1000.50')
+          await maximum.press('Tab')
+        },
+        expressionKind: 'range',
+      },
+      {
+        label: 'relative period',
+        bindingID: 'purchase_time_relative',
+        mutate: async () => {
+          const control = page.getByRole('region', { name: 'Filter by relative purchase period' })
+          await control.getByLabel('Period unit').selectOption('year')
+          const count = control.getByLabel('Period count')
+          await count.fill('10')
+          await count.press('Tab')
+        },
+        expressionKind: 'relative_period',
+      },
+    ]
+
+    for (const mutation of mutationCases) {
+      console.log(`${path}: testing ${mutation.label}`)
+      const previousRevision = await currentFilterRevision(page)
+      await mutation.mutate()
+      await page.waitForFunction(({ revision, bindingID, expressionKind }) => {
+        const dashboard = document.querySelector('lv-dashboard-page') as any
+        const state = dashboard?.canonicalFilterState
+        const bindings = Object.values(dashboard?.filterContract?.bindings ?? {}) as any[]
+        const binding = bindings.find((candidate) =>
+          candidate.id === bindingID
+          && (candidate.scope === 'report' || candidate.pageID === 'filters'))
+        const expression = binding ? state?.appliedControls?.[binding.key]?.expression : undefined
+        return state?.revision > revision
+          && expression?.kind === expressionKind
+          && dashboard?.filterController?.pending === false
+      }, {
+        revision: previousRevision,
+        bindingID: mutation.bindingID,
+        expressionKind: mutation.expressionKind,
+      }, { timeout: 30_000 })
+      const synchronized = await page.evaluate((bindingID) => {
+        const dashboard = document.querySelector('lv-dashboard-page') as any
+        const slicer = Array.from(dashboard?.shadowRoot?.querySelectorAll('lv-slicer') ?? [])
+          .find((candidate: any) => candidate.binding?.id === bindingID) as any
+        const dock = dashboard?.shadowRoot?.querySelector('lv-filter-dock') as any
+        const pane = Array.from(dock?.shadowRoot?.querySelectorAll('lv-filter-pane-card') ?? [])
+          .find((candidate: any) => candidate.binding?.key === slicer?.binding?.key) as any
+        return pane && JSON.stringify(pane.expression) === JSON.stringify(slicer?.expression)
+      }, mutation.bindingID)
+      if (!synchronized) throw new Error(`${path}: ${mutation.label} did not synchronize pane and slicer state`)
+    }
+
+    const finalRevision = await currentFilterRevision(page)
+    if (finalRevision < mutationCases.length) {
+      throw new Error(`${path}: final filter revision=${finalRevision}, want at least ${mutationCases.length}`)
+    }
+    const canonicalURLParams = await page.evaluate(() => {
+      const dashboard = document.querySelector('lv-dashboard-page') as any
+      return dashboard?.signal('urlParams', {}) as Record<string, string | string[]>
+    })
+    const actualURLParams = new URL(page.url()).searchParams
+    for (const [key, value] of Object.entries(canonicalURLParams)) {
+      const expected = Array.isArray(value) ? value : [value]
+      const actual = actualURLParams.getAll(key)
+      if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+        throw new Error(`${path}: URL parameter ${key}=${JSON.stringify(actual)}, want ${JSON.stringify(expected)}`)
+      }
+    }
+    if ([...actualURLParams.keys()].some((key) => !(key in canonicalURLParams))) {
+      throw new Error(`${path}: URL contains parameters outside canonical state: ${page.url()}`)
+    }
+    assertNoBlockingConsoleMessages(path, messages)
+  } finally {
+    await page.close()
+  }
+}
+
+async function currentFilterRevision(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const dashboard = document.querySelector('lv-dashboard-page') as any
+    return Number(dashboard?.canonicalFilterState?.revision ?? 0)
+  })
 }
 
 type SpatialWindowSnapshot = {

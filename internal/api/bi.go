@@ -104,14 +104,80 @@ type DashboardTableColumn struct {
 	Format string `json:"format,omitempty"`
 }
 
+type DashboardFilterPredicatePolicy struct {
+	Kind      string   `json:"kind"`
+	Operators []string `json:"operators"`
+}
+
+type DashboardFilterStaticOption struct {
+	Value map[string]any `json:"value"`
+	Label string         `json:"label"`
+}
+
+type DashboardFilterOptionSource struct {
+	Kind   string                        `json:"kind"`
+	Limit  int32                         `json:"limit"`
+	Values []DashboardFilterStaticOption `json:"values"`
+}
+
+type DashboardCompiledFilterDefinition struct {
+	ID            string                           `json:"id"`
+	Label         string                           `json:"label"`
+	Description   string                           `json:"description,omitempty"`
+	Field         string                           `json:"field"`
+	Fact          string                           `json:"fact,omitempty"`
+	ValueKind     string                           `json:"valueKind"`
+	Predicates    []DashboardFilterPredicatePolicy `json:"predicates"`
+	Options       DashboardFilterOptionSource      `json:"options"`
+	FormatPattern string                           `json:"formatPattern,omitempty"`
+	FormatUnit    string                           `json:"formatUnit,omitempty"`
+	Timezone      string                           `json:"timezone"`
+	Calendar      string                           `json:"calendar"`
+	WeekStart     string                           `json:"weekStart"`
+}
+
+type DashboardFilterBindingRef struct {
+	Scope string `json:"scope"`
+	ID    string `json:"id"`
+}
+
+type DashboardCompiledFilterBinding struct {
+	Key                string                      `json:"key"`
+	ID                 string                      `json:"id"`
+	Filter             string                      `json:"filter"`
+	Scope              string                      `json:"scope"`
+	PageID             string                      `json:"pageID,omitempty"`
+	Default            map[string]any              `json:"default"`
+	SelectionMode      string                      `json:"selectionMode"`
+	MaxSelectedValues  int32                       `json:"maxSelectedValues"`
+	ReaderEditable     bool                        `json:"readerEditable"`
+	URLParam           string                      `json:"urlParam,omitempty"`
+	URLEncoding        string                      `json:"urlEncoding,omitempty"`
+	PaneVisible        bool                        `json:"paneVisible"`
+	PaneOrder          int32                       `json:"paneOrder"`
+	PaneLabel          string                      `json:"paneLabel,omitempty"`
+	Targets            []string                    `json:"targets"`
+	OptionDependencies []DashboardFilterBindingRef `json:"optionDependencies"`
+}
+
+type DashboardFilterPresentation struct {
+	Style       string `json:"style"`
+	Search      bool   `json:"search"`
+	SelectAll   bool   `json:"selectAll"`
+	ShowCounts  bool   `json:"showCounts"`
+	ShowSummary bool   `json:"showSummary"`
+	Compact     bool   `json:"compact"`
+	Title       string `json:"title,omitempty"`
+	Description string `json:"description,omitempty"`
+	AriaLabel   string `json:"ariaLabel,omitempty"`
+}
+
 type DashboardFilterDescribeResponse struct {
-	ID          string                       `json:"id"`
-	ComponentID string                       `json:"componentId,omitempty"`
-	Title       string                       `json:"title,omitempty"`
-	Description string                       `json:"description,omitempty"`
-	Field       string                       `json:"field,omitempty"`
-	MultiSelect bool                         `json:"multiSelect"`
-	Placement   *DashboardComponentPlacement `json:"placement,omitempty"`
+	Definition   DashboardCompiledFilterDefinition `json:"definition"`
+	Binding      DashboardCompiledFilterBinding    `json:"binding"`
+	ComponentID  string                            `json:"componentId,omitempty"`
+	Presentation *DashboardFilterPresentation      `json:"presentation,omitempty"`
+	Placement    *DashboardComponentPlacement      `json:"placement,omitempty"`
 }
 
 type DashboardVisualDescribeResponse struct {
@@ -311,19 +377,17 @@ type ModelDashboardUsage struct {
 }
 
 type DashboardPageQueryRequest struct {
-	Filters map[string]any `json:"filters"`
-}
-
-type DashboardTableQueryRequest struct {
-	PageID  string         `json:"pageId"`
-	Count   int            `json:"count"`
-	Filters map[string]any `json:"filters"`
+	FilterState           map[string]any   `json:"filterState"`
+	InteractionSelections []map[string]any `json:"interactionSelections"`
+	SpatialSelections     []map[string]any `json:"spatialSelections"`
 }
 
 type DashboardVisualQueryRequest struct {
-	Limit     int            `json:"limit"`
-	PageToken string         `json:"pageToken"`
-	Filters   map[string]any `json:"filters"`
+	Limit                 int              `json:"limit"`
+	PageToken             string           `json:"pageToken"`
+	FilterState           map[string]any   `json:"filterState"`
+	InteractionSelections []map[string]any `json:"interactionSelections"`
+	SpatialSelections     []map[string]any `json:"spatialSelections"`
 }
 
 type DashboardTableQueryResponse struct {

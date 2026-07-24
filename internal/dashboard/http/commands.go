@@ -2,12 +2,14 @@ package http
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	nethttp "net/http"
 
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	"github.com/Yacobolo/leapview/internal/dashboard/command"
 	lddatastar "github.com/Yacobolo/leapview/internal/dashboard/datastar"
+	dashboardsession "github.com/Yacobolo/leapview/internal/dashboard/session"
 	dashboardstream "github.com/Yacobolo/leapview/internal/dashboard/stream"
 	"github.com/Yacobolo/leapview/pkg/pagestream"
 )
@@ -44,22 +46,6 @@ func (h Handler) ClearSelection(w nethttp.ResponseWriter, r *nethttp.Request) {
 	})
 }
 
-func (h Handler) Reload(w nethttp.ResponseWriter, r *nethttp.Request) {
-	h.handleCommand(w, r, func(service command.Service, request command.Request, current dashboard.Filters) (command.PreparedRefresh, error) {
-		// Filter controls are authored by the client event, while selections stay
-		// coordinator-owned so a stale signal post cannot resurrect or erase a
-		// rapid interaction command.
-		current.Controls = request.Filters.Controls
-		return service.PrepareReload(request, current)
-	})
-}
-
-func (h Handler) ResetFilters(w nethttp.ResponseWriter, r *nethttp.Request) {
-	h.handleCommand(w, r, func(service command.Service, request command.Request, _ dashboard.Filters) (command.PreparedRefresh, error) {
-		return service.PrepareResetFilters(request)
-	})
-}
-
 func (h Handler) handleCommand(w nethttp.ResponseWriter, r *nethttp.Request, prepare commandPrepare) {
 	h.handleCommandWithBefore(w, r, prepare, nil)
 }
@@ -82,7 +68,6 @@ func (h Handler) handleCommandWithBefore(w nethttp.ResponseWriter, r *nethttp.Re
 		DashboardID:                dashboardID,
 		PageID:                     pageID,
 		ModelID:                    modelID,
-		Filters:                    signals.Filters,
 		VisualWindowCommand:        signals.VisualWindowCommand,
 		VisualSpatialWindowCommand: signals.VisualSpatialWindowCommand,
 		InteractionCommand:         signals.InteractionCommand,
@@ -113,11 +98,17 @@ func (h Handler) handleCommandWithBefore(w nethttp.ResponseWriter, r *nethttp.Re
 			prepared, generation, err := h.SharedCommandPrepare(r, request, signals, func(shared dashboard.Filters) (command.PreparedRefresh, error) {
 				return prepare(command.Service{Metrics: metrics}, request, shared)
 			})
+			if err == nil {
+				err = h.persistPreparedSelections(r, metrics, request, signals, prepared)
+			}
 			preparation := streamPreparation(prepared)
 			preparation.Generation = generation
 			return preparation, err
 		}
 		prepared, err := prepare(command.Service{Metrics: metrics}, request, current)
+		if err == nil {
+			err = h.persistPreparedSelections(r, metrics, request, signals, prepared)
+		}
 		return streamPreparation(prepared), err
 	}, func(preparation dashboardstream.RefreshPreparation) dashboardstream.RefreshWork {
 		plan, _ := preparation.Plan.(command.RefreshPlan)
@@ -158,6 +149,56 @@ func (h Handler) handleCommandWithBefore(w nethttp.ResponseWriter, r *nethttp.Re
 	// as a failed request. The empty patch acknowledges command acceptance while
 	// progressive results continue exclusively on the page /updates stream.
 	writeJSON(w, nethttp.StatusOK, map[string]any{})
+}
+
+func (h Handler) persistPreparedSelections(
+	r *nethttp.Request,
+	metrics Metrics,
+	request command.Request,
+	signals dashboard.Signals,
+	prepared command.PreparedRefresh,
+) error {
+	plan := prepared.Plan
+	if plan.Command != "select" && plan.Command != "spatial_select" && plan.Command != "clear_selection" {
+		return nil
+	}
+	if h.SessionStore == nil {
+		return nil
+	}
+	definition, _, ok := metrics.Report(request.DashboardID)
+	if !ok {
+		return nil
+	}
+	clientID := pagestream.ClientIDFromRequest(r, signals.Runtime.ClientID)
+	key := h.dashboardSessionKey(r, definition, clientID, signals.Runtime.StreamInstanceID)
+	interaction, err := selectionMaps(prepared.Filters.Selections)
+	if err != nil {
+		return err
+	}
+	spatial, err := selectionMaps(prepared.Filters.SpatialSelections)
+	if err != nil {
+		return err
+	}
+	_, err = (dashboardsession.Service{Store: h.SessionStore}).UpdateSelections(r.Context(), key, interaction, spatial)
+	if errors.Is(err, dashboardsession.ErrNotFound) {
+		return nil
+	}
+	return err
+}
+
+func selectionMaps[T any](values []T) ([]map[string]any, error) {
+	encoded, err := json.Marshal(values)
+	if err != nil {
+		return nil, err
+	}
+	var result []map[string]any
+	if err := json.Unmarshal(encoded, &result); err != nil {
+		return nil, err
+	}
+	if result == nil {
+		result = []map[string]any{}
+	}
+	return result, nil
 }
 
 func streamPreparation(prepared command.PreparedRefresh) dashboardstream.RefreshPreparation {

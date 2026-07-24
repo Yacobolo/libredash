@@ -3,35 +3,55 @@ package signals
 import (
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/Yacobolo/leapview/internal/dashboard"
-	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
+	dashboardfilter "github.com/Yacobolo/leapview/internal/dashboard/filter"
 )
 
 func TestDashboardContractConversionsPreserveJSON(t *testing.T) {
 	t.Parallel()
 
-	filters := dashboard.Filters{
-		Controls:          map[string]dashboard.FilterControl{"state": {Type: "multi_select", Operator: "in", Values: []string{"SP"}}},
-		Selections:        []dashboard.InteractionSelection{{ID: "visual:orders:point", SourceKind: "visual", SourceID: "orders", InteractionKind: "point", Label: "42", Order: 1, Entries: []dashboard.InteractionSelectionEntry{{Label: "42", Mappings: []dashboard.InteractionSelectionMapping{{Field: "ratings.rating_bucket", Fact: "ratings", Value: float64(42), Label: "Rating"}}}}}},
-		SpatialSelections: []dashboard.SpatialInteractionSelection{},
-	}
-	filterConfig := []dashboarddefinition.FilterConfig{{
-		ID: "state",
-		FilterDefinition: dashboarddefinition.FilterDefinition{
-			Type: "multi_select", Label: "State", Description: "Order state", Dimension: "orders.state", Fact: "orders", Custom: true,
-			Default: dashboarddefinition.FilterDefault{Operator: "in", Values: []string{"SP"}}, Operator: "in", DefaultOperator: "in", Operators: []string{"in"},
-			Options: []dashboarddefinition.FilterOption{{Value: "SP", Label: "Sao Paulo"}}, Presets: []dashboarddefinition.FilterPreset{{Value: "recent", Label: "Recent", From: "2026-01-01", To: "2026-12-31", RelativeDays: 30}},
-			Values: dashboarddefinition.FilterValues{Source: "orders.state", Limit: 100}, URLParam: "state", FromURLParam: "from", ToURLParam: "to", OperatorURLParam: "op",
-			Targets: dashboarddefinition.FilterTargets{Visuals: []string{"orders", "orders_table"}},
-		},
-	}}
+	selections := []dashboard.InteractionSelection{{ID: "visual:orders:point", SourceKind: "visual", SourceID: "orders", InteractionKind: "point", Label: "42", Order: 1, Entries: []dashboard.InteractionSelectionEntry{{Label: "42", Mappings: []dashboard.InteractionSelectionMapping{{Field: "ratings.rating_bucket", Fact: "ratings", Value: float64(42), Label: "Rating"}}}}}}
+	assertSameJSON(t, selections, DashboardInteractionSelectionsFromDashboard(selections))
+	spatial := []dashboard.SpatialInteractionSelection{}
+	assertSameJSON(t, spatial, DashboardSpatialSelectionsFromDashboard(spatial))
+}
 
-	assertSameJSON(t, filters, DashboardFiltersFromDashboard(filters))
-	convertedFilters := ReportFilterConfigsFromReport(filterConfig)
-	if convertedFilters[0].Targets == nil || convertedFilters[0].Targets.Visuals == nil || !reflect.DeepEqual(*convertedFilters[0].Targets.Visuals, []string{"orders", "orders_table"}) {
-		t.Fatalf("filter targets = %#v", convertedFilters[0].Targets)
+func TestDashboardFilterStateUsesEmptyJSONCollections(t *testing.T) {
+	t.Parallel()
+
+	contract := DashboardFilterStateFromDomain(dashboardfilter.State{})
+	encoded, err := json.Marshal(contract)
+	if err != nil {
+		t.Fatalf("marshal filter state: %v", err)
+	}
+	if contract.DirtyBindings == nil {
+		t.Fatalf("dirty bindings must be an empty collection: %s", encoded)
+	}
+	if got := string(encoded); !strings.Contains(got, `"dirtyBindings":[]`) {
+		t.Fatalf("filter state = %s, want empty dirtyBindings array", got)
+	}
+}
+
+func TestDashboardRelativePeriodExpressionPreservesFalseIncludeCurrent(t *testing.T) {
+	t.Parallel()
+
+	contract := DashboardFilterExpressionFromDomain(dashboardfilter.Expression{
+		Kind:           dashboardfilter.ExpressionRelativePeriod,
+		Direction:      dashboardfilter.DirectionPrevious,
+		Count:          10,
+		Unit:           dashboardfilter.UnitYear,
+		IncludeCurrent: false,
+		Anchor:         dashboardfilter.AnchorCurrentTime,
+	})
+	encoded, err := json.Marshal(contract)
+	if err != nil {
+		t.Fatalf("marshal relative-period expression: %v", err)
+	}
+	if got := string(encoded); !strings.Contains(got, `"includeCurrent":false`) {
+		t.Fatalf("relative-period expression = %s, want explicit false includeCurrent", got)
 	}
 }
 

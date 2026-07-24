@@ -2,80 +2,92 @@
 
 Filters and selections let users change a report without giving the browser unrestricted query control. Dashboard YAML defines allowed fields, operators, option sources, URL state, semantic mappings, and targets; the server validates and applies each command.
 
+This guide describes the currently accepted dashboard configuration. See [Filter and slicer target architecture](/docs/architecture/filters-slicers) for the state, command, targeting, and option-domain design.
+
 ## Define dashboard filters
 
-### Define a multi-select filter
+### Define a categorical filter
 
 ```yaml
 filters:
   state:
-    type: multi_select
     label: State
     description: Limit results to one or more customer states.
-    url_param: state
-    operator: in
-    values:
-      source: distinct
-      limit: 50
-    field: customers.state
+    field: customer_state
+    predicates:
+      - kind: set
+        operators: [in, not_in]
+    options: {kind: distinct, limit: 50}
+filter_bindings:
+  state:
+    filter: state
+    default: {kind: unfiltered}
+    selection: {mode: multiple, max_selected_values: 50}
+    url: {param: state, encoding: typed_v1}
+    pane: {visible: true, order: 10}
 ```
 
-Distinct option loading must be bounded. A multi-select is appropriate when cardinality is understandable and users recognize the values. For thousands of identifiers, prefer a more focused search or text-filter workflow rather than loading an enormous option set.
+The definition owns semantic meaning and legal predicates. The binding owns state, scope, targets, selection limits, URL identity, editability, and Filters-pane presentation. Distinct options are loaded lazily in bounded pages. For thousands of identifiers, enable search and keep page sizes conservative.
 
-Place the filter on a page:
+Optionally present the same report binding as a page slicer:
 
 ```yaml
 - id: state-filter
-  kind: filter_card
-  filter: state
+  kind: slicer
+  binding: {scope: report, id: state}
+  presentation: {style: dropdown, search: true}
   placement: {col: 1, row: 1, col_span: 4, row_span: 2}
 ```
 
-### Define a date range
+The pane card and slicer are separate shells around the same canonical binding state. Removing either presentation does not remove the binding or its filtering effect.
 
-Date filters can provide shareable URL bounds and named presets:
+### Define date and relative-period predicates
 
 ```yaml
 filters:
   purchase_date:
-    type: date_range
     label: Purchase date
-    url_param: period
-    from_url_param: from
-    to_url_param: to
-    field: orders.purchase_date
-    default:
-      preset: all
-    presets:
-      - {value: all, label: All time}
-      - {value: "2018", label: "2018", from: "2018-01-01", to: "2018-12-31"}
+    field: purchase_date
+    predicates:
+      - kind: range
+      - kind: relative_period
+filter_bindings:
+  purchase_date:
+    filter: purchase_date
+    default: {kind: unfiltered}
+    url: {param: period, encoding: typed_v1}
+    pane: {visible: true, order: 20}
 ```
 
-Choose calendar bounds in the same business timezone and date semantics used by the modeled field. A date derived from a UTC timestamp may differ from a local-business date near midnight; resolve that in the model table instead of compensating in each filter.
+Date, timestamp, calendar, timezone, and week-start semantics come from the semantic field. A date derived from a UTC timestamp may differ from a local-business date near midnight; resolve that in the model instead of compensating in each presentation.
 
 ### Define a text filter
 
-Text filters can expose an allowed operator set and persist the selected operator separately:
+Text definitions expose only their allowed operator set:
 
 ```yaml
 filters:
   category:
-    type: text
     label: Category
-    url_param: category
-    operator_url_param: category_op
-    default_operator: contains
-    operators: [contains, equals, starts_with, not_contains]
-    field: orders.category
+    field: category
+    predicates:
+      - kind: comparison
+        operators: [contains, equals, starts_with, ends_with, not_contains]
+filter_bindings:
+  category:
+    filter: category
+    default: {kind: unfiltered}
+    url: {param: category, encoding: typed_v1}
+    pane: {visible: true, order: 30}
 ```
 
-Offer only operators that make sense for the field and data volume. Stable URL parameter names let users bookmark and share report state. Renaming one invalidates old links, so treat it as a compatibility change.
+`typed_v1` serializes the canonical typed expression as unpadded base64url. The server parses and normalizes it; the browser does not maintain a second predicate parser. Default and unfiltered values are omitted. Stable parameter names are compatibility-sensitive, so rename them intentionally.
 
 ## Control interaction scope
 
 ### Scope filter targets
 
-By default, a dashboard filter may participate broadly according to the runtime contract. Use explicit targets when a filter should affect only a subset of page components. Narrow targeting makes dashboards easier to explain and avoids unnecessary refresh work.
+By default, a binding applies to every semantically compatible consumer in its scope. Use `targets: {include: [...]}` or `targets: {exclude: [...]}` when it should affect only part of a page or report. Page targets are component IDs; report targets are qualified `pageID/componentID` identities. Include and exclude are mutually exclusive.
 
 Test combinations, not just filters in isolation. Two individually valid filters can produce an empty intersection, and users should see a deliberate empty state rather than a broken chart.
 

@@ -94,10 +94,12 @@ Dashboard signal roots should remain explicit and renderer-neutral:
 ```text
 $chrome
 $page
-$filters
-$filterOptions
+$filterContract
+$filterState
+$filterOptionPages
+$interactionSelections
+$spatialSelections
 $visuals
-$tables
 $status
 ```
 

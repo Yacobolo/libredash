@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	nethttp "net/http"
+	"sort"
 
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	"github.com/Yacobolo/leapview/internal/api"
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
+	dashboardfilter "github.com/Yacobolo/leapview/internal/dashboard/filter"
 	"github.com/Yacobolo/leapview/internal/dataquery"
 	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
 	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
@@ -67,7 +69,7 @@ func (h Handler) ListDashboardComponents(w nethttp.ResponseWriter, r *nethttp.Re
 	}
 	out := make([]api.DashboardComponentResponse, 0, len(page.Visuals))
 	for _, component := range page.PlacedVisuals() {
-		out = append(out, dashboardComponentDTO(component, report))
+		out = append(out, dashboardComponentDTO(component, report, page))
 	}
 	items, nextCursor, ok := pageSliceForRequest(w, r, out)
 	if !ok {
@@ -83,7 +85,7 @@ func (h Handler) GetDashboardPage(w nethttp.ResponseWriter, r *nethttp.Request) 
 	}
 	components := make([]api.DashboardComponentResponse, 0, len(page.Visuals))
 	for _, component := range page.PlacedVisuals() {
-		components = append(components, dashboardComponentDTO(component, report))
+		components = append(components, dashboardComponentDTO(component, report, page))
 	}
 	writeJSON(w, nethttp.StatusOK, api.DashboardPageResponse{
 		ID: page.ID, Title: page.Title, Description: page.Description, Components: components,
@@ -96,22 +98,50 @@ func (h Handler) GetDashboardFilter(w nethttp.ResponseWriter, r *nethttp.Request
 		return
 	}
 	filterID := chi.URLParam(r, "filter")
-	filter, exists := report.Filters[filterID]
+	binding, exists := filterBindingForPage(report, page, filterID)
 	if !exists {
 		writeJSONError(w, fmt.Errorf("filter %q not found", filterID), nethttp.StatusNotFound)
 		return
 	}
-	component, exists := pageComponentForFilter(page, filterID)
+	filter, exists := report.FilterDefinitions[binding.Filter]
 	if !exists {
-		writeJSONError(w, fmt.Errorf("filter %q not found on page %q", filterID, page.ID), nethttp.StatusNotFound)
+		writeJSONError(w, fmt.Errorf("filter definition %q not found", binding.Filter), nethttp.StatusNotFound)
 		return
 	}
-	multiSelect := filter.Type == "multi_select"
-	writeJSON(w, nethttp.StatusOK, api.DashboardFilterDescribeResponse{
-		ID: filterID, ComponentID: component.ID, Title: firstNonEmpty(component.Title, filter.Label),
-		Description: firstNonEmpty(component.Description, filter.Description), Field: filter.Dimension,
-		MultiSelect: multiSelect, Placement: componentPlacement(component),
-	})
+	component, _ := pageComponentForFilter(page, binding.Scope, binding.ID)
+	bindingResponse := map[string]any{
+		"key": binding.Key, "id": binding.ID, "filter": binding.Filter, "scope": binding.Scope,
+		"default": binding.Default, "selectionMode": binding.Selection.Mode,
+		"maxSelectedValues": binding.Selection.MaxSelectedValues, "readerEditable": binding.Editable(),
+		"paneVisible": binding.Pane.IsVisible(), "paneOrder": binding.Pane.Order,
+		"targets": binding.Targets, "optionDependencies": binding.OptionDependencies,
+	}
+	if binding.PageID != "" {
+		bindingResponse["pageID"] = binding.PageID
+	}
+	if binding.URL.Param != "" {
+		bindingResponse["urlParam"] = binding.URL.Param
+		bindingResponse["urlEncoding"] = binding.URL.Encoding
+	}
+	if binding.Pane.Label != "" {
+		bindingResponse["paneLabel"] = binding.Pane.Label
+	}
+	response := map[string]any{
+		"definition": map[string]any{
+			"id": binding.Filter, "label": filter.Label, "description": filter.Description,
+			"field": filter.Field, "fact": filter.Fact, "valueKind": filter.ValueKind,
+			"predicates": filter.Predicates, "options": filter.Options,
+			"formatPattern": filter.Formatting.Pattern, "formatUnit": filter.Formatting.Unit,
+			"timezone": filter.Time.Timezone, "calendar": filter.Time.Calendar, "weekStart": filter.Time.WeekStart,
+		},
+		"binding": bindingResponse,
+	}
+	if component.ID != "" {
+		response["componentId"] = component.ID
+		response["presentation"] = component.Presentation
+		response["placement"] = componentPlacement(component)
+	}
+	writeJSON(w, nethttp.StatusOK, response)
 }
 
 func (h Handler) GetDashboardVisual(w nethttp.ResponseWriter, r *nethttp.Request) {
@@ -143,14 +173,18 @@ func (h Handler) QueryDashboardPage(w nethttp.ResponseWriter, r *nethttp.Request
 		writeJSONError(w, err, nethttp.StatusBadRequest)
 		return
 	}
-	dashboardID := chi.URLParam(r, "dashboard")
-	filters := dashboardFilters(input.Filters)
-	if !dashboardFiltersProvided(filters) {
-		filters = metrics.DefaultFilters(dashboardID)
+	report, page, ok := h.dashboardReportPage(w, r)
+	if !ok {
+		return
 	}
-	pageID := chi.URLParam(r, "page")
-	ctx := dataquery.WithMetadata(r.Context(), h.requestQueryMetadata(r, dataquery.SurfaceAPI, dataquery.OperationAPIQuery, "dashboard_page", dashboardID+":"+pageID))
-	patch, err := metrics.QueryDashboardPage(ctx, dashboardID, pageID, filters)
+	dashboardID := chi.URLParam(r, "dashboard")
+	filters, err := dashboardQueryFilters(report, page.ID, input.FilterState, input.InteractionSelections, input.SpatialSelections)
+	if err != nil {
+		writeJSONError(w, err, nethttp.StatusBadRequest)
+		return
+	}
+	ctx := dataquery.WithMetadata(r.Context(), h.requestQueryMetadata(r, dataquery.SurfaceAPI, dataquery.OperationAPIQuery, "dashboard_page", dashboardID+":"+page.ID))
+	patch, err := metrics.QueryDashboardPage(ctx, dashboardID, page.ID, filters)
 	if err != nil {
 		writeJSONError(w, err, nethttp.StatusBadRequest)
 		return
@@ -159,7 +193,7 @@ func (h Handler) QueryDashboardPage(w nethttp.ResponseWriter, r *nethttp.Request
 	for id, envelope := range patch.Visuals {
 		visuals[id] = envelope
 	}
-	writeJSON(w, nethttp.StatusOK, map[string]any{"filters": patch.Filters, "filterOptions": patch.FilterOptions, "status": patch.Status, "visuals": visuals})
+	writeJSON(w, nethttp.StatusOK, map[string]any{"filterState": dashboardAPIFilterState(filters), "status": patch.Status, "visuals": visuals})
 }
 
 func (h Handler) QueryDashboardVisualData(w nethttp.ResponseWriter, r *nethttp.Request) {
@@ -200,9 +234,10 @@ func (h Handler) QueryDashboardVisualData(w nethttp.ResponseWriter, r *nethttp.R
 		return
 	}
 	dashboardID := chi.URLParam(r, "dashboard")
-	filters := dashboardFilters(input.Filters)
-	if !dashboardFiltersProvided(filters) {
-		filters = metrics.DefaultFilters(dashboardID)
+	filters, err := dashboardQueryFilters(report, page.ID, input.FilterState, input.InteractionSelections, input.SpatialSelections)
+	if err != nil {
+		writeJSONError(w, err, nethttp.StatusBadRequest)
+		return
 	}
 	ctx := dataquery.WithMetadata(r.Context(), h.requestQueryMetadata(r, dataquery.SurfaceAPI, dataquery.OperationAPIQuery, "dashboard_visual", dashboardID+":"+visualID))
 	patch, err := metrics.QueryDashboardPage(ctx, dashboardID, page.ID, filters)
@@ -243,9 +278,15 @@ func (h Handler) queryDashboardTabularVisual(w nethttp.ResponseWriter, r *nethtt
 		return
 	}
 	dashboardID := chi.URLParam(r, "dashboard")
-	filters := dashboardFilters(input.Filters)
-	if !dashboardFiltersProvided(filters) {
-		filters = metrics.DefaultFilters(dashboardID)
+	report, _, exists := metrics.Report(dashboardID)
+	if !exists {
+		writeJSONError(w, fmt.Errorf("dashboard %q not found", dashboardID), nethttp.StatusNotFound)
+		return
+	}
+	filters, err := dashboardQueryFilters(report, page.ID, input.FilterState, input.InteractionSelections, input.SpatialSelections)
+	if err != nil {
+		writeJSONError(w, err, nethttp.StatusBadRequest)
+		return
 	}
 	ctx := dataquery.WithMetadata(r.Context(), h.requestQueryMetadata(r, dataquery.SurfaceAPI, dataquery.OperationAPIQuery, "dashboard_visual", dashboardID+":"+visualID))
 	definition, exists := metrics.VisualizationDefinition(dashboardID, visualID)
@@ -286,29 +327,59 @@ func (h Handler) ListDashboardFilterOptions(w nethttp.ResponseWriter, r *nethttp
 		return
 	}
 	filterID := chi.URLParam(r, "filter")
-	if _, exists := report.Filters[filterID]; !exists {
+	binding, exists := filterBindingForPage(report, page, filterID)
+	if !exists {
 		writeJSONError(w, fmt.Errorf("filter %q not found", filterID), nethttp.StatusNotFound)
 		return
 	}
-	if _, ok := pageComponentForFilter(page, filterID); !ok {
-		writeJSONError(w, fmt.Errorf("filter %q not found on page %q", filterID, page.ID), nethttp.StatusNotFound)
+	definition, exists := report.FilterDefinitions[binding.Filter]
+	if !exists {
+		writeJSONError(w, fmt.Errorf("filter definition %q not found", binding.Filter), nethttp.StatusNotFound)
 		return
 	}
-	dashboardID := chi.URLParam(r, "dashboard")
-	filters := dashboardFilters(input.Filters)
-	if !dashboardFiltersProvided(filters) {
-		filters = metrics.DefaultFilters(dashboardID)
-	}
-	ctx := dataquery.WithMetadata(r.Context(), h.requestQueryMetadata(r, dataquery.SurfaceAPI, dataquery.OperationAPIQuery, "dashboard_filter", dashboardID+":"+filterID))
-	patch, err := metrics.QueryDashboardPage(ctx, dashboardID, page.ID, filters)
+	filters, err := dashboardQueryFilters(report, page.ID, input.FilterState, input.InteractionSelections, input.SpatialSelections)
 	if err != nil {
 		writeJSONError(w, err, nethttp.StatusBadRequest)
 		return
 	}
-	options := patch.FilterOptions[filterID]
-	out := make([]api.DashboardFilterOptionResponse, 0, len(options))
-	for _, option := range options {
-		out = append(out, api.DashboardFilterOptionResponse{Value: option.Value, Label: option.Label})
+	dashboardID := chi.URLParam(r, "dashboard")
+	out := make([]api.DashboardFilterOptionResponse, 0, len(definition.Options.Values))
+	for _, option := range definition.Options.Values {
+		out = append(out, api.DashboardFilterOptionResponse{Value: fmt.Sprint(option.Value.Value), Label: option.Label})
+	}
+	if definition.Options.Kind == "distinct" {
+		queryMetrics, supported := metrics.(compiledFilterOptionMetrics)
+		if !supported {
+			writeJSONError(w, fmt.Errorf("compiled filter options are not supported by this runtime"), nethttp.StatusNotImplemented)
+			return
+		}
+		dependencies := map[string]dashboardfilter.Expression{}
+		keysByReference := map[dashboardfilter.BindingRef]string{}
+		for key, candidate := range report.CompiledFilterBindings() {
+			if candidate.Scope == dashboardfilter.ScopeReport || candidate.PageID == page.ID {
+				keysByReference[dashboardfilter.BindingRef{Scope: candidate.Scope, ID: candidate.ID}] = key
+			}
+		}
+		if filters.CompiledState != nil {
+			for _, reference := range binding.OptionDependencies {
+				key := keysByReference[reference]
+				if applied, ok := filters.CompiledState.AppliedControls[key]; ok && applied.Expression.Kind != dashboardfilter.ExpressionUnfiltered {
+					dependencies[key] = applied.ResolvedExpression
+				}
+			}
+		}
+		result, err := queryMetrics.QueryCompiledFilterOptions(r.Context(), dashboardID, dashboardfilter.OptionQuery{
+			Field: definition.Field, Fact: definition.Fact, ValueKind: definition.ValueKind,
+			Dependencies: dependencies, Limit: 200,
+		})
+		if err != nil {
+			writeJSONError(w, err, nethttp.StatusBadRequest)
+			return
+		}
+		out = make([]api.DashboardFilterOptionResponse, 0, len(result.Items))
+		for _, option := range result.Items {
+			out = append(out, api.DashboardFilterOptionResponse{Value: fmt.Sprint(option.Value.Value), Label: option.Label})
+		}
 	}
 	items, nextCursor, ok := pageSliceForRequest(w, r, out)
 	if !ok {
@@ -407,23 +478,85 @@ func requestQueryOperation(operation, objectType string) string {
 	}
 }
 
-func dashboardFilters(raw map[string]any) dashboard.Filters {
-	if len(raw) == 0 {
-		return dashboard.Filters{}
+func dashboardQueryFilters(
+	definition dashboarddefinition.Definition,
+	pageID string,
+	rawState map[string]any,
+	rawSelections []map[string]any,
+	rawSpatialSelections []map[string]any,
+) (dashboard.Filters, error) {
+	filters := definition.DefaultFiltersForPage(pageID)
+	if len(rawState) > 0 {
+		var input struct {
+			Version  string                     `json:"version"`
+			Controls map[string]json.RawMessage `json:"controls"`
+		}
+		encoded, err := json.Marshal(rawState)
+		if err != nil {
+			return dashboard.Filters{}, fmt.Errorf("encode filterState: %w", err)
+		}
+		if err := json.Unmarshal(encoded, &input); err != nil {
+			return dashboard.Filters{}, fmt.Errorf("decode filterState: %w", err)
+		}
+		if input.Version != "typed_v1" {
+			return dashboard.Filters{}, fmt.Errorf("filterState version must be typed_v1")
+		}
+		machine := dashboardfilter.NewMachine(dashboardfilter.ApplicationImmediate, definition.FilterBindingSpecs())
+		bindings := definition.CompiledFilterBindings()
+		keys := make([]string, 0, len(input.Controls))
+		for key := range input.Controls {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			binding, ok := bindings[key]
+			if !ok || binding.Scope == dashboardfilter.ScopePage && binding.PageID != pageID {
+				return dashboard.Filters{}, fmt.Errorf("unknown filter binding %q for page %q", key, pageID)
+			}
+			var expression dashboardfilter.Expression
+			if err := json.Unmarshal(input.Controls[key], &expression); err != nil {
+				return dashboard.Filters{}, fmt.Errorf("filter binding %q: %w", key, err)
+			}
+			state := machine.State()
+			if _, err := machine.Execute(dashboardfilter.Command{
+				Kind: dashboardfilter.CommandMutate, BaseRevision: state.Revision,
+				ClientMutationID: "api:" + key, BindingKey: key,
+				Operation: dashboardfilter.MutationSet, Expression: &expression,
+			}); err != nil {
+				return dashboard.Filters{}, fmt.Errorf("filter binding %q: %w", key, err)
+			}
+		}
+		state := machine.State()
+		filters.CompiledState = &state
 	}
-	bytes, err := json.Marshal(raw)
-	if err != nil {
-		return dashboard.Filters{}
+	if err := decodeDashboardSelectionState(rawSelections, &filters.Selections); err != nil {
+		return dashboard.Filters{}, fmt.Errorf("interactionSelections: %w", err)
 	}
-	var filters dashboard.Filters
-	if err := json.Unmarshal(bytes, &filters); err != nil {
-		return dashboard.Filters{}
+	if err := decodeDashboardSelectionState(rawSpatialSelections, &filters.SpatialSelections); err != nil {
+		return dashboard.Filters{}, fmt.Errorf("spatialSelections: %w", err)
 	}
-	return filters
+	return filters, nil
 }
 
-func dashboardFiltersProvided(filters dashboard.Filters) bool {
-	return filters.Controls != nil || filters.Selections != nil || filters.SpatialSelections != nil
+func decodeDashboardSelectionState[T any](raw []map[string]any, target *[]T) error {
+	if raw == nil {
+		return nil
+	}
+	encoded, err := json.Marshal(raw)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(encoded, target)
+}
+
+func dashboardAPIFilterState(filters dashboard.Filters) map[string]any {
+	controls := map[string]dashboardfilter.Expression{}
+	if filters.CompiledState != nil {
+		for key, applied := range filters.CompiledState.AppliedControls {
+			controls[key] = applied.Expression
+		}
+	}
+	return map[string]any{"version": "typed_v1", "controls": controls}
 }
 
 func dashboardSummaryDTO(row dashboard.CatalogDashboard) api.DashboardSummary {
@@ -437,8 +570,8 @@ func dashboardSummaryDTO(row dashboard.CatalogDashboard) api.DashboardSummary {
 	}
 }
 
-func dashboardComponentDTO(component dashboard.PageVisual, report dashboarddefinition.Definition) api.DashboardComponentResponse {
-	summary := dashboardComponentSummary(component, report)
+func dashboardComponentDTO(component dashboard.PageVisual, report dashboarddefinition.Definition, page dashboard.Page) api.DashboardComponentResponse {
+	summary := dashboardComponentSummary(component, report, page)
 	out := api.DashboardComponentResponse{
 		ID:          component.ID,
 		Kind:        summary.Kind,
@@ -505,7 +638,7 @@ func dashboardManifest(report dashboarddefinition.Definition, model *semanticmod
 		Counts: api.DashboardManifestCounts{
 			Pages:   len(pages),
 			Visuals: len(report.Visualizations),
-			Filters: len(report.Filters),
+			Filters: len(report.FilterDefinitions),
 		},
 		Pages: make([]api.DashboardManifestPage, 0, len(pages)),
 		DetailTools: map[string]string{
@@ -522,14 +655,14 @@ func dashboardManifest(report dashboarddefinition.Definition, model *semanticmod
 			Components:  make([]api.DashboardManifestComponent, 0, len(page.Visuals)),
 		}
 		for _, component := range page.Visuals {
-			pageSummary.Components = append(pageSummary.Components, dashboardComponentSummary(component, report))
+			pageSummary.Components = append(pageSummary.Components, dashboardComponentSummary(component, report, page))
 		}
 		out.Pages = append(out.Pages, pageSummary)
 	}
 	return out
 }
 
-func dashboardComponentSummary(component dashboard.PageVisual, report dashboarddefinition.Definition) api.DashboardManifestComponent {
+func dashboardComponentSummary(component dashboard.PageVisual, report dashboarddefinition.Definition, page dashboard.Page) api.DashboardManifestComponent {
 	switch {
 	case component.Visual != "":
 		title := component.Title
@@ -537,12 +670,14 @@ func dashboardComponentSummary(component dashboard.PageVisual, report dashboardd
 			title = dashboarddefinition.SpecTitle(report.Visualizations[component.Visual].Spec)
 		}
 		return api.DashboardManifestComponent{ID: component.ID, Kind: "visual", Ref: component.Visual, Title: title}
-	case component.Filter != "":
+	case component.Binding.ID != "":
 		title := component.Title
 		if title == "" {
-			title = report.Filters[component.Filter].Label
+			if binding, ok := filterBindingForPage(report, page, component.Binding.ID); ok {
+				title = report.FilterDefinitions[binding.Filter].Label
+			}
 		}
-		return api.DashboardManifestComponent{ID: component.ID, Kind: "filter", Ref: component.Filter, Title: title}
+		return api.DashboardManifestComponent{ID: component.ID, Kind: "slicer", Ref: component.Binding.ID, Title: title}
 	default:
 		kind := component.Kind
 		if kind == "" {
@@ -561,11 +696,21 @@ func pageComponentForVisual(page dashboard.Page, visualID string) (dashboard.Pag
 	return dashboard.PageVisual{}, false
 }
 
-func pageComponentForFilter(page dashboard.Page, filterID string) (dashboard.PageVisual, bool) {
+func pageComponentForFilter(page dashboard.Page, scope dashboardfilter.Scope, bindingID string) (dashboard.PageVisual, bool) {
 	for _, component := range page.PlacedVisuals() {
-		if component.Filter == filterID {
+		if component.Binding.Scope == scope && component.Binding.ID == bindingID {
 			return component, true
 		}
 	}
 	return dashboard.PageVisual{}, false
+}
+
+func filterBindingForPage(report dashboarddefinition.Definition, page dashboard.Page, bindingID string) (dashboardfilter.Binding, bool) {
+	if binding, ok := page.FilterBindings[bindingID]; ok {
+		return binding, true
+	}
+	if binding, ok := report.FilterBindings[bindingID]; ok {
+		return binding, true
+	}
+	return dashboardfilter.Binding{}, false
 }

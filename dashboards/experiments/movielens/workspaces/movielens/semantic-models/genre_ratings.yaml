@@ -22,6 +22,19 @@ spec:
       from: rating_genres.user_id
       to: users.user_id
       cardinality: many_to_one
+  dimensions:
+    rating_date:
+      type: date
+      bindings:
+        rating_genres: {field: rating_genres.rating_date}
+    genre:
+      type: string
+      bindings:
+        rating_genres: {field: rating_genres.genre}
+    release_decade:
+      type: string
+      bindings:
+        rating_genres: {field: rating_genres.release_decade}
   measures:
     genre_rating_count:
       label: Genre ratings

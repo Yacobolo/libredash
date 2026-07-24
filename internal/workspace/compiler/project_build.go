@@ -52,12 +52,13 @@ func projectDashboardPages(pages []projectDashboardPage) []dashboard.Page {
 	out := make([]dashboard.Page, 0, len(pages))
 	for _, page := range pages {
 		out = append(out, dashboard.Page{
-			ID:          page.ID,
-			Title:       page.Title,
-			Description: page.Description,
-			Canvas:      page.Canvas,
-			Grid:        page.Grid,
-			Visuals:     append([]dashboard.PageVisual(nil), page.Components...),
+			ID:             page.ID,
+			Title:          page.Title,
+			Description:    page.Description,
+			Canvas:         page.Canvas,
+			Grid:           page.Grid,
+			FilterBindings: page.FilterBindings,
+			Visuals:        append([]dashboard.PageVisual(nil), page.Components...),
 		})
 	}
 	return out

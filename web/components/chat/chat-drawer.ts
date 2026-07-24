@@ -3,6 +3,7 @@ import { property, state } from 'lit/decorators.js'
 import { ExternalLink, Plus, X } from 'lucide'
 import type {
   AgentContextSignal,
+	DashboardInteractionSelection,
 	AgentReferenceSearchSignal,
 	AgentReferenceSignal,
 	ChatSignal,
@@ -212,7 +213,17 @@ class ChatDrawer extends DatastarLit(LitElement) {
   }
 
 	get dashboardFilters(): AgentContextSignal['filters'] {
-		return this.signal<AgentContextSignal['filters']>('filters', this.context?.filters ?? { controls: {}, selections: [], spatialSelections: [] })
+		return this.signal<AgentContextSignal['filters']>('filterState', this.context?.filters ?? {
+			revision: 0,
+			appliedControls: {},
+			draftControls: {},
+			dirtyBindings: [],
+			defaultsRevision: '',
+		})
+	}
+
+	get dashboardSelections(): DashboardInteractionSelection[] {
+		return this.signal<DashboardInteractionSelection[]>('interactionSelections', [])
 	}
 
   get pending(): boolean {
@@ -257,10 +268,11 @@ class ChatDrawer extends DatastarLit(LitElement) {
 
   render() {
     const agent = this.agent
-    const context = this.context
+		const context = this.context
 		const currentFilters = this.dashboardFilters
-		const controls = Object.keys(currentFilters.controls ?? {}).length
-		const selections = currentFilters.selections?.length ?? 0
+		const controls = Object.values(currentFilters.appliedControls ?? {})
+			.filter((control) => control.expression.kind !== 'unfiltered').length
+		const selections = this.dashboardSelections.length
 		const searchResults = this.referenceSearch.results ?? []
 		const pinnedSuggestions = mergeReferences(
 			searchResults.filter((reference) => isOnPageReference(reference, context)),

@@ -190,6 +190,7 @@ Focused slices are available at `/docs/cli/commands/{id}.json|md` and `/docs/api
 - [Runtime architecture](/docs/architecture/runtime): Follow routing, query execution, and streamed UI updates.
 - [Storage architecture](/docs/storage-architecture): Understand DuckLake, DuckDB, snapshots, and serving pointers.
 - [Datastar signal flow](/docs/architecture/datastar): Understand server-owned state and SSE response contracts.
+- [Filter and slicer target architecture](/docs/architecture/filters-slicers): Understand semantic filter definitions, scoped bindings, canonical state, pane controls, slicers, and governed option queries.
 - [Visualization architecture](/docs/architecture/visual-plugins): Understand the visualization IR, generated contracts, runtime data states, and renderer adapters.
 - [Geographic rendering decision](/docs/architecture/geographic-rendering): Understand why MapLibre exclusively owns built-in geographic rendering.
 

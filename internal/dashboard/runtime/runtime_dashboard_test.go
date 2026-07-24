@@ -16,6 +16,7 @@ import (
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	"github.com/Yacobolo/leapview/internal/dashboard/consumer"
 	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
+	dashboardfilter "github.com/Yacobolo/leapview/internal/dashboard/filter"
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 	"github.com/Yacobolo/leapview/internal/dataquery"
 	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
@@ -184,7 +185,7 @@ func sharedOrdersWorkspaceDefinition(t *testing.T) *workspace.Definition {
 			"model_a": modelA,
 			"model_b": modelB,
 		},
-		Dashboards: map[string]dashboarddefinition.Definition{"dashboard": {ID: "dashboard", Title: "Dashboard", SemanticModel: "model_a", Filters: map[string]dashboarddefinition.FilterDefinition{}, Pages: []dashboard.Page{}, Visualizations: map[string]visualizationdefinition.Definition{}}},
+		Dashboards: map[string]dashboarddefinition.Definition{"dashboard": {ID: "dashboard", Title: "Dashboard", SemanticModel: "model_a", Pages: []dashboard.Page{}, Visualizations: map[string]visualizationdefinition.Definition{}}},
 	}
 }
 
@@ -386,25 +387,15 @@ c2,20040,Rio de Janeiro,RJ
 
 	recorder.queries = nil
 	recorder.results = nil
-	options := map[string][]dashboard.FilterOption{}
-	err = metrics.ExecuteConsumersPage(ctx, consumer.Request{DashboardID: "fulfillment-operations", PageID: "overview", Targets: []consumer.Target{
-		{Kind: consumer.KindFilterOptions, ID: "state"},
-		{Kind: consumer.KindFilterOptions, ID: "status"},
-	}}, func(result consumer.Result) bool {
-		for id, values := range result.FilterOptions {
-			options[id] = values
+	for _, field := range []string{"state", "status"} {
+		options, optionErr := metrics.QueryCompiledFilterOptions(ctx, "fulfillment-operations", dashboardfilter.OptionQuery{
+			Field: field, ValueKind: dashboardfilter.ValueString, Limit: 50,
+		})
+		if optionErr != nil {
+			t.Fatal(optionErr)
 		}
-		return true
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(options["state"]) == 0 || len(options["status"]) == 0 {
-		t.Fatalf("targeted filter options = %#v", options)
-	}
-	for _, result := range recorder.results {
-		if result.CacheOutcome != dataquery.CacheHit {
-			t.Fatalf("warm filter option cache outcome = %q, want hit: %#v", result.CacheOutcome, recorder.results)
+		if len(options.Items) == 0 {
+			t.Fatalf("targeted %s filter options are empty", field)
 		}
 	}
 	recorder.queries = nil
@@ -667,10 +658,12 @@ relogios_presentes,watches_gifts
 		t.Fatalf("expected DuckLake data directory: %v", err)
 	}
 
-	patch, err := metrics.QueryDashboardPage(context.Background(), "executive-sales", "overview", dashboard.Filters{Controls: map[string]dashboard.FilterControl{
-		"state":         {Type: "multi_select", Operator: "in", Values: []string{"SP"}},
-		"purchase_date": {Type: "date_range", Preset: "2018"},
-	}})
+	patch, err := metrics.QueryDashboardPage(context.Background(), "executive-sales", "overview", compiledFiltersForTest(t, metrics, "executive-sales", "overview", map[string]dashboardfilter.Expression{
+		"state": setExpression("SP"),
+		"purchase_date": rangeExpression(
+			dashboardfilter.ValueDate, "2018-01-01", "2018-12-31",
+		),
+	}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -716,7 +709,13 @@ relogios_presentes,watches_gifts
 	if got := datumString(envelopeRows(t, patch.Visuals["category_revenue"])[0], "label"); got != "health_beauty" {
 		t.Fatalf("top category = %q, want health_beauty", got)
 	}
-	if got := len(patch.FilterOptions["state"]); got != 2 {
+	options, err := metrics.QueryCompiledFilterOptions(context.Background(), "executive-sales", dashboardfilter.OptionQuery{
+		Field: "state", ValueKind: dashboardfilter.ValueString, Limit: 50,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := len(options.Items); got != 2 {
 		t.Fatalf("state filter options = %d, want 2", got)
 	}
 
@@ -820,22 +819,17 @@ relogios_presentes,watches_gifts
 	}
 	assertVisualKeys(t, funnelPatch, []string{"delivery_funnel", "status_funnel", "status_funnel_left"})
 
-	piePatch, err := metrics.QueryDashboardPage(context.Background(), "executive-sales", "chart-pie", dashboard.Filters{Controls: map[string]dashboard.FilterControl{
-		"category": {Type: "text", Operator: "contains", Value: "health"},
-		"state":    {Type: "multi_select", Operator: "in", Values: []string{"SP"}},
-	}})
+	pieFilters := compiledFiltersForTest(t, metrics, "executive-sales", "chart-pie", map[string]dashboardfilter.Expression{
+		"category": comparisonExpression(dashboardfilter.OperatorContains, "health"),
+		"state":    setExpression("SP"),
+	})
+	piePatch, err := metrics.QueryDashboardPage(context.Background(), "executive-sales", "chart-pie", pieFilters)
 	if err != nil {
 		t.Fatal(err)
 	}
 	assertVisualKeys(t, piePatch, []string{"category_pie_inside", "status_pie", "status_pie_rose"})
-	if _, ok := piePatch.Filters.Controls["category"]; ok {
-		t.Fatalf("pie patch included off-page category filter: %#v", piePatch.Filters.Controls)
-	}
-	if _, ok := piePatch.FilterOptions["category"]; ok {
-		t.Fatalf("pie patch included off-page category options: %#v", piePatch.FilterOptions)
-	}
-	if got := len(piePatch.FilterOptions["state"]); got != 2 {
-		t.Fatalf("pie state filter options = %d, want 2", got)
+	if piePatch.Filters.CompiledState == nil || piePatch.Filters.CompiledState.Revision != pieFilters.CompiledState.Revision {
+		t.Fatalf("pie patch did not preserve canonical filter state: %#v", piePatch.Filters.CompiledState)
 	}
 
 	emptyPagePatch, err := metrics.QueryDashboardPage(context.Background(), "executive-sales", "", dashboard.Filters{})
@@ -1074,12 +1068,11 @@ relogios_presentes,watches_gifts
 	if len(envelopeRows(t, multiRowPatch.Visuals["orders"])) != 2 {
 		t.Fatalf("orders chart points under multi-row table selection = %d, want 2", len(envelopeRows(t, multiRowPatch.Visuals["orders"])))
 	}
-	andMultiRowPatch, err := metrics.QueryDashboardPage(context.Background(), "executive-sales", "overview", dashboard.Filters{
-		Controls: map[string]dashboard.FilterControl{
-			"state": {Type: "multi_select", Operator: "in", Values: []string{"SP"}},
-		},
-		Selections: multiRowSelection.Selections,
+	andFilters := compiledFiltersForTest(t, metrics, "executive-sales", "overview", map[string]dashboardfilter.Expression{
+		"state": setExpression("SP"),
 	})
+	andFilters.Selections = multiRowSelection.Selections
+	andMultiRowPatch, err := metrics.QueryDashboardPage(context.Background(), "executive-sales", "overview", andFilters)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1313,30 +1306,30 @@ relogios_presentes,watches_gifts
 	}{
 		{
 			name: "multi state",
-			filters: dashboard.Filters{Controls: map[string]dashboard.FilterControl{
-				"state": {Type: "multi_select", Operator: "in", Values: []string{"SP", "RJ"}},
-			}},
+			filters: compiledFiltersForTest(t, metrics, "executive-sales", "overview", map[string]dashboardfilter.Expression{
+				"state": setExpression("SP", "RJ"),
+			}),
 			want: "2",
 		},
 		{
 			name: "category contains",
-			filters: dashboard.Filters{Controls: map[string]dashboard.FilterControl{
-				"category": {Type: "text", Operator: "contains", Value: "watch"},
-			}},
+			filters: compiledFiltersForTest(t, metrics, "executive-sales", "overview", map[string]dashboardfilter.Expression{
+				"category": comparisonExpression(dashboardfilter.OperatorContains, "watch"),
+			}),
 			want: "1",
 		},
 		{
 			name: "category equals",
-			filters: dashboard.Filters{Controls: map[string]dashboard.FilterControl{
-				"category": {Type: "text", Operator: "equals", Value: "health_beauty"},
-			}},
+			filters: compiledFiltersForTest(t, metrics, "executive-sales", "overview", map[string]dashboardfilter.Expression{
+				"category": comparisonExpression(dashboardfilter.OperatorEquals, "health_beauty"),
+			}),
 			want: "1",
 		},
 		{
 			name: "custom date range",
-			filters: dashboard.Filters{Controls: map[string]dashboard.FilterControl{
-				"purchase_date": {Type: "date_range", Preset: "custom", From: "2018-01-01", To: "2018-01-31"},
-			}},
+			filters: compiledFiltersForTest(t, metrics, "executive-sales", "overview", map[string]dashboardfilter.Expression{
+				"purchase_date": rangeExpression(dashboardfilter.ValueDate, "2018-01-01", "2018-01-31"),
+			}),
 			want: "1",
 		},
 	}
@@ -1378,6 +1371,76 @@ func interactionSelection(sourceKind, sourceID, interactionKind, field string, v
 		InteractionKind: interactionKind,
 		Entries:         entries,
 		Label:           strings.Join(values, ", "),
+	}
+}
+
+func compiledFiltersForTest(
+	t *testing.T,
+	metrics *Service,
+	dashboardID string,
+	pageID string,
+	expressions map[string]dashboardfilter.Expression,
+) dashboard.Filters {
+	t.Helper()
+	definition, _, ok := metrics.Report(dashboardID)
+	if !ok {
+		t.Fatalf("dashboard %q not found", dashboardID)
+	}
+	page, ok := definition.PageOrDefault(pageID)
+	if !ok {
+		t.Fatalf("dashboard page %q not found", pageID)
+	}
+	state := definition.DefaultFilterState()
+	for bindingID, expression := range expressions {
+		var binding dashboardfilter.Binding
+		found := false
+		for _, candidate := range definition.CompiledFilterBindings() {
+			if candidate.ID == bindingID && (candidate.Scope == dashboardfilter.ScopeReport || candidate.PageID == page.ID) {
+				binding, found = candidate, true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("filter binding %q not found on page %q", bindingID, page.ID)
+		}
+		filterDefinition := definition.FilterDefinitions[binding.Filter]
+		canonical, err := dashboardfilter.Canonicalize(expression, filterDefinition.ValueKind)
+		if err != nil {
+			t.Fatalf("canonicalize filter binding %q: %v", bindingID, err)
+		}
+		state.AppliedControls[binding.Key] = dashboardfilter.AppliedState{
+			Expression: canonical, ResolvedExpression: canonical,
+		}
+	}
+	return dashboard.Filters{CompiledState: &state, ActivePageID: page.ID}.WithDefaults()
+}
+
+func setExpression(values ...string) dashboardfilter.Expression {
+	typed := make([]dashboardfilter.Value, len(values))
+	for index, value := range values {
+		typed[index] = dashboardfilter.Value{Kind: dashboardfilter.ValueString, Value: value}
+	}
+	return dashboardfilter.Expression{
+		Kind: dashboardfilter.ExpressionSet, Operator: dashboardfilter.OperatorIn, Values: typed,
+	}
+}
+
+func comparisonExpression(operator dashboardfilter.Operator, value string) dashboardfilter.Expression {
+	return dashboardfilter.Expression{
+		Kind: dashboardfilter.ExpressionComparison, Operator: operator,
+		Value: &dashboardfilter.Value{Kind: dashboardfilter.ValueString, Value: value},
+	}
+}
+
+func rangeExpression(kind dashboardfilter.ValueKind, lower, upper string) dashboardfilter.Expression {
+	return dashboardfilter.Expression{
+		Kind: dashboardfilter.ExpressionRange,
+		Lower: &dashboardfilter.Bound{
+			Value: dashboardfilter.Value{Kind: kind, Value: lower}, Inclusive: true,
+		},
+		Upper: &dashboardfilter.Bound{
+			Value: dashboardfilter.Value{Kind: kind, Value: upper}, Inclusive: true,
+		},
 	}
 }
 

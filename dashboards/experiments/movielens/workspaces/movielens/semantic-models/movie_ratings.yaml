@@ -60,6 +60,11 @@ spec:
         tags:
           field: movies.title
           path: [tags_movies]
+    rating_bucket:
+      label: Rating bucket
+      type: string
+      bindings:
+        ratings: {field: ratings.rating_bucket}
   measures:
     rating_count:
       label: Ratings

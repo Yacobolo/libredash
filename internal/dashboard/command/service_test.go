@@ -7,6 +7,7 @@ import (
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
+	dashboardfilter "github.com/Yacobolo/leapview/internal/dashboard/filter"
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 	"github.com/Yacobolo/leapview/internal/testutil/dashboardfixture"
 	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
@@ -17,7 +18,7 @@ type fakeMetrics struct {
 }
 
 func (fakeMetrics) DefaultFilters(string) dashboard.Filters {
-	return dashboard.Filters{Controls: map[string]dashboard.FilterControl{"state": {Type: "multi_select", Operator: "in"}}}
+	return dashboard.Filters{}.WithDefaults()
 }
 func (fakeMetrics) NormalizeVisualizationWindow(_ string, request dashboard.TableRequest) dashboard.TableRequest {
 	if request.Table == "" {
@@ -28,7 +29,14 @@ func (fakeMetrics) NormalizeVisualizationWindow(_ string, request dashboard.Tabl
 func (m fakeMetrics) Report(string) (dashboarddefinition.Definition, *semanticmodel.Model, bool) {
 	authored := reportdef.Dashboard{
 		ID: "dash", SemanticModel: "model",
-		Filters: map[string]reportdef.FilterDefinition{"state": {Type: "multi_select", Label: "State", Operator: "in"}},
+		FilterDefinitions: map[string]dashboardfilter.Definition{
+			"state": {
+				Label: "State", Field: "state",
+				Predicates: []dashboardfilter.PredicatePolicy{{
+					Kind: dashboardfilter.ExpressionSet, Operators: []dashboardfilter.Operator{dashboardfilter.OperatorIn},
+				}},
+			},
+		},
 		Visuals: reportdef.MergeVisualizations(reportdef.ChartVisualizations(map[string]reportdef.Visual{
 			"chart": {
 				Type:  "bar",
@@ -60,10 +68,13 @@ func (m fakeMetrics) Report(string) (dashboarddefinition.Definition, *semanticmo
 			},
 		}), reportdef.TabularVisualizations("table", map[string]reportdef.TableVisual{"orders": {Query: reportdef.TableQuery{Table: "orders", Fields: []string{"orders.state"}}}})),
 		Pages: []dashboard.Page{
-			{ID: "overview", Visuals: []dashboard.PageVisual{
-				{Kind: "filter", Filter: "state"}, {Kind: "visual", Visual: "chart"}, {Kind: "visual", Visual: "customer_map"}, {Kind: "visual", Visual: "orders"},
+			{ID: "overview", FilterBindings: map[string]dashboardfilter.Binding{
+				"state": {Filter: "state", Default: dashboardfilter.Expression{Kind: dashboardfilter.ExpressionUnfiltered}},
+			}, Visuals: []dashboard.PageVisual{
+				{ID: "state-slicer", Kind: "slicer", Binding: dashboardfilter.BindingRef{Scope: dashboardfilter.ScopePage, ID: "state"}},
+				{ID: "chart", Kind: "visual", Visual: "chart"}, {ID: "customer-map", Kind: "visual", Visual: "customer_map"}, {ID: "orders", Kind: "visual", Visual: "orders"},
 			}},
-			{ID: "boolean", Visuals: []dashboard.PageVisual{{Kind: "visual", Visual: "boolean_chart"}, {Kind: "visual", Visual: "orders"}}},
+			{ID: "boolean", Visuals: []dashboard.PageVisual{{ID: "boolean-chart", Kind: "visual", Visual: "boolean_chart"}, {ID: "orders", Kind: "visual", Visual: "orders"}}},
 		},
 	}
 	model := &semanticmodel.Model{
@@ -171,21 +182,24 @@ func TestPrepareVisualWindowValidatesTypedIdentityAndCoordinates(t *testing.T) {
 	}
 }
 
-func TestPrepareSelectUsesAuthoritativeFiltersAndExplicitTargetsOnly(t *testing.T) {
+func TestPrepareSelectUsesAuthoritativeSelectionsAndExplicitTargetsOnly(t *testing.T) {
+	authoritative := dashboard.Filters{
+		Selections: []dashboard.InteractionSelection{{
+			SourceKind: "visual", SourceID: "existing", InteractionKind: "point_selection",
+		}},
+	}.WithDefaults()
 	prepared, err := (Service{Metrics: fakeMetrics{}}).PrepareSelect(Request{
 		DashboardID: "dash", PageID: "overview",
 		InteractionCommand: dashboard.InteractionCommand{
 			SourceKind: "visual", SourceID: "chart", InteractionKind: "point_selection", Action: "set",
 			Mappings: []dashboard.InteractionCommandMapping{{Field: "state", Value: "RJ"}},
 		},
-	}, dashboard.Filters{Controls: map[string]dashboard.FilterControl{
-		"state": {Type: "multi_select", Values: []string{"SP"}},
-	}}.WithDefaults())
+	}, authoritative)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := prepared.Filters.Controls["state"].Values; len(got) != 1 || got[0] != "SP" {
-		t.Fatalf("authoritative controls = %#v", prepared.Filters.Controls)
+	if len(prepared.Filters.Selections) != 2 || prepared.Filters.Selections[0].SourceID != "existing" {
+		t.Fatalf("authoritative selections = %#v", prepared.Filters.Selections)
 	}
 	if len(prepared.Plan.Targets) != 1 || prepared.Plan.Targets[0].Kind != TargetWindow || prepared.Plan.Targets[0].ID != "orders" {
 		t.Fatalf("targets = %#v", prepared.Plan.Targets)

@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	dashboardfilter "github.com/Yacobolo/leapview/internal/dashboard/filter"
 	"github.com/Yacobolo/leapview/internal/testutil/ssetest"
 )
 
@@ -28,8 +29,7 @@ func TestUpdatesStreamsRealRuntimeSignals(t *testing.T) {
 			pageID:  "overview",
 			signals: map[string]any{},
 			query: url.Values{
-				"state":    []string{"SP"},
-				"category": []string{"ignored"},
+				"state": []string{mustTypedSetURLValue(t, "SP")},
 			},
 			assert: func(t *testing.T, patches []map[string]any) {
 				t.Helper()
@@ -38,7 +38,6 @@ func TestUpdatesStreamsRealRuntimeSignals(t *testing.T) {
 				requireStatusLoading(t, patches, true)
 				requireStatusLoading(t, patches, false)
 				requireFilterValues(t, patches, "state", "SP")
-				requireFilterOptions(t, patches, "state")
 				requireVisual(t, patches, "total_orders")
 				requireTable(t, patches, "orders_table")
 				requireNoTopLevelSignal(t, patches, "kpis")
@@ -113,17 +112,19 @@ func requireStatusError(t *testing.T, patches []map[string]any, setupRequired bo
 
 func requireFilterValues(t *testing.T, patches []map[string]any, filterID string, want ...string) {
 	t.Helper()
+	bindingKey := dashboardfilter.BindingKey("executive-sales", dashboardfilter.ScopeReport, "", filterID)
 	requirePatch(t, patches, func(patch map[string]any) bool {
-		filter := mapAt(patch, "filters", "controls", filterID)
-		values, ok := filter["values"].([]any)
-		if len(want) == 0 && !ok {
+		expression := mapAt(patch, "filterState", "appliedControls", bindingKey, "expression")
+		values, ok := expression["values"].([]any)
+		if len(want) == 0 && (!ok || expression["kind"] == "unfiltered") {
 			return true
 		}
 		if !ok || len(values) != len(want) {
 			return false
 		}
 		for i := range want {
-			if values[i] != want[i] {
+			value, valueOK := values[i].(map[string]any)
+			if !valueOK || value["value"] != want[i] {
 				return false
 			}
 		}
@@ -131,16 +132,19 @@ func requireFilterValues(t *testing.T, patches []map[string]any, filterID string
 	})
 }
 
-func requireFilterOptions(t *testing.T, patches []map[string]any, filterID string) {
+func mustTypedSetURLValue(t *testing.T, values ...string) string {
 	t.Helper()
-	requirePatch(t, patches, func(patch map[string]any) bool {
-		options, ok := patch["filterOptions"].(map[string]any)
-		if !ok {
-			return false
-		}
-		values, ok := options[filterID].([]any)
-		return ok && len(values) > 0
-	})
+	typed := make([]dashboardfilter.Value, len(values))
+	for index, value := range values {
+		typed[index] = dashboardfilter.Value{Kind: dashboardfilter.ValueString, Value: value}
+	}
+	encoded, err := dashboardfilter.EncodeTypedV1(dashboardfilter.Expression{
+		Kind: dashboardfilter.ExpressionSet, Operator: dashboardfilter.OperatorIn, Values: typed,
+	}, dashboardfilter.ValueString)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return encoded
 }
 
 func requireVisual(t *testing.T, patches []map[string]any, visualID string) {
@@ -161,8 +165,9 @@ func requireTable(t *testing.T, patches []map[string]any, tableID string) {
 
 func requireNoFilter(t *testing.T, patches []map[string]any, filterID string) {
 	t.Helper()
+	bindingKey := dashboardfilter.BindingKey("executive-sales", dashboardfilter.ScopeReport, "", filterID)
 	for _, patch := range patches {
-		if hasKey(mapAt(patch, "filters", "controls"), filterID) {
+		if hasKey(mapAt(patch, "filterState", "appliedControls"), bindingKey) {
 			t.Fatalf("patch streamed unexpected filter %q: %#v", filterID, patch)
 		}
 	}
@@ -171,7 +176,7 @@ func requireNoFilter(t *testing.T, patches []map[string]any, filterID string) {
 func requireNoSelection(t *testing.T, patches []map[string]any) {
 	t.Helper()
 	requirePatch(t, patches, func(patch map[string]any) bool {
-		selections, ok := mapAt(patch, "filters")["selections"].([]any)
+		selections, ok := patch["interactionSelections"].([]any)
 		return ok && len(selections) == 0
 	})
 }
@@ -179,7 +184,7 @@ func requireNoSelection(t *testing.T, patches []map[string]any) {
 func requireSelection(t *testing.T, patches []map[string]any, sourceID, field, value string) {
 	t.Helper()
 	requirePatch(t, patches, func(patch map[string]any) bool {
-		selections, ok := mapAt(patch, "filters")["selections"].([]any)
+		selections, ok := patch["interactionSelections"].([]any)
 		if !ok {
 			return false
 		}

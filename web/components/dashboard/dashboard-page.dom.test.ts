@@ -243,7 +243,10 @@ test('dashboard keeps the source visualization selected through canonicalization
     await page.waitForFunction(() => (document.querySelector('lv-dashboard-page') as any)?.page?.title === 'Executive Sales Dashboard')
     const selections = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
       const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev')
-      mergePatch({ filters: { selections: [] } })
+      mergePatch({
+        interactionSelections: [],
+        status: { generation: 3, refreshId: 'refresh-3', loading: false, progressPercent: 100 },
+      })
       await element.updateComplete
       const readSelection = async () => {
         await element.updateComplete
@@ -263,16 +266,16 @@ test('dashboard keeps the source visualization selected through canonicalization
       const optimistic = await readSelection()
 
       mergePatch({
-        filters: { selections: [{
+        interactionSelections: [{
           sourceKind: 'visual', sourceId: 'orders_chart', interactionKind: 'selection',
           entries: [{ label: 'Delivered', mappings: [{ field: 'orders.status', fact: 'orders', value: 'delivered' }] }],
-        }] },
+        }],
         status: { generation: 4, refreshId: 'refresh-4', loading: false, progressPercent: 100 },
       })
       const canonical = await readSelection()
 
       mergePatch({
-        filters: { selections: [] },
+        interactionSelections: [],
         status: { generation: 5, refreshId: 'refresh-5', loading: false, progressPercent: 100 },
       })
       const cleared = await readSelection()
@@ -683,6 +686,724 @@ test('collapsed filters and page navigation use the same rail width', async () =
   }
 })
 
+test('mobile filter dock is reachable before the canvas and opens with pointer activation', async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 820 } })
+  try {
+    await page.addInitScript(() => localStorage.setItem('leapview:filters-open', 'closed'))
+    await page.goto(baseURL)
+    const dashboard = page.locator('lv-dashboard-page')
+    await dashboard.waitFor()
+    const positions = await dashboard.evaluate(async (element: any) => {
+      await element.updateComplete
+      const dock = element.shadowRoot.querySelector('lv-filter-dock') as any
+      await dock.updateComplete
+      const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev')
+      mergePatch({
+        filterValidation: {
+          accepted: false,
+          message: 'range lower bound exceeds upper bound',
+          currentRevision: 0,
+          clientMutationID: 'mobile-validation',
+        },
+      })
+      await element.updateComplete
+      const alert = element.shadowRoot.querySelector('[role="alert"]')
+      return {
+        dockTop: dock.getBoundingClientRect().top,
+        canvasTop: element.shadowRoot.querySelector('.canvas-wrap').getBoundingClientRect().top,
+        dockBottom: dock.getBoundingClientRect().bottom,
+        alertTop: alert.getBoundingClientRect().top,
+        dockBeforeCanvas: Boolean(
+          dock.compareDocumentPosition(element.shadowRoot.querySelector('.canvas-wrap'))
+          & Node.DOCUMENT_POSITION_FOLLOWING
+        ),
+      }
+    })
+    expect(positions.dockTop).toBeLessThan(positions.canvasTop)
+    expect(positions.dockBottom).toBeLessThanOrEqual(positions.alertTop)
+    expect(positions.dockBeforeCanvas).toBe(true)
+
+    const toggle = page.locator('lv-filter-dock button.rail')
+    await toggle.click()
+    const opened = await dashboard.evaluate(async (element: any) => {
+      const dock = element.shadowRoot.querySelector('lv-filter-dock') as any
+      await dock.updateComplete
+      return {
+        expanded: dock.shadowRoot.querySelector('button.rail').getAttribute('aria-expanded'),
+        panelDisplay: getComputedStyle(dock.shadowRoot.querySelector('.panel')).display,
+        asidePosition: getComputedStyle(dock.shadowRoot.querySelector('aside')).position,
+        focused: dock.shadowRoot.activeElement?.getAttribute('aria-label'),
+      }
+    })
+    expect(opened).toEqual({
+      expanded: 'true',
+      panelDisplay: 'grid',
+      asidePosition: 'fixed',
+      focused: 'Close filters',
+    })
+
+    await page.keyboard.press('Escape')
+    const closed = await dashboard.evaluate(async (element: any) => {
+      const dock = element.shadowRoot.querySelector('lv-filter-dock') as any
+      await dock.updateComplete
+      return {
+        expanded: dock.shadowRoot.querySelector('button.rail').getAttribute('aria-expanded'),
+        focused: dock.shadowRoot.activeElement?.className,
+      }
+    })
+    expect(closed).toEqual({ expanded: 'false', focused: 'rail' })
+  } finally {
+    await page.close()
+  }
+})
+
+test('filter pane groups scope and exposes clear, reset, apply, and cancel actions', async () => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => customElements.get('lv-filter-dock'))
+    const result = await page.evaluate(async () => {
+      localStorage.setItem('leapview:filters-open', 'open')
+      const dock = document.createElement('lv-filter-dock') as any
+      const definition = {
+        id: 'state',
+        label: 'State',
+        field: 'orders.state',
+        valueKind: 'string',
+        predicates: [{ kind: 'set', operators: ['in'] }],
+        options: { kind: 'static', limit: 2, values: [
+          { value: { kind: 'string', value: 'CA' }, label: 'CA' },
+          { value: { kind: 'string', value: 'SP' }, label: 'SP' },
+        ] },
+        timezone: 'UTC',
+        calendar: 'gregorian',
+        weekStart: 'monday',
+      }
+      dock.pageId = 'overview'
+      dock.contract = {
+        applicationMode: 'deferred',
+        definitions: { state: definition },
+        bindings: {
+          report_state: {
+            key: 'report_state', id: 'report_state', filter: 'state', scope: 'report',
+            default: { kind: 'unfiltered' }, selectionMode: 'single', maxSelectedValues: 1,
+            readerEditable: true, paneVisible: true, paneOrder: 0, targets: [],
+            optionDependencies: [],
+          },
+          page_state: {
+            key: 'page_state', id: 'page_state', filter: 'state', scope: 'page', pageID: 'overview',
+            default: { kind: 'set', operator: 'in', values: [{ kind: 'string', value: 'SP' }] },
+            selectionMode: 'single', maxSelectedValues: 1,
+            readerEditable: true, paneVisible: true, paneOrder: 1, targets: [],
+            optionDependencies: [],
+          },
+          hidden_page_state: {
+            key: 'hidden_page_state', id: 'hidden_page_state', filter: 'state', scope: 'page', pageID: 'overview',
+            default: { kind: 'unfiltered' }, selectionMode: 'single', maxSelectedValues: 1,
+            readerEditable: true, paneVisible: false, paneOrder: 2, targets: [],
+            optionDependencies: [],
+          },
+          locked_report_state: {
+            key: 'locked_report_state', id: 'locked_report_state', filter: 'state', scope: 'report',
+            default: { kind: 'unfiltered' }, selectionMode: 'single', maxSelectedValues: 1,
+            readerEditable: false, paneVisible: false, paneOrder: 3, targets: [],
+            optionDependencies: [],
+          },
+        },
+      }
+      dock.filterState = {
+        revision: 4,
+        appliedControls: {
+          report_state: {
+            expression: { kind: 'set', operator: 'in', values: [{ kind: 'string', value: 'CA' }] },
+            resolvedExpression: { kind: 'set', operator: 'in', values: [{ kind: 'string', value: 'CA' }] },
+          },
+          page_state: {
+            expression: { kind: 'set', operator: 'in', values: [{ kind: 'string', value: 'CA' }] },
+            resolvedExpression: { kind: 'set', operator: 'in', values: [{ kind: 'string', value: 'CA' }] },
+          },
+        },
+        draftControls: {
+          report_state: { kind: 'set', operator: 'in', values: [{ kind: 'string', value: 'SP' }] },
+        },
+        dirtyBindings: ['report_state'],
+        defaultsRevision: 'defaults',
+      }
+      const events: Array<{ type: string; detail: unknown }> = []
+      for (const type of [
+        'lv-filter-clear',
+        'lv-filter-reset-binding',
+        'lv-filter-reset-scope',
+        'lv-filter-apply',
+        'lv-filter-cancel',
+      ]) {
+        dock.addEventListener(type, (event: Event) => {
+          events.push({ type, detail: (event as CustomEvent).detail })
+        })
+      }
+      document.body.append(dock)
+      await dock.updateComplete
+      const cards = Array.from(dock.shadowRoot.querySelectorAll('lv-filter-pane-card')) as any[]
+      await Promise.all(cards.map(card => card.updateComplete))
+      const reportCard = cards.find(card => card.binding.key === 'report_state')
+      const pageCard = cards.find(card => card.binding.key === 'page_state')
+      ;(reportCard.shadowRoot.querySelector('button[aria-label="Clear State"]') as HTMLButtonElement).click()
+      ;(pageCard.shadowRoot.querySelector('button[aria-label="Reset State to default"]') as HTMLButtonElement).click()
+      ;(dock.shadowRoot.querySelector('button[data-reset-scope="page"]') as HTMLButtonElement).click()
+      ;(dock.shadowRoot.querySelector('button[data-reset-scope="dashboard"]') as HTMLButtonElement).click()
+      ;(dock.shadowRoot.querySelector('button[data-filter-apply]') as HTMLButtonElement).click()
+      ;(dock.shadowRoot.querySelector('button[data-filter-cancel]') as HTMLButtonElement).click()
+      return {
+        groups: Array.from(dock.shadowRoot.querySelectorAll('.group-title')).map(node => node.textContent?.trim()),
+        activeCards: cards.filter(card => card.hasAttribute('active')).map(card => card.binding.key),
+        dirtyCards: cards.filter(card => card.hasAttribute('dirty')).map(card => card.binding.key),
+        events,
+      }
+    })
+    expect(result.groups).toEqual(['Filters on all pages', 'Filters on this page'])
+    expect(result.activeCards).toEqual(['report_state', 'page_state'])
+    expect(result.dirtyCards).toEqual(['report_state'])
+    expect(result.events).toEqual([
+      { type: 'lv-filter-clear', detail: { bindingKey: 'report_state' } },
+      { type: 'lv-filter-reset-binding', detail: { bindingKey: 'page_state' } },
+      { type: 'lv-filter-reset-scope', detail: { scope: 'page', bindingKeys: ['hidden_page_state', 'page_state'] } },
+      { type: 'lv-filter-reset-scope', detail: { scope: 'dashboard', bindingKeys: ['hidden_page_state', 'page_state', 'report_state'] } },
+      { type: 'lv-filter-apply', detail: null },
+      { type: 'lv-filter-cancel', detail: null },
+    ])
+  } finally {
+    await page.close()
+  }
+})
+
+test('range and text leaves expose visible input semantics', async () => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => customElements.get('lv-filter-leaf'))
+    const result = await page.evaluate(async () => {
+      const binding = {
+        key: 'filter', id: 'filter', filter: 'filter', scope: 'page', pageID: 'overview',
+        default: { kind: 'unfiltered' }, selectionMode: 'single', maxSelectedValues: 1,
+        readerEditable: true, paneVisible: true, paneOrder: 0, targets: [],
+        optionDependencies: [],
+      }
+      const text = document.createElement('lv-filter-leaf') as any
+      text.definition = {
+        id: 'category', label: 'Category', field: 'orders.category', valueKind: 'string',
+        predicates: [{ kind: 'comparison', operators: ['contains'] }],
+        options: { kind: 'none', limit: 0, values: [] },
+      }
+      text.binding = binding
+      text.presentation = {
+        style: 'input', search: false, selectAll: false,
+        showCounts: false, showSummary: true, compact: false,
+      }
+      const range = document.createElement('lv-filter-leaf') as any
+      range.definition = {
+        id: 'revenue', label: 'Revenue', field: 'orders.revenue', valueKind: 'decimal',
+        predicates: [{ kind: 'range', operators: [] }],
+        options: { kind: 'none', limit: 0, values: [] },
+      }
+      range.binding = { ...binding, key: 'revenue' }
+      range.presentation = {
+        style: 'numeric_range', search: false, selectAll: false,
+        showCounts: false, showSummary: true, compact: false,
+      }
+      document.body.append(text, range)
+      await Promise.all([text.updateComplete, range.updateComplete])
+      return {
+        operator: text.shadowRoot.querySelector('.operator')?.textContent?.trim(),
+        placeholder: text.shadowRoot.querySelector('input')?.getAttribute('placeholder'),
+        rangeLabels: Array.from(range.shadowRoot.querySelectorAll('.field-label')).map(node => node.textContent?.trim()),
+      }
+    })
+    expect(result).toEqual({
+      operator: 'Contains',
+      placeholder: 'Enter value',
+      rangeLabels: ['Minimum', 'Maximum'],
+    })
+  } finally {
+    await page.close()
+  }
+})
+
+test('pane defaults a relative-period definition to the structured shared leaf', async () => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => customElements.get('lv-filter-dock'))
+    const controls = await page.evaluate(async () => {
+      localStorage.setItem('leapview:filters-open', 'open')
+      const dock = document.createElement('lv-filter-dock') as any
+      dock.pageId = 'overview'
+      dock.contract = {
+        applicationMode: 'immediate',
+        definitions: {
+          period: {
+            id: 'period',
+            label: 'Relative period',
+            field: 'orders.created_at',
+            valueKind: 'timestamp',
+            predicates: [{ kind: 'relative_period', operators: [] }],
+            options: { kind: 'none', limit: 0, values: [] },
+            timezone: 'UTC',
+            calendar: 'gregorian',
+            weekStart: 'monday',
+          },
+        },
+        bindings: {
+          fb_period: {
+            key: 'fb_period',
+            id: 'period',
+            filter: 'period',
+            scope: 'page',
+            pageID: 'overview',
+            default: { kind: 'unfiltered' },
+            selectionMode: 'single',
+            maxSelectedValues: 1,
+            readerEditable: true,
+            paneVisible: true,
+            paneOrder: 0,
+            targets: [],
+            optionDependencies: [],
+          },
+        },
+      }
+      dock.filterState = {
+        revision: 0,
+        appliedControls: {
+          fb_period: {
+            expression: { kind: 'unfiltered' },
+            resolvedExpression: { kind: 'unfiltered' },
+          },
+        },
+        draftControls: {},
+        dirtyBindings: [],
+        defaultsRevision: 'v1',
+      }
+      document.body.append(dock)
+      await dock.updateComplete
+      const card = dock.shadowRoot.querySelector('lv-filter-pane-card') as any
+      await card.updateComplete
+      const leaf = card.shadowRoot.querySelector('lv-filter-leaf') as any
+      await leaf.updateComplete
+      return {
+        textInputs: leaf.shadowRoot.querySelectorAll('input[type="text"]').length,
+        direction: Boolean(leaf.shadowRoot.querySelector('select[aria-label="Direction"]')),
+        count: Boolean(leaf.shadowRoot.querySelector('input[aria-label="Period count"]')),
+        unit: Boolean(leaf.shadowRoot.querySelector('select[aria-label="Period unit"]')),
+      }
+    })
+    expect(controls).toEqual({ textInputs: 0, direction: true, count: true, unit: true })
+  } finally {
+    await page.close()
+  }
+})
+
+test('rejected filter validation reconciles optimistic state and announces the error', async () => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => (document.querySelector('lv-dashboard-page') as any)?.page)
+    const result = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
+      let command: any
+      element.addEventListener('lv-filter-command', (event: CustomEvent) => {
+        command = event.detail
+      }, { once: true })
+      element.filterController.mutate('fb_state', {
+        kind: 'set',
+        operator: 'in',
+        values: [{ kind: 'string', value: 'CA' }],
+      })
+      element.requestUpdate()
+      await element.updateComplete
+      const optimistic = element.filterController.projected.appliedControls.fb_state.expression
+
+      const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev')
+      mergePatch({
+        filterValidation: {
+          accepted: false,
+          message: 'range lower bound must not exceed upper bound',
+          currentRevision: 0,
+          clientMutationID: command.clientMutationID,
+        },
+      })
+      await element.updateComplete
+      return {
+        optimistic,
+        reconciled: element.filterController.projected.appliedControls.fb_state.expression,
+        pending: element.filterController.pending,
+        alert: element.shadowRoot.querySelector('[role="alert"]')?.textContent?.trim(),
+      }
+    })
+    expect(result).toEqual({
+      optimistic: {
+        kind: 'set',
+        operator: 'in',
+        values: [{ kind: 'string', value: 'CA' }],
+      },
+      reconciled: {
+        kind: 'set',
+        operator: 'in',
+        values: [{ kind: 'string', value: 'SP' }],
+      },
+      pending: false,
+      alert: 'range lower bound must not exceed upper bound',
+    })
+  } finally {
+    await page.close()
+  }
+})
+
+test('canonical URL tombstones remove cleared filter parameters before history replacement', async () => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => (document.querySelector('lv-dashboard-page') as any)?.page)
+    const result = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
+      const replacements: Record<string, unknown>[] = []
+      ;(window as any).DatastarURLSync = {
+        replace: (params: Record<string, unknown>) => {
+          replacements.push(params)
+          return window.location.pathname
+        },
+      }
+      const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev')
+      mergePatch({ urlParams: { order_status: 'encoded-filter' } })
+      const before = element.signal('urlParams', {})
+      mergePatch({
+        urlParams: { order_status: null },
+        filterState: { revision: 1 },
+      })
+      await element.updateComplete
+      return {
+        before,
+        after: element.signal('urlParams', {}),
+        replacements,
+      }
+    })
+    expect(result).toEqual({
+      before: { order_status: 'encoded-filter' },
+      after: {},
+      replacements: [{}],
+    })
+  } finally {
+    await page.close()
+  }
+})
+
+test('visible dynamic list controls wait for the canonical session before requesting options', async () => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => customElements.get('lv-filter-leaf'))
+    const requests = await page.evaluate(async () => {
+      const leaf = document.createElement('lv-filter-leaf') as any
+      leaf.definition = {
+        id: 'state',
+        label: 'State',
+        field: 'orders.state',
+        valueKind: 'string',
+        predicates: [{ kind: 'set', operators: ['in'] }],
+        options: { kind: 'distinct', limit: 50, values: [] },
+        format: {},
+      }
+      leaf.binding = {
+        key: 'fb_state',
+        id: 'state',
+        filter: 'state',
+        scope: 'page',
+        pageID: 'overview',
+        default: { kind: 'unfiltered' },
+        selectionMode: 'multiple',
+        selectionLimit: 50,
+        readerEditable: true,
+        paneVisible: true,
+        paneOrder: 0,
+        paneLabel: 'State',
+        targets: [],
+        incomingDependencies: [],
+      }
+      leaf.presentation = {
+        style: 'list', search: false, selectAll: false,
+        showCounts: false, showSummary: true, compact: false,
+      }
+      leaf.stale = true
+      const seen: unknown[] = []
+      leaf.addEventListener('lv-filter-options-needed', (event: CustomEvent) => seen.push(event.detail))
+      document.body.append(leaf)
+      await leaf.updateComplete
+      const whileStale = seen.length
+      leaf.stale = false
+      await leaf.updateComplete
+      return { whileStale, afterCurrent: seen.length, detail: seen[0] }
+    })
+    expect(requests).toEqual({
+      whileStale: 0,
+      afterCurrent: 1,
+      detail: { bindingKey: 'fb_state', search: '', limit: 50 },
+    })
+  } finally {
+    await page.close()
+  }
+})
+
+test('static filter controls render compiled options without requesting an option page', async () => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => customElements.get('lv-filter-leaf'))
+    const state = await page.evaluate(async () => {
+      const leaf = document.createElement('lv-filter-leaf') as any
+      leaf.definition = {
+        id: 'delivered',
+        label: 'Delivery state',
+        field: 'orders.is_delivered',
+        valueKind: 'boolean',
+        predicates: [{ kind: 'set', operators: ['in'] }],
+        options: {
+          kind: 'static',
+          limit: 2,
+          values: [
+            { value: { kind: 'boolean', value: true }, label: 'Delivered' },
+            { value: { kind: 'boolean', value: false }, label: 'Not delivered' },
+          ],
+        },
+        format: {},
+      }
+      leaf.binding = {
+        key: 'fb_delivered',
+        id: 'delivered',
+        filter: 'delivered',
+        scope: 'page',
+        pageID: 'overview',
+        default: { kind: 'unfiltered' },
+        selectionMode: 'single',
+        selectionLimit: 1,
+        readerEditable: true,
+        paneVisible: true,
+        paneOrder: 0,
+        paneLabel: 'Delivery state',
+        targets: [],
+        incomingDependencies: [],
+      }
+      leaf.presentation = {
+        style: 'buttons', search: false, selectAll: false,
+        showCounts: false, showSummary: true, compact: false,
+      }
+      const requests: unknown[] = []
+      leaf.addEventListener('lv-filter-options-needed', (event: CustomEvent) => requests.push(event.detail))
+      document.body.append(leaf)
+      await leaf.updateComplete
+      return {
+        requests: requests.length,
+        buttons: Array.from(leaf.shadowRoot.querySelectorAll('button')).map((button: HTMLButtonElement) => button.textContent?.trim()),
+      }
+    })
+    expect(state).toEqual({ requests: 0, buttons: ['Delivered', 'Not delivered'] })
+  } finally {
+    await page.close()
+  }
+})
+
+test('opened dynamic dropdowns refresh their option page after stale data becomes current', async () => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => customElements.get('lv-filter-leaf'))
+    const requests = await page.evaluate(async () => {
+      const leaf = document.createElement('lv-filter-leaf') as any
+      leaf.definition = {
+        id: 'state',
+        label: 'State',
+        field: 'orders.state',
+        valueKind: 'string',
+        predicates: [{ kind: 'set', operators: ['in'] }],
+        options: { kind: 'distinct', limit: 50, values: [] },
+        format: {},
+      }
+      leaf.binding = {
+        key: 'fb_state',
+        id: 'state',
+        filter: 'state',
+        scope: 'page',
+        pageID: 'overview',
+        default: { kind: 'unfiltered' },
+        selectionMode: 'multiple',
+        selectionLimit: 50,
+        readerEditable: true,
+        paneVisible: true,
+        paneOrder: 0,
+        paneLabel: 'State',
+        targets: [],
+        incomingDependencies: [],
+      }
+      leaf.presentation = {
+        style: 'dropdown', search: false, selectAll: false,
+        showCounts: false, showSummary: true, compact: false,
+      }
+      leaf.expression = {
+        kind: 'set', operator: 'in',
+        values: [{ kind: 'string', value: 'AC' }],
+      }
+      const seen: unknown[] = []
+      leaf.addEventListener('lv-filter-options-needed', (event: CustomEvent) => seen.push(event.detail))
+      document.body.append(leaf)
+      await leaf.updateComplete
+      const retained = Array.from(leaf.shadowRoot.querySelectorAll('option')).map((option: HTMLOptionElement) => ({
+        label: option.textContent?.trim(),
+        selected: option.selected,
+      }))
+      leaf.shadowRoot.querySelector('select').focus()
+      await leaf.updateComplete
+      const afterOpen = seen.length
+      leaf.stale = true
+      await leaf.updateComplete
+      leaf.stale = false
+      await leaf.updateComplete
+      return { retained, afterOpen, afterRefresh: seen.length }
+    })
+    expect(requests).toEqual({
+      retained: [
+        { label: 'All', selected: false },
+        { label: 'AC', selected: true },
+      ],
+      afterOpen: 1,
+      afterRefresh: 2,
+    })
+  } finally {
+    await page.close()
+  }
+})
+
+test('visible dynamic controls request replacement options when a filter revision invalidates their page', async () => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => customElements.get('lv-filter-leaf'))
+    const result = await page.evaluate(async () => {
+      const leaf = document.createElement('lv-filter-leaf') as any
+      leaf.definition = {
+        id: 'status', label: 'Status', field: 'orders.status', valueKind: 'string',
+        predicates: [{ kind: 'set', operators: ['in'] }],
+        options: { kind: 'distinct', limit: 50, values: [] },
+      }
+      leaf.binding = {
+        key: 'fb_status', id: 'status', filter: 'status', scope: 'page', pageID: 'overview',
+        default: { kind: 'unfiltered' }, selectionMode: 'multiple', maxSelectedValues: 0,
+        readerEditable: true, paneVisible: true, paneOrder: 0, targets: [],
+        optionDependencies: [],
+      }
+      leaf.presentation = {
+        style: 'list', search: false, selectAll: false,
+        showCounts: false, showSummary: true, compact: false,
+      }
+      leaf.optionRetryDelay = 10
+      const requests: unknown[] = []
+      leaf.addEventListener('lv-filter-options-needed', (event: CustomEvent) => requests.push(event.detail))
+      document.body.append(leaf)
+      await leaf.updateComplete
+      leaf.options = {
+        bindingKey: 'fb_status', servingStateID: 'serving', streamGeneration: 1,
+        filterRevision: 1, requestGeneration: 1, complete: true,
+        consumerIdentity: 'option:fb_status',
+        items: [{ value: { kind: 'string', value: 'delivered' }, label: 'delivered', selected: false, available: true }],
+      }
+      await leaf.updateComplete
+      leaf.options = undefined
+      await leaf.updateComplete
+      await leaf.updateComplete
+      await new Promise(resolve => setTimeout(resolve, 30))
+      return {
+        requests: requests.length,
+        status: leaf.shadowRoot.querySelector('.status')?.textContent?.trim(),
+      }
+    })
+    expect(result).toEqual({ requests: 3, status: 'Loading values' })
+  } finally {
+    await page.close()
+  }
+})
+
+test('same-dashboard page navigation commits canonical history after the page patch', async () => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => (document.querySelector('lv-dashboard-page') as any)?.page?.pageId === 'overview')
+    const navigation = await page.locator('lv-dashboard-page').evaluate(async (element: any) => {
+      const pushes: Array<{ params: Record<string, unknown>; path: string }> = []
+      ;(window as any).DatastarURLSync = {
+        push: (params: Record<string, unknown>, path: string) => {
+          pushes.push({ params, path })
+          return path
+        },
+      }
+      let command: Record<string, unknown> | undefined
+      element.addEventListener('lv-page-navigate', (event: CustomEvent) => {
+        command = event.detail
+      }, { once: true })
+      const sidebar = element.shadowRoot.querySelector('lv-sub-sidebar')
+      const details = sidebar.shadowRoot.querySelector('a[href$="/details"]') as HTMLAnchorElement
+      details.click()
+      await element.updateComplete
+
+      const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev')
+      mergePatch({
+        page: {
+          pageId: 'details',
+          pageTitle: 'Details',
+          pages: [
+            { id: 'overview', title: 'Overview', href: '/dashboards/executive-sales/pages/overview', active: false },
+            { id: 'details', title: 'Details', href: '/dashboards/executive-sales/pages/details', active: true },
+          ],
+        },
+        urlParams: { state: 'canonical' },
+      })
+      await element.updateComplete
+      return { command, pushes }
+    })
+    expect(navigation.command).toMatchObject({ pageID: 'details', baseFilterRevision: 0 })
+    expect(String(navigation.command?.clientMutationID ?? '')).not.toBe('')
+    expect(navigation.pushes).toEqual([{
+      params: { state: 'canonical' },
+      path: '/dashboards/executive-sales/pages/details',
+    }])
+  } finally {
+    await page.close()
+  }
+})
+
+test('collapsed report-page links dispatch navigation from a real pointer click', async () => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
+  try {
+    await page.addInitScript(() => localStorage.setItem('leapview-report-sidebar-collapsed', 'true'))
+    await page.goto(baseURL)
+    await page.waitForFunction(() => (document.querySelector('lv-dashboard-page') as any)?.page?.pageId === 'overview')
+    await page.locator('lv-dashboard-page').evaluate((element: any) => {
+      ;(window as any).__pageNavigation = null
+      element.addEventListener('lv-page-navigate', (event: CustomEvent) => {
+        ;(window as any).__pageNavigation = event.detail
+      }, { once: true })
+    })
+
+    const link = page.getByRole('link', { name: 'Details' })
+    const box = await link.boundingBox()
+    if (!box) throw new Error('details link has no pointer target')
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await page.mouse.down()
+    await page.mouse.up()
+
+    await page.waitForFunction(() => Boolean((window as any).__pageNavigation))
+    expect(await page.evaluate(() => (window as any).__pageNavigation)).toMatchObject({
+      pageID: 'details',
+      baseFilterRevision: 0,
+    })
+  } finally {
+    await page.close()
+  }
+})
+
 test('dashboard agent drawer folds out with the dashboard motion contract', async () => {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   try {
@@ -832,28 +1553,75 @@ function testDocument(): string {
     kind: 'dashboard', title: 'Executive Sales Dashboard', dashboardId: 'executive-sales', dashboardTitle: 'Executive Sales Dashboard',
     pageId: 'overview', pageTitle: 'Overview', headerDetail: '1. Overview', modelId: 'olist', modelTitle: 'Olist',
     canvas: { width: 1024, height: 720 }, grid: { columns: 12, rowHeight: 48, gap: 16, padding: 16 },
-    pages: [{ id: 'overview', title: 'Overview', href: '/dashboards/executive-sales/pages/overview', active: true }],
+    pages: [
+      { id: 'overview', title: 'Overview', href: '/dashboards/executive-sales/pages/overview', active: true },
+      { id: 'details', title: 'Details', href: '/dashboards/executive-sales/pages/details', active: false },
+    ],
     components: [
       { id: 'title', kind: 'header', x: 16, y: 16, width: 456, height: 88, title: 'Executive Sales' },
-      { id: 'state-filter', kind: 'filter', filter: 'state', x: 488, y: 16, width: 216, height: 88 },
+      { id: 'state-slicer', kind: 'slicer', binding: { scope: 'page', id: 'state' }, presentation: { style: 'dropdown', search: true, selectAll: false, showCounts: false, showSummary: true, compact: false }, x: 488, y: 16, width: 216, height: 88 },
       { id: 'orders-kpi', kind: 'visual', visual: 'orders_kpi', x: 720, y: 16, width: 240, height: 88 },
       { id: 'orders-chart', kind: 'visual', visual: 'orders_chart', x: 16, y: 128, width: 456, height: 280 },
       { id: 'orders-table', kind: 'visual', visual: 'orders', x: 16, y: 760, width: 944, height: 280 },
     ],
   }
-  const filters = {
-    controls: { state: { type: 'multi_select', operator: 'in', values: [] } },
-    selections: [
+  const interactionSelections = [
       { sourceKind: 'visual', sourceId: 'orders_chart', interactionKind: 'selection', entries: [{ label: 'Delivered', mappings: [{ field: 'orders.status', fact: 'orders', value: 'delivered' }] }] },
       { sourceKind: 'visual', sourceId: 'orders', interactionKind: 'row_selection', entries: [{ label: 'o1', mappings: [{ field: 'orders.order_id', fact: 'orders', value: 'o1' }] }] },
-    ],
-    spatialSelections: [],
+  ]
+  const filterState = {
+    revision: 0,
+    appliedControls: {
+      fb_state: {
+        expression: { kind: 'set', operator: 'in', values: [{ kind: 'string', value: 'SP' }] },
+        resolvedExpression: { kind: 'set', operator: 'in', values: [{ kind: 'string', value: 'SP' }] },
+      },
+    },
+    draftControls: {},
+    dirtyBindings: [],
+    defaultsRevision: 'v1',
   }
   const signals = {
     page,
-    filterConfig: [{ id: 'state', type: 'multi_select', label: 'State', dimension: 'orders.state', default: { values: [] }, operator: 'in', urlParam: 'state' }],
-    filters,
-    filterOptions: { state: [{ value: 'SP', label: 'SP' }] },
+    filterContract: {
+      applicationMode: 'immediate',
+      definitions: {
+        state: {
+          id: 'state', label: 'State', field: 'orders.state', valueKind: 'string',
+          predicates: [{ kind: 'set', operators: ['in'] }],
+          options: { kind: 'distinct', limit: 50, values: [] },
+          timezone: 'UTC', calendar: 'gregorian', weekStart: 'monday',
+        },
+      },
+      bindings: {
+        fb_state: {
+          key: 'fb_state', id: 'state', filter: 'state', scope: 'page', pageID: 'overview',
+          default: { kind: 'unfiltered' }, selectionMode: 'multiple', maxSelectedValues: 0,
+          readerEditable: true, paneVisible: true, paneOrder: 0, targets: ['overview/orders-chart'],
+          optionDependencies: [],
+        },
+      },
+    },
+    filterState,
+    filterOptionPages: {
+      fb_state: {
+        bindingKey: 'fb_state', options: [{ value: { kind: 'string', value: 'SP' }, label: 'SP', selected: false, available: true }],
+        complete: true, servingStateID: 'serving-test', streamGeneration: 3, filterRevision: 0,
+        requestGeneration: 0, consumerIdentity: 'option:fb_state',
+      },
+    },
+    filterValidation: {
+      accepted: true,
+      message: '',
+      currentRevision: 0,
+      clientMutationID: '',
+    },
+    runtime: {
+      kind: 'dashboard', clientId: 'dashboard-test', streamInstanceId: 'stream-test',
+      dashboardId: 'executive-sales', pageId: 'overview', servingStateId: 'serving-test',
+    },
+    interactionSelections,
+    spatialSelections: [],
     visuals: testVisualizationSignals(),
     status: { loading: true, error: '', refreshId: 'refresh-3', generation: 3, lastUpdated: '2026-07-18T10:00:00Z', setupRequired: false, progressPercent: 50 },
     agent: {
@@ -872,7 +1640,7 @@ function testDocument(): string {
       pageTitle: 'Overview',
       modelId: 'olist',
       generation: 3,
-      filters,
+      filters: filterState,
       references: [],
     },
     agentReferenceSearch: { query: '', requestId: 0, results: [] },
@@ -918,7 +1686,7 @@ function testVisualizationEnvelopes() {
 function testVisualizationSignals() {
   return Object.fromEntries(Object.entries(testVisualizationEnvelopes()).map(([id, envelope]) => {
     const { dataState, ...signal } = envelope
-    return [id, { ...signal, dataState: { schemaVersion: 1, encoding: 'json', kind: dataState.kind, specRevision: dataState.specRevision, dataRevision: dataState.dataRevision, generation: dataState.generation, payload: JSON.stringify(dataState) } }]
+    return [id, { ...signal, filterRevision: 0, dataState: { schemaVersion: 1, encoding: 'json', kind: dataState.kind, specRevision: dataState.specRevision, dataRevision: dataState.dataRevision, generation: dataState.generation, payload: JSON.stringify(dataState) } }]
   }))
 }
 

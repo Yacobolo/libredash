@@ -188,12 +188,17 @@ spec:
   semanticModel: sales
   filters:
     status:
-      type: multi_select
       label: Status
       field: order_key
-      operator: in
-      values:
-        source: distinct
+      predicates:
+        - kind: set
+          operators: [in, not_in]
+      options: {kind: distinct}
+  filter_bindings:
+    status:
+      filter: status
+      default: {kind: unfiltered}
+  filter_application: {mode: immediate}
   visuals:
     total:
       type: kpi

@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"crypto/rand"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -20,9 +22,13 @@ import (
 	"github.com/Yacobolo/leapview/internal/asyncjob"
 	asyncjobsqlite "github.com/Yacobolo/leapview/internal/asyncjob/sqlite"
 	cursorsigningsqlite "github.com/Yacobolo/leapview/internal/cursorsigning/sqlite"
+	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
+	dashboardfilter "github.com/Yacobolo/leapview/internal/dashboard/filter"
 	dashboardhttp "github.com/Yacobolo/leapview/internal/dashboard/http"
 	"github.com/Yacobolo/leapview/internal/dashboard/publication"
 	publicationsqlite "github.com/Yacobolo/leapview/internal/dashboard/publication/sqlite"
+	dashboardsession "github.com/Yacobolo/leapview/internal/dashboard/session"
+	dashboardsessionsqlite "github.com/Yacobolo/leapview/internal/dashboard/session/sqlite"
 	dashboardstream "github.com/Yacobolo/leapview/internal/dashboard/stream"
 	deploymenthttp "github.com/Yacobolo/leapview/internal/deployment/http"
 	manageddatabinding "github.com/Yacobolo/leapview/internal/manageddata/binding"
@@ -47,6 +53,7 @@ import (
 	workspacesqlite "github.com/Yacobolo/leapview/internal/workspace/sqlite"
 	agentcore "github.com/Yacobolo/leapview/pkg/agent"
 	"github.com/Yacobolo/leapview/pkg/pagestream"
+	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/csrf"
 )
 
@@ -98,6 +105,9 @@ type Server struct {
 	publicationStreams              publication.StreamRegistry
 	publicationRepo                 *publicationsqlite.Repository
 	publicationService              *publication.Service
+	dashboardSessions               dashboardsession.Store
+	dashboardOptionCursorSecret     []byte
+	dashboardOptionCache            *dashboardfilter.OptionCache
 	store                           *platform.Store
 	servingStateRepo                servingStateRepository
 	managedDataBindingRepo          manageddatabinding.Repository
@@ -170,17 +180,24 @@ func New(metrics QueryMetrics) *Server {
 			IncludePayloads:   true,
 		})
 	}
+	optionCursorSecret := make([]byte, 32)
+	if _, err := rand.Read(optionCursorSecret); err != nil {
+		panic("generate dashboard option cursor secret: " + err.Error())
+	}
 	return &Server{
-		metrics:            metrics,
-		broker:             pagestream.NewBroker(pagestream.WithTraceStore(trace)),
-		pageStreamTrace:    trace,
-		dashboardRefreshes: dashboardstream.NewRegistry(),
-		publicationStreams: publication.NewMemoryStreamRegistry(),
-		requestBodyLimit:   DefaultRequestBodyLimitConfig(),
-		telemetry:          newHTTPTelemetry(),
-		logger:             logger,
-		pendingChatTitles:  map[string]struct{}{},
-		apiIdempotency:     map[string]*apiIdempotencyRecord{},
+		metrics:                     metrics,
+		broker:                      pagestream.NewBroker(pagestream.WithTraceStore(trace)),
+		pageStreamTrace:             trace,
+		dashboardRefreshes:          dashboardstream.NewRegistry(),
+		publicationStreams:          publication.NewMemoryStreamRegistry(),
+		dashboardSessions:           dashboardsession.NewMemoryStore(),
+		dashboardOptionCursorSecret: optionCursorSecret,
+		dashboardOptionCache:        dashboardfilter.NewOptionCache(4096),
+		requestBodyLimit:            DefaultRequestBodyLimitConfig(),
+		telemetry:                   newHTTPTelemetry(),
+		logger:                      logger,
+		pendingChatTitles:           map[string]struct{}{},
+		apiIdempotency:              map[string]*apiIdempotencyRecord{},
 	}
 }
 
@@ -314,6 +331,7 @@ func NewWithOptions(metrics QueryMetrics, options Options) *Server {
 		server.publicationStreams = publicationsqlite.NewStreamRegistry(options.Store.SQLDB())
 		server.publicationBroker = publicationsqlite.NewBroker(options.Store.SQLDB(), server.pageStreamTrace, server.logger)
 		server.publicationService = publication.NewService(server.publicationRepo, server.publicationStreams.ClosePublication)
+		server.dashboardSessions = dashboardsessionsqlite.NewStore(options.Store.SQLDB())
 		if err := cursorsigningsqlite.Configure(context.Background(), options.Store.SQLDB()); err != nil {
 			server.logger.ErrorContext(context.Background(), "configure cursor signing failed", "error", err)
 		}
@@ -710,6 +728,32 @@ func (s *Server) dashboardHTTP() dashboardhttp.Handler {
 		RefreshFinished:      s.telemetry.dashboardRefreshFinished,
 		RefreshEventObserved: s.telemetry.dashboardRefreshEventObserved,
 		CacheObserved:        s.telemetry.dashboardCacheObserved,
+		SessionStore:         s.dashboardSessions,
+		OptionCursorSecret:   append([]byte(nil), s.dashboardOptionCursorSecret...),
+		OptionCache:          s.dashboardOptionCache,
+		SessionKey: func(r *http.Request, definition dashboarddefinition.Definition, clientID, streamInstanceID string) dashboardsession.Key {
+			workspaceID := chi.URLParam(r, "workspace")
+			if workspaceID == "" {
+				workspaceID = r.URL.Query().Get("workspace")
+			}
+			servingStateID := definition.DefaultFilterState().DefaultsRevision
+			if s.workspaceRepo != nil {
+				if summary, err := s.workspaceRepo.ByID(r.Context(), workspace.WorkspaceID(workspaceID)); err == nil && summary.ActiveServingStateID != "" {
+					servingStateID = string(summary.ActiveServingStateID)
+				}
+			}
+			principalOrClient := clientID
+			if principal, ok := principalFromContext(r.Context()); ok && principal.ID != "" {
+				principalOrClient = principal.ID + ":" + clientID
+			}
+			return dashboardsession.Key{
+				WorkspaceOrPublication: workspaceID,
+				PrincipalOrClient:      principalOrClient,
+				DashboardID:            definition.ID,
+				ServingStateID:         servingStateID,
+				StreamInstanceID:       streamInstanceID,
+			}
+		},
 		CurrentPrincipalID: func(r *http.Request) string {
 			principal, ok := principalFromContext(r.Context())
 			if !ok {
@@ -764,4 +808,14 @@ func (s *Server) metricsForWorkspace(workspaceID string) (QueryMetrics, bool) {
 
 type dashboardCommandMetrics struct {
 	QueryMetrics
+}
+
+func (m dashboardCommandMetrics) QueryCompiledFilterOptions(ctx context.Context, dashboardID string, query dashboardfilter.OptionQuery) (dashboardfilter.OptionResult, error) {
+	provider, ok := m.QueryMetrics.(interface {
+		QueryCompiledFilterOptions(context.Context, string, dashboardfilter.OptionQuery) (dashboardfilter.OptionResult, error)
+	})
+	if !ok {
+		return dashboardfilter.OptionResult{}, errors.New("compiled filter options are not supported by this runtime")
+	}
+	return provider.QueryCompiledFilterOptions(ctx, dashboardID, query)
 }

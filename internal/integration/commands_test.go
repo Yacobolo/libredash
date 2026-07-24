@@ -40,38 +40,14 @@ func TestCommandsPublishReloadPatchesToOpenStream(t *testing.T) {
 			name: "/commands/clear-selection",
 			path: "/commands/clear-selection",
 			signals: mergeSignals(runtimeSignals("cmd-clear", "overview"), map[string]any{
-				"filters": map[string]any{
-					"selections": []map[string]any{selectionSignal("orders_table", "orders.status", "delivered")},
-				},
-				"visualWindowCommand": visualWindowCommand("orders_table", "all", 0, 50, 4, 0),
+				"interactionSelections": []map[string]any{selectionSignal("orders_table", "orders.status", "delivered")},
+				"visualWindowCommand":   visualWindowCommand("orders_table", "all", 0, 50, 4, 0),
 			}),
 			assert: func(t *testing.T, patches []map[string]any) {
 				t.Helper()
 				requireStatusLoading(t, patches, true)
 				requireNoSelection(t, patches)
 				requireVisual(t, patches, "category_revenue")
-			},
-		},
-		{
-			name: "/commands/reset-filters",
-			path: "/commands/reset-filters",
-			signals: mergeSignals(runtimeSignals("cmd-reset", "overview"), map[string]any{
-				"filters": map[string]any{
-					"controls": map[string]any{
-						"state": map[string]any{
-							"type":     "multi_select",
-							"operator": "in",
-							"values":   []string{"SP"},
-						},
-					},
-				},
-				"visualWindowCommand": visualWindowCommand("orders_table", "all", 50, 50, 5, 2),
-			}),
-			assert: func(t *testing.T, patches []map[string]any) {
-				t.Helper()
-				requireStatusLoading(t, patches, true)
-				requireFilterValues(t, patches, "state")
-				requireTableResetVersion(t, patches, "orders_table", 3)
 			},
 		},
 	}
@@ -114,9 +90,6 @@ func TestVisualWindowCommandPublishesOnlyRequestedVisualPatch(t *testing.T) {
 	patches := nextRefreshPatches(t, stream)
 	requireTableBlock(t, patches, "orders_table", "a", 0, 7)
 	for _, patch := range patches {
-		if hasKey(patch, "filterOptions") {
-			t.Fatalf("visual-window command streamed non-target data: %#v", patch)
-		}
 		for visualID := range mapAt(patch, "visuals") {
 			if visualID != "orders_table" {
 				t.Fatalf("visual-window command streamed non-target visual %q: %#v", visualID, patch)

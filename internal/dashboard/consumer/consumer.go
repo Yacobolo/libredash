@@ -11,10 +11,9 @@ import (
 type Kind string
 
 const (
-	KindFilterOptions Kind = "filter_options"
-	KindVisual        Kind = "visual"
-	KindWindow        Kind = "visual_window"
-	KindSpatial       Kind = "spatial"
+	KindVisual  Kind = "visual"
+	KindWindow  Kind = "visual_window"
+	KindSpatial Kind = "spatial"
 )
 
 type Target struct {
@@ -59,7 +58,6 @@ type ProgressPublisher func(Progress)
 type Result struct {
 	Target         Target
 	Envelope       visualizationir.VisualizationEnvelope
-	FilterOptions  map[string][]dashboard.FilterOption
 	Metadata       bool
 	Err            error
 	Duration       time.Duration

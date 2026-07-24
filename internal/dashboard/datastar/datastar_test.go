@@ -251,3 +251,11 @@ func TestRefreshCompleteMarksSetupRequiredErrors(t *testing.T) {
 		t.Fatalf("terminal patch = %#v", patch)
 	}
 }
+
+func TestDashboardViewStreamIDIsStableAcrossPageNavigation(t *testing.T) {
+	overview := StreamID("client", "dashboard", "overview", "view-1")
+	details := StreamID("client", "dashboard", "details", "view-1")
+	if overview != details {
+		t.Fatalf("dashboard view stream IDs differ across pages: %q != %q", overview, details)
+	}
+}

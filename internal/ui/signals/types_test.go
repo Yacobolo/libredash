@@ -9,6 +9,7 @@ import (
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
+	dashboardfilter "github.com/Yacobolo/leapview/internal/dashboard/filter"
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
 	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
@@ -55,6 +56,9 @@ func compiledTestVisualizations(t *testing.T, report *reportdef.Dashboard, model
 
 func compiledTestDashboard(t *testing.T, report *reportdef.Dashboard, model *semanticmodel.Model) (dashboarddefinition.Definition, map[string]visualizationdefinition.Definition) {
 	t.Helper()
+	if err := workspacecompiler.ValidateDashboard(report, map[string]*semanticmodel.Model{model.Name: model}); err != nil {
+		t.Fatal(err)
+	}
 	definitions := compiledTestVisualizations(t, report, model)
 	compiled, err := workspacecompiler.CompileDashboardDefinition(report, definitions)
 	if err != nil {
@@ -99,11 +103,11 @@ func TestDashboardInitialEnvelopeValidatesPageScopedPayloads(t *testing.T) {
 	if _, ok := envelope.Visuals["off_page_chart"]; ok {
 		t.Fatalf("off-page visual was emitted: %#v", envelope.Visuals)
 	}
-	if _, ok := envelope.Filters.Controls["state"]; !ok {
-		t.Fatalf("page filter control missing: %#v", envelope.Filters)
+	if len(envelope.FilterContract.Bindings) != 2 {
+		t.Fatalf("dashboard filter bindings = %#v, want both page bindings", envelope.FilterContract.Bindings)
 	}
-	if _, ok := envelope.Filters.Controls["category"]; ok {
-		t.Fatalf("off-page filter control was emitted: %#v", envelope.Filters)
+	if len(envelope.FilterState.AppliedControls) != 2 {
+		t.Fatalf("applied filter state = %#v, want both page bindings", envelope.FilterState)
 	}
 	if envelope.Runtime.StreamInstanceID == nil || *envelope.Runtime.StreamInstanceID != "stream-instance" {
 		t.Fatalf("stream instance id = %#v", envelope.Runtime.StreamInstanceID)
@@ -283,9 +287,16 @@ func testDashboardReport() reportdef.Dashboard {
 		ID:            "report",
 		Title:         "Report",
 		SemanticModel: "test",
-		Filters: map[string]reportdef.FilterDefinition{
-			"state":    {Type: "multi_select", Label: "State", Dimension: "orders.state", URLParam: "state", Operator: "in"},
-			"category": {Type: "text", Label: "Category", Dimension: "orders.category", URLParam: "category", DefaultOperator: "contains"},
+		FilterDefinitions: map[string]dashboardfilter.Definition{
+			"state": {
+				Label: "State", Field: "orders.state",
+				Predicates: []dashboardfilter.PredicatePolicy{{Kind: dashboardfilter.ExpressionSet, Operators: []dashboardfilter.Operator{dashboardfilter.OperatorIn}}},
+				Options:    dashboardfilter.OptionSource{Kind: dashboardfilter.OptionSourceDistinct, Limit: 50},
+			},
+			"category": {
+				Label: "Category", Field: "orders.category",
+				Predicates: []dashboardfilter.PredicatePolicy{{Kind: dashboardfilter.ExpressionComparison, Operators: []dashboardfilter.Operator{dashboardfilter.OperatorContains}}},
+			},
 		},
 		Visuals: reportdef.MergeVisualizations(reportdef.ChartVisualizations(map[string]reportdef.Visual{
 			"active_chart":   {Title: "Active", Type: "bar", Query: reportdef.VisualQuery{Dimensions: testFieldRefs("orders.status"), Measures: testFieldRefs("order_count")}},
@@ -298,17 +309,31 @@ func testDashboardReport() reportdef.Dashboard {
 				ID:     "overview",
 				Title:  "Overview",
 				Canvas: dashboard.PageCanvas{Width: 1200, Height: 800},
+				FilterBindings: map[string]dashboardfilter.Binding{
+					"state": {
+						Filter:  "state",
+						Default: dashboardfilter.Expression{Kind: dashboardfilter.ExpressionUnfiltered},
+						URL:     dashboardfilter.URLPolicy{Param: "state", Encoding: dashboardfilter.URLEncodingTypedV1},
+					},
+				},
 				Visuals: []dashboard.PageVisual{
-					{ID: "state-filter", Kind: "filter", Filter: "state", X: 0, Y: 0, Width: 100, Height: 40},
-					{ID: "chart", Kind: "visual", Visual: "active_chart", X: 0, Y: 48, Width: 100, Height: 100},
+					{ID: "state-slicer", Kind: "slicer", Binding: dashboardfilter.BindingRef{Scope: dashboardfilter.ScopePage, ID: "state"}, Placement: dashboard.PagePlacement{Col: 1, Row: 1, ColSpan: 3, RowSpan: 1}},
+					{ID: "chart", Kind: "visual", Visual: "active_chart", Placement: dashboard.PagePlacement{Col: 1, Row: 2, ColSpan: 6, RowSpan: 4}},
 				},
 			},
 			{
 				ID:     "detail",
 				Title:  "Detail",
 				Canvas: dashboard.PageCanvas{Width: 1200, Height: 800},
+				FilterBindings: map[string]dashboardfilter.Binding{
+					"category": {
+						Filter:  "category",
+						Default: dashboardfilter.Expression{Kind: dashboardfilter.ExpressionUnfiltered},
+						URL:     dashboardfilter.URLPolicy{Param: "category", Encoding: dashboardfilter.URLEncodingTypedV1},
+					},
+				},
 				Visuals: []dashboard.PageVisual{
-					{ID: "orders", Kind: "visual", Visual: "orders", X: 0, Y: 0, Width: 100, Height: 100},
+					{ID: "orders", Kind: "visual", Visual: "orders", Placement: dashboard.PagePlacement{Col: 1, Row: 1, ColSpan: 6, RowSpan: 4}},
 				},
 			},
 		},
@@ -320,7 +345,12 @@ func testSemanticModel() *semanticmodel.Model {
 		Name:  "test",
 		Title: "Test",
 		Tables: map[string]semanticmodel.Table{
-			"orders": {Source: "orders", PrimaryKey: "order_id", Grain: "order_id", Dimensions: map[string]semanticmodel.MetricDimension{"order_id": {Expr: "order_id"}, "status": {Expr: "status"}, "state": {Expr: "state"}, "category": {Expr: "category"}}},
+			"orders": {Source: "orders", PrimaryKey: "order_id", Grain: "order_id", Dimensions: map[string]semanticmodel.MetricDimension{
+				"order_id": {Expr: "order_id", Type: "string"},
+				"status":   {Expr: "status", Type: "string"},
+				"state":    {Expr: "state", Type: "string"},
+				"category": {Expr: "category", Type: "string"},
+			}},
 		},
 		Measures: map[string]semanticmodel.MetricMeasure{"order_count": {Fact: "orders", Aggregation: "count", Empty: "zero", Label: "Orders"}},
 	}

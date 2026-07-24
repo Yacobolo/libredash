@@ -361,14 +361,14 @@ func ExtractLineage(workspaceID workspace.WorkspaceID, servingStateID workspace.
 			edge(fromID, measureID, workspace.AssetEdgeUsesMeasure)
 			return nil
 		}
-		for _, filterName := range sortedMapKeys(compiledReport.Filters) {
-			filter := compiledReport.Filters[filterName]
-			filterID, err := add(workspace.AssetTypeFilter, reportKey+"."+filterName, reportID, filter.Label, filter.Description, filterPayload(filter))
+		for _, filterName := range sortedMapKeys(compiledReport.FilterDefinitions) {
+			filter := compiledReport.FilterDefinitions[filterName]
+			filterID, err := add(workspace.AssetTypeFilter, reportKey+"."+filterName, reportID, filter.Label, filter.Description, filter)
 			if err != nil {
 				return workspace.AssetGraph{}, err
 			}
 			edge(reportID, filterID, workspace.AssetEdgeContains)
-			if err := addFieldUse(filterID, filter.Dimension, workspace.AssetEdgeFiltersField); err != nil {
+			if err := addFieldUse(filterID, filter.Field, workspace.AssetEdgeFiltersField); err != nil {
 				return workspace.AssetGraph{}, err
 			}
 		}
@@ -434,8 +434,12 @@ func ExtractLineage(workspaceID workspace.WorkspaceID, servingStateID workspace.
 					}
 					edge(itemID, visualID, workspace.AssetEdgeUsesVisual)
 				}
-				if item.Filter != "" {
-					filterID, err := assetID(workspace.AssetTypeFilter, reportKey+"."+item.Filter)
+				if item.Kind == "slicer" {
+					binding := compiledReport.FilterBindings[item.Binding.ID]
+					if item.Binding.Scope == "page" {
+						binding = page.FilterBindings[item.Binding.ID]
+					}
+					filterID, err := assetID(workspace.AssetTypeFilter, reportKey+"."+binding.Filter)
 					if err != nil {
 						return workspace.AssetGraph{}, err
 					}

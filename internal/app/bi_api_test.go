@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/Yacobolo/leapview/internal/dashboard"
+	dashboardfilter "github.com/Yacobolo/leapview/internal/dashboard/filter"
 	"github.com/Yacobolo/leapview/internal/dataquery"
 	"github.com/Yacobolo/leapview/internal/queryaudit"
 	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
@@ -21,6 +22,27 @@ func newPublicAPIRequest(method, target string, body io.Reader) *http.Request {
 	req := httptest.NewRequest(method, target, body)
 	req.Header.Set("Authorization", "Bearer dev")
 	return req
+}
+
+func dashboardAPISetFilterBody(t *testing.T, pageID, bindingID string, values ...string) string {
+	t.Helper()
+	typed := make([]dashboardfilter.Value, len(values))
+	for index, value := range values {
+		typed[index] = dashboardfilter.Value{Kind: dashboardfilter.ValueString, Value: value}
+	}
+	body := map[string]any{"filterState": map[string]any{
+		"version": "typed_v1",
+		"controls": map[string]any{
+			dashboardfilter.BindingKey("executive-sales", dashboardfilter.ScopePage, pageID, bindingID): dashboardfilter.Expression{
+				Kind: dashboardfilter.ExpressionSet, Operator: dashboardfilter.OperatorIn, Values: typed,
+			},
+		},
+	}}
+	encoded, err := json.Marshal(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(encoded)
 }
 
 func TestBIAPIListResponsesUseStandardEnvelope(t *testing.T) {
@@ -113,7 +135,7 @@ func TestBIAPIListPaginationRejectsMalformedLimit(t *testing.T) {
 func TestBIAPIQueriesBoundRowsAndPageData(t *testing.T) {
 	server := NewWithOptions(manyRowsMetrics{}, Options{Store: testStore(t), DefaultWorkspaceID: "test"})
 
-	pageReq := newPublicAPIRequest(http.MethodPost, "/api/v1/workspaces/test/dashboards/executive-sales/pages/overview/query", strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}}}`))
+	pageReq := newPublicAPIRequest(http.MethodPost, "/api/v1/workspaces/test/dashboards/executive-sales/pages/overview/query", strings.NewReader(dashboardAPISetFilterBody(t, "overview", "state", "SP")))
 	pageReq.Header.Set("Accept", "application/json")
 	pageReq.Header.Set("Content-Type", "application/json")
 	pageRec := httptest.NewRecorder()
@@ -178,7 +200,7 @@ func TestBIAPIDashboardVisualDataSurface(t *testing.T) {
 		t.Fatalf("visual describe status=%d body=%s", visualRec.Code, visualRec.Body.String())
 	}
 
-	dataReq := newPublicAPIRequest(http.MethodPost, "/api/v1/workspaces/test/dashboards/executive-sales/pages/overview/visuals/orders/query", strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}}}`))
+	dataReq := newPublicAPIRequest(http.MethodPost, "/api/v1/workspaces/test/dashboards/executive-sales/pages/overview/visuals/orders/query", strings.NewReader(dashboardAPISetFilterBody(t, "overview", "state", "SP")))
 	dataReq.Header.Set("Accept", "application/json")
 	dataReq.Header.Set("Content-Type", "application/json")
 	dataRec := httptest.NewRecorder()
@@ -194,6 +216,19 @@ func TestBIAPIDashboardVisualDataSurface(t *testing.T) {
 	server.Routes().ServeHTTP(tableRec, tableReq)
 	if tableRec.Code != http.StatusOK || !strings.Contains(tableRec.Body.String(), `"o1"`) || !strings.Contains(tableRec.Body.String(), `"rows"`) {
 		t.Fatalf("table data status=%d body=%s", tableRec.Code, tableRec.Body.String())
+	}
+
+	filterDescribeReq := newPublicAPIRequest(http.MethodGet, "/api/v1/workspaces/test/dashboards/executive-sales/pages/overview/filters/state", nil)
+	filterDescribeRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(filterDescribeRec, filterDescribeReq)
+	filterDescribeBody := filterDescribeRec.Body.String()
+	if filterDescribeRec.Code != http.StatusOK ||
+		!strings.Contains(filterDescribeBody, `"definition"`) ||
+		!strings.Contains(filterDescribeBody, `"binding"`) ||
+		!strings.Contains(filterDescribeBody, `"key":"fb_`) ||
+		!strings.Contains(filterDescribeBody, `"valueKind":"string"`) ||
+		strings.Contains(filterDescribeBody, `"multiSelect"`) {
+		t.Fatalf("filter describe status=%d body=%s", filterDescribeRec.Code, filterDescribeBody)
 	}
 
 	filterReq := newPublicAPIRequest(http.MethodPost, "/api/v1/workspaces/test/dashboards/executive-sales/pages/overview/filters/state/values?limit=1", strings.NewReader(`{}`))
@@ -323,7 +358,7 @@ func TestBIAPIDashboardVisualDataSurfaceNotFoundAndMalformedBody(t *testing.T) {
 		}
 	}
 
-	req := newPublicAPIRequest(http.MethodPost, "/api/v1/workspaces/test/dashboards/executive-sales/pages/overview/visuals/orders/query", strings.NewReader(`{"filters":`))
+	req := newPublicAPIRequest(http.MethodPost, "/api/v1/workspaces/test/dashboards/executive-sales/pages/overview/visuals/orders/query", strings.NewReader(`{"filterState":`))
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()

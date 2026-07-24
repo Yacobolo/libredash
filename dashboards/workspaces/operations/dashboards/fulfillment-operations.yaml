@@ -10,32 +10,52 @@ spec:
   semanticModel: operations
   filters:
     state:
-      type: multi_select
       label: State
-      url_param: state
-      operator: in
-      values:
-        source: distinct
+      field: state
+      predicates:
+        - kind: set
+          operators: [in, not_in]
+      options:
+        kind: distinct
         limit: 50
-      field: customers.state
     status:
-      type: multi_select
       label: Status
-      url_param: status
-      operator: in
-      values:
-        source: distinct
+      field: status
+      predicates:
+        - kind: set
+          operators: [in, not_in]
+      options:
+        kind: distinct
         limit: 20
-      field: orders.status
     delivery_bucket:
-      type: multi_select
       label: Delivery speed
-      url_param: delivery
-      operator: in
-      values:
-        source: distinct
+      field: delivery_bucket
+      predicates:
+        - kind: set
+          operators: [in, not_in]
+      options:
+        kind: distinct
         limit: 20
-      field: orders.delivery_bucket
+  filter_bindings:
+    state:
+      filter: state
+      default: {kind: unfiltered}
+      selection: {mode: multiple, max_selected_values: 50}
+      url: {param: state, encoding: typed_v1}
+      pane: {visible: true, order: 10}
+    status:
+      filter: status
+      default: {kind: unfiltered}
+      selection: {mode: multiple, max_selected_values: 20}
+      url: {param: status, encoding: typed_v1}
+      pane: {visible: true, order: 20}
+    delivery_bucket:
+      filter: delivery_bucket
+      default: {kind: unfiltered}
+      selection: {mode: multiple, max_selected_values: 20}
+      url: {param: delivery, encoding: typed_v1}
+      pane: {visible: true, order: 30}
+  filter_application: {mode: immediate}
   visuals:
     total_orders:
       type: kpi
@@ -109,16 +129,19 @@ spec:
         padding: 16
       components:
         - id: state-filter
-          kind: filter
-          filter: state
+          kind: slicer
+          binding: {scope: report, id: state}
+          presentation: {style: dropdown, search: true}
           placement: {col: 1, row: 1, col_span: 4, row_span: 2}
         - id: status-filter
-          kind: filter
-          filter: status
+          kind: slicer
+          binding: {scope: report, id: status}
+          presentation: {style: dropdown, search: true}
           placement: {col: 5, row: 1, col_span: 4, row_span: 2}
         - id: delivery-filter
-          kind: filter
-          filter: delivery_bucket
+          kind: slicer
+          binding: {scope: report, id: delivery_bucket}
+          presentation: {style: dropdown, search: true}
           placement: {col: 9, row: 1, col_span: 4, row_span: 2}
         - id: total-orders
           kind: visual

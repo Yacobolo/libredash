@@ -157,6 +157,9 @@ type SemanticDimension struct {
 	Description string                      `yaml:"description"`
 	Type        string                      `yaml:"type"`
 	Grains      []string                    `yaml:"grains"`
+	Timezone    string                      `yaml:"timezone,omitempty"`
+	Calendar    string                      `yaml:"calendar,omitempty"`
+	WeekStart   string                      `yaml:"week_start,omitempty"`
 	Bindings    map[string]DimensionBinding `yaml:"bindings"`
 }
 

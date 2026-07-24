@@ -209,11 +209,18 @@ func TestDashboardDataCommandsUseGeneratedURLsAndBodies(t *testing.T) {
 			response: map[string]any{"id": "orders", "title": "Orders"},
 		},
 		{
+			name:     "filter describe",
+			args:     []string{"filter", "executive-sales", "overview", "state"},
+			method:   http.MethodGet,
+			path:     "/api/v1/workspaces/test/dashboards/executive-sales/pages/overview/filters/state",
+			response: map[string]any{"definition": map[string]any{"id": "state"}, "binding": map[string]any{"key": "fb_state"}},
+		},
+		{
 			name:     "visual data",
-			args:     []string{"visual-data", "executive-sales", "overview", "orders", "--count", "7", "--filters-json", `{"controls":{"state":{"values":["SP"]}}}`},
+			args:     []string{"visual-data", "executive-sales", "overview", "orders", "--count", "7", "--filter-state-json", `{"version":"typed_v1","controls":{"fb_state":{"kind":"set","operator":"in","values":[{"kind":"string","value":"SP"}]}}}`},
 			method:   http.MethodPost,
 			path:     "/api/v1/workspaces/test/dashboards/executive-sales/pages/overview/visuals/orders/query",
-			wantBody: []string{`"filters"`, `"state"`, `"limit":7`},
+			wantBody: []string{`"filterState"`, `"typed_v1"`, `"fb_state"`, `"limit":7`},
 			response: map[string]any{"id": "orders", "data": []map[string]any{}},
 		},
 		{

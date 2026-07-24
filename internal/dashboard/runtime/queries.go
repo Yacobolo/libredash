@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -57,22 +58,27 @@ func (s *QueryService) QueryDashboard(ctx context.Context, dashboardID string, f
 }
 
 func (s *QueryService) QueryDashboardPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters) (dashboard.Patch, error) {
+	filters.ActivePageID = pageID
 	return s.snapshots.QueryDashboardPage(ctx, dashboardID, pageID, filters)
 }
 
 func (s *QueryService) QueryDashboardVisualizations(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters) (dashboard.Patch, error) {
+	filters.ActivePageID = pageID
 	return s.snapshots.QueryDashboardPage(ctx, dashboardID, pageID, filters)
 }
 
 func (s *QueryService) QueryVisualization(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualID string) (visualizationir.VisualizationEnvelope, error) {
+	filters.ActivePageID = pageID
 	return s.snapshots.queryVisualizationPage(ctx, dashboardID, pageID, filters, visualID)
 }
 
 func (s *QueryService) QueryVisualizationWindow(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request visualizationir.VisualizationWindowRequest) (visualizationir.VisualizationEnvelope, error) {
+	filters.ActivePageID = pageID
 	return s.visualizations.queryVisualizationWindowPage(ctx, dashboardID, pageID, filters, request, true)
 }
 
 func (s *QueryService) QueryVisualizationSpatialWindow(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request visualizationir.VisualizationSpatialWindowRequest) (visualizationir.VisualizationEnvelope, error) {
+	filters.ActivePageID = pageID
 	return s.snapshots.querySpatialVisualPage(ctx, dashboardID, pageID, filters, request)
 }
 
@@ -84,6 +90,7 @@ func (s *SnapshotService) QueryDashboardPage(ctx context.Context, dashboardID, p
 	report, runtime, err := s.reports.reportRuntime(dashboardID, s.runtimes)
 	if report != nil {
 		page := dashboardPage(report, pageID)
+		filters.ActivePageID = page.ID
 		filters = report.NormalizeFiltersForPage(page.ID, filters)
 	} else {
 		filters = filters.WithDefaults()
@@ -112,12 +119,6 @@ func (s *SnapshotService) QueryDashboardPage(ctx context.Context, dashboardID, p
 	}
 
 	page := dashboardPage(report, pageID)
-	options, err := s.filters.filterOptions(ctx, runtime, report, report.PageFilterIDs(page.ID))
-	if err != nil {
-		return dashboard.EmptyPatch(filters, err), nil
-	}
-	patch.FilterOptions = options
-
 	allIDs := pageVisualizationIDs(page)
 	inlineIDs := make([]string, 0, len(allIDs))
 	windowIDs := make([]string, 0, len(allIDs))
@@ -210,7 +211,7 @@ func (s *SnapshotService) querySpatialVisualPage(ctx context.Context, dashboardI
 	}
 	page := dashboardPage(report, pageID)
 	filters = report.NormalizeFiltersForPage(page.ID, filters)
-	if !contains(pageVisualizationIDs(page), request.VisualID) {
+	if !slices.Contains(pageVisualizationIDs(page), request.VisualID) {
 		return visualizationir.VisualizationEnvelope{}, fmt.Errorf("visual %q is not on page %q", request.VisualID, page.ID)
 	}
 	s.mu.RLock()
@@ -230,7 +231,7 @@ func (s *SnapshotService) queryVisualsPage(ctx context.Context, dashboardID, pag
 	filters = report.NormalizeFiltersForPage(page.ID, filters)
 	pageIDs := pageVisualizationIDs(page)
 	for _, visualID := range visualIDs {
-		if !contains(pageIDs, visualID) {
+		if !slices.Contains(pageIDs, visualID) {
 			return nil, fmt.Errorf("visual %q is not on page %q", visualID, page.ID)
 		}
 	}
@@ -251,40 +252,13 @@ func (s *SnapshotService) queryVisualBundlePage(ctx context.Context, dashboardID
 	filters = report.NormalizeFiltersForPage(page.ID, filters)
 	pageIDs := pageVisualizationIDs(page)
 	for _, visualID := range visualIDs {
-		if !contains(pageIDs, visualID) {
+		if !slices.Contains(pageIDs, visualID) {
 			return nil, fmt.Errorf("visual %q is not on page %q", visualID, page.ID)
 		}
 	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.visualizations.bundledVisuals(ctx, runtime, report, filters, append([]string{}, visualIDs...))
-}
-
-func (s *SnapshotService) queryFilterOptionsPage(ctx context.Context, dashboardID, pageID string, filterIDs []string) (map[string][]dashboard.FilterOption, error) {
-	report, runtime, err := s.reports.reportRuntime(dashboardID, s.runtimes)
-	if err != nil {
-		return nil, err
-	}
-	if !runtime.ready {
-		return nil, runtime.missing
-	}
-	page := dashboardPage(report, pageID)
-	pageFilterIDs := report.PageFilterIDs(page.ID)
-	allowed := make(map[string]struct{}, len(pageFilterIDs))
-	for _, filterID := range pageFilterIDs {
-		allowed[filterID] = struct{}{}
-	}
-	if len(filterIDs) == 0 {
-		filterIDs = pageFilterIDs
-	}
-	for _, filterID := range filterIDs {
-		if _, ok := allowed[filterID]; !ok {
-			return nil, fmt.Errorf("filter %q is not on page %q", filterID, page.ID)
-		}
-	}
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.filters.filterOptions(ctx, runtime, report, filterIDs)
 }
 
 func dashboardPage(report *dashboarddefinition.Definition, pageID string) dashboard.Page {
@@ -332,7 +306,7 @@ func (s *VisualizationDataService) queryVisualizationWindowPage(ctx context.Cont
 		return visualizationir.VisualizationEnvelope{}, err
 	}
 	page := dashboardPage(report, pageID)
-	if !contains(pageVisualizationIDs(page), window.VisualID) {
+	if !slices.Contains(pageVisualizationIDs(page), window.VisualID) {
 		return visualizationir.VisualizationEnvelope{}, fmt.Errorf("visual %q is not on page %q", window.VisualID, page.ID)
 	}
 	definition, ok := report.Visualizations[window.VisualID]

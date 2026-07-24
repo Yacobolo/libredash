@@ -7,6 +7,7 @@ import (
 
 	"github.com/Yacobolo/leapview/internal/analytics/arrowquery"
 	"github.com/Yacobolo/leapview/internal/dashboard"
+	dashboardfilter "github.com/Yacobolo/leapview/internal/dashboard/filter"
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 	"github.com/Yacobolo/leapview/internal/dataquery"
 	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
@@ -43,6 +44,16 @@ func (m workloadMetrics) MetricsForWorkspace(workspaceID string) (QueryMetrics, 
 
 func (m workloadMetrics) QueryDashboard(ctx context.Context, dashboardID string, filters dashboard.Filters) (dashboard.Patch, error) {
 	return m.QueryDashboardPage(ctx, dashboardID, "", filters)
+}
+
+func (m workloadMetrics) QueryCompiledFilterOptions(ctx context.Context, dashboardID string, query dashboardfilter.OptionQuery) (dashboardfilter.OptionResult, error) {
+	provider, ok := m.QueryMetrics.(interface {
+		QueryCompiledFilterOptions(context.Context, string, dashboardfilter.OptionQuery) (dashboardfilter.OptionResult, error)
+	})
+	if !ok {
+		return dashboardfilter.OptionResult{}, errors.New("compiled filter options are not supported by this runtime")
+	}
+	return provider.QueryCompiledFilterOptions(m.readContext(ctx), dashboardID, query)
 }
 
 func (m workloadMetrics) QueryDashboardPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters) (dashboard.Patch, error) {

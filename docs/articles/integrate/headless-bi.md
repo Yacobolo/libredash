@@ -17,7 +17,8 @@ For dashboards, discover in this order:
 ```sh
 leapview dashboards list --workspace sales
 leapview dashboards describe executive-sales --workspace sales
-leapview dashboards components executive-sales overview --workspace sales
+leapview dashboards page executive-sales overview --workspace sales
+leapview dashboards filter executive-sales overview state --workspace sales
 ```
 
 Add `--target` and `--token`, or configure the corresponding environment values. Discovery returns stable IDs and supported components from the active deployment.
@@ -40,10 +41,10 @@ Use a coordinated page query when several components should share one canonical 
 ```sh
 leapview dashboards query-page executive-sales overview \
   --workspace sales \
-  --filters-json '{"state":["SP"]}'
+  --filter-state-json '{"version":"typed_v1","controls":{"fb_REPLACE_WITH_DISCOVERED_KEY":{"kind":"set","operator":"in","values":[{"kind":"string","value":"SP"}]}}}'
 ```
 
-The exact filter JSON follows the dashboard query contract. Querying the page can be preferable to issuing several unrelated component calls because the server can resolve shared state coherently.
+Use the opaque `binding.key` returned by `dashboards filter`; do not derive it. The exact filter JSON follows the dashboard query contract. Querying the page can be preferable to issuing several unrelated component calls because the server can resolve shared state coherently.
 
 Use visual or table data commands for focused refreshes. Table requests support bounded windows/count according to their generated command and API contracts.
 

@@ -331,8 +331,10 @@ package contracts
 	description?:    string
 	semantic_model!: #Identifier
 	filters?: close({
-		[#Identifier]: #Filter
+		[#Identifier]: #FilterDefinition
 	})
+	filter_bindings?: close({[#Identifier]: #FilterBinding})
+	filter_application?: #FilterApplication
 	visuals!: close({
 		[#Identifier]: #Visual
 	})
@@ -342,52 +344,116 @@ package contracts
 #DashboardSpec: close({
 	semanticModel!: #Identifier
 	filters?: close({
-		[#Identifier]: #Filter
+		[#Identifier]: #FilterDefinition
 	})
+	filter_bindings?: close({[#Identifier]: #FilterBinding})
+	filter_application?: #FilterApplication
 	visuals!: close({
 		[#Identifier]: #Visual
 	})
 	pages!: [...#Page]
 })
 
-#Filter: close({
-	type!:        "date_range" | "multi_select" | "text"
+#FilterDefinition: close({
 	label!:       string
 	description?: string
 	field!:       #FieldRef | #Identifier
 	fact?:        #Identifier
-	default?:     #FilterDefault
-	custom?:      bool
-	presets?: [...#FilterPreset]
-	operator?: string
-	values?: close({source?: string, limit?: int})
-	default_operator?: string
-	operators?: [...string]
-	options?: [...close({value: string, label: string})]
-	url_param?:          string
-	from_url_param?:     string
-	to_url_param?:       string
-	operator_url_param?: string
-	targets?: close({
-		visuals?: [...#Identifier]
+	predicates!: [...#FilterPredicate]
+	options?: #FilterOptionSource
+	formatting?: close({
+		pattern?: string
+		unit?:    string
 	})
 })
 
-#FilterDefault: close({
-	preset?:   string
-	from?:     string
-	to?:       string
-	operator?: string
-	value?:    string
-	values?: [...string]
+#FilterPredicate: close({
+	kind!: "null_check" | "set" | "comparison" | "range" | "relative_period"
+	operators?: [...("is_null" | "is_not_null" | "in" | "not_in" | "equals" | "not_equals" | "contains" | "not_contains" | "starts_with" | "ends_with" | "greater_than" | "greater_than_or_equal" | "less_than" | "less_than_or_equal")]
 })
 
-#FilterPreset: close({
-	value!:         string
-	label!:         string
-	from?:          string
-	to?:            string
-	relative_days?: int
+#FilterOptionSource: close({
+	kind?:  "static" | "distinct"
+	limit?: int & >=0 & <=500
+	values?: [...close({
+		value!: #FilterValue
+		label!: string
+	})]
+})
+
+#FilterBinding: close({
+	filter!:          #Identifier
+	default?:         #FilterExpression
+	selection?: close({
+		mode?:                "single" | "multiple"
+		max_selected_values?: int & >=0
+	})
+	reader_editable?: bool
+	url?: close({
+		param?:    string
+		encoding?: "typed_v1"
+	})
+	pane?: close({
+		visible?: bool
+		order?:   int
+		label?:   string
+	})
+	targets?: close({
+		include?: [...string]
+		exclude?: [...string]
+	})
+	option_interactions?: close({
+		include?: [...#FilterBindingRef]
+		exclude?: [...#FilterBindingRef]
+	})
+})
+
+#FilterApplication: close({
+	mode!: "immediate" | "deferred"
+})
+
+#FilterBindingRef: close({
+	scope!: "page" | "report"
+	id!:    #Identifier
+})
+
+#FilterValue: close({kind!: "string", value!: string}) |
+	close({kind!: "boolean", value!: bool}) |
+	close({kind!: "integer" | "decimal" | "date" | "timestamp", value!: string})
+
+#FilterExpression: close({kind!: "unfiltered"}) |
+	close({
+		kind!:     "null_check"
+		operator!: "is_null" | "is_not_null"
+	}) |
+	close({
+		kind!:     "set"
+		operator!: "in" | "not_in"
+		values!:   [...#FilterValue]
+	}) |
+	close({
+		kind!:     "comparison"
+		operator!: "equals" | "not_equals" | "contains" | "not_contains" | "starts_with" | "ends_with" | "greater_than" | "greater_than_or_equal" | "less_than" | "less_than_or_equal"
+		value!:    #FilterValue
+	}) |
+	close({
+		kind!:  "range"
+		lower?: #FilterBound
+		upper?: #FilterBound
+	}) |
+	close({
+		kind!:            "relative_period"
+		direction!:       "previous" | "current" | "next"
+		count!:           int & >0
+		unit!:            "minute" | "hour" | "day" | "week" | "month" | "quarter" | "year"
+		include_current?: bool
+		anchor!:          "current_time" | "first_available" | "last_available" | "fixed"
+		anchor_value?:    #FilterValue
+	})
+
+#FilterBound: close({
+	value!:     #FilterValue
+	inclusive!: bool
 })
 
 #Visual: #CartesianVisual | #ProportionalVisual | #HierarchyVisual | #PolarVisual | #GeographicVisual | #CustomVisual | #KPIVisual | #DataTableVisual | #MatrixVisual | #PivotVisual
@@ -743,10 +809,11 @@ package contracts
 		gap?:        int
 		padding?:    int
 	})
+	filter_bindings?: close({[#Identifier]: #FilterBinding})
 	components!: [...#PageComponent]
 })
 
-#PageComponent: #VisualComponent | #FilterComponent | #HeaderComponent
+#PageComponent: #VisualComponent | #SlicerComponent | #HeaderComponent
 
 #PageComponentCommon: {
 	id!:          #ObjectID
@@ -769,10 +836,21 @@ package contracts
 	visual!: #Identifier
 })
 
-#FilterComponent: close({
+#SlicerComponent: close({
 	#PageComponentCommon
-	kind!:   "filter"
-	filter!: #Identifier
+	kind!:    "slicer"
+	binding!: #FilterBindingRef
+	presentation?: close({
+		style?:         "dropdown" | "list" | "buttons" | "input" | "numeric_range" | "date_range" | "relative_period"
+		search?:        bool
+		select_all?:    bool
+		show_counts?:   bool
+		show_summary?:  bool
+		compact?:        bool
+		title?:          string
+		description?:    string
+		aria_label?:     string
+	})
 })
 
 #HeaderComponent: close({

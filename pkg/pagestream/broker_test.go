@@ -225,9 +225,9 @@ func TestBrokerDropsPendingOlderGenerationWhenNewGenerationStarts(t *testing.T) 
 	// buffer, but do not consume it. A generation 2 start must evict that result
 	// rather than merge it into generation 2 or deliver it afterward.
 	broker.PublishEnvelope("client:page", Envelope{Signals: SignalPatch{
-		"visuals":       map[string]any{"old-visual": "generation-1"},
-		"tables":        map[string]any{"old-table": "generation-1"},
-		"filterOptions": map[string]any{"old-filter": "generation-1"},
+		"visuals":           map[string]any{"old-visual": "generation-1"},
+		"tables":            map[string]any{"old-table": "generation-1"},
+		"filterOptionPages": map[string]any{"old-filter": "generation-1"},
 		"componentStatus": map[string]any{
 			"visual:old-visual": map[string]any{"generation": int64(1), "loading": false},
 		},
@@ -253,7 +253,7 @@ func TestBrokerDropsPendingOlderGenerationWhenNewGenerationStarts(t *testing.T) 
 		if !ok || status["generation"] != int64(2) {
 			t.Fatalf("first patch after generation 2 starts = %#v", patch)
 		}
-		for _, staleKey := range []string{"visuals", "tables", "filterOptions"} {
+		for _, staleKey := range []string{"visuals", "tables", "filterOptionPages"} {
 			if _, exists := patch[staleKey]; exists {
 				t.Fatalf("generation 2 start contains stale %s: %#v", staleKey, patch)
 			}
@@ -276,7 +276,7 @@ func TestBrokerDropsPendingOlderGenerationWhenNewGenerationStarts(t *testing.T) 
 		if !ok || status["generation"] != int64(2) || status["loading"] != false {
 			t.Fatalf("generation 2 completion = %#v", patch)
 		}
-		for _, staleKey := range []string{"visuals", "tables", "filterOptions"} {
+		for _, staleKey := range []string{"visuals", "tables", "filterOptionPages"} {
 			if _, exists := patch[staleKey]; exists {
 				t.Fatalf("generation 2 completion contains stale %s: %#v", staleKey, patch)
 			}

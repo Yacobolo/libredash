@@ -112,14 +112,11 @@ func Page(clientID, csrfToken string, catalog dashboard.Catalog, report dashboar
 	if activePage.ID == "" {
 		activePage = defaultPage()
 	}
-	visualReset := visualResetExpression()
 	initialFilters = report.NormalizeFiltersForPage(activePage.ID, initialFilters)
 	initialURLParams := report.URLParamsFromFiltersForPage(activePage.ID, initialFilters)
 	initialURLParams["streamInstance"] = newStreamInstanceID()
 	dashboardUpdatesURL := updatesURLWithParams(catalog.Workspace.ID, report.ID, activePage.ID, initialURLParams)
-	reloadAction := uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/reload", "runtime", "filters.controls")
-	filtersUpdate := "$filters = evt.detail.filters; $urlParams = evt.detail.urlParams; window.DatastarURLSync && window.DatastarURLSync.replace($urlParams); " + visualReset
-	agentTurn := "$agent.composer.value = evt.detail.input; $agentContext.references = evt.detail.references; $agentContext.filters = $filters; $agentContext.generation = $status.generation; " + uiactions.Post("/chats/turns", "agent", "agentContext")
+	agentTurn := "$agent.composer.value = evt.detail.input; $agentContext.references = evt.detail.references; $agentContext.filters = $filterState; $agentContext.generation = $status.generation; " + uiactions.Post("/chats/turns", "agent", "agentContext")
 	agentRestore := "$agent.activeConversationId = evt.detail.conversationId; " + uiactions.Get("/chats/restore", "agent")
 	return pagestream.RenderPage(pagestream.PageSpec{
 		Title:             brand.Name,
@@ -139,7 +136,6 @@ func Page(clientID, csrfToken string, catalog dashboard.Catalog, report dashboar
 		MainAttrs: []g.Node{
 			h.ID("dashboard"),
 			h.Class(appRootClass),
-			g.Attr("data-on:datastar-url-params-sync__window", "$urlParams = evt.detail.params; $filters = window.LeapViewFilterURL.fromParams($filterConfig, $filters, $urlParams); "+visualReset+reloadAction),
 		},
 		UpdatesURL: dashboardUpdatesURL,
 		Body: []g.Node{
@@ -154,10 +150,10 @@ func Page(clientID, csrfToken string, catalog dashboard.Catalog, report dashboar
 					g.Attr("data-on:lv-chat-submit", agentTurn),
 					g.Attr("data-on:lv-chat-restore", agentRestore),
 					g.Attr("data-on:lv-chat-new", "$agent.activeConversationId = ''; $agent.transcript = []; $agent.composer.value = ''; $agentVisuals = {}"),
-					g.Attr("data-on:lv-filters-change", filtersUpdate+reloadAction),
-					g.Attr("data-on:lv-filters-reset", filtersUpdate+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/reset-filters", "runtime")),
-					g.Attr("data-on:lv-filters-refresh", reloadAction),
-					g.Attr("data-on:lv-selection-clear", "$filters.selections = []; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/clear-selection", "runtime")),
+					g.Attr("data-on:lv-filter-command", "$filterCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/filter", "runtime", "filterCommand")),
+					g.Attr("data-on:lv-filter-options-request", "$filterOptionRequest = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/filter-options", "runtime", "filterOptionRequest")),
+					g.Attr("data-on:lv-page-navigate", "$navigationCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/navigate", "runtime", "navigationCommand")),
+					g.Attr("data-on:lv-selection-clear", "$interactionSelections = []; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/clear-selection", "runtime")),
 					g.Attr("data-on:lv-interaction-select", "$interactionCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/select", "runtime", "interactionCommand")),
 					g.Attr("data-on:lv-interaction-spatial-select", "$spatialInteractionCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/spatial-select", "runtime", "spatialInteractionCommand")),
 					g.Attr("data-on:lv-visualization-window-request", "$visualWindowCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/visual-window", "runtime", "visualWindowCommand")),
@@ -199,9 +195,6 @@ func PublicPage(options PublicPageOptions, catalog dashboard.Catalog, report das
 	}
 	base := "/public/dashboards/" + options.PublicID
 	commandBase := base + "/commands/"
-	visualReset := visualResetExpression()
-	reloadAction := uiactions.Post(commandBase+"reload", "runtime", "filters.controls")
-	filtersUpdate := "$filters = evt.detail.filters; $urlParams = evt.detail.urlParams; window.DatastarURLSync && window.DatastarURLSync.replace($urlParams); " + visualReset
 	return pagestream.RenderPage(pagestream.PageSpec{
 		Title:             report.Title,
 		DatastarScriptURL: datastarScriptURL(),
@@ -214,16 +207,15 @@ func PublicPage(options PublicPageOptions, catalog dashboard.Catalog, report das
 		),
 		MainAttrs: []g.Node{
 			h.ID("dashboard"), h.Class(appRootClass),
-			g.Attr("data-on:datastar-url-params-sync__window", "$urlParams = evt.detail.params; $filters = window.LeapViewFilterURL.fromParams($filterConfig, $filters, $urlParams); "+visualReset+reloadAction),
 		},
 		UpdatesURL: base + "/updates?" + values.Encode(),
 		Body: []g.Node{
 			g.El("lv-dashboard-page",
 				g.Attr("workspace-id", catalog.Workspace.ID), g.Attr("dashboard-id", report.ID), g.Attr("page-id", activePage.ID), g.Attr("presentation", presentation),
-				g.Attr("data-on:lv-filters-change", filtersUpdate+reloadAction),
-				g.Attr("data-on:lv-filters-reset", filtersUpdate+uiactions.Post(commandBase+"reset-filters", "runtime")),
-				g.Attr("data-on:lv-filters-refresh", reloadAction),
-				g.Attr("data-on:lv-selection-clear", "$filters.selections = []; "+uiactions.Post(commandBase+"clear-selection", "runtime")),
+				g.Attr("data-on:lv-filter-command", "$filterCommand = evt.detail; "+uiactions.Post(commandBase+"filter", "runtime", "filterCommand")),
+				g.Attr("data-on:lv-filter-options-request", "$filterOptionRequest = evt.detail; "+uiactions.Post(commandBase+"filter-options", "runtime", "filterOptionRequest")),
+				g.Attr("data-on:lv-page-navigate", "$navigationCommand = evt.detail; "+uiactions.Post(commandBase+"navigate", "runtime", "navigationCommand")),
+				g.Attr("data-on:lv-selection-clear", "$interactionSelections = []; "+uiactions.Post(commandBase+"clear-selection", "runtime")),
 				g.Attr("data-on:lv-interaction-select", "$interactionCommand = evt.detail; "+uiactions.Post(commandBase+"select", "runtime", "interactionCommand")),
 				g.Attr("data-on:lv-interaction-spatial-select", "$spatialInteractionCommand = evt.detail; "+uiactions.Post(commandBase+"spatial-select", "runtime", "spatialInteractionCommand")),
 				g.Attr("data-on:lv-visualization-window-request", "$visualWindowCommand = evt.detail; "+uiactions.Post(commandBase+"visual-window", "runtime", "visualWindowCommand")),
@@ -258,11 +250,16 @@ func BootstrapSignals(clientID, streamInstanceID string, catalog dashboard.Catal
 		"chrome":                     envelope.Chrome,
 		"page":                       envelope.Page,
 		"runtime":                    envelope.Runtime,
-		"filterConfig":               envelope.FilterConfig,
-		"filters":                    envelope.Filters,
+		"filterContract":             envelope.FilterContract,
+		"filterState":                envelope.FilterState,
+		"filterOptionPages":          envelope.FilterOptionPages,
+		"filterCommand":              envelope.FilterCommand,
+		"filterOptionRequest":        envelope.FilterOptionRequest,
+		"filterValidation":           envelope.FilterValidation,
+		"navigationCommand":          envelope.NavigationCommand,
+		"interactionSelections":      envelope.InteractionSelections,
+		"spatialSelections":          envelope.SpatialSelections,
 		"urlParams":                  envelope.URLParams,
-		"urlParamShape":              envelope.URLParamShape,
-		"filterOptions":              envelope.FilterOptions,
 		"interactionCommand":         envelope.InteractionCommand,
 		"spatialInteractionCommand":  envelope.SpatialInteractionCommand,
 		"visualWindowCommand":        envelope.VisualWindowCommand,
@@ -286,11 +283,16 @@ func PublicBootstrapSignals(clientID, streamInstanceID, publicID, presentation s
 		"chrome":                     envelope.Chrome,
 		"page":                       envelope.Page,
 		"runtime":                    envelope.Runtime,
-		"filterConfig":               envelope.FilterConfig,
-		"filters":                    envelope.Filters,
+		"filterContract":             envelope.FilterContract,
+		"filterState":                envelope.FilterState,
+		"filterOptionPages":          envelope.FilterOptionPages,
+		"filterCommand":              envelope.FilterCommand,
+		"filterOptionRequest":        envelope.FilterOptionRequest,
+		"filterValidation":           envelope.FilterValidation,
+		"navigationCommand":          envelope.NavigationCommand,
+		"interactionSelections":      envelope.InteractionSelections,
+		"spatialSelections":          envelope.SpatialSelections,
 		"urlParams":                  envelope.URLParams,
-		"urlParamShape":              envelope.URLParamShape,
-		"filterOptions":              envelope.FilterOptions,
 		"interactionCommand":         envelope.InteractionCommand,
 		"spatialInteractionCommand":  envelope.SpatialInteractionCommand,
 		"visualWindowCommand":        envelope.VisualWindowCommand,

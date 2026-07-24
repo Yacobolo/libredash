@@ -19,6 +19,7 @@ import (
 	"github.com/Yacobolo/leapview/internal/agent"
 	"github.com/Yacobolo/leapview/internal/api"
 	"github.com/Yacobolo/leapview/internal/dashboard"
+	dashboardfilter "github.com/Yacobolo/leapview/internal/dashboard/filter"
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 	"github.com/Yacobolo/leapview/internal/platform"
 	productsearch "github.com/Yacobolo/leapview/internal/search"
@@ -1029,6 +1030,7 @@ func TestDashboardChatDraftTurnStaysEmbeddedAndUsesResolvedContext(t *testing.T)
 	service := agent.NewService(fakeMetrics{}, testAgentRepository(store), agent.Config{APIKey: "key", BaseURL: modelServer.URL, Model: "fake-model"})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, Agent: service, DefaultWorkspaceID: "test"})
 
+	stateBindingKey := dashboardfilter.BindingKey("executive-sales", dashboardfilter.ScopePage, "overview", "state")
 	signals := map[string]any{
 		"agent": map[string]any{
 			"activeConversationId": "",
@@ -1041,8 +1043,14 @@ func TestDashboardChatDraftTurnStaysEmbeddedAndUsesResolvedContext(t *testing.T)
 			"pageId":      "overview",
 			"generation":  3,
 			"filters": map[string]any{
-				"controls":   map[string]any{"state": map[string]any{"type": "multi_select", "operator": "in", "values": []string{"SP"}}},
-				"selections": []any{},
+				"revision": 2,
+				"appliedControls": map[string]any{stateBindingKey: map[string]any{
+					"expression":         map[string]any{"kind": "set", "operator": "in", "values": []map[string]any{{"kind": "string", "value": "SP"}}},
+					"resolvedExpression": map[string]any{"kind": "set", "operator": "in", "values": []map[string]any{{"kind": "string", "value": "SP"}}},
+				}},
+				"draftControls":    map[string]any{},
+				"dirtyBindings":    []string{},
+				"defaultsRevision": "test-v1",
 			},
 			"references": []map[string]any{{
 				"kind": "visual", "componentId": "orders-chart", "visualId": "orders",

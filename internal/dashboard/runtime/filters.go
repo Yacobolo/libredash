@@ -3,13 +3,12 @@ package runtime
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
-	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
+	dashboardfilter "github.com/Yacobolo/leapview/internal/dashboard/filter"
 	reportdef "github.com/Yacobolo/leapview/internal/dashboard/report"
 	"github.com/Yacobolo/leapview/internal/dashboard/reportmodel"
 	"github.com/Yacobolo/leapview/internal/dataquery"
@@ -19,90 +18,76 @@ import (
 
 type FilterService struct{}
 
-func (s *FilterService) filterOptions(ctx context.Context, runtime *modelRuntime, report *dashboarddefinition.Definition, names []string) (map[string][]dashboard.FilterOption, error) {
-	options := map[string][]dashboard.FilterOption{}
-	names = append([]string{}, names...)
-	sort.Strings(names)
-	for _, name := range names {
-		filter := report.Filters[name]
-		if filter.Values.Source != "distinct" {
+func (m *Service) QueryCompiledFilterOptions(ctx context.Context, dashboardID string, query dashboardfilter.OptionQuery) (dashboardfilter.OptionResult, error) {
+	report, runtime, err := m.queries.snapshots.reports.reportRuntime(dashboardID, m.queries.snapshots.runtimes)
+	if err != nil {
+		return dashboardfilter.OptionResult{}, err
+	}
+	filters := []reportdef.QueryFilter{}
+	bindings := report.CompiledFilterBindings()
+	for key, expression := range query.Dependencies {
+		binding, ok := bindings[key]
+		if !ok {
+			return dashboardfilter.OptionResult{}, fmt.Errorf("unknown option dependency binding %q", key)
+		}
+		definition, ok := report.FilterDefinitions[binding.Filter]
+		if !ok {
+			return dashboardfilter.OptionResult{}, fmt.Errorf("unknown option dependency filter %q", binding.Filter)
+		}
+		dependencyFilters, filterErr := semanticFiltersForExpression(definition, expression)
+		if filterErr != nil {
+			return dashboardfilter.OptionResult{}, filterErr
+		}
+		filters = append(filters, dependencyFilters...)
+	}
+	if query.Search != "" {
+		filters = append(filters, reportdef.QueryFilter{Field: query.Field, Fact: query.Fact, Operator: "contains", Values: []any{query.Search}})
+	}
+	if query.After != "" {
+		filters = append(filters, reportdef.QueryFilter{Field: query.Field, Fact: query.Fact, Operator: "greater_than", Values: []any{query.After}})
+	}
+	request := reportAggregateDataQuery(report.SemanticModel, reportdef.AggregateQuery{
+		Table: tableForField(query.Field), Dimensions: []reportdef.QueryField{{Field: query.Field, Alias: "value"}},
+		Filters: filters, Sort: []reportdef.QuerySort{{Field: "value", Direction: "asc"}}, Limit: query.Limit + 1,
+	})
+	request.Surface = dataquery.SurfaceDashboard
+	request.Operation = dataquery.OperationDashboardFilterOptions
+	result, err := runtime.data.ExecuteDataQuery(ctx, request)
+	if err != nil {
+		return dashboardfilter.OptionResult{}, err
+	}
+	rows := reportRowsFromDataQuery(result.Rows)
+	complete := len(rows) <= query.Limit
+	if len(rows) > query.Limit {
+		rows = rows[:query.Limit]
+	}
+	items := make([]dashboardfilter.OptionItem, 0, len(rows))
+	next := ""
+	for _, row := range rows {
+		raw, ok := row["value"]
+		if !ok || raw == nil {
 			continue
 		}
-		limit := filter.Values.Limit
-		if limit <= 0 {
-			limit = 200
+		value := fmt.Sprint(normalizeDBValue(raw))
+		typed := dashboardfilter.Value{Kind: query.ValueKind, Value: value}
+		if query.ValueKind == dashboardfilter.ValueBoolean {
+			typed.Value = value == "true"
 		}
-		if limit > 500 {
-			limit = 500
-		}
-		query := reportdef.AggregateQuery{
-			Table:      tableForField(filter.Dimension),
-			Dimensions: []reportdef.QueryField{{Field: filter.Dimension, Alias: "value"}},
-			Sort:       []reportdef.QuerySort{{Field: "value", Direction: "asc"}},
-			Limit:      limit,
-		}
-		request := reportAggregateDataQuery(report.SemanticModel, query)
-		request.Surface = dataquery.SurfaceDashboard
-		request.Operation = dataquery.OperationDashboardFilterOptions
-		result, err := runtime.data.ExecuteDataQuery(ctx, request)
-		if err != nil {
-			return nil, err
-		}
-		rows := reportRowsFromDataQuery(result.Rows)
-		values := []dashboard.FilterOption{}
-		for _, row := range rows {
-			value, ok := row["value"]
-			if !ok || value == nil {
-				continue
-			}
-			label := fmt.Sprint(normalizeDBValue(value))
-			values = append(values, dashboard.FilterOption{Value: label, Label: label})
-		}
-		options[name] = values
+		items = append(items, dashboardfilter.OptionItem{Value: typed, Label: value, Available: true})
+		next = value
 	}
-	return options, nil
+	return dashboardfilter.OptionResult{Items: items, Complete: complete, Next: next}, nil
 }
 
 func (s *FilterService) semanticFilters(ctx context.Context, runtime *modelRuntime, report *dashboarddefinition.Definition, filters dashboard.Filters, targetKind, targetID string) ([]reportdef.QueryFilter, error) {
 	filters = filters.WithDefaults()
 	result := []reportdef.QueryFilter{}
-	for _, name := range sortedKeys(report.Filters) {
-		filter := report.Filters[name]
-		control, ok := filters.Controls[name]
-		if !ok {
-			continue
-		}
-		applies, err := compiledFilterAppliesToTarget(report, runtime.model, filter, targetKind, targetID)
+	if filters.CompiledState != nil {
+		compiled, err := semanticBindingFiltersForTarget(report, *filters.CompiledState, filters.ActivePageID, targetKind, targetID)
 		if err != nil {
 			return nil, err
 		}
-		if !applies {
-			continue
-		}
-		switch filter.Type {
-		case "date_range":
-			dateFilters := s.dateSemanticFilters(runtime, filter, control)
-			result = append(result, dateFilters...)
-		case "multi_select":
-			if control.Operator != "in" || len(control.Values) == 0 {
-				continue
-			}
-			values := make([]any, len(control.Values))
-			for i, value := range control.Values {
-				values[i] = value
-			}
-			result = append(result, reportdef.QueryFilter{Field: filter.Dimension, Fact: filter.Fact, Operator: "in", Values: values})
-		case "text":
-			value := strings.TrimSpace(control.Value)
-			if value == "" {
-				continue
-			}
-			operator := control.Operator
-			if operator == "" {
-				operator = filter.DefaultOperator
-			}
-			result = append(result, reportdef.QueryFilter{Field: filter.Dimension, Fact: filter.Fact, Operator: operator, Values: []any{value}})
-		}
+		result = append(result, compiled...)
 	}
 	for _, selection := range filters.Selections {
 		if selection.SourceKind == "" || selection.SourceID == "" || len(selection.Entries) == 0 {
@@ -340,39 +325,6 @@ func isUIOnlyRowSelection(selection dashboard.InteractionSelection) bool {
 	return true
 }
 
-func (s *FilterService) dateSemanticFilters(runtime *modelRuntime, filter dashboarddefinition.FilterDefinition, control dashboard.FilterControl) []reportdef.QueryFilter {
-	if control.From != "" || control.To != "" {
-		result := []reportdef.QueryFilter{}
-		if control.From != "" {
-			result = append(result, reportdef.QueryFilter{Field: filter.Dimension, Fact: filter.Fact, Operator: "greater_than_or_equal", Values: []any{control.From}})
-		}
-		if control.To != "" {
-			result = append(result, reportdef.QueryFilter{Field: filter.Dimension, Fact: filter.Fact, Operator: "less_than", Values: []any{control.To}})
-		}
-		return result
-	}
-	if control.Preset == "" || control.Preset == "all" {
-		return nil
-	}
-	for _, preset := range filter.Presets {
-		if preset.Value != control.Preset {
-			continue
-		}
-		if preset.From != "" && preset.To != "" {
-			return []reportdef.QueryFilter{
-				{Field: filter.Dimension, Fact: filter.Fact, Operator: "greater_than_or_equal", Values: []any{preset.From}},
-				{Field: filter.Dimension, Fact: filter.Fact, Operator: "less_than", Values: []any{preset.To}},
-			}
-		}
-		if preset.RelativeDays > 0 {
-			// The demo relative preset is anchored to the imported order timeline. Leave
-			// it unbounded here rather than injecting physical SQL into semantic filters.
-			return nil
-		}
-	}
-	return nil
-}
-
 func (s *FilterService) countRows(ctx context.Context, runtime *modelRuntime, report *dashboarddefinition.Definition, table string, filters dashboard.Filters, targetKind, targetID string) (int, error) {
 	queryFilters, err := s.semanticFilters(ctx, runtime, report, filters, targetKind, targetID)
 	if err != nil {
@@ -395,124 +347,6 @@ func tableForField(field string) string {
 	return ""
 }
 
-func contains(values []string, value string) bool {
-	for _, candidate := range values {
-		if candidate == value {
-			return true
-		}
-	}
-	return false
-}
-
 func isGridQuery(kind visualizationdefinition.QueryKind) bool {
 	return kind == visualizationdefinition.QueryDetail || kind == visualizationdefinition.QueryMatrix || kind == visualizationdefinition.QueryPivot
-}
-
-func compiledFilterAppliesToTarget(definition *dashboarddefinition.Definition, model *semanticmodel.Model, filter dashboarddefinition.FilterDefinition, targetKind, targetID string) (bool, error) {
-	if !filter.Targets.IsEmpty() && !filter.Targets.Contains(targetKind, targetID) {
-		return false, nil
-	}
-	facts, err := compiledTargetFacts(definition, model, targetID)
-	if err != nil {
-		return false, err
-	}
-	if dimension, ok := model.Dimensions[filter.Dimension]; ok {
-		for _, fact := range facts {
-			if _, ok := dimension.Bindings[fact]; !ok {
-				if !filter.Targets.IsEmpty() {
-					return false, fmt.Errorf("semantic dimension %q has no binding for fact %q", filter.Dimension, fact)
-				}
-				return false, nil
-			}
-		}
-		return true, nil
-	}
-	if len(facts) != 1 {
-		if filter.Fact == "" || !contains(facts, filter.Fact) {
-			return false, nil
-		}
-		return model.CanReachField(filter.Fact, filter.Dimension) == nil, nil
-	}
-	if err := model.CanReachField(facts[0], filter.Dimension); err != nil {
-		if !filter.Targets.IsEmpty() {
-			return false, err
-		}
-		return false, nil
-	}
-	return true, nil
-}
-
-func compiledTargetFacts(definition *dashboarddefinition.Definition, model *semanticmodel.Model, targetID string) ([]string, error) {
-	target, ok := definition.Visualizations[targetID]
-	if !ok {
-		return nil, fmt.Errorf("unknown visualization %q", targetID)
-	}
-	table, measures := compiledQueryTableAndMeasures(target.Query)
-	if table != "" {
-		if _, ok := model.Tables[table]; !ok {
-			return nil, fmt.Errorf("query references unknown table %q", table)
-		}
-		return []string{table}, nil
-	}
-	facts := map[string]struct{}{}
-	visiting := map[string]bool{}
-	var addMember func(string) error
-	addMember = func(name string) error {
-		if measure, ok := model.Measures[name]; ok {
-			facts[measure.Fact] = struct{}{}
-			return nil
-		}
-		metric, ok := model.Metrics[name]
-		if !ok {
-			return fmt.Errorf("unknown measure or metric %q", name)
-		}
-		if visiting[name] {
-			return fmt.Errorf("metric dependency cycle includes %q", name)
-		}
-		visiting[name] = true
-		expression, err := semanticmodel.ParseExpression(metric.Expression)
-		if err != nil {
-			return err
-		}
-		for _, reference := range expression.References() {
-			if err := addMember(reference); err != nil {
-				return err
-			}
-		}
-		delete(visiting, name)
-		return nil
-	}
-	for _, measure := range measures {
-		if err := addMember(measure.FieldID); err != nil {
-			return nil, err
-		}
-	}
-	result := make([]string, 0, len(facts))
-	for fact := range facts {
-		result = append(result, fact)
-	}
-	sort.Strings(result)
-	if len(result) == 0 {
-		return nil, fmt.Errorf("query requires at least one fact")
-	}
-	return result, nil
-}
-
-func compiledQueryTableAndMeasures(query visualizationdefinition.QueryBinding) (string, []visualizationdefinition.FieldBinding) {
-	switch query.Kind {
-	case visualizationdefinition.QueryAggregate:
-		return query.Aggregate.TableID, query.Aggregate.Measures
-	case visualizationdefinition.QueryDetail:
-		return query.Detail.TableID, nil
-	case visualizationdefinition.QueryMatrix:
-		return query.Matrix.TableID, query.Matrix.Measures
-	case visualizationdefinition.QueryPivot:
-		return query.Pivot.TableID, query.Pivot.Measures
-	case visualizationdefinition.QueryCustom:
-		return query.Custom.TableID, query.Custom.Fields
-	case visualizationdefinition.QuerySpatial:
-		return query.Spatial.TableID, query.Spatial.Measures
-	default:
-		return "", nil
-	}
 }

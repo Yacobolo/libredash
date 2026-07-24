@@ -52,4 +52,4 @@ Change a source contract and regenerate; do not patch generated output as an ind
 
 The product application and public documentation site are separate binaries in one monorepo. They share versioned contracts and examples but have independent HTTP packages and build outputs. This preserves documentation proximity without coupling production application availability to the marketing/docs site.
 
-Read [Runtime architecture](/docs/architecture/runtime), [Datastar signal flow](/docs/architecture/datastar), [Visualization target architecture](/docs/architecture/visual-plugins), [Geographic rendering decision](/docs/architecture/geographic-rendering), and [Storage architecture](/docs/storage-architecture) for deeper boundaries.
+Read [Runtime architecture](/docs/architecture/runtime), [Datastar signal flow](/docs/architecture/datastar), [Filter and slicer target architecture](/docs/architecture/filters-slicers), [Visualization target architecture](/docs/architecture/visual-plugins), [Geographic rendering decision](/docs/architecture/geographic-rendering), and [Storage architecture](/docs/storage-architecture) for deeper boundaries.

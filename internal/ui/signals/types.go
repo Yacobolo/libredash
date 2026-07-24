@@ -11,6 +11,7 @@ import (
 	"github.com/Yacobolo/leapview/internal/brand"
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
+	dashboardfilter "github.com/Yacobolo/leapview/internal/dashboard/filter"
 	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
 	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 	visualizationruntime "github.com/Yacobolo/leapview/internal/visualization/runtime"
@@ -282,6 +283,10 @@ func DashboardInitialEnvelope(clientID, streamInstanceID string, catalog dashboa
 		modelID = model.Name
 		modelTitle = model.Title
 	}
+	filterState := report.DefaultFilterState()
+	if initialFilters.CompiledState != nil {
+		filterState = dashboardfilter.CloneState(*initialFilters.CompiledState)
+	}
 	return DashboardEnvelope{
 		Agent: ChatSignal{
 			Conversations: []ChatConversationSummary{},
@@ -304,7 +309,7 @@ func DashboardInitialEnvelope(clientID, streamInstanceID string, catalog dashboa
 			PageID:         activePage.ID,
 			PageTitle:      activePage.Title,
 			ModelID:        modelID,
-			Filters:        DashboardFiltersFromDashboard(initialFilters),
+			Filters:        DashboardFilterStateFromDomain(filterState),
 			ReferenceLimit: agent.MaxTurnReferences,
 			References:     []AgentReferenceSignal{},
 		},
@@ -337,12 +342,25 @@ func DashboardInitialEnvelope(clientID, streamInstanceID string, catalog dashboa
 			DashboardID:      optionalValue(report.ID),
 			PageID:           optionalValue(activePage.ID),
 			ModelID:          optionalValue(modelID),
+			ServingStateID:   optionalValue(initialFilters.ServingStateID),
 		},
-		FilterConfig:               ReportFilterConfigsFromReport(report.FilterConfigForPage(activePage.ID)),
-		Filters:                    DashboardFiltersFromDashboard(initialFilters),
+		FilterContract:    DashboardFilterContractFromDefinition(report),
+		FilterState:       DashboardFilterStateFromDomain(filterState),
+		FilterOptionPages: map[string]DashboardFilterOptionPage{},
+		FilterCommand: DashboardFilterCommand{Value: &DashboardFilterMutateCommand{
+			DashboardFilterCommandBase: DashboardFilterCommandBase{
+				Kind: "mutate", BaseRevision: int64(filterState.Revision),
+			},
+			Kind: "mutate", BindingKey: "", Operation: "clear",
+		}},
+		FilterOptionRequest: DashboardFilterOptionRequest{},
+		FilterValidation: DashboardFilterValidationResult{
+			Accepted: true, CurrentRevision: int64(filterState.Revision), ClientMutationID: "",
+		},
+		InteractionSelections:      dashboardInteractionSelections(initialFilters.Selections),
+		SpatialSelections:          dashboardSpatialSelections(initialFilters.SpatialSelections),
+		NavigationCommand:          DashboardNavigationCommand{},
 		URLParams:                  report.URLParamsFromFiltersForPage(activePage.ID, initialFilters),
-		URLParamShape:              report.URLParamShapeForPage(activePage.ID),
-		FilterOptions:              map[string][]DashboardFilterOption{},
 		InteractionCommand:         DashboardInteractionCommandFromDashboard(dashboard.InteractionCommand{Toggle: true, Mappings: []dashboard.InteractionCommandMapping{}}),
 		VisualWindowCommand:        DashboardVisualWindowRequestFromDashboard(tableRequest),
 		VisualSpatialWindowCommand: DashboardVisualSpatialWindowRequestFromDashboard(dashboard.SpatialWindowRequest{}),
@@ -365,9 +383,13 @@ func ChatInitialEnvelope(catalog dashboard.Catalog, workspaceID, roleLabel, view
 		Runtime: RouteRuntimeSignal{Kind: RouteChat, WorkspaceID: optionalValue(workspaceID)},
 		Agent:   state.Agent,
 		AgentContext: AgentContextSignal{
-			Surface:        "chat",
-			WorkspaceID:    workspaceID,
-			Filters:        DashboardFilters{Controls: map[string]DashboardFilterControl{}, Selections: []DashboardInteractionSelection{}},
+			Surface:     "chat",
+			WorkspaceID: workspaceID,
+			Filters: DashboardFilterState{
+				AppliedControls: map[string]DashboardAppliedFilterState{},
+				DraftControls:   map[string]DashboardFilterExpression{},
+				DirtyBindings:   []string{},
+			},
 			ReferenceLimit: agent.MaxTurnReferences,
 			References:     []AgentReferenceSignal{},
 		},
@@ -522,7 +544,10 @@ func InitialVisualizationEnvelopes(definitions map[string]visualizationdefinitio
 		if err != nil {
 			panic(fmt.Sprintf("compiled dashboard visualization %q has invalid initial envelope: %v", id, err))
 		}
-		out[id] = DashboardVisualizationSignalFromIR(envelope)
+		signal := DashboardVisualizationSignalFromIR(envelope)
+		signal.StreamGeneration = 1
+		signal.ConsumerIdentity = page.ID + "/" + id
+		out[id] = signal
 	}
 	return out
 }
@@ -548,7 +573,6 @@ func ValidateDashboardEnvelope(envelope DashboardEnvelope) error {
 		return fmt.Errorf("dashboard envelope requires dashboardId and pageId")
 	}
 	usedVisuals := map[string]struct{}{}
-	usedFilters := map[string]struct{}{}
 	for _, component := range envelope.Page.Components {
 		switch {
 		case component.Visual != nil && *component.Visual != "":
@@ -556,13 +580,22 @@ func ValidateDashboardEnvelope(envelope DashboardEnvelope) error {
 			if _, ok := envelope.Visuals[*component.Visual]; !ok {
 				return fmt.Errorf("component %q references missing visual %q", component.ID, *component.Visual)
 			}
-		case component.Filter != nil && *component.Filter != "":
-			usedFilters[*component.Filter] = struct{}{}
-			if !filterConfigContains(envelope.FilterConfig, *component.Filter) {
-				return fmt.Errorf("component %q references missing filter config %q", component.ID, *component.Filter)
+		case component.Binding != nil:
+			var binding *DashboardCompiledFilterBinding
+			for key, candidate := range envelope.FilterContract.Bindings {
+				if candidate.Scope == component.Binding.Scope && candidate.ID == component.Binding.ID &&
+					(candidate.Scope != "page" || ValueOrZero(candidate.PageID) == envelope.Page.PageID) {
+					value := candidate
+					value.Key = key
+					binding = &value
+					break
+				}
 			}
-			if _, ok := envelope.Filters.Controls[*component.Filter]; !ok {
-				return fmt.Errorf("component %q references missing filter control %q", component.ID, *component.Filter)
+			if binding == nil {
+				return fmt.Errorf("component %q references missing %s filter binding %q", component.ID, component.Binding.Scope, component.Binding.ID)
+			}
+			if _, ok := envelope.FilterState.AppliedControls[binding.Key]; !ok {
+				return fmt.Errorf("component %q binding %q has no applied state", component.ID, binding.Key)
 			}
 		}
 	}
@@ -603,21 +636,36 @@ func dashboardPageNav(workspaceID, reportID string, pages []dashboard.Page, acti
 func dashboardComponents(page dashboard.Page) []DashboardComponentSignal {
 	components := make([]DashboardComponentSignal, 0, len(page.Visuals))
 	for _, visual := range page.PlacedVisuals() {
+		var binding *DashboardFilterBindingRef
+		if visual.Binding.ID != "" {
+			binding = &DashboardFilterBindingRef{Scope: string(visual.Binding.Scope), ID: visual.Binding.ID}
+		}
+		var presentation *DashboardFilterPresentation
+		if visual.Kind == "slicer" {
+			presentation = &DashboardFilterPresentation{
+				Style: string(visual.Presentation.Style), Search: visual.Presentation.Search,
+				SelectAll: visual.Presentation.SelectAll, ShowCounts: visual.Presentation.ShowCounts,
+				ShowSummary: visual.Presentation.ShowSummary, Compact: visual.Presentation.Compact,
+				Title: optionalValue(visual.Presentation.Title), Description: optionalValue(visual.Presentation.Description),
+				AriaLabel: optionalValue(visual.Presentation.AriaLabel),
+			}
+		}
 		components = append(components, DashboardComponentSignal{
-			ID:          visual.ID,
-			Kind:        visual.Kind,
-			Visual:      optionalValue(visual.Visual),
-			Filter:      optionalValue(visual.Filter),
-			Description: optionalValue(visual.Description),
-			Placement:   DashboardPagePlacementFromDashboard(visual.Placement),
-			X:           visual.X,
-			Y:           visual.Y,
-			Width:       visual.Width,
-			Height:      visual.Height,
-			Eyebrow:     optionalValue(visual.Eyebrow),
-			Title:       optionalValue(visual.Title),
-			Subtitle:    optionalValue(visual.Subtitle),
-			Badges:      optionalSlice(visual.Badges),
+			ID:           visual.ID,
+			Kind:         visual.Kind,
+			Visual:       optionalValue(visual.Visual),
+			Binding:      binding,
+			Presentation: presentation,
+			Description:  optionalValue(visual.Description),
+			Placement:    DashboardPagePlacementFromDashboard(visual.Placement),
+			X:            visual.X,
+			Y:            visual.Y,
+			Width:        visual.Width,
+			Height:       visual.Height,
+			Eyebrow:      optionalValue(visual.Eyebrow),
+			Title:        optionalValue(visual.Title),
+			Subtitle:     optionalValue(visual.Subtitle),
+			Badges:       optionalSlice(visual.Badges),
 		})
 	}
 	return components
@@ -694,13 +742,4 @@ func formatReportPageNumber(index, pageCount int) string {
 		}
 	}
 	return pageNumber
-}
-
-func filterConfigContains(config []ReportFilterConfig, id string) bool {
-	for _, item := range config {
-		if item.ID == id {
-			return true
-		}
-	}
-	return false
 }

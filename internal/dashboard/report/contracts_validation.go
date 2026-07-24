@@ -22,71 +22,7 @@ func (d *Dashboard) validateContract() error {
 	if len(d.Pages) == 0 {
 		return fmt.Errorf("dashboard %q requires pages", d.ID)
 	}
-	for name, filter := range d.Filters {
-		if filter.Type == "" || filter.Label == "" || filter.Dimension == "" {
-			return fmt.Errorf("filter %q requires type, label, and field", name)
-		}
-		switch filter.Type {
-		case "date_range":
-			if filter.URLParam == "" || filter.FromURLParam == "" || filter.ToURLParam == "" {
-				return fmt.Errorf("filter %q date_range requires url_param, from_url_param, and to_url_param", name)
-			}
-			if len(filter.Presets) == 0 {
-				return fmt.Errorf("filter %q date_range requires presets", name)
-			}
-			presets := map[string]struct{}{}
-			for _, preset := range filter.Presets {
-				if preset.Value == "" || preset.Label == "" {
-					return fmt.Errorf("filter %q date_range preset requires value and label", name)
-				}
-				if _, exists := presets[preset.Value]; exists {
-					return fmt.Errorf("filter %q date_range has duplicate preset %q", name, preset.Value)
-				}
-				presets[preset.Value] = struct{}{}
-				if (preset.From == "") != (preset.To == "") {
-					return fmt.Errorf("filter %q date_range preset %q requires both from and to", name, preset.Value)
-				}
-				if preset.RelativeDays < 0 {
-					return fmt.Errorf("filter %q date_range preset %q has negative relative_days", name, preset.Value)
-				}
-			}
-			if filter.Default.Preset != "" {
-				if _, ok := presets[filter.Default.Preset]; !ok {
-					return fmt.Errorf("filter %q date_range default preset %q is not defined", name, filter.Default.Preset)
-				}
-			}
-		case "multi_select":
-			if filter.Operator != "in" {
-				return fmt.Errorf("filter %q has unsupported operator %q", name, filter.Operator)
-			}
-			if filter.Values.Source != "" && filter.Values.Source != "distinct" {
-				return fmt.Errorf("filter %q has unsupported values.source %q", name, filter.Values.Source)
-			}
-		case "text":
-			if len(filter.Operators) == 0 {
-				return fmt.Errorf("filter %q text requires operators", name)
-			}
-			operators := map[string]struct{}{}
-			for _, operator := range filter.Operators {
-				if !supportedTextOperator(operator) {
-					return fmt.Errorf("filter %q has unsupported operator %q", name, operator)
-				}
-				operators[operator] = struct{}{}
-			}
-			if filter.OperatorURLParam != "" && filter.URLParam == "" {
-				return fmt.Errorf("filter %q text operator_url_param requires url_param", name)
-			}
-			if filter.DefaultOperator != "" {
-				if _, ok := operators[filter.DefaultOperator]; !ok {
-					return fmt.Errorf("filter %q default_operator %q is not in operators", name, filter.DefaultOperator)
-				}
-			}
-		default:
-			return fmt.Errorf("filter %q has unsupported type %q", name, filter.Type)
-		}
-		d.Filters[name] = filter
-	}
-	if err := d.validateFilterURLParams(); err != nil {
+	if err := d.validateFilterArchitectureContract(); err != nil {
 		return err
 	}
 	for name, authored := range d.Visuals {
@@ -102,9 +38,6 @@ func (d *Dashboard) validateContract() error {
 		if err := d.validateTabularContract(name, authored.Type, *authored.Tabular); err != nil {
 			return err
 		}
-	}
-	if err := d.validateFilterTargetReferences(); err != nil {
-		return err
 	}
 	return d.validatePages()
 }
@@ -509,26 +442,6 @@ func (d *Dashboard) validateInteractionTarget(sourceKind, sourceID, kind, target
 	return nil
 }
 
-func (d *Dashboard) validateFilterTargetReferences() error {
-	for name, filter := range d.Filters {
-		for _, target := range filter.Targets.Visuals {
-			if _, ok := d.Visuals[target]; !ok {
-				return fmt.Errorf("filter %q references unknown target visual %q", name, target)
-			}
-		}
-	}
-	return nil
-}
-
-func supportedTextOperator(operator string) bool {
-	switch operator {
-	case "contains", "not_contains", "equals", "starts_with":
-		return true
-	default:
-		return false
-	}
-}
-
 func (d *Dashboard) validatePages() error {
 	seenPages := map[string]struct{}{}
 	for index, page := range d.Pages {
@@ -549,18 +462,15 @@ func (d *Dashboard) validatePages() error {
 			}
 			switch visual.Kind {
 			case "header":
-				if visual.Visual != "" || visual.Filter != "" {
-					return fmt.Errorf("page %q header %q must not reference a visual or filter", page.ID, visual.ID)
+				if visual.Visual != "" || visual.Binding.ID != "" {
+					return fmt.Errorf("page %q header %q must not reference a visual or filter binding", page.ID, visual.ID)
 				}
-			case "filter":
-				if visual.Filter == "" {
-					return fmt.Errorf("page %q visual %q requires filter", page.ID, visual.ID)
-				}
-				if _, ok := d.Filters[visual.Filter]; !ok {
-					return fmt.Errorf("page %q references unknown filter %q", page.ID, visual.Filter)
-				}
+			case "slicer":
 				if visual.Visual != "" {
-					return fmt.Errorf("page %q filter %q must not reference a visual", page.ID, visual.ID)
+					return fmt.Errorf("page %q slicer %q must not reference a visual", page.ID, visual.ID)
+				}
+				if visual.Binding.ID == "" || !d.bindingReferenceExists(page.ID, visual.Binding) {
+					return fmt.Errorf("page %q slicer %q references unknown filter binding %s/%s", page.ID, visual.ID, visual.Binding.Scope, visual.Binding.ID)
 				}
 			case "visual":
 				if visual.Visual == "" {
@@ -569,8 +479,8 @@ func (d *Dashboard) validatePages() error {
 				if _, ok := d.Visuals[visual.Visual]; !ok {
 					return fmt.Errorf("page %q references unknown visual %q", page.ID, visual.Visual)
 				}
-				if visual.Filter != "" {
-					return fmt.Errorf("page %q visual %q must not reference a filter", page.ID, visual.ID)
+				if visual.Binding.ID != "" {
+					return fmt.Errorf("page %q visual %q must not reference a filter binding", page.ID, visual.ID)
 				}
 			default:
 				return fmt.Errorf("page %q visual %q has unsupported kind %q", page.ID, visual.ID, visual.Kind)

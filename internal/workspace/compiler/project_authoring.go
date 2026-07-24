@@ -3,6 +3,7 @@ package compiler
 import (
 	semanticmodel "github.com/Yacobolo/leapview/internal/analytics/model"
 	"github.com/Yacobolo/leapview/internal/dashboard"
+	dashboardfilter "github.com/Yacobolo/leapview/internal/dashboard/filter"
 	"github.com/Yacobolo/leapview/internal/dashboard/report"
 	"gopkg.in/yaml.v3"
 )
@@ -81,10 +82,12 @@ type projectSemanticModelSpec struct {
 }
 
 type dashboardSpec struct {
-	SemanticModel string                                   `yaml:"semanticModel"`
-	Filters       map[string]report.FilterDefinition       `yaml:"filters"`
-	Visuals       map[string]report.AuthoringVisualization `yaml:"visuals"`
-	Pages         []projectDashboardPage                   `yaml:"pages"`
+	SemanticModel     string                                   `yaml:"semanticModel"`
+	Filters           map[string]dashboardfilter.Definition    `yaml:"filters"`
+	FilterBindings    map[string]dashboardfilter.Binding       `yaml:"filter_bindings"`
+	FilterApplication dashboardfilter.ApplicationPolicy        `yaml:"filter_application"`
+	Visuals           map[string]report.AuthoringVisualization `yaml:"visuals"`
+	Pages             []projectDashboardPage                   `yaml:"pages"`
 }
 
 type projectModelTableSpec struct {
@@ -109,12 +112,13 @@ type projectModelField struct {
 }
 
 type projectDashboardPage struct {
-	ID          string                 `yaml:"id"`
-	Title       string                 `yaml:"title"`
-	Description string                 `yaml:"description"`
-	Canvas      dashboard.PageCanvas   `yaml:"canvas"`
-	Grid        dashboard.PageGrid     `yaml:"grid"`
-	Components  []dashboard.PageVisual `yaml:"components"`
+	ID             string                             `yaml:"id"`
+	Title          string                             `yaml:"title"`
+	Description    string                             `yaml:"description"`
+	Canvas         dashboard.PageCanvas               `yaml:"canvas"`
+	Grid           dashboard.PageGrid                 `yaml:"grid"`
+	FilterBindings map[string]dashboardfilter.Binding `yaml:"filter_bindings"`
+	Components     []dashboard.PageVisual             `yaml:"components"`
 }
 
 type workspaceGroupSpec struct {

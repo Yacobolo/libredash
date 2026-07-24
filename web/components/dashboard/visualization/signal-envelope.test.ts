@@ -15,6 +15,8 @@ test('dashboard visualization signals keep large frames opaque and reconstruct c
   expect(signal.dataState.schemaVersion).toBe(1)
   expect(typeof signal.dataState.payload).toBe('string')
   expect((envelope?.dataState as any).datasets[0].rows).toHaveLength(20_000)
+  expect(envelope).not.toHaveProperty('filterRevision')
+  expect(envelope).not.toHaveProperty('servingStateID')
 })
 
 test('dashboard visualization signal decoder reuses data on status-only patches', () => {
@@ -72,5 +74,9 @@ function visualizationSignal(state: Record<string, unknown>): DashboardVisualiza
     selection: [],
     status: { kind: 'ready' },
     diagnostics: [],
+    servingStateID: 'serving-1',
+    streamGeneration: generation,
+    filterRevision: 0,
+    consumerIdentity: 'overview/map',
   }
 }

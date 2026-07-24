@@ -6,16 +6,27 @@ import (
 	"math"
 	"time"
 
+	dashboardfilter "github.com/Yacobolo/leapview/internal/dashboard/filter"
 	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
 )
 
 type Signals struct {
-	Filters                    Filters                    `json:"filters"`
-	Runtime                    Runtime                    `json:"runtime"`
-	VisualWindowCommand        VisualizationWindowRequest `json:"visualWindowCommand"`
-	VisualSpatialWindowCommand SpatialWindowRequest       `json:"visualSpatialWindowCommand"`
-	InteractionCommand         InteractionCommand         `json:"interactionCommand"`
-	SpatialInteractionCommand  SpatialSelectionCommand    `json:"spatialInteractionCommand"`
+	Runtime                    Runtime                       `json:"runtime"`
+	VisualWindowCommand        VisualizationWindowRequest    `json:"visualWindowCommand"`
+	VisualSpatialWindowCommand SpatialWindowRequest          `json:"visualSpatialWindowCommand"`
+	InteractionCommand         InteractionCommand            `json:"interactionCommand"`
+	SpatialInteractionCommand  SpatialSelectionCommand       `json:"spatialInteractionCommand"`
+	FilterCommand              dashboardfilter.Command       `json:"filterCommand"`
+	FilterOptionRequest        dashboardfilter.OptionRequest `json:"filterOptionRequest"`
+	NavigationCommand          NavigationCommand             `json:"navigationCommand"`
+	InteractionSelections      []InteractionSelection        `json:"interactionSelections"`
+	SpatialSelections          []SpatialInteractionSelection `json:"spatialSelections"`
+}
+
+type NavigationCommand struct {
+	PageID             string `json:"pageID"`
+	BaseFilterRevision uint64 `json:"baseFilterRevision"`
+	ClientMutationID   string `json:"clientMutationID"`
 }
 
 // Browser command contracts are owned by the visualization IR. These aliases
@@ -52,14 +63,15 @@ type CatalogDashboard struct {
 }
 
 type Page struct {
-	ID          string       `json:"id" yaml:"id"`
-	Title       string       `json:"title" yaml:"title"`
-	Description string       `json:"description,omitempty" yaml:"description"`
-	Canvas      PageCanvas   `json:"canvas" yaml:"canvas"`
-	Grid        PageGrid     `json:"grid" yaml:"grid"`
-	Visuals     []PageVisual `json:"visuals" yaml:"visuals"`
-	Width       int          `json:"width,omitempty" yaml:"-"`
-	Height      int          `json:"height,omitempty" yaml:"-"`
+	ID             string                             `json:"id" yaml:"id"`
+	Title          string                             `json:"title" yaml:"title"`
+	Description    string                             `json:"description,omitempty" yaml:"description"`
+	Canvas         PageCanvas                         `json:"canvas" yaml:"canvas"`
+	Grid           PageGrid                           `json:"grid" yaml:"grid"`
+	FilterBindings map[string]dashboardfilter.Binding `json:"filterBindings,omitempty" yaml:"filter_bindings,omitempty"`
+	Visuals        []PageVisual                       `json:"visuals" yaml:"visuals"`
+	Width          int                                `json:"width,omitempty" yaml:"-"`
+	Height         int                                `json:"height,omitempty" yaml:"-"`
 }
 
 type PageCanvas struct {
@@ -146,36 +158,29 @@ func (p PagePlacement) IsZero() bool {
 }
 
 type PageVisual struct {
-	ID          string        `json:"id" yaml:"id"`
-	Kind        string        `json:"kind" yaml:"kind"`
-	Visual      string        `json:"visual,omitempty" yaml:"visual"`
-	Filter      string        `json:"filter,omitempty" yaml:"filter"`
-	Description string        `json:"description,omitempty" yaml:"description"`
-	Placement   PagePlacement `json:"placement" yaml:"placement"`
-	X           float64       `json:"x" yaml:"-"`
-	Y           float64       `json:"y" yaml:"-"`
-	Width       float64       `json:"width" yaml:"-"`
-	Height      float64       `json:"height" yaml:"-"`
-	Eyebrow     string        `json:"eyebrow,omitempty" yaml:"eyebrow"`
-	Title       string        `json:"title,omitempty" yaml:"title"`
-	Subtitle    string        `json:"subtitle,omitempty" yaml:"subtitle"`
-	Badges      []string      `json:"badges,omitempty" yaml:"badges"`
+	ID           string                       `json:"id" yaml:"id"`
+	Kind         string                       `json:"kind" yaml:"kind"`
+	Visual       string                       `json:"visual,omitempty" yaml:"visual"`
+	Binding      dashboardfilter.BindingRef   `json:"binding,omitempty" yaml:"binding,omitempty"`
+	Presentation dashboardfilter.Presentation `json:"presentation,omitempty" yaml:"presentation,omitempty"`
+	Description  string                       `json:"description,omitempty" yaml:"description"`
+	Placement    PagePlacement                `json:"placement" yaml:"placement"`
+	X            float64                      `json:"x" yaml:"-"`
+	Y            float64                      `json:"y" yaml:"-"`
+	Width        float64                      `json:"width" yaml:"-"`
+	Height       float64                      `json:"height" yaml:"-"`
+	Eyebrow      string                       `json:"eyebrow,omitempty" yaml:"eyebrow"`
+	Title        string                       `json:"title,omitempty" yaml:"title"`
+	Subtitle     string                       `json:"subtitle,omitempty" yaml:"subtitle"`
+	Badges       []string                     `json:"badges,omitempty" yaml:"badges"`
 }
 
 type Filters struct {
-	Controls          map[string]FilterControl      `json:"controls"`
 	Selections        []InteractionSelection        `json:"selections"`
 	SpatialSelections []SpatialInteractionSelection `json:"spatialSelections"`
-}
-
-type FilterControl struct {
-	Type     string   `json:"type"`
-	Operator string   `json:"operator,omitempty"`
-	Preset   string   `json:"preset,omitempty"`
-	From     string   `json:"from,omitempty"`
-	To       string   `json:"to,omitempty"`
-	Value    string   `json:"value,omitempty"`
-	Values   []string `json:"values,omitempty"`
+	CompiledState     *dashboardfilter.State        `json:"-"`
+	ServingStateID    string                        `json:"-"`
+	ActivePageID      string                        `json:"-"`
 }
 
 type Runtime struct {
@@ -187,9 +192,6 @@ type Runtime struct {
 }
 
 func (f Filters) WithDefaults() Filters {
-	if f.Controls == nil {
-		f.Controls = map[string]FilterControl{}
-	}
 	if f.Selections == nil {
 		f.Selections = []InteractionSelection{}
 	}
@@ -652,15 +654,9 @@ func joinValues(values []string) string {
 }
 
 type Patch struct {
-	Filters       Filters                                          `json:"filters"`
-	FilterOptions map[string][]FilterOption                        `json:"filterOptions,omitempty"`
-	Status        Status                                           `json:"status"`
-	Visuals       map[string]visualizationir.VisualizationEnvelope `json:"visuals"`
-}
-
-type FilterOption struct {
-	Value string `json:"value"`
-	Label string `json:"label"`
+	Filters Filters                                          `json:"filters"`
+	Status  Status                                           `json:"status"`
+	Visuals map[string]visualizationir.VisualizationEnvelope `json:"visuals"`
 }
 
 type Status struct {

@@ -108,7 +108,6 @@ type Request struct {
 	DashboardID                string
 	PageID                     string
 	ModelID                    string
-	Filters                    dashboard.Filters
 	VisualWindowCommand        dashboard.VisualizationWindowRequest
 	VisualSpatialWindowCommand dashboard.SpatialWindowRequest
 	InteractionCommand         dashboard.InteractionCommand

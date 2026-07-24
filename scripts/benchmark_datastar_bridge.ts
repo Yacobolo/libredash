@@ -162,18 +162,18 @@ function componentMarkup(variant: BridgeVariant, payload: Record<string, unknown
   if (variant !== 'legacy') return `<bench-${variant}-page></bench-${variant}-page>`
   const attrs = [
     ['page', payload.page],
-    ['filterconfig', payload.filterConfig],
-    ['filters', payload.filters],
-    ['filteroptions', payload.filterOptions],
+    ['filtercontract', payload.filterContract],
+    ['filterstate', payload.filterState],
+    ['filteroptionpages', payload.filterOptionPages],
     ['visuals', payload.visuals],
     ['tables', payload.tables],
     ['status', payload.status],
   ].map(([name, value]) => `${name}="${attr(value)}"`).join('\n            ')
   const mirrors = [
     ['page', '$page'],
-    ['filterconfig', '$filterConfig'],
-    ['filters', '$filters'],
-    ['filteroptions', '$filterOptions'],
+    ['filtercontract', '$filterContract'],
+    ['filterstate', '$filterState'],
+    ['filteroptionpages', '$filterOptionPages'],
     ['visuals', '$visuals'],
     ['tables', '$tables'],
     ['status', '$status'],
@@ -271,29 +271,44 @@ function benchmarkSignals(): Record<string, unknown> {
         height: 160,
       })),
     },
-    filterConfig: ['state', 'category', 'status', 'channel'].map((id) => ({
-      id,
-      type: 'multi_select',
-      label: id[0].toUpperCase() + id.slice(1),
-      dimension: `orders.${id}`,
-      operator: 'in',
-      urlParam: id,
-    })),
-    filters: {
-      controls: {
-        state: { type: 'multi_select', operator: 'in', values: [] },
-        category: { type: 'multi_select', operator: 'in', values: [] },
-        status: { type: 'multi_select', operator: 'in', values: [] },
-        channel: { type: 'multi_select', operator: 'in', values: [] },
-      },
-      selections: [],
+    filterContract: {
+      applicationMode: 'immediate',
+      definitions: Object.fromEntries(['state', 'category', 'status', 'channel'].map((id) => [id, {
+        id,
+        label: id[0].toUpperCase() + id.slice(1),
+        field: `orders.${id}`,
+        valueKind: 'string',
+        predicates: [{ kind: 'set', operators: ['in', 'not_in'] }],
+        options: { kind: 'distinct', limit: 50, values: [] },
+        timezone: 'UTC',
+        calendar: 'gregorian',
+        weekStart: 'monday',
+      }])),
+      bindings: Object.fromEntries(['state', 'category', 'status', 'channel'].map((id, order) => [`fb_${id}`, {
+        key: `fb_${id}`, id, filter: id, scope: 'report',
+        default: { kind: 'unfiltered' }, selectionMode: 'multiple', maxSelectedValues: 50,
+        readerEditable: true, urlParam: id, urlEncoding: 'typed_v1',
+        paneVisible: true, paneOrder: order, targets: [], optionDependencies: [],
+      }])),
     },
-    filterOptions: {
-      state: optionList('state', 0, 8),
-      category: optionList('category', 0, 12),
-      status: optionList('status', 0, 10),
-      channel: optionList('channel', 0, 6),
+    filterState: {
+      revision: 0,
+      appliedControls: Object.fromEntries(['state', 'category', 'status', 'channel'].map((id) => [`fb_${id}`, {
+        expression: { kind: 'unfiltered' },
+        resolvedExpression: { kind: 'unfiltered' },
+      }])),
+      draftControls: {},
+      dirtyBindings: [],
+      defaultsRevision: 'benchmark-v1',
     },
+    filterOptionPages: {
+      fb_state: { bindingKey: 'fb_state', items: optionList('state', 0, 8) },
+      fb_category: { bindingKey: 'fb_category', items: optionList('category', 0, 12) },
+      fb_status: { bindingKey: 'fb_status', items: optionList('status', 0, 10) },
+      fb_channel: { bindingKey: 'fb_channel', items: optionList('channel', 0, 6) },
+    },
+    interactionSelections: [],
+    spatialSelections: [],
     visuals: Object.fromEntries(Array.from({ length: 8 }, (_, index) => [
       `visual_${index}`,
       {
@@ -334,10 +349,12 @@ function benchmarkSignals(): Record<string, unknown> {
   }
 }
 
-function optionList(prefix: string, iteration: number, count: number): Array<{ value: string; label: string }> {
+function optionList(prefix: string, iteration: number, count: number): Array<{ value: { kind: 'string'; value: string }; label: string; selected: boolean; available: boolean }> {
   return Array.from({ length: count }, (_, index) => ({
-    value: `${prefix}-${iteration}-${index}`,
+    value: { kind: 'string', value: `${prefix}-${iteration}-${index}` },
     label: `${prefix.toUpperCase()} ${iteration}-${index}`,
+    selected: false,
+    available: true,
   }))
 }
 

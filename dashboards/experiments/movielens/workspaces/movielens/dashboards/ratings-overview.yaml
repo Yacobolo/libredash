@@ -10,52 +10,60 @@ spec:
   semanticModel: movie_ratings
   filters:
     rating_date:
-      type: date_range
       label: Rating date
-      url_param: period
-      from_url_param: from
-      to_url_param: to
       field: activity_date
-      default:
-        preset: all
-      presets:
-        - value: all
-          label: All time
-        - value: "2023"
-          label: "2023"
-          from: "2023-01-01"
-          to: "2023-12-31"
-        - value: "2020s"
-          label: 2020s
-          from: "2020-01-01"
-          to: "2030-01-01"
+      predicates:
+        - kind: range
+        - kind: relative_period
     release_decade:
-      type: multi_select
       label: Release decade
-      url_param: decade
-      operator: in
-      values:
-        source: distinct
-        limit: 20
       field: release_decade
+      predicates:
+        - kind: set
+          operators: [in, not_in]
+      options:
+        kind: distinct
+        limit: 20
     rating_bucket:
-      type: multi_select
       label: Rating
-      url_param: rating
-      operator: in
-      values:
-        source: distinct
-        limit: 10
-      field: ratings.rating_bucket
+      field: rating_bucket
       fact: ratings
+      predicates:
+        - kind: set
+          operators: [in, not_in]
+      options:
+        kind: distinct
+        limit: 10
     title:
-      type: text
       label: Title
-      url_param: title
-      operator_url_param: title_op
-      default_operator: contains
-      operators: [contains, equals, starts_with, not_contains]
       field: movie_title
+      predicates:
+        - kind: comparison
+          operators: [contains, equals, starts_with, not_contains]
+  filter_bindings:
+    rating_date:
+      filter: rating_date
+      default: {kind: unfiltered}
+      url: {param: period, encoding: typed_v1}
+      pane: {visible: true, order: 10}
+    release_decade:
+      filter: release_decade
+      default: {kind: unfiltered}
+      selection: {mode: multiple, max_selected_values: 20}
+      url: {param: decade, encoding: typed_v1}
+      pane: {visible: true, order: 20}
+    rating_bucket:
+      filter: rating_bucket
+      default: {kind: unfiltered}
+      selection: {mode: multiple, max_selected_values: 10}
+      url: {param: rating, encoding: typed_v1}
+      pane: {visible: true, order: 30}
+    title:
+      filter: title
+      default: {kind: unfiltered}
+      url: {param: title, encoding: typed_v1}
+      pane: {visible: true, order: 40}
+  filter_application: {mode: immediate}
   visuals:
     rating_count:
       type: kpi
@@ -272,20 +280,24 @@ spec:
         padding: 16
       components:
         - id: rating-date-filter
-          kind: filter
-          filter: rating_date
+          kind: slicer
+          binding: {scope: report, id: rating_date}
+          presentation: {style: date_range}
           placement: {col: 1, row: 1, col_span: 3, row_span: 2}
         - id: decade-filter
-          kind: filter
-          filter: release_decade
+          kind: slicer
+          binding: {scope: report, id: release_decade}
+          presentation: {style: dropdown, search: true}
           placement: {col: 4, row: 1, col_span: 3, row_span: 2}
         - id: rating-filter
-          kind: filter
-          filter: rating_bucket
+          kind: slicer
+          binding: {scope: report, id: rating_bucket}
+          presentation: {style: dropdown}
           placement: {col: 7, row: 1, col_span: 3, row_span: 2}
         - id: title-filter
-          kind: filter
-          filter: title
+          kind: slicer
+          binding: {scope: report, id: title}
+          presentation: {style: input}
           placement: {col: 10, row: 1, col_span: 3, row_span: 2}
         - id: rating-count
           kind: visual

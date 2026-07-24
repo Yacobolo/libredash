@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/Yacobolo/leapview/internal/dashboard"
+	dashboardfilter "github.com/Yacobolo/leapview/internal/dashboard/filter"
 	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
 	"github.com/Yacobolo/leapview/internal/visualization/ir"
 )
@@ -18,7 +19,7 @@ func TestCompiledDashboardOwnsVisualizationsWithoutAuthoringVisualMaps(t *testin
 		t.Fatal(err)
 	}
 	pages := []dashboard.Page{{ID: "overview"}}
-	compiled, err := New("sales", "Sales", "", "sales", nil, pages, map[string]visualizationdefinition.Definition{"orders": visual})
+	compiled, err := New("sales", "Sales", "", "sales", pages, map[string]visualizationdefinition.Definition{"orders": visual})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,19 +31,47 @@ func TestCompiledDashboardOwnsVisualizationsWithoutAuthoringVisualMaps(t *testin
 	}
 }
 
-func TestCompiledDashboardOwnsPageFilterNormalization(t *testing.T) {
+func TestCompiledDashboardOwnsCanonicalFilterNormalization(t *testing.T) {
+	regionKey := dashboardfilter.BindingKey("sales", dashboardfilter.ScopePage, "overview", "region")
+	hiddenKey := dashboardfilter.BindingKey("sales", dashboardfilter.ScopePage, "other", "hidden")
 	compiled := Definition{
-		Filters: map[string]FilterDefinition{
-			"region": {Type: "multi_select", Default: FilterDefault{Values: []string{"EU"}}},
-			"hidden": {Type: "text", Default: FilterDefault{Value: "ignored"}},
+		FilterDefinitions: map[string]dashboardfilter.Definition{
+			"region": {
+				ValueKind: dashboardfilter.ValueString,
+				Predicates: []dashboardfilter.PredicatePolicy{{
+					Kind: dashboardfilter.ExpressionSet, Operators: []dashboardfilter.Operator{dashboardfilter.OperatorIn},
+				}},
+			},
+			"hidden": {
+				ValueKind: dashboardfilter.ValueString,
+				Predicates: []dashboardfilter.PredicatePolicy{{
+					Kind: dashboardfilter.ExpressionComparison, Operators: []dashboardfilter.Operator{dashboardfilter.OperatorEquals},
+				}},
+			},
 		},
-		Pages: []dashboard.Page{{ID: "overview", Visuals: []dashboard.PageVisual{{Kind: "filter", Filter: "region"}}}},
+		Pages: []dashboard.Page{
+			{ID: "overview", FilterBindings: map[string]dashboardfilter.Binding{
+				"region": {
+					Key: regionKey, ID: "region", Filter: "region", Scope: dashboardfilter.ScopePage, PageID: "overview",
+					Default: dashboardfilter.Expression{Kind: dashboardfilter.ExpressionSet, Operator: dashboardfilter.OperatorIn, Values: []dashboardfilter.Value{{Kind: dashboardfilter.ValueString, Value: "EU"}}},
+				},
+			}},
+			{ID: "other", FilterBindings: map[string]dashboardfilter.Binding{
+				"hidden": {
+					Key: hiddenKey, ID: "hidden", Filter: "hidden", Scope: dashboardfilter.ScopePage, PageID: "other",
+					Default: dashboardfilter.Expression{Kind: dashboardfilter.ExpressionComparison, Operator: dashboardfilter.OperatorEquals, Value: &dashboardfilter.Value{Kind: dashboardfilter.ValueString, Value: "ignored"}},
+				},
+			}},
+		},
 	}
 	filters := compiled.NormalizeFiltersForPage("overview", dashboard.Filters{})
-	if got := filters.Controls["region"].Values; len(got) != 1 || got[0] != "EU" {
+	if filters.CompiledState == nil {
+		t.Fatal("compiled filter state is nil")
+	}
+	if got := filters.CompiledState.AppliedControls[regionKey].Expression.Values; len(got) != 1 || got[0].Value != "EU" {
 		t.Fatalf("region defaults = %#v", got)
 	}
-	if _, ok := filters.Controls["hidden"]; ok {
-		t.Fatal("normalization retained a filter outside the page scope")
+	if _, ok := filters.CompiledState.AppliedControls[hiddenKey]; !ok {
+		t.Fatal("dashboard session state did not retain off-page filter state")
 	}
 }

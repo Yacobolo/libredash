@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 )
 
 var supportedAggregations = map[string]struct{}{
@@ -56,6 +57,26 @@ func (m *Model) validateSemanticDefinitions() error {
 		}
 		dimension.Name = name
 		dimension.Label = defaultString(dimension.Label, titleFromIdentifier(name))
+		if dimension.Timezone == "" {
+			dimension.Timezone = "UTC"
+		}
+		if dimension.Calendar == "" {
+			dimension.Calendar = "gregorian"
+		}
+		if dimension.WeekStart == "" {
+			dimension.WeekStart = "monday"
+		}
+		if _, err := time.LoadLocation(dimension.Timezone); err != nil {
+			return fmt.Errorf("semantic dimension %q has invalid timezone %q", name, dimension.Timezone)
+		}
+		if dimension.Calendar != "gregorian" {
+			return fmt.Errorf("semantic dimension %q has unsupported calendar %q", name, dimension.Calendar)
+		}
+		switch dimension.WeekStart {
+		case "monday", "sunday":
+		default:
+			return fmt.Errorf("semantic dimension %q has unsupported week_start %q", name, dimension.WeekStart)
+		}
 		if _, ok := supportedSemanticDimensionTypes[dimension.Type]; !ok {
 			return fmt.Errorf("semantic dimension %q has unsupported type %q", name, dimension.Type)
 		}

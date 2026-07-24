@@ -102,13 +102,79 @@ model DashboardVisualDescribeResponse {
   height?: float64;
 }
 
-model DashboardFilterDescribeResponse {
+model DashboardFilterPredicatePolicy {
+  kind: "null_check" | "set" | "comparison" | "range" | "relative_period";
+  operators: string[];
+}
+
+model DashboardFilterStaticOption {
+  value: DashboardFilterValue;
+  label: string;
+}
+
+model DashboardFilterOptionSource {
+  kind: "none" | "static" | "distinct";
+  limit: int32;
+  values: DashboardFilterStaticOption[];
+}
+
+model DashboardCompiledFilterDefinition {
   id: string;
-  componentId?: string;
+  label: string;
+  description?: string;
+  field: string;
+  fact?: string;
+  valueKind: "string" | "boolean" | "integer" | "decimal" | "date" | "timestamp";
+  predicates: DashboardFilterPredicatePolicy[];
+  options: DashboardFilterOptionSource;
+  formatPattern?: string;
+  formatUnit?: string;
+  timezone: string;
+  calendar: string;
+  weekStart: string;
+}
+
+model DashboardFilterBindingRef {
+  scope: "report" | "page";
+  id: string;
+}
+
+model DashboardCompiledFilterBinding {
+  key: string;
+  id: string;
+  filter: string;
+  scope: "report" | "page";
+  pageID?: string;
+  default: DashboardFilterExpression;
+  selectionMode: "single" | "multiple";
+  maxSelectedValues: int32;
+  readerEditable: boolean;
+  urlParam?: string;
+  urlEncoding?: "typed_v1";
+  paneVisible: boolean;
+  paneOrder: int32;
+  paneLabel?: string;
+  targets: string[];
+  optionDependencies: DashboardFilterBindingRef[];
+}
+
+model DashboardFilterPresentation {
+  style: "dropdown" | "list" | "buttons" | "input" | "numeric_range" | "date_range" | "relative_period";
+  search: boolean;
+  selectAll: boolean;
+  showCounts: boolean;
+  showSummary: boolean;
+  compact: boolean;
   title?: string;
   description?: string;
-  field?: string;
-  multiSelect?: boolean;
+  ariaLabel?: string;
+}
+
+model DashboardFilterDescribeResponse {
+  definition: DashboardCompiledFilterDefinition;
+  binding: DashboardCompiledFilterBinding;
+  componentId?: string;
+  presentation?: DashboardFilterPresentation;
   placement?: DashboardComponentPlacement;
 }
 
@@ -343,10 +409,91 @@ model SemanticModelDescriptionResponse {
   tables?: SemanticModelTableSummary[];
 }
 
-model DashboardFilters {
-  controls?: Record<unknown>;
-  selections?: Record<unknown>[];
-  spatialSelections?: DashboardSpatialInteractionSelection[];
+@discriminator("kind")
+model DashboardFilterValue {
+  kind: string;
+}
+
+model DashboardStringFilterValue extends DashboardFilterValue {
+  kind: "string";
+  value: string;
+}
+
+model DashboardBooleanFilterValue extends DashboardFilterValue {
+  kind: "boolean";
+  value: boolean;
+}
+
+model DashboardIntegerFilterValue extends DashboardFilterValue {
+  kind: "integer";
+  value: string;
+}
+
+model DashboardDecimalFilterValue extends DashboardFilterValue {
+  kind: "decimal";
+  value: string;
+}
+
+model DashboardDateFilterValue extends DashboardFilterValue {
+  kind: "date";
+  value: string;
+}
+
+model DashboardTimestampFilterValue extends DashboardFilterValue {
+  kind: "timestamp";
+  value: string;
+}
+
+model DashboardFilterBound {
+  value: DashboardFilterValue;
+  inclusive: boolean;
+}
+
+@discriminator("kind")
+model DashboardFilterExpression {
+  kind: string;
+}
+
+model DashboardUnfilteredExpression extends DashboardFilterExpression {
+  kind: "unfiltered";
+}
+
+model DashboardNullCheckExpression extends DashboardFilterExpression {
+  kind: "null_check";
+  operator: "is_null" | "is_not_null";
+}
+
+model DashboardSetExpression extends DashboardFilterExpression {
+  kind: "set";
+  operator: "in" | "not_in";
+  values: DashboardFilterValue[];
+}
+
+model DashboardComparisonExpression extends DashboardFilterExpression {
+  kind: "comparison";
+  operator: "equals" | "not_equals" | "contains" | "not_contains" | "starts_with" | "ends_with" | "greater_than" | "greater_than_or_equal" | "less_than" | "less_than_or_equal";
+  value: DashboardFilterValue;
+}
+
+model DashboardRangeExpression extends DashboardFilterExpression {
+  kind: "range";
+  lower?: DashboardFilterBound;
+  upper?: DashboardFilterBound;
+}
+
+model DashboardRelativePeriodExpression extends DashboardFilterExpression {
+  kind: "relative_period";
+  direction: "previous" | "current" | "next";
+  count: int32;
+  unit: "minute" | "hour" | "day" | "week" | "month" | "quarter" | "year";
+  includeCurrent: boolean;
+  anchor: "current_time" | "first_available" | "last_available" | "fixed";
+  anchorValue?: DashboardFilterValue;
+}
+
+model DashboardAppliedFilterInput {
+  version: "typed_v1";
+  controls: Record<DashboardFilterExpression>;
 }
 
 model DashboardSpatialInteractionSelection {
@@ -366,18 +513,21 @@ model DashboardSpatialSelectionGeometry {
 }
 
 model DashboardPageQueryRequest {
-  filters?: DashboardFilters;
+  filterState?: DashboardAppliedFilterInput;
+  interactionSelections?: Record<unknown>[];
+  spatialSelections?: DashboardSpatialInteractionSelection[];
 }
 
 model DashboardVisualQueryRequest {
   limit?: QueryLimit;
   pageToken?: PageToken;
-  filters?: DashboardFilters;
+  filterState?: DashboardAppliedFilterInput;
+  interactionSelections?: Record<unknown>[];
+  spatialSelections?: DashboardSpatialInteractionSelection[];
 }
 
 model DashboardPageQueryResponse {
-  filters: Record<unknown>;
-  filterOptions?: Record<unknown>;
+  filterState: DashboardAppliedFilterInput;
   status?: Record<unknown>;
   visuals: Record<LeapViewVisualization.VisualizationEnvelope>;
 }
@@ -640,7 +790,12 @@ op explainSemanticPreview(@path workspace: string, @path("model") modelName: str
 @apigen.cli(#{ command: #["dashboards", "query-page"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "dashboard", displayName: "dashboard" }, #{ source: "path", name: "page", displayName: "page" }], output: #{ mode: "raw" } })
 @apigen.tool(#{
   name: "query_dashboard_page", effect: "read", tags: #["dashboard", "query"],
-  input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }] },
+  input: #{ fields: #[
+    #{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" },
+    #{ source: "body", name: "filterState", mode: "omit" },
+    #{ source: "body", name: "interactionSelections", mode: "omit" },
+    #{ source: "body", name: "spatialSelections", mode: "omit" },
+  ] },
   output: #{ mode: "raw" },
 })
 op queryDashboardPage(@path workspace: string, @path dashboard: string, @path page: string, @body body?: DashboardPageQueryRequest): OkJson<DashboardPageQueryResponse> | CommonErrors;
@@ -655,7 +810,12 @@ op queryDashboardPage(@path workspace: string, @path dashboard: string, @path pa
 @apigen.cli(#{ command: #["dashboards", "visual-data"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "dashboard", displayName: "dashboard" }, #{ source: "path", name: "page", displayName: "page" }, #{ source: "path", name: "visual", displayName: "visual" }], output: #{ mode: "raw" } })
 @apigen.tool(#{
   name: "query_dashboard_visual", effect: "read", tags: #["dashboard", "visual", "query"],
-  input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }] },
+  input: #{ fields: #[
+    #{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" },
+    #{ source: "body", name: "filterState", mode: "omit" },
+    #{ source: "body", name: "interactionSelections", mode: "omit" },
+    #{ source: "body", name: "spatialSelections", mode: "omit" },
+  ] },
   output: #{ mode: "raw" },
 })
 op queryDashboardVisualData(@path workspace: string, @path dashboard: string, @path page: string, @path visual: string, @header accept?: string, @body body?: DashboardVisualQueryRequest): RowsetResponse<LeapViewVisualization.VisualizationEnvelope> | CommonErrors;
@@ -669,7 +829,13 @@ op queryDashboardVisualData(@path workspace: string, @path dashboard: string, @p
 @apigen.cli(#{ command: #["dashboards", "filter-options"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "dashboard", displayName: "dashboard" }, #{ source: "path", name: "page", displayName: "page" }, #{ source: "path", name: "filter", displayName: "filter" }], output: #{ mode: "raw" } })
 @apigen.tool(#{
   name: "list_dashboard_filter_values", effect: "read", tags: #["dashboard", "filter"],
-  input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }, #{ source: "query", name: "limit", default: 25 }] },
+  input: #{ fields: #[
+    #{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" },
+    #{ source: "query", name: "limit", default: 25 },
+    #{ source: "body", name: "filterState", mode: "omit" },
+    #{ source: "body", name: "interactionSelections", mode: "omit" },
+    #{ source: "body", name: "spatialSelections", mode: "omit" },
+  ] },
   output: #{ mode: "project", select: #[#{ source: "/items", countAs: "count", select: #[#{ source: "/value" }, #{ source: "/label" }] }], cursor: #{ source: "/page/nextCursor" } },
 })
 op listDashboardFilterValues(@path workspace: string, @path dashboard: string, @path page: string, @path filter: string, @query limit?: ListLimit, @query pageToken?: PageToken, @body body?: DashboardPageQueryRequest): OkJson<DashboardFilterOptionListResponse> | CommonErrors;

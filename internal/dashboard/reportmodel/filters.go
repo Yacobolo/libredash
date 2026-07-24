@@ -8,41 +8,31 @@ import (
 	"github.com/Yacobolo/leapview/internal/dashboard/report"
 )
 
-func FilterAppliesToTarget(d *report.Dashboard, model *semanticmodel.Model, filter report.FilterDefinition, targetKind, targetID string) (bool, error) {
-	targeted := !filter.Targets.IsEmpty()
-	if targeted && !filter.Targets.Contains(targetKind, targetID) {
-		return false, nil
-	}
+func FieldAppliesToTarget(d *report.Dashboard, model *semanticmodel.Model, field, fact, targetKind, targetID string) (bool, error) {
 	facts, err := TargetFacts(d, model, targetKind, targetID)
 	if err != nil {
 		return false, err
 	}
-	if dimension, ok := model.Dimensions[filter.Dimension]; ok {
-		for _, fact := range facts {
-			if _, ok := dimension.Bindings[fact]; !ok {
-				if targeted {
-					return false, fmt.Errorf("semantic dimension %q has no binding for fact %q", filter.Dimension, fact)
-				}
+	if dimension, ok := model.Dimensions[field]; ok {
+		for _, targetFact := range facts {
+			if _, ok := dimension.Bindings[targetFact]; !ok {
 				return false, nil
 			}
 		}
 		return true, nil
 	}
 	if len(facts) != 1 {
-		if filter.Fact == "" {
+		if fact == "" {
 			return false, nil
 		}
-		for _, fact := range facts {
-			if fact == filter.Fact {
-				return model.CanReachField(fact, filter.Dimension) == nil, nil
+		for _, targetFact := range facts {
+			if targetFact == fact {
+				return model.CanReachField(targetFact, field) == nil, nil
 			}
 		}
 		return false, nil
 	}
-	if err := model.CanReachField(facts[0], filter.Dimension); err != nil {
-		if targeted {
-			return false, err
-		}
+	if err := model.CanReachField(facts[0], field); err != nil {
 		return false, nil
 	}
 	return true, nil

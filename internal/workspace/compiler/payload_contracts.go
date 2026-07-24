@@ -1,5 +1,7 @@
 package compiler
 
+import dashboardfilter "github.com/Yacobolo/leapview/internal/dashboard/filter"
+
 type catalogPayloadV1 struct {
 	Workspace      catalogWorkspacePayloadV1   `json:"Workspace"`
 	SemanticModels []catalogModelPayloadV1     `json:"SemanticModels"`
@@ -134,6 +136,9 @@ type semanticDimensionPayloadV1 struct {
 	Description string                                       `json:"Description"`
 	Type        string                                       `json:"Type"`
 	Grains      []string                                     `json:"Grains"`
+	Timezone    string                                       `json:"Timezone"`
+	Calendar    string                                       `json:"Calendar"`
+	WeekStart   string                                       `json:"WeekStart"`
 	Bindings    map[string]semanticDimensionBindingPayloadV1 `json:"Bindings"`
 }
 
@@ -190,49 +195,6 @@ type dashboardPayloadV1 struct {
 	Tags          []string `json:"Tags"`
 }
 
-type filterPayloadV1 struct {
-	Type             string                  `json:"Type"`
-	Label            string                  `json:"Label"`
-	Description      string                  `json:"Description"`
-	Dimension        string                  `json:"Dimension"`
-	Fact             string                  `json:"Fact"`
-	Default          any                     `json:"Default"`
-	Custom           bool                    `json:"Custom"`
-	Presets          []filterPresetPayloadV1 `json:"Presets"`
-	Operator         string                  `json:"Operator"`
-	Values           filterValuesPayloadV1   `json:"Values"`
-	DefaultOperator  string                  `json:"DefaultOperator"`
-	Operators        []string                `json:"Operators"`
-	Options          []filterOptionPayloadV1 `json:"Options"`
-	URLParam         string                  `json:"URLParam"`
-	FromURLParam     string                  `json:"FromURLParam"`
-	ToURLParam       string                  `json:"ToURLParam"`
-	OperatorURLParam string                  `json:"OperatorURLParam"`
-	Targets          filterTargetsPayloadV1  `json:"Targets"`
-}
-
-type filterPresetPayloadV1 struct {
-	Value        string `json:"value"`
-	Label        string `json:"label"`
-	From         string `json:"from,omitempty"`
-	To           string `json:"to,omitempty"`
-	RelativeDays int    `json:"relativeDays,omitempty"`
-}
-
-type filterValuesPayloadV1 struct {
-	Source string `json:"source,omitempty"`
-	Limit  int    `json:"limit,omitempty"`
-}
-
-type filterOptionPayloadV1 struct {
-	Value string `json:"value"`
-	Label string `json:"label"`
-}
-
-type filterTargetsPayloadV1 struct {
-	Visuals []string `json:"visuals,omitempty"`
-}
-
 type pagePayloadV1 struct {
 	ID          string       `json:"ID"`
 	Title       string       `json:"Title"`
@@ -281,15 +243,16 @@ type refreshPipelineSchedulePayloadV1 struct {
 	Timezone string `json:"Timezone"`
 }
 type pageItemPayloadV1 struct {
-	ID          string          `json:"ID"`
-	Kind        string          `json:"Kind"`
-	Visual      string          `json:"Visual"`
-	Filter      string          `json:"Filter"`
-	Description string          `json:"Description"`
-	Placement   pagePlacementV1 `json:"Placement"`
-	Title       string          `json:"Title"`
-	Subtitle    string          `json:"Subtitle"`
-	Badges      []string        `json:"Badges"`
+	ID           string                       `json:"ID"`
+	Kind         string                       `json:"Kind"`
+	Visual       string                       `json:"Visual"`
+	Binding      dashboardfilter.BindingRef   `json:"Binding"`
+	Presentation dashboardfilter.Presentation `json:"Presentation"`
+	Description  string                       `json:"Description"`
+	Placement    pagePlacementV1              `json:"Placement"`
+	Title        string                       `json:"Title"`
+	Subtitle     string                       `json:"Subtitle"`
+	Badges       []string                     `json:"Badges"`
 }
 
 type pageCanvasV1 struct {

@@ -37,7 +37,7 @@ func TestCoordinatorPublishesStartBeforeWorkCompletes(t *testing.T) {
 	t.Cleanup(coordinator.Close)
 
 	refresh, err := coordinator.Begin(func(current dashboard.Filters) (dashboard.Filters, error) {
-		current.Controls["state"] = dashboard.FilterControl{Type: "multi_select", Values: []string{"SP"}}
+		current.ServingStateID = "serving-state"
 		return current, nil
 	}, func(ctx context.Context, publish RefreshPublisher) {
 		close(workStarted)
@@ -56,7 +56,7 @@ func TestCoordinatorPublishesStartBeforeWorkCompletes(t *testing.T) {
 
 	select {
 	case event := <-events:
-		if event.Type != RefreshEventStart || event.Generation != 1 || event.Filters.Controls["state"].Values[0] != "SP" {
+		if event.Type != RefreshEventStart || event.Generation != 1 || event.Filters.ServingStateID != "serving-state" {
 			t.Fatalf("start event = %#v", event)
 		}
 	case <-time.After(time.Second):

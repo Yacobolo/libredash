@@ -2,146 +2,160 @@
 package definition
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"sort"
 
 	"github.com/Yacobolo/leapview/internal/dashboard"
+	dashboardfilter "github.com/Yacobolo/leapview/internal/dashboard/filter"
 	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
 	"github.com/Yacobolo/leapview/internal/visualization/ir"
 )
 
-type FilterDefinition struct {
-	Type             string         `json:"type"`
-	Label            string         `json:"label"`
-	Description      string         `json:"description,omitempty"`
-	Dimension        string         `json:"dimension"`
-	Fact             string         `json:"fact,omitempty"`
-	Default          FilterDefault  `json:"default"`
-	Custom           bool           `json:"custom,omitempty"`
-	Presets          []FilterPreset `json:"presets,omitempty"`
-	Operator         string         `json:"operator,omitempty"`
-	Values           FilterValues   `json:"values,omitempty"`
-	DefaultOperator  string         `json:"defaultOperator,omitempty"`
-	Operators        []string       `json:"operators,omitempty"`
-	Options          []FilterOption `json:"options,omitempty"`
-	URLParam         string         `json:"urlParam,omitempty"`
-	FromURLParam     string         `json:"fromURLParam,omitempty"`
-	ToURLParam       string         `json:"toURLParam,omitempty"`
-	OperatorURLParam string         `json:"operatorURLParam,omitempty"`
-	Targets          FilterTargets  `json:"targets,omitempty"`
-}
-
-type FilterConfig struct {
-	ID string `json:"id"`
-	FilterDefinition
-}
-
-type FilterOption struct {
-	Value string `json:"value"`
-	Label string `json:"label"`
-}
-type FilterDefault struct {
-	Preset   string   `json:"preset,omitempty"`
-	From     string   `json:"from,omitempty"`
-	To       string   `json:"to,omitempty"`
-	Operator string   `json:"operator,omitempty"`
-	Value    string   `json:"value,omitempty"`
-	Values   []string `json:"values,omitempty"`
-}
-type FilterPreset struct {
-	Value        string `json:"value"`
-	Label        string `json:"label"`
-	From         string `json:"from,omitempty"`
-	To           string `json:"to,omitempty"`
-	RelativeDays int    `json:"relativeDays,omitempty"`
-}
-type FilterValues struct {
-	Source string `json:"source,omitempty"`
-	Limit  int    `json:"limit,omitempty"`
-}
-type FilterTargets struct {
-	Visuals []string `json:"visuals,omitempty"`
-}
-
-func (targets FilterTargets) IsEmpty() bool {
-	return len(targets.Visuals) == 0
-}
-func (targets FilterTargets) Contains(kind, id string) bool {
-	if kind != "visual" {
-		return false
-	}
-	for _, value := range targets.Visuals {
-		if value == id {
-			return true
-		}
-	}
-	return false
-}
-
 type Definition struct {
-	ID             string                                        `json:"id"`
-	Title          string                                        `json:"title"`
-	Description    string                                        `json:"description,omitempty"`
-	SemanticModel  string                                        `json:"semanticModel"`
-	Filters        map[string]FilterDefinition                   `json:"filters"`
-	Pages          []dashboard.Page                              `json:"pages"`
-	Visualizations map[string]visualizationdefinition.Definition `json:"visualizations"`
+	ID                string                                        `json:"id"`
+	Title             string                                        `json:"title"`
+	Description       string                                        `json:"description,omitempty"`
+	SemanticModel     string                                        `json:"semanticModel"`
+	FilterDefinitions map[string]dashboardfilter.Definition         `json:"filterDefinitions,omitempty"`
+	FilterBindings    map[string]dashboardfilter.Binding            `json:"filterBindings,omitempty"`
+	FilterApplication dashboardfilter.ApplicationPolicy             `json:"filterApplication,omitempty"`
+	Pages             []dashboard.Page                              `json:"pages"`
+	Visualizations    map[string]visualizationdefinition.Definition `json:"visualizations"`
 }
 
-func New(id, title, description, semanticModel string, filters map[string]FilterDefinition, pages []dashboard.Page, visualizations map[string]visualizationdefinition.Definition) (Definition, error) {
+func New(id, title, description, semanticModel string, pages []dashboard.Page, visualizations map[string]visualizationdefinition.Definition) (Definition, error) {
 	if id == "" || semanticModel == "" {
 		return Definition{}, fmt.Errorf("compiled dashboard requires ID and semantic model")
 	}
-	return Definition{ID: id, Title: title, Description: description, SemanticModel: semanticModel, Filters: cloneFilters(filters), Pages: append([]dashboard.Page(nil), pages...), Visualizations: cloneVisualizations(visualizations)}, nil
+	return Definition{ID: id, Title: title, Description: description, SemanticModel: semanticModel, Pages: append([]dashboard.Page(nil), pages...), Visualizations: cloneVisualizations(visualizations)}, nil
 }
 
 func (definition Definition) DefaultFilters() dashboard.Filters {
 	filters := dashboard.Filters{}.WithDefaults()
-	for name, filter := range definition.Filters {
-		control := dashboard.FilterControl{Type: filter.Type, Operator: filter.Operator}
-		if filter.DefaultOperator != "" {
-			control.Operator = filter.DefaultOperator
-		}
-		control.Preset, control.From, control.To, control.Value = filter.Default.Preset, filter.Default.From, filter.Default.To, filter.Default.Value
-		control.Values = append([]string(nil), filter.Default.Values...)
-		filters.Controls[name] = control
-	}
+	state := definition.DefaultFilterState()
+	filters.CompiledState = &state
 	return filters
 }
 
-func (definition Definition) PageFilterIDs(pageID string) []string {
-	ids, seen := []string{}, map[string]struct{}{}
+func (definition Definition) CompiledFilterBindings() map[string]dashboardfilter.Binding {
+	out := make(map[string]dashboardfilter.Binding, len(definition.FilterBindings))
+	for _, binding := range definition.FilterBindings {
+		out[binding.Key] = binding
+	}
 	for _, page := range definition.Pages {
-		if page.ID != pageID {
-			continue
-		}
-		for _, item := range page.Visuals {
-			if item.Kind != "filter" || item.Filter == "" {
-				continue
-			}
-			if _, ok := seen[item.Filter]; ok {
-				continue
-			}
-			seen[item.Filter] = struct{}{}
-			ids = append(ids, item.Filter)
+		for _, binding := range page.FilterBindings {
+			out[binding.Key] = binding
 		}
 	}
-	sort.Strings(ids)
-	return ids
+	return out
+}
+
+func (definition Definition) DefaultFilterState() dashboardfilter.State {
+	return dashboardfilter.NewMachine(definition.FilterApplication.WithDefaults().Mode, definition.FilterBindingSpecs()).State()
+}
+
+func (definition Definition) FilterBindingSpecs() map[string]dashboardfilter.BindingSpec {
+	specs := make(map[string]dashboardfilter.BindingSpec)
+	for key, binding := range definition.CompiledFilterBindings() {
+		filterDefinition := definition.FilterDefinitions[binding.Filter]
+		specs[key] = dashboardfilter.BindingSpec{
+			ValueKind:  filterDefinition.ValueKind,
+			Default:    binding.Default,
+			Selection:  binding.Selection,
+			Editable:   binding.Editable(),
+			Time:       filterDefinition.Time,
+			Predicates: filterDefinition.Predicates,
+		}
+	}
+	return specs
+}
+
+func (definition Definition) FilterStateFromURL(pageID string, values url.Values) (dashboardfilter.State, error) {
+	specs := definition.FilterBindingSpecs()
+	machine := dashboardfilter.NewMachine(definition.FilterApplication.WithDefaults().Mode, specs)
+	bindings := definition.CompiledFilterBindings()
+	keys := make([]string, 0, len(bindings))
+	for key := range bindings {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		binding := bindings[key]
+		if binding.URL.Param == "" || !bindingAvailableOnPage(binding, pageID) {
+			continue
+		}
+		encoded := values.Get(binding.URL.Param)
+		if encoded == "" {
+			continue
+		}
+		expression, err := dashboardfilter.DecodeTypedV1(encoded, specs[key].ValueKind)
+		if err != nil {
+			return machine.State(), fmt.Errorf("URL parameter %q: %w", binding.URL.Param, err)
+		}
+		state := machine.State()
+		if _, err := machine.Execute(dashboardfilter.Command{
+			Kind: dashboardfilter.CommandMutate, BaseRevision: state.Revision,
+			ClientMutationID: "url:" + key, BindingKey: key,
+			Operation: dashboardfilter.MutationSet, Expression: &expression,
+		}); err != nil {
+			return machine.State(), fmt.Errorf("URL parameter %q: %w", binding.URL.Param, err)
+		}
+	}
+	return machine.State(), nil
+}
+
+func (definition Definition) URLParamsFromFilterState(pageID string, state dashboardfilter.State) (url.Values, error) {
+	params := url.Values{}
+	bindings := definition.CompiledFilterBindings()
+	keys := make([]string, 0, len(bindings))
+	for key := range bindings {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		binding := bindings[key]
+		if binding.URL.Param == "" || !bindingAvailableOnPage(binding, pageID) {
+			continue
+		}
+		applied, ok := state.AppliedControls[key]
+		if !ok || expressionsEqual(applied.Expression, binding.Default) {
+			continue
+		}
+		filterDefinition := definition.FilterDefinitions[binding.Filter]
+		encoded, err := dashboardfilter.EncodeTypedV1(applied.Expression, filterDefinition.ValueKind)
+		if err != nil {
+			return nil, fmt.Errorf("encode binding %q URL: %w", binding.ID, err)
+		}
+		params.Set(binding.URL.Param, encoded)
+	}
+	return params, nil
+}
+
+func bindingAvailableOnPage(binding dashboardfilter.Binding, pageID string) bool {
+	return binding.Scope == dashboardfilter.ScopeReport || binding.PageID == pageID
+}
+
+func expressionsEqual(left, right dashboardfilter.Expression) bool {
+	leftJSON, _ := json.Marshal(left)
+	rightJSON, _ := json.Marshal(right)
+	return string(leftJSON) == string(rightJSON)
 }
 
 func (definition Definition) NormalizeFiltersForPage(pageID string, filters dashboard.Filters) dashboard.Filters {
-	filters, defaults, next := filters.WithDefaults(), definition.DefaultFilters(), dashboard.Filters{}.WithDefaults()
-	for _, id := range definition.PageFilterIDs(pageID) {
-		if control, ok := filters.Controls[id]; ok {
-			next.Controls[id] = control
-		} else if control, ok := defaults.Controls[id]; ok {
-			next.Controls[id] = control
-		}
-	}
+	filters, next := filters.WithDefaults(), dashboard.Filters{}.WithDefaults()
 	next.Selections = append([]dashboard.InteractionSelection(nil), filters.Selections...)
 	next.SpatialSelections = append([]dashboard.SpatialInteractionSelection(nil), filters.SpatialSelections...)
+	if filters.CompiledState != nil {
+		state := dashboardfilter.CloneState(*filters.CompiledState)
+		next.CompiledState = &state
+	} else {
+		state := definition.DefaultFilterState()
+		next.CompiledState = &state
+	}
+	next.ServingStateID = filters.ServingStateID
+	next.ActivePageID = pageID
 	return next
 }
 
@@ -161,109 +175,35 @@ func (definition Definition) PageOrDefault(pageID string) (dashboard.Page, bool)
 	}
 	return definition.Pages[0], true
 }
-func (definition Definition) FilterConfigForPage(pageID string) []FilterConfig {
-	ids := definition.PageFilterIDs(pageID)
-	out := make([]FilterConfig, 0, len(ids))
-	for _, id := range ids {
-		out = append(out, FilterConfig{ID: id, FilterDefinition: definition.Filters[id]})
-	}
-	return out
-}
-
 func (definition Definition) FiltersFromURLForPage(pageID string, values url.Values) dashboard.Filters {
-	allowed := map[string]struct{}{}
-	for _, id := range definition.PageFilterIDs(pageID) {
-		allowed[id] = struct{}{}
+	state, err := definition.FilterStateFromURL(pageID, values)
+	if err != nil {
+		return definition.DefaultFiltersForPage(pageID)
 	}
-	filters := definition.DefaultFilters()
-	for name, filter := range definition.Filters {
-		if _, ok := allowed[name]; !ok {
-			delete(filters.Controls, name)
-			continue
-		}
-		control := filters.Controls[name]
-		first := func(key string) string {
-			if key == "" || len(values[key]) == 0 {
-				return ""
-			}
-			return values[key][0]
-		}
-		switch filter.Type {
-		case "date_range":
-			if value := first(filter.URLParam); value != "" {
-				control.Preset = value
-			}
-			from, to := first(filter.FromURLParam), first(filter.ToURLParam)
-			if from != "" || to != "" {
-				control.Preset, control.From, control.To = "custom", from, to
-			}
-		case "multi_select":
-			if filter.URLParam != "" {
-				control.Values = uniqueSorted(values[filter.URLParam])
-			}
-		case "text":
-			if value := first(filter.URLParam); value != "" {
-				control.Value = value
-			}
-			if value := first(filter.OperatorURLParam); value != "" && containsString(filter.Operators, value) {
-				control.Operator = value
-			}
-		}
-		filters.Controls[name] = control
-	}
-	return filters.WithDefaults()
+	filters := dashboard.Filters{}.WithDefaults()
+	filters.CompiledState = &state
+	filters.ActivePageID = pageID
+	return filters
 }
 
 func (definition Definition) URLParamsFromFiltersForPage(pageID string, filters dashboard.Filters) map[string]any {
-	filters, defaults := filters.WithDefaults(), definition.DefaultFilters().WithDefaults()
-	allowed := map[string]struct{}{}
-	for _, id := range definition.PageFilterIDs(pageID) {
-		allowed[id] = struct{}{}
+	state := definition.DefaultFilterState()
+	if filters.CompiledState != nil {
+		state = *filters.CompiledState
 	}
-	params := map[string]any{}
-	for name, filter := range definition.Filters {
-		if _, ok := allowed[name]; !ok {
-			continue
-		}
-		control, def := filters.Controls[name], defaults.Controls[name]
-		switch filter.Type {
-		case "date_range":
-			if control.Preset != "" && control.Preset != def.Preset {
-				params[filter.URLParam] = control.Preset
-			}
-			if control.From != "" && control.From != def.From {
-				params[filter.FromURLParam] = control.From
-			}
-			if control.To != "" && control.To != def.To {
-				params[filter.ToURLParam] = control.To
-			}
-		case "multi_select":
-			if len(control.Values) > 0 {
-				params[filter.URLParam] = uniqueSorted(control.Values)
-			}
-		case "text":
-			if control.Value != "" {
-				params[filter.URLParam] = control.Value
-			}
-			if control.Operator != "" && control.Operator != def.Operator {
-				params[filter.OperatorURLParam] = control.Operator
-			}
+	typed, err := definition.URLParamsFromFilterState(pageID, state)
+	if err != nil {
+		return map[string]any{}
+	}
+	params := make(map[string]any, len(typed))
+	for key, values := range typed {
+		if len(values) == 1 {
+			params[key] = values[0]
+		} else if len(values) > 1 {
+			params[key] = append([]string(nil), values...)
 		}
 	}
 	return params
-}
-
-func (definition Definition) URLParamShapeForPage(pageID string) map[string]any {
-	shape := map[string]any{}
-	for _, id := range definition.PageFilterIDs(pageID) {
-		filter := definition.Filters[id]
-		for _, parameter := range []string{filter.URLParam, filter.FromURLParam, filter.ToURLParam, filter.OperatorURLParam} {
-			if parameter != "" {
-				shape[parameter] = id
-			}
-		}
-	}
-	return shape
 }
 
 func SpecTitle(spec ir.VisualizationSpec) string {
@@ -389,37 +329,6 @@ func fieldFormat(field ir.VisualizationField) string {
 		}
 	}
 	return "text"
-}
-func uniqueSorted(values []string) []string {
-	seen := map[string]struct{}{}
-	out := []string{}
-	for _, value := range values {
-		if value == "" {
-			continue
-		}
-		if _, ok := seen[value]; ok {
-			continue
-		}
-		seen[value] = struct{}{}
-		out = append(out, value)
-	}
-	sort.Strings(out)
-	return out
-}
-func containsString(values []string, value string) bool {
-	for _, candidate := range values {
-		if candidate == value {
-			return true
-		}
-	}
-	return false
-}
-func cloneFilters(values map[string]FilterDefinition) map[string]FilterDefinition {
-	out := make(map[string]FilterDefinition, len(values))
-	for key, value := range values {
-		out[key] = value
-	}
-	return out
 }
 func cloneVisualizations(values map[string]visualizationdefinition.Definition) map[string]visualizationdefinition.Definition {
 	out := make(map[string]visualizationdefinition.Definition, len(values))

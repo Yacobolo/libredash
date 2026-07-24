@@ -10,39 +10,48 @@ spec:
   semanticModel: genre_ratings
   filters:
     rating_date:
-      type: date_range
       label: Rating date
-      url_param: period
-      from_url_param: from
-      to_url_param: to
-      field: rating_genres.rating_date
-      default:
-        preset: all
-      presets:
-        - value: all
-          label: All time
-        - value: "2023"
-          label: "2023"
-          from: "2023-01-01"
-          to: "2023-12-31"
+      field: rating_date
+      predicates:
+        - kind: range
+        - kind: relative_period
     genre:
-      type: multi_select
       label: Genre
-      url_param: genre
-      operator: in
-      values:
-        source: distinct
+      field: genre
+      predicates:
+        - kind: set
+          operators: [in, not_in]
+      options:
+        kind: distinct
         limit: 30
-      field: rating_genres.genre
     release_decade:
-      type: multi_select
       label: Release decade
-      url_param: decade
-      operator: in
-      values:
-        source: distinct
+      field: release_decade
+      predicates:
+        - kind: set
+          operators: [in, not_in]
+      options:
+        kind: distinct
         limit: 20
-      field: rating_genres.release_decade
+  filter_bindings:
+    rating_date:
+      filter: rating_date
+      default: {kind: unfiltered}
+      url: {param: period, encoding: typed_v1}
+      pane: {visible: true, order: 10}
+    genre:
+      filter: genre
+      default: {kind: unfiltered}
+      selection: {mode: multiple, max_selected_values: 30}
+      url: {param: genre, encoding: typed_v1}
+      pane: {visible: true, order: 20}
+    release_decade:
+      filter: release_decade
+      default: {kind: unfiltered}
+      selection: {mode: multiple, max_selected_values: 20}
+      url: {param: decade, encoding: typed_v1}
+      pane: {visible: true, order: 30}
+  filter_application: {mode: immediate}
   visuals:
     genre_rating_count:
       type: kpi
@@ -145,16 +154,19 @@ spec:
         padding: 16
       components:
         - id: rating-date-filter
-          kind: filter
-          filter: rating_date
+          kind: slicer
+          binding: {scope: report, id: rating_date}
+          presentation: {style: date_range}
           placement: {col: 1, row: 1, col_span: 4, row_span: 2}
         - id: genre-filter
-          kind: filter
-          filter: genre
+          kind: slicer
+          binding: {scope: report, id: genre}
+          presentation: {style: dropdown, search: true}
           placement: {col: 5, row: 1, col_span: 4, row_span: 2}
         - id: decade-filter
-          kind: filter
-          filter: release_decade
+          kind: slicer
+          binding: {scope: report, id: release_decade}
+          presentation: {style: dropdown, search: true}
           placement: {col: 9, row: 1, col_span: 4, row_span: 2}
         - id: genre-ratings
           kind: visual

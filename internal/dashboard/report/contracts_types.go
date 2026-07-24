@@ -3,19 +3,22 @@ package report
 import (
 	"fmt"
 	"github.com/Yacobolo/leapview/internal/dashboard"
+	dashboardfilter "github.com/Yacobolo/leapview/internal/dashboard/filter"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 )
 
 type Dashboard struct {
-	ID            string                            `yaml:"id"`
-	Title         string                            `yaml:"title"`
-	Description   string                            `yaml:"description"`
-	SemanticModel string                            `yaml:"semantic_model"`
-	Filters       map[string]FilterDefinition       `yaml:"filters"`
-	Visuals       map[string]AuthoringVisualization `yaml:"visuals"`
-	Pages         []dashboard.Page                  `yaml:"pages"`
+	ID                string                                `yaml:"id"`
+	Title             string                                `yaml:"title"`
+	Description       string                                `yaml:"description"`
+	SemanticModel     string                                `yaml:"semantic_model"`
+	FilterDefinitions map[string]dashboardfilter.Definition `yaml:"filter_definitions,omitempty"`
+	FilterBindings    map[string]dashboardfilter.Binding    `yaml:"filter_bindings,omitempty"`
+	FilterApplication dashboardfilter.ApplicationPolicy     `yaml:"filter_application,omitempty"`
+	Visuals           map[string]AuthoringVisualization     `yaml:"visuals"`
+	Pages             []dashboard.Page                      `yaml:"pages"`
 }
 
 // AuthoringVisualization is the closed visualization union used from YAML
@@ -112,59 +115,6 @@ func MergeVisualizations(groups ...map[string]AuthoringVisualization) map[string
 		}
 	}
 	return result
-}
-
-type FilterDefinition struct {
-	Type             string         `yaml:"type" json:"type"`
-	Label            string         `yaml:"label" json:"label"`
-	Description      string         `yaml:"description" json:"description,omitempty"`
-	Dimension        string         `yaml:"field" json:"dimension"`
-	Fact             string         `yaml:"fact" json:"fact,omitempty"`
-	Default          FilterDefault  `yaml:"default" json:"default"`
-	Custom           bool           `yaml:"custom" json:"custom,omitempty"`
-	Presets          []FilterPreset `yaml:"presets" json:"presets,omitempty"`
-	Operator         string         `yaml:"operator" json:"operator,omitempty"`
-	Values           FilterValues   `yaml:"values" json:"values,omitempty"`
-	DefaultOperator  string         `yaml:"default_operator" json:"defaultOperator,omitempty"`
-	Operators        []string       `yaml:"operators" json:"operators,omitempty"`
-	Options          []FilterOption `yaml:"options" json:"options,omitempty"`
-	URLParam         string         `yaml:"url_param" json:"urlParam,omitempty"`
-	FromURLParam     string         `yaml:"from_url_param" json:"fromURLParam,omitempty"`
-	ToURLParam       string         `yaml:"to_url_param" json:"toURLParam,omitempty"`
-	OperatorURLParam string         `yaml:"operator_url_param" json:"operatorURLParam,omitempty"`
-	Targets          FilterTargets  `yaml:"targets" json:"targets,omitempty"`
-}
-
-type FilterConfig struct {
-	ID string `json:"id"`
-	FilterDefinition
-}
-
-type FilterOption struct {
-	Value string `yaml:"value" json:"value"`
-	Label string `yaml:"label" json:"label"`
-}
-
-type FilterDefault struct {
-	Preset   string   `yaml:"preset" json:"preset,omitempty"`
-	From     string   `yaml:"from" json:"from,omitempty"`
-	To       string   `yaml:"to" json:"to,omitempty"`
-	Operator string   `yaml:"operator" json:"operator,omitempty"`
-	Value    string   `yaml:"value" json:"value,omitempty"`
-	Values   []string `yaml:"values" json:"values,omitempty"`
-}
-
-type FilterPreset struct {
-	Value        string `yaml:"value" json:"value"`
-	Label        string `yaml:"label" json:"label"`
-	From         string `yaml:"from" json:"from,omitempty"`
-	To           string `yaml:"to" json:"to,omitempty"`
-	RelativeDays int    `yaml:"relative_days" json:"relativeDays,omitempty"`
-}
-
-type FilterValues struct {
-	Source string `yaml:"source" json:"source,omitempty"`
-	Limit  int    `yaml:"limit" json:"limit,omitempty"`
 }
 
 type Visual struct {
@@ -519,10 +469,6 @@ type Interaction struct {
 	PointSelection   SelectionInteraction        `yaml:"point_selection" json:"pointSelection,omitempty"`
 	RowSelection     SelectionInteraction        `yaml:"row_selection" json:"rowSelection,omitempty"`
 	SpatialSelection SpatialSelectionInteraction `yaml:"spatial_selection" json:"spatialSelection,omitempty"`
-}
-
-type FilterTargets struct {
-	Visuals []string `yaml:"visuals" json:"visuals,omitempty"`
 }
 
 type SelectionInteraction struct {

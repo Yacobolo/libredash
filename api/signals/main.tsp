@@ -467,7 +467,7 @@ model AgentContextSignal {
   `pageTitle`: string;
   `modelId`: string;
   `generation`: int64;
-  `filters`: DashboardFilters;
+  `filters`: DashboardFilterState;
   `referenceLimit`: int32;
   `references`: AgentReferenceSignal[];
 }
@@ -593,19 +593,37 @@ model ConnectionsPageSignal {
 @apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "dashboard" })
 model DashboardComponentSignal {
   `badges`?: string[];
+  `binding`?: DashboardFilterBindingRef;
   `description`?: string;
   `eyebrow`?: string;
-  `filter`?: string;
   `height`: float64;
   `id`: string;
   `kind`: string;
   `placement`: DashboardPagePlacement;
+  `presentation`?: DashboardFilterPresentation;
   `subtitle`?: string;
   `title`?: string;
   `visual`?: string;
   `width`: float64;
   `x`: float64;
   `y`: float64;
+}
+
+model DashboardFilterBindingRef {
+  `scope`: "report" | "page";
+  `id`: string;
+}
+
+model DashboardFilterPresentation {
+  `style`: "dropdown" | "list" | "buttons" | "input" | "numeric_range" | "date_range" | "relative_period";
+  `search`: boolean;
+  `selectAll`: boolean;
+  `showCounts`: boolean;
+  `showSummary`: boolean;
+  `compact`: boolean;
+  `title`?: string;
+  `description`?: string;
+  `ariaLabel`?: string;
 }
 
 @apigen.contract(#{ kind: "ui-envelope", tags: #["dashboard", "envelope"] })
@@ -621,16 +639,28 @@ model DashboardEnvelope {
   `agentVisuals`: Record<LeapViewVisualization.VisualizationEnvelope>;
   @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "chrome" })
   `chrome`: ChromeSignal;
-  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "filterConfig" })
-  `filterConfig`: ReportFilterConfig[];
-  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "merge", `x-leapview-signal-key`: "filterOptions" })
-  `filterOptions`: Record<DashboardFilterOption[]>;
-  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "filters" })
-  `filters`: DashboardFilters;
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "filterContract" })
+  `filterContract`: DashboardFilterContract;
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "filterState" })
+  `filterState`: DashboardFilterState;
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "merge", `x-leapview-signal-key`: "filterOptionPages" })
+  `filterOptionPages`: Record<DashboardFilterOptionPage>;
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "filterCommand" })
+  `filterCommand`: DashboardFilterCommand;
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "filterOptionRequest" })
+  `filterOptionRequest`: DashboardFilterOptionRequest;
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "filterValidation" })
+  `filterValidation`: DashboardFilterValidationResult;
   @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "interactionCommand" })
   `interactionCommand`: DashboardInteractionCommand;
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "navigationCommand" })
+  `navigationCommand`: DashboardNavigationCommand;
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "interactionSelections" })
+  `interactionSelections`: DashboardInteractionSelection[];
   @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "spatialInteractionCommand" })
   `spatialInteractionCommand`: LeapViewVisualization.VisualizationSpatialSelectionCommand;
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "spatialSelections" })
+  `spatialSelections`: LeapViewVisualization.VisualizationSpatialSelectionState[];
   @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "page" })
   `page`: DashboardPageSignal;
   @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "runtime" })
@@ -641,33 +671,246 @@ model DashboardEnvelope {
   `visualWindowCommand`: LeapViewVisualization.VisualizationWindowRequest;
   @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "visualSpatialWindowCommand" })
   `visualSpatialWindowCommand`: LeapViewVisualization.VisualizationSpatialWindowRequest;
-  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "merge", `x-leapview-signal-key`: "urlParamShape" })
-  `urlParamShape`: Record<unknown>;
-  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "merge", `x-leapview-signal-key`: "urlParams" })
+  @apigen.`metadata`(#{ `x-leapview-patch-mode`: "replace", `x-leapview-signal-key`: "urlParams" })
   `urlParams`: Record<unknown>;
   @apigen.`metadata`(#{ `x-leapview-patch-mode`: "merge", `x-leapview-signal-key`: "visuals" })
   `visuals`: Record<DashboardVisualizationSignal>;
 }
 
-model DashboardFilterControl {
-  `from`?: string;
-  `operator`?: string;
-  `preset`?: string;
-  `to`?: string;
-  `type`: string;
-  `value`?: string;
-  `values`?: string[];
+@discriminator("kind")
+model DashboardFilterValue {
+  `kind`: string;
+}
+
+model DashboardStringFilterValue extends DashboardFilterValue {
+  `kind`: "string";
+  `value`: string;
+}
+
+model DashboardBooleanFilterValue extends DashboardFilterValue {
+  `kind`: "boolean";
+  `value`: boolean;
+}
+
+model DashboardIntegerFilterValue extends DashboardFilterValue {
+  `kind`: "integer";
+  /** Canonical precision-safe base-10 integer. */
+  `value`: string;
+}
+
+model DashboardDecimalFilterValue extends DashboardFilterValue {
+  `kind`: "decimal";
+  /** Canonical precision-safe base-10 decimal. */
+  `value`: string;
+}
+
+model DashboardDateFilterValue extends DashboardFilterValue {
+  `kind`: "date";
+  /** Canonical ISO 8601 calendar date. */
+  `value`: string;
+}
+
+model DashboardTimestampFilterValue extends DashboardFilterValue {
+  `kind`: "timestamp";
+  /** Canonical RFC 3339 timestamp. */
+  `value`: string;
+}
+
+model DashboardFilterBound {
+  `value`: DashboardFilterValue;
+  `inclusive`: boolean;
+}
+
+@discriminator("kind")
+model DashboardFilterExpression {
+  `kind`: string;
+}
+
+model DashboardUnfilteredExpression extends DashboardFilterExpression {
+  `kind`: "unfiltered";
+}
+
+model DashboardNullCheckExpression extends DashboardFilterExpression {
+  `kind`: "null_check";
+  `operator`: "is_null" | "is_not_null";
+}
+
+model DashboardSetExpression extends DashboardFilterExpression {
+  `kind`: "set";
+  `operator`: "in" | "not_in";
+  `values`: DashboardFilterValue[];
+}
+
+model DashboardComparisonExpression extends DashboardFilterExpression {
+  `kind`: "comparison";
+  `operator`: "equals" | "not_equals" | "contains" | "not_contains" | "starts_with" | "ends_with" | "greater_than" | "greater_than_or_equal" | "less_than" | "less_than_or_equal";
+  `value`: DashboardFilterValue;
+}
+
+model DashboardRangeExpression extends DashboardFilterExpression {
+  `kind`: "range";
+  `lower`?: DashboardFilterBound;
+  `upper`?: DashboardFilterBound;
+}
+
+model DashboardRelativePeriodExpression extends DashboardFilterExpression {
+  `kind`: "relative_period";
+  `direction`: "previous" | "current" | "next";
+  `count`: int32;
+  `unit`: "minute" | "hour" | "day" | "week" | "month" | "quarter" | "year";
+  `includeCurrent`: boolean;
+  `anchor`: "current_time" | "first_available" | "last_available" | "fixed";
+  `anchorValue`?: DashboardFilterValue;
+}
+
+model DashboardAppliedFilterState {
+  `expression`: DashboardFilterExpression;
+  `resolvedExpression`: DashboardFilterExpression;
+  `evaluatedAt`?: utcDateTime;
+}
+
+model DashboardFilterState {
+  `revision`: int64;
+  `appliedControls`: Record<DashboardAppliedFilterState>;
+  `draftControls`: Record<DashboardFilterExpression>;
+  `dirtyBindings`: string[];
+  `defaultsRevision`: string;
+}
+
+model DashboardFilterPredicatePolicy {
+  `kind`: "null_check" | "set" | "comparison" | "range" | "relative_period";
+  `operators`: string[];
+}
+
+model DashboardFilterOptionSource {
+  `kind`: "none" | "static" | "distinct";
+  `limit`: int32;
+  `values`: DashboardFilterStaticOption[];
+}
+
+model DashboardFilterStaticOption {
+  `value`: DashboardFilterValue;
+  `label`: string;
+}
+
+model DashboardCompiledFilterDefinition {
+  `id`: string;
+  `label`: string;
+  `description`?: string;
+  `field`: string;
+  `fact`?: string;
+  `valueKind`: "string" | "boolean" | "integer" | "decimal" | "date" | "timestamp";
+  `predicates`: DashboardFilterPredicatePolicy[];
+  `options`: DashboardFilterOptionSource;
+  `formatPattern`?: string;
+  `formatUnit`?: string;
+  `timezone`: string;
+  `calendar`: string;
+  `weekStart`: string;
+}
+
+model DashboardCompiledFilterBinding {
+  `key`: string;
+  `id`: string;
+  `filter`: string;
+  `scope`: "report" | "page";
+  `pageID`?: string;
+  `default`: DashboardFilterExpression;
+  `selectionMode`: "single" | "multiple";
+  `maxSelectedValues`: int32;
+  `readerEditable`: boolean;
+  `urlParam`?: string;
+  `urlEncoding`?: "typed_v1";
+  `paneVisible`: boolean;
+  `paneOrder`: int32;
+  `paneLabel`?: string;
+  `targets`: string[];
+  `optionDependencies`: DashboardFilterBindingRef[];
+}
+
+model DashboardFilterContract {
+  `applicationMode`: "immediate" | "deferred";
+  `definitions`: Record<DashboardCompiledFilterDefinition>;
+  `bindings`: Record<DashboardCompiledFilterBinding>;
+}
+
+model DashboardFilterOptionItem {
+  `value`: DashboardFilterValue;
+  `label`: string;
+  `count`?: int64;
+  `selected`: boolean;
+  `available`: boolean;
+}
+
+model DashboardFilterOptionPage {
+  `bindingKey`: string;
+  `servingStateID`: string;
+  `streamGeneration`: int64;
+  `filterRevision`: int64;
+  `requestGeneration`: int64;
+  `items`: DashboardFilterOptionItem[];
+  `complete`: boolean;
+  `nextCursor`?: string;
+  `consumerIdentity`: string;
+}
+
+model DashboardFilterValidationResult {
+  `accepted`: boolean;
+  `message`: string;
+  `currentRevision`: int64;
+  `clientMutationID`: string;
+}
+
+@apigen.contract(#{ kind: "ui-command", tags: #["dashboard", "filter", "command"] })
+@discriminator("kind")
+model DashboardFilterCommand {
+  `kind`: string;
+  `baseRevision`: int64;
+  `clientMutationID`: string;
+}
+
+model DashboardFilterMutateCommand extends DashboardFilterCommand {
+  `kind`: "mutate";
+  `bindingKey`: string;
+  `operation`: "set" | "clear" | "reset_binding";
+  `expression`?: DashboardFilterExpression;
+}
+
+model DashboardFilterApplyCommand extends DashboardFilterCommand {
+  `kind`: "apply";
+}
+
+model DashboardFilterCancelCommand extends DashboardFilterCommand {
+  `kind`: "cancel";
+}
+
+model DashboardFilterResetCommand extends DashboardFilterCommand {
+  `kind`: "reset";
+  `resetScope`: "page" | "dashboard";
+  `bindingKeys`: string[];
+}
+
+@apigen.contract(#{ kind: "ui-command", tags: #["dashboard", "navigation", "command"] })
+model DashboardNavigationCommand {
+  `pageID`: string;
+  `baseFilterRevision`: int64;
+  `clientMutationID`: string;
+}
+
+@apigen.contract(#{ kind: "ui-command", tags: #["dashboard", "filter", "options"] })
+model DashboardFilterOptionRequest {
+  `bindingKey`: string;
+  `search`: string;
+  `cursor`?: string;
+  `limit`: int32;
+  `servingStateID`: string;
+  `filterRevision`: int64;
+  `requestGeneration`: int64;
 }
 
 model DashboardFilterOption {
   `label`: string;
   `value`: string;
-}
-
-model DashboardFilters {
-  `controls`: Record<DashboardFilterControl>;
-  `selections`: DashboardInteractionSelection[];
-  `spatialSelections`: LeapViewVisualization.VisualizationSpatialSelectionState[];
 }
 
 model DashboardInteractionCommand {
@@ -699,6 +942,10 @@ model DashboardVisualizationSignal {
   `spatialSelection`?: LeapViewVisualization.VisualizationSpatialSelectionState;
   `status`: LeapViewVisualization.VisualizationStatus;
   `diagnostics`: LeapViewVisualization.VisualizationDiagnostic[];
+  `servingStateID`: string;
+  `streamGeneration`: int64;
+  `filterRevision`: int64;
+  `consumerIdentity`: string;
 }
 
 model DashboardInteractionCommandMapping {
@@ -1134,6 +1381,7 @@ model RouteRuntimeSignal {
   `modelId`?: string;
   `pageId`?: string;
   `streamInstanceId`?: string;
+  `servingStateId`?: string;
   `workspaceId`?: string;
 }
 

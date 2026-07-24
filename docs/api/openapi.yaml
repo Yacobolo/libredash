@@ -24113,17 +24113,62 @@ paths:
               schema:
                 $ref: '#/components/schemas/DashboardFilterDescribeResponse'
               example:
+                binding:
+                  filter: example
+                  id: example
+                  key: example
+                  maxSelectedValues: 1
+                  optionDependencies:
+                    - id: example
+                      scope: example
+                  pageID: example
+                  paneLabel: example
+                  paneOrder: 1
+                  paneVisible: true
+                  readerEditable: true
+                  scope: example
+                  selectionMode: example
+                  targets:
+                    - example
+                  urlEncoding: example
+                  urlParam: example
                 componentId: example
-                description: example
-                field: example
-                id: example
-                multiSelect: true
+                definition:
+                  calendar: example
+                  description: example
+                  fact: example
+                  field: example
+                  formatPattern: example
+                  formatUnit: example
+                  id: example
+                  label: example
+                  options:
+                    kind: example
+                    limit: 1
+                    values:
+                      - label: example
+                  predicates:
+                    - kind: example
+                      operators:
+                        - example
+                  timezone: example
+                  valueKind: example
+                  weekStart: example
                 placement:
                   col: 1
                   colSpan: 1
                   row: 1
                   rowSpan: 1
-                title: example
+                presentation:
+                  ariaLabel: example
+                  compact: true
+                  description: example
+                  search: true
+                  selectAll: true
+                  showCounts: true
+                  showSummary: true
+                  style: example
+                  title: example
         '400':
           description: The server could not understand the request due to invalid syntax.
           content:
@@ -24668,30 +24713,31 @@ paths:
             schema:
               $ref: '#/components/schemas/DashboardPageQueryRequest'
             example:
-              filters:
+              filterState:
                 controls:
-                  key: example
-                selections:
-                  - key: example
-                spatialSelections:
-                  - geometry:
-                      bounds:
-                        east: !!float 1
-                        north: !!float 1
-                        south: !!float 1
-                        west: !!float 1
-                      center:
-                        latitude: !!float 1
+                  key: {}
+                version: example
+              interactionSelections:
+                - key: example
+              spatialSelections:
+                - geometry:
+                    bounds:
+                      east: !!float 1
+                      north: !!float 1
+                      south: !!float 1
+                      west: !!float 1
+                    center:
+                      latitude: !!float 1
+                      longitude: !!float 1
+                    kind: example
+                    points:
+                      - latitude: !!float 1
                         longitude: !!float 1
-                      kind: example
-                      points:
-                        - latitude: !!float 1
-                          longitude: !!float 1
-                      radiusMeters: !!float 1
-                    gesture: box
-                    interactionID: example
-                    order: 1
-                    visualID: example
+                    radiusMeters: !!float 1
+                  gesture: box
+                  interactionID: example
+                  order: 1
+                  visualID: example
       x-apigen-tool:
         confirmation: never
         effect: read
@@ -24704,6 +24750,15 @@ paths:
             - default: !!float 25
               name: limit
               source: query
+            - mode: omit
+              name: filterState
+              source: body
+            - mode: omit
+              name: interactionSelections
+              source: body
+            - mode: omit
+              name: spatialSelections
+              source: body
         name: list_dashboard_filter_values
         output:
           cursor:
@@ -24753,10 +24808,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/DashboardPageQueryResponse'
               example:
-                filterOptions:
-                  key: example
-                filters:
-                  key: example
+                filterState:
+                  controls:
+                    key: {}
+                  version: example
                 status:
                   key: example
                 visuals:
@@ -25029,30 +25084,31 @@ paths:
             schema:
               $ref: '#/components/schemas/DashboardPageQueryRequest'
             example:
-              filters:
+              filterState:
                 controls:
-                  key: example
-                selections:
-                  - key: example
-                spatialSelections:
-                  - geometry:
-                      bounds:
-                        east: !!float 1
-                        north: !!float 1
-                        south: !!float 1
-                        west: !!float 1
-                      center:
-                        latitude: !!float 1
+                  key: {}
+                version: example
+              interactionSelections:
+                - key: example
+              spatialSelections:
+                - geometry:
+                    bounds:
+                      east: !!float 1
+                      north: !!float 1
+                      south: !!float 1
+                      west: !!float 1
+                    center:
+                      latitude: !!float 1
+                      longitude: !!float 1
+                    kind: example
+                    points:
+                      - latitude: !!float 1
                         longitude: !!float 1
-                      kind: example
-                      points:
-                        - latitude: !!float 1
-                          longitude: !!float 1
-                      radiusMeters: !!float 1
-                    gesture: box
-                    interactionID: example
-                    order: 1
-                    visualID: example
+                    radiusMeters: !!float 1
+                  gesture: box
+                  interactionID: example
+                  order: 1
+                  visualID: example
       x-apigen-tool:
         confirmation: never
         effect: read
@@ -25062,6 +25118,15 @@ paths:
               mode: context
               name: workspace
               source: path
+            - mode: omit
+              name: filterState
+              source: body
+            - mode: omit
+              name: interactionSelections
+              source: body
+            - mode: omit
+              name: spatialSelections
+              source: body
         name: query_dashboard_page
         output:
           mode: raw
@@ -25693,32 +25758,33 @@ paths:
             schema:
               $ref: '#/components/schemas/DashboardVisualQueryRequest'
             example:
-              filters:
+              filterState:
                 controls:
-                  key: example
-                selections:
-                  - key: example
-                spatialSelections:
-                  - geometry:
-                      bounds:
-                        east: !!float 1
-                        north: !!float 1
-                        south: !!float 1
-                        west: !!float 1
-                      center:
-                        latitude: !!float 1
-                        longitude: !!float 1
-                      kind: example
-                      points:
-                        - latitude: !!float 1
-                          longitude: !!float 1
-                      radiusMeters: !!float 1
-                    gesture: box
-                    interactionID: example
-                    order: 1
-                    visualID: example
+                  key: {}
+                version: example
+              interactionSelections:
+                - key: example
               limit: 1
               pageToken: example
+              spatialSelections:
+                - geometry:
+                    bounds:
+                      east: !!float 1
+                      north: !!float 1
+                      south: !!float 1
+                      west: !!float 1
+                    center:
+                      latitude: !!float 1
+                      longitude: !!float 1
+                    kind: example
+                    points:
+                      - latitude: !!float 1
+                        longitude: !!float 1
+                    radiusMeters: !!float 1
+                  gesture: box
+                  interactionID: example
+                  order: 1
+                  visualID: example
       x-apigen-tool:
         confirmation: never
         effect: read
@@ -25728,6 +25794,15 @@ paths:
               mode: context
               name: workspace
               source: path
+            - mode: omit
+              name: filterState
+              source: body
+            - mode: omit
+              name: interactionSelections
+              source: body
+            - mode: omit
+              name: spatialSelections
+              source: body
         name: query_dashboard_visual
         output:
           mode: raw
@@ -40253,6 +40328,262 @@ components:
         kind: example
         program: example
         programDigest: example
+    DashboardAppliedFilterInput:
+      type: object
+      required:
+        - version
+        - controls
+      properties:
+        version:
+          type: string
+          enum:
+            - typed_v1
+          example: example
+        controls:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/DashboardFilterExpression'
+          example:
+            key: {}
+      example:
+        controls:
+          key: {}
+        version: example
+    DashboardBooleanFilterValue:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/DashboardFilterValueBase'
+      required:
+        - kind
+        - value
+      properties:
+        kind:
+          type: string
+          enum:
+            - boolean
+          example: example
+        value:
+          type: boolean
+          example: true
+      example:
+        kind: example
+        value: true
+    DashboardComparisonExpression:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/DashboardFilterExpressionBase'
+      required:
+        - kind
+        - operator
+        - value
+      properties:
+        kind:
+          type: string
+          enum:
+            - comparison
+          example: example
+        operator:
+          type: string
+          enum:
+            - equals
+            - not_equals
+            - contains
+            - not_contains
+            - starts_with
+            - ends_with
+            - greater_than
+            - greater_than_or_equal
+            - less_than
+            - less_than_or_equal
+          example: example
+        value:
+          $ref: '#/components/schemas/DashboardFilterValue'
+      example:
+        kind: example
+        operator: example
+    DashboardCompiledFilterBinding:
+      type: object
+      required:
+        - key
+        - id
+        - filter
+        - scope
+        - default
+        - selectionMode
+        - maxSelectedValues
+        - readerEditable
+        - paneVisible
+        - paneOrder
+        - targets
+        - optionDependencies
+      properties:
+        key:
+          type: string
+          example: example
+        id:
+          type: string
+          example: example
+        filter:
+          type: string
+          example: example
+        scope:
+          type: string
+          enum:
+            - report
+            - page
+          example: example
+        pageID:
+          type: string
+          example: example
+        default:
+          $ref: '#/components/schemas/DashboardFilterExpression'
+        selectionMode:
+          type: string
+          enum:
+            - single
+            - multiple
+          example: example
+        maxSelectedValues:
+          type: integer
+          format: int32
+          example: 1
+        readerEditable:
+          type: boolean
+          example: true
+        urlParam:
+          type: string
+          example: example
+        urlEncoding:
+          type: string
+          enum:
+            - typed_v1
+          example: example
+        paneVisible:
+          type: boolean
+          example: true
+        paneOrder:
+          type: integer
+          format: int32
+          example: 1
+        paneLabel:
+          type: string
+          example: example
+        targets:
+          type: array
+          items:
+            type: string
+          example:
+            - example
+        optionDependencies:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardFilterBindingRef'
+          example:
+            - id: example
+              scope: example
+      example:
+        filter: example
+        id: example
+        key: example
+        maxSelectedValues: 1
+        optionDependencies:
+          - id: example
+            scope: example
+        pageID: example
+        paneLabel: example
+        paneOrder: 1
+        paneVisible: true
+        readerEditable: true
+        scope: example
+        selectionMode: example
+        targets:
+          - example
+        urlEncoding: example
+        urlParam: example
+    DashboardCompiledFilterDefinition:
+      type: object
+      required:
+        - id
+        - label
+        - field
+        - valueKind
+        - predicates
+        - options
+        - timezone
+        - calendar
+        - weekStart
+      properties:
+        id:
+          type: string
+          example: example
+        label:
+          type: string
+          example: example
+        description:
+          type: string
+          example: example
+        field:
+          type: string
+          example: example
+        fact:
+          type: string
+          example: example
+        valueKind:
+          type: string
+          enum:
+            - string
+            - boolean
+            - integer
+            - decimal
+            - date
+            - timestamp
+          example: example
+        predicates:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardFilterPredicatePolicy'
+          example:
+            - kind: example
+              operators:
+                - example
+        options:
+          $ref: '#/components/schemas/DashboardFilterOptionSource'
+        formatPattern:
+          type: string
+          example: example
+        formatUnit:
+          type: string
+          example: example
+        timezone:
+          type: string
+          example: example
+        calendar:
+          type: string
+          example: example
+        weekStart:
+          type: string
+          example: example
+      example:
+        calendar: example
+        description: example
+        fact: example
+        field: example
+        formatPattern: example
+        formatUnit: example
+        id: example
+        label: example
+        options:
+          kind: example
+          limit: 1
+          values:
+            - label: example
+        predicates:
+          - kind: example
+            operators:
+              - example
+        timezone: example
+        valueKind: example
+        weekStart: example
     DashboardComponentPlacement:
       type: object
       properties:
@@ -40346,6 +40677,75 @@ components:
         width: !!float 1
         x: !!float 1
         'y': !!float 1
+    DashboardDateFilterValue:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/DashboardFilterValueBase'
+      required:
+        - kind
+        - value
+      properties:
+        kind:
+          type: string
+          enum:
+            - date
+          example: example
+        value:
+          type: string
+          example: example
+      example:
+        kind: example
+        value: example
+    DashboardDecimalFilterValue:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/DashboardFilterValueBase'
+      required:
+        - kind
+        - value
+      properties:
+        kind:
+          type: string
+          enum:
+            - decimal
+          example: example
+        value:
+          type: string
+          example: example
+      example:
+        kind: example
+        value: example
+    DashboardFilterBindingRef:
+      type: object
+      required:
+        - scope
+        - id
+      properties:
+        scope:
+          type: string
+          enum:
+            - report
+            - page
+          example: example
+        id:
+          type: string
+          example: example
+      example:
+        id: example
+        scope: example
+    DashboardFilterBound:
+      type: object
+      required:
+        - value
+        - inclusive
+      properties:
+        value:
+          $ref: '#/components/schemas/DashboardFilterValue'
+        inclusive:
+          type: boolean
+          example: true
+      example:
+        inclusive: true
     DashboardFilterComponentResponse:
       type: object
       allOf:
@@ -40368,40 +40768,104 @@ components:
     DashboardFilterDescribeResponse:
       type: object
       required:
-        - id
+        - definition
+        - binding
       properties:
-        id:
-          type: string
-          example: example
+        definition:
+          $ref: '#/components/schemas/DashboardCompiledFilterDefinition'
+        binding:
+          $ref: '#/components/schemas/DashboardCompiledFilterBinding'
         componentId:
           type: string
           example: example
-        title:
-          type: string
-          example: example
-        description:
-          type: string
-          example: example
-        field:
-          type: string
-          example: example
-        multiSelect:
-          type: boolean
-          example: true
+        presentation:
+          $ref: '#/components/schemas/DashboardFilterPresentation'
         placement:
           $ref: '#/components/schemas/DashboardComponentPlacement'
       example:
+        binding:
+          filter: example
+          id: example
+          key: example
+          maxSelectedValues: 1
+          optionDependencies:
+            - id: example
+              scope: example
+          pageID: example
+          paneLabel: example
+          paneOrder: 1
+          paneVisible: true
+          readerEditable: true
+          scope: example
+          selectionMode: example
+          targets:
+            - example
+          urlEncoding: example
+          urlParam: example
         componentId: example
-        description: example
-        field: example
-        id: example
-        multiSelect: true
+        definition:
+          calendar: example
+          description: example
+          fact: example
+          field: example
+          formatPattern: example
+          formatUnit: example
+          id: example
+          label: example
+          options:
+            kind: example
+            limit: 1
+            values:
+              - label: example
+          predicates:
+            - kind: example
+              operators:
+                - example
+          timezone: example
+          valueKind: example
+          weekStart: example
         placement:
           col: 1
           colSpan: 1
           row: 1
           rowSpan: 1
-        title: example
+        presentation:
+          ariaLabel: example
+          compact: true
+          description: example
+          search: true
+          selectAll: true
+          showCounts: true
+          showSummary: true
+          style: example
+          title: example
+    DashboardFilterExpression:
+      oneOf:
+        - $ref: '#/components/schemas/DashboardUnfilteredExpression'
+        - $ref: '#/components/schemas/DashboardNullCheckExpression'
+        - $ref: '#/components/schemas/DashboardSetExpression'
+        - $ref: '#/components/schemas/DashboardComparisonExpression'
+        - $ref: '#/components/schemas/DashboardRangeExpression'
+        - $ref: '#/components/schemas/DashboardRelativePeriodExpression'
+      discriminator:
+        propertyName: kind
+        mapping:
+          comparison: '#/components/schemas/DashboardComparisonExpression'
+          null_check: '#/components/schemas/DashboardNullCheckExpression'
+          range: '#/components/schemas/DashboardRangeExpression'
+          relative_period: '#/components/schemas/DashboardRelativePeriodExpression'
+          set: '#/components/schemas/DashboardSetExpression'
+          unfiltered: '#/components/schemas/DashboardUnfilteredExpression'
+    DashboardFilterExpressionBase:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          example: example
+      example:
+        kind: example
     DashboardFilterOptionListResponse:
       type: object
       required:
@@ -40438,68 +40902,155 @@ components:
       example:
         label: example
         value: example
-    DashboardFilters:
+    DashboardFilterOptionSource:
       type: object
+      required:
+        - kind
+        - limit
+        - values
       properties:
-        controls:
-          type: object
-          additionalProperties: {}
-          example:
-            key: example
-        selections:
+        kind:
+          type: string
+          enum:
+            - none
+            - static
+            - distinct
+          example: example
+        limit:
+          type: integer
+          format: int32
+          example: 1
+        values:
           type: array
           items:
-            type: object
-            additionalProperties: {}
+            $ref: '#/components/schemas/DashboardFilterStaticOption'
           example:
-            - key: example
-        spatialSelections:
-          type: array
-          items:
-            $ref: '#/components/schemas/DashboardSpatialInteractionSelection'
-          example:
-            - geometry:
-                bounds:
-                  east: !!float 1
-                  north: !!float 1
-                  south: !!float 1
-                  west: !!float 1
-                center:
-                  latitude: !!float 1
-                  longitude: !!float 1
-                kind: example
-                points:
-                  - latitude: !!float 1
-                    longitude: !!float 1
-                radiusMeters: !!float 1
-              gesture: box
-              interactionID: example
-              order: 1
-              visualID: example
+            - label: example
       example:
-        controls:
-          key: example
-        selections:
-          - key: example
-        spatialSelections:
-          - geometry:
-              bounds:
-                east: !!float 1
-                north: !!float 1
-                south: !!float 1
-                west: !!float 1
-              center:
-                latitude: !!float 1
-                longitude: !!float 1
-              kind: example
-              points:
-                - latitude: !!float 1
-                  longitude: !!float 1
-              radiusMeters: !!float 1
-            gesture: box
-            interactionID: example
-            order: 1
-            visualID: example
+        kind: example
+        limit: 1
+        values:
+          - label: example
+    DashboardFilterPredicatePolicy:
+      type: object
+      required:
+        - kind
+        - operators
+      properties:
+        kind:
+          type: string
+          enum:
+            - null_check
+            - set
+            - comparison
+            - range
+            - relative_period
+          example: example
+        operators:
+          type: array
+          items:
+            type: string
+          example:
+            - example
+      example:
+        kind: example
+        operators:
+          - example
+    DashboardFilterPresentation:
+      type: object
+      required:
+        - style
+        - search
+        - selectAll
+        - showCounts
+        - showSummary
+        - compact
+      properties:
+        style:
+          type: string
+          enum:
+            - dropdown
+            - list
+            - buttons
+            - input
+            - numeric_range
+            - date_range
+            - relative_period
+          example: example
+        search:
+          type: boolean
+          example: true
+        selectAll:
+          type: boolean
+          example: true
+        showCounts:
+          type: boolean
+          example: true
+        showSummary:
+          type: boolean
+          example: true
+        compact:
+          type: boolean
+          example: true
+        title:
+          type: string
+          example: example
+        description:
+          type: string
+          example: example
+        ariaLabel:
+          type: string
+          example: example
+      example:
+        ariaLabel: example
+        compact: true
+        description: example
+        search: true
+        selectAll: true
+        showCounts: true
+        showSummary: true
+        style: example
+        title: example
+    DashboardFilterStaticOption:
+      type: object
+      required:
+        - value
+        - label
+      properties:
+        value:
+          $ref: '#/components/schemas/DashboardFilterValue'
+        label:
+          type: string
+          example: example
+      example:
+        label: example
+    DashboardFilterValue:
+      oneOf:
+        - $ref: '#/components/schemas/DashboardStringFilterValue'
+        - $ref: '#/components/schemas/DashboardBooleanFilterValue'
+        - $ref: '#/components/schemas/DashboardIntegerFilterValue'
+        - $ref: '#/components/schemas/DashboardDecimalFilterValue'
+        - $ref: '#/components/schemas/DashboardDateFilterValue'
+        - $ref: '#/components/schemas/DashboardTimestampFilterValue'
+      discriminator:
+        propertyName: kind
+        mapping:
+          boolean: '#/components/schemas/DashboardBooleanFilterValue'
+          date: '#/components/schemas/DashboardDateFilterValue'
+          decimal: '#/components/schemas/DashboardDecimalFilterValue'
+          integer: '#/components/schemas/DashboardIntegerFilterValue'
+          string: '#/components/schemas/DashboardStringFilterValue'
+          timestamp: '#/components/schemas/DashboardTimestampFilterValue'
+    DashboardFilterValueBase:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          example: example
+      example:
+        kind: example
     DashboardHeaderComponentResponse:
       type: object
       allOf:
@@ -40514,6 +41065,25 @@ components:
           example: example
       example:
         kind: example
+    DashboardIntegerFilterValue:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/DashboardFilterValueBase'
+      required:
+        - kind
+        - value
+      properties:
+        kind:
+          type: string
+          enum:
+            - integer
+          example: example
+        value:
+          type: string
+          example: example
+      example:
+        kind: example
+        value: example
     DashboardListResponse:
       type: object
       required:
@@ -40697,18 +41267,45 @@ components:
             title: example
         semantic_model: example
         title: example
+    DashboardNullCheckExpression:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/DashboardFilterExpressionBase'
+      required:
+        - kind
+        - operator
+      properties:
+        kind:
+          type: string
+          enum:
+            - null_check
+          example: example
+        operator:
+          type: string
+          enum:
+            - is_null
+            - is_not_null
+          example: example
+      example:
+        kind: example
+        operator: example
     DashboardPageQueryRequest:
       type: object
       properties:
-        filters:
-          $ref: '#/components/schemas/DashboardFilters'
-      example:
-        filters:
-          controls:
-            key: example
-          selections:
+        filterState:
+          $ref: '#/components/schemas/DashboardAppliedFilterInput'
+        interactionSelections:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+          example:
             - key: example
-          spatialSelections:
+        spatialSelections:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardSpatialInteractionSelection'
+          example:
             - geometry:
                 bounds:
                   east: !!float 1
@@ -40727,22 +41324,40 @@ components:
               interactionID: example
               order: 1
               visualID: example
+      example:
+        filterState:
+          controls:
+            key: {}
+          version: example
+        interactionSelections:
+          - key: example
+        spatialSelections:
+          - geometry:
+              bounds:
+                east: !!float 1
+                north: !!float 1
+                south: !!float 1
+                west: !!float 1
+              center:
+                latitude: !!float 1
+                longitude: !!float 1
+              kind: example
+              points:
+                - latitude: !!float 1
+                  longitude: !!float 1
+              radiusMeters: !!float 1
+            gesture: box
+            interactionID: example
+            order: 1
+            visualID: example
     DashboardPageQueryResponse:
       type: object
       required:
-        - filters
+        - filterState
         - visuals
       properties:
-        filters:
-          type: object
-          additionalProperties: {}
-          example:
-            key: example
-        filterOptions:
-          type: object
-          additionalProperties: {}
-          example:
-            key: example
+        filterState:
+          $ref: '#/components/schemas/DashboardAppliedFilterInput'
         status:
           type: object
           additionalProperties: {}
@@ -40780,10 +41395,10 @@ components:
                 message: example
               visualID: example
       example:
-        filterOptions:
-          key: example
-        filters:
-          key: example
+        filterState:
+          controls:
+            key: {}
+          version: example
         status:
           key: example
         visuals:
@@ -41001,6 +41616,116 @@ components:
         - suspended
         - unconfigured
       example: active
+    DashboardRangeExpression:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/DashboardFilterExpressionBase'
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          enum:
+            - range
+          example: example
+        lower:
+          $ref: '#/components/schemas/DashboardFilterBound'
+        upper:
+          $ref: '#/components/schemas/DashboardFilterBound'
+      example:
+        kind: example
+        lower:
+          inclusive: true
+        upper:
+          inclusive: true
+    DashboardRelativePeriodExpression:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/DashboardFilterExpressionBase'
+      required:
+        - kind
+        - direction
+        - count
+        - unit
+        - includeCurrent
+        - anchor
+      properties:
+        kind:
+          type: string
+          enum:
+            - relative_period
+          example: example
+        direction:
+          type: string
+          enum:
+            - previous
+            - current
+            - next
+          example: example
+        count:
+          type: integer
+          format: int32
+          example: 1
+        unit:
+          type: string
+          enum:
+            - minute
+            - hour
+            - day
+            - week
+            - month
+            - quarter
+            - year
+          example: example
+        includeCurrent:
+          type: boolean
+          example: true
+        anchor:
+          type: string
+          enum:
+            - current_time
+            - first_available
+            - last_available
+            - fixed
+          example: example
+        anchorValue:
+          $ref: '#/components/schemas/DashboardFilterValue'
+      example:
+        anchor: example
+        count: 1
+        direction: example
+        includeCurrent: true
+        kind: example
+        unit: example
+    DashboardSetExpression:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/DashboardFilterExpressionBase'
+      required:
+        - kind
+        - operator
+        - values
+      properties:
+        kind:
+          type: string
+          enum:
+            - set
+          example: example
+        operator:
+          type: string
+          enum:
+            - in
+            - not_in
+          example: example
+        values:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardFilterValue'
+          example: []
+      example:
+        kind: example
+        operator: example
+        values: []
     DashboardSpatialInteractionSelection:
       type: object
       required:
@@ -41084,6 +41809,25 @@ components:
           - latitude: !!float 1
             longitude: !!float 1
         radiusMeters: !!float 1
+    DashboardStringFilterValue:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/DashboardFilterValueBase'
+      required:
+        - kind
+        - value
+      properties:
+        kind:
+          type: string
+          enum:
+            - string
+          example: example
+        value:
+          type: string
+          example: example
+      example:
+        kind: example
+        value: example
     DashboardSummary:
       type: object
       required:
@@ -41124,6 +41868,39 @@ components:
         tags:
           - example
         title: example
+    DashboardTimestampFilterValue:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/DashboardFilterValueBase'
+      required:
+        - kind
+        - value
+      properties:
+        kind:
+          type: string
+          enum:
+            - timestamp
+          example: example
+        value:
+          type: string
+          example: example
+      example:
+        kind: example
+        value: example
+    DashboardUnfilteredExpression:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/DashboardFilterExpressionBase'
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          enum:
+            - unfiltered
+          example: example
+      example:
+        kind: example
     DashboardVisualComponentResponse:
       type: object
       allOf:
@@ -41211,15 +41988,20 @@ components:
           minLength: 1
           maxLength: 2048
           example: example
-        filters:
-          $ref: '#/components/schemas/DashboardFilters'
-      example:
-        filters:
-          controls:
-            key: example
-          selections:
+        filterState:
+          $ref: '#/components/schemas/DashboardAppliedFilterInput'
+        interactionSelections:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+          example:
             - key: example
-          spatialSelections:
+        spatialSelections:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardSpatialInteractionSelection'
+          example:
             - geometry:
                 bounds:
                   east: !!float 1
@@ -41238,8 +42020,34 @@ components:
               interactionID: example
               order: 1
               visualID: example
+      example:
+        filterState:
+          controls:
+            key: {}
+          version: example
+        interactionSelections:
+          - key: example
         limit: 1
         pageToken: example
+        spatialSelections:
+          - geometry:
+              bounds:
+                east: !!float 1
+                north: !!float 1
+                south: !!float 1
+                west: !!float 1
+              center:
+                latitude: !!float 1
+                longitude: !!float 1
+              kind: example
+              points:
+                - latitude: !!float 1
+                  longitude: !!float 1
+              radiusMeters: !!float 1
+            gesture: box
+            interactionID: example
+            order: 1
+            visualID: example
     DataPolicyListResponse:
       type: object
       required:

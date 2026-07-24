@@ -23,6 +23,44 @@ spec:
     from: delivery_routes.order_id
     to: orders.order_id
     cardinality: many_to_one
+  dimensions:
+    purchase_timestamp:
+      type: timestamp
+      bindings:
+        orders: {field: orders.purchase_timestamp}
+    purchase_date:
+      type: date
+      bindings:
+        orders: {field: orders.purchase_date}
+    state:
+      type: string
+      bindings:
+        orders:
+          field: customers.state
+          path: [orders_customers]
+        delivery_routes:
+          field: customers.state
+          path: [delivery_routes_orders, orders_customers]
+    order_status:
+      type: string
+      bindings:
+        orders: {field: orders.status}
+    category:
+      type: string
+      bindings:
+        orders: {field: orders.category}
+    delivered:
+      type: boolean
+      bindings:
+        orders: {field: orders.is_delivered}
+    delivery_days:
+      type: number
+      bindings:
+        orders: {field: orders.delivery_days}
+    revenue_amount:
+      type: number
+      bindings:
+        orders: {field: orders.revenue}
   measures:
     fixture_points:
       label: Fixture points

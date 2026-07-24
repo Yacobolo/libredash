@@ -593,9 +593,9 @@ func TestAPIGenAgentToolsExposeTypeSpecArgumentNamesAndBodyFields(t *testing.T) 
 		"asset_lineage":                {"assetId"},
 		"describe_model":               {"model"},
 		"describe_dashboard_page":      {"dashboard", "page"},
-		"list_dashboard_filter_values": {"dashboard", "page", "filter", "filters", "limit", "pageToken"},
-		"query_dashboard_page":         {"dashboard", "page", "filters"},
-		"query_dashboard_visual":       {"dashboard", "page", "visual", "filters", "limit", "pageToken"},
+		"list_dashboard_filter_values": {"dashboard", "page", "filter", "limit", "pageToken"},
+		"query_dashboard_page":         {"dashboard", "page"},
+		"query_dashboard_visual":       {"dashboard", "page", "visual", "limit", "pageToken"},
 		"query_semantic_model":         {"model", "dimensions", "measures", "filters", "sort", "limit", "pageToken"},
 	} {
 		var schema struct {

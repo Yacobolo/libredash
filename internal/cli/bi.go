@@ -71,12 +71,24 @@ func dashboardsCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 	}
 	addTargetTokenFlags(visual, opts)
 
+	filter := &cobra.Command{
+		Use:   "filter <dashboard> <page> <filter>",
+		Short: "Describe a compiled dashboard filter binding",
+		Args:  cobra.ExactArgs(3),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runRawAPI(ctx, opts, "getDashboardFilter", map[string]string{
+				"workspace": opts.workspaceID, "dashboard": args[0], "page": args[1], "filter": args[2],
+			}, nil, nil)
+		},
+	}
+	addTargetTokenFlags(filter, opts)
+
 	visualData := &cobra.Command{
 		Use:   "visual-data <dashboard> <page> <visual>",
 		Short: "Query dashboard visual data",
 		Args:  cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			body, err := visualQueryBody(opts.count, opts.filtersJSON)
+			body, err := visualQueryBody(opts.count, opts.filterStateJSON)
 			if err != nil {
 				return err
 			}
@@ -84,7 +96,7 @@ func dashboardsCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 		},
 	}
 	addTargetTokenFlags(visualData, opts)
-	visualData.Flags().StringVar(&opts.filtersJSON, "filters-json", "", "dashboard filters JSON")
+	visualData.Flags().StringVar(&opts.filterStateJSON, "filter-state-json", "", "versioned dashboard filter state JSON")
 	visualData.Flags().IntVar(&opts.count, "count", 0, "row count for table, matrix, or pivot visuals")
 
 	queryPage := &cobra.Command{
@@ -92,7 +104,7 @@ func dashboardsCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 		Short: "Query a dashboard page",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			body, err := filtersBody(opts.filtersJSON)
+			body, err := filterStateBody(opts.filterStateJSON)
 			if err != nil {
 				return err
 			}
@@ -100,14 +112,14 @@ func dashboardsCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 		},
 	}
 	addTargetTokenFlags(queryPage, opts)
-	queryPage.Flags().StringVar(&opts.filtersJSON, "filters-json", "", "dashboard filters JSON")
+	queryPage.Flags().StringVar(&opts.filterStateJSON, "filter-state-json", "", "versioned dashboard filter state JSON")
 
 	filterOptions := &cobra.Command{
 		Use:   "filter-options <dashboard> <page> <filter>",
 		Short: "List dashboard filter options",
 		Args:  cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			body, err := filtersBody(opts.filtersJSON)
+			body, err := filterStateBody(opts.filterStateJSON)
 			if err != nil {
 				return err
 			}
@@ -116,9 +128,9 @@ func dashboardsCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 	}
 	addTargetTokenFlags(filterOptions, opts)
 	addPaginationFlags(filterOptions, opts)
-	filterOptions.Flags().StringVar(&opts.filtersJSON, "filters-json", "", "dashboard filters JSON")
+	filterOptions.Flags().StringVar(&opts.filterStateJSON, "filter-state-json", "", "versioned dashboard filter state JSON")
 
-	parent.AddCommand(list, describe, page, visual, visualData, queryPage, filterOptions)
+	parent.AddCommand(list, describe, page, visual, filter, visualData, queryPage, filterOptions)
 	return parent
 }
 
@@ -267,28 +279,28 @@ func runRawAPI(ctx context.Context, opts *rootOptions, operationID string, pathP
 	return encoder.Encode(out)
 }
 
-func filtersBody(raw string) (map[string]any, error) {
+func filterStateBody(raw string) (map[string]any, error) {
 	if raw == "" {
 		return nil, nil
 	}
-	filters, err := decodeObjectJSON(raw)
+	filterState, err := decodeObjectJSON(raw)
 	if err != nil {
-		return nil, fmt.Errorf("filters-json: %w", err)
+		return nil, fmt.Errorf("filter-state-json: %w", err)
 	}
-	return map[string]any{"filters": filters}, nil
+	return map[string]any{"filterState": filterState}, nil
 }
 
-func visualQueryBody(count int, rawFilters string) (map[string]any, error) {
+func visualQueryBody(count int, rawFilterState string) (map[string]any, error) {
 	body := map[string]any{}
 	if count > 0 {
 		body["limit"] = count
 	}
-	if rawFilters != "" {
-		filters, err := decodeObjectJSON(rawFilters)
+	if rawFilterState != "" {
+		filterState, err := decodeObjectJSON(rawFilterState)
 		if err != nil {
-			return nil, fmt.Errorf("filters-json: %w", err)
+			return nil, fmt.Errorf("filter-state-json: %w", err)
 		}
-		body["filters"] = filters
+		body["filterState"] = filterState
 	}
 	if len(body) == 0 {
 		return nil, nil

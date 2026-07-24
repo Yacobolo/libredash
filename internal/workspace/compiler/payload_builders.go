@@ -194,7 +194,11 @@ func semanticDimensionsPayload(dimensions map[string]semanticmodel.SemanticDimen
 			binding := dimension.Bindings[fact]
 			bindings[fact] = semanticDimensionBindingPayloadV1{Field: binding.Field, Path: append([]string{}, binding.Path...)}
 		}
-		out[name] = semanticDimensionPayloadV1{Name: name, Label: dimension.Label, Description: dimension.Description, Type: dimension.Type, Grains: append([]string{}, dimension.Grains...), Bindings: bindings}
+		out[name] = semanticDimensionPayloadV1{
+			Name: name, Label: dimension.Label, Description: dimension.Description, Type: dimension.Type,
+			Grains: append([]string{}, dimension.Grains...), Timezone: dimension.Timezone,
+			Calendar: dimension.Calendar, WeekStart: dimension.WeekStart, Bindings: bindings,
+		}
 	}
 	return out
 }
@@ -269,59 +273,6 @@ func dashboardPayload(report dashboarddefinition.Definition, tags []string) dash
 	return dashboardPayloadV1{ID: report.ID, Title: report.Title, Description: report.Description, SemanticModel: report.SemanticModel, Tags: tags}
 }
 
-func filterPayload(filter dashboarddefinition.FilterDefinition) filterPayloadV1 {
-	return filterPayloadV1{
-		Type:             filter.Type,
-		Label:            filter.Label,
-		Description:      filter.Description,
-		Dimension:        filter.Dimension,
-		Fact:             filter.Fact,
-		Default:          filter.Default,
-		Custom:           filter.Custom,
-		Presets:          filterPresetsPayload(filter.Presets),
-		Operator:         filter.Operator,
-		Values:           filterValuesPayload(filter.Values),
-		DefaultOperator:  filter.DefaultOperator,
-		Operators:        filter.Operators,
-		Options:          filterOptionsPayload(filter.Options),
-		URLParam:         filter.URLParam,
-		FromURLParam:     filter.FromURLParam,
-		ToURLParam:       filter.ToURLParam,
-		OperatorURLParam: filter.OperatorURLParam,
-		Targets:          filterTargetsPayload(filter.Targets),
-	}
-}
-
-func filterPresetsPayload(presets []dashboarddefinition.FilterPreset) []filterPresetPayloadV1 {
-	out := make([]filterPresetPayloadV1, 0, len(presets))
-	for _, preset := range presets {
-		out = append(out, filterPresetPayloadV1{
-			Value:        preset.Value,
-			Label:        preset.Label,
-			From:         preset.From,
-			To:           preset.To,
-			RelativeDays: preset.RelativeDays,
-		})
-	}
-	return out
-}
-
-func filterValuesPayload(values dashboarddefinition.FilterValues) filterValuesPayloadV1 {
-	return filterValuesPayloadV1{Source: values.Source, Limit: values.Limit}
-}
-
-func filterOptionsPayload(options []dashboarddefinition.FilterOption) []filterOptionPayloadV1 {
-	out := make([]filterOptionPayloadV1, 0, len(options))
-	for _, option := range options {
-		out = append(out, filterOptionPayloadV1{Value: option.Value, Label: option.Label})
-	}
-	return out
-}
-
-func filterTargetsPayload(targets dashboarddefinition.FilterTargets) filterTargetsPayloadV1 {
-	return filterTargetsPayloadV1{Visuals: append([]string{}, targets.Visuals...)}
-}
-
 func pagePayload(page dashboard.Page) pagePayloadV1 {
 	return pagePayloadV1{
 		ID:          page.ID,
@@ -389,15 +340,16 @@ func pageGridPayload(grid dashboard.PageGrid) pageGridV1 {
 
 func pageItemPayload(item dashboard.PageVisual) pageItemPayloadV1 {
 	return pageItemPayloadV1{
-		ID:          item.ID,
-		Kind:        item.Kind,
-		Visual:      item.Visual,
-		Filter:      item.Filter,
-		Description: item.Description,
-		Placement:   pagePlacementPayload(item.Placement),
-		Title:       item.Title,
-		Subtitle:    item.Subtitle,
-		Badges:      item.Badges,
+		ID:           item.ID,
+		Kind:         item.Kind,
+		Visual:       item.Visual,
+		Binding:      item.Binding,
+		Presentation: item.Presentation,
+		Description:  item.Description,
+		Placement:    pagePlacementPayload(item.Placement),
+		Title:        item.Title,
+		Subtitle:     item.Subtitle,
+		Badges:       item.Badges,
 	}
 }
 

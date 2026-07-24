@@ -19,10 +19,8 @@ func ValidateDashboard(d *report.Dashboard, models map[string]*semanticmodel.Mod
 	if !ok {
 		return fmt.Errorf("dashboard %q references unknown semantic model %q", d.ID, d.SemanticModel)
 	}
-	for name, filter := range d.Filters {
-		if err := model.ValidateQueryDimension(filter.Dimension); err != nil {
-			return fmt.Errorf("filter %q references unknown dimension %q", name, filter.Dimension)
-		}
+	if err := validateFilterArchitecture(d, model); err != nil {
+		return err
 	}
 	for name, authored := range d.Visuals {
 		if authored.Chart == nil {
@@ -174,16 +172,8 @@ func validateTableQueryPlan(d *report.Dashboard, model *semanticmodel.Model, nam
 	return nil
 }
 
-func scopedQueryFilters(d *report.Dashboard, model *semanticmodel.Model, targetKind, targetID string) []semanticquery.Filter {
-	filters := []semanticquery.Filter{}
-	for _, filter := range d.Filters {
-		applies, err := reportmodel.FilterAppliesToTarget(d, model, filter, targetKind, targetID)
-		if err != nil || !applies {
-			continue
-		}
-		filters = append(filters, semanticquery.Filter{Field: filter.Dimension, Fact: filter.Fact, Operator: "in"})
-	}
-	return filters
+func scopedQueryFilters(_ *report.Dashboard, _ *semanticmodel.Model, _, _ string) []semanticquery.Filter {
+	return nil
 }
 
 func reportFieldRefsToQueryFields(fields []report.FieldRef) []semanticquery.Field {
@@ -340,18 +330,7 @@ func normalizeTableFormatting(model *semanticmodel.Model, table *report.TableVis
 	table.MeasureFormatting = next
 }
 
-func validateFilterTargets(d *report.Dashboard, model *semanticmodel.Model) error {
-	for name, filter := range d.Filters {
-		for _, target := range filter.Targets.Visuals {
-			ok, err := reportmodel.FilterAppliesToTarget(d, model, filter, "visual", target)
-			if err != nil || !ok {
-				if err == nil {
-					err = fmt.Errorf("filter field %q is not reachable", filter.Dimension)
-				}
-				return fmt.Errorf("filter %q cannot apply to visual %q: %w", name, target, err)
-			}
-		}
-	}
+func validateFilterTargets(_ *report.Dashboard, _ *semanticmodel.Model) error {
 	return nil
 }
 

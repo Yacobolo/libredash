@@ -52,11 +52,10 @@ func ClientStreamID(r *http.Request, signals dashboard.Signals, dashboardID, pag
 }
 
 func StreamID(clientID, dashboardID, pageID string, streamInstanceID ...string) string {
-	streamID := clientID + ":" + dashboardID + ":" + pageID
 	if len(streamInstanceID) > 0 && streamInstanceID[0] != "" {
-		streamID += ":" + streamInstanceID[0]
+		return clientID + ":" + dashboardID + ":view:" + streamInstanceID[0]
 	}
-	return streamID
+	return clientID + ":" + dashboardID + ":" + pageID
 }
 
 func LoadingPatch() pagestream.SignalPatch {
@@ -98,13 +97,11 @@ func RefreshEventPatch(event dashboardstream.RefreshEvent) pagestream.SignalPatc
 			}
 		}
 		return pagestream.SignalPatch{
-			"filters": event.Filters,
-			"status":  status(true, nil),
-			"visuals": visuals,
+			"interactionSelections": uisignals.DashboardInteractionSelectionsFromDashboard(event.Filters.Selections),
+			"spatialSelections":     uisignals.DashboardSpatialSelectionsFromDashboard(event.Filters.SpatialSelections),
+			"status":                status(true, nil),
+			"visuals":               visuals,
 		}
-	case dashboardstream.RefreshEventFilterOptions:
-		options, _ := event.Value.(map[string][]dashboard.FilterOption)
-		return pagestream.SignalPatch{"filterOptions": options}
 	case dashboardstream.RefreshEventProgress:
 		return pagestream.SignalPatch{"status": status(true, nil)}
 	case dashboardstream.RefreshEventVisual:
@@ -139,7 +136,12 @@ func visualizationEnvelopeSignal(event dashboardstream.RefreshEvent) uisignals.D
 	if !ok {
 		panic(fmt.Sprintf("dashboard visualization %q has invalid envelope value %T", event.Target, event.Value))
 	}
-	return uisignals.DashboardVisualizationSignalFromIR(envelope)
+	signal := uisignals.DashboardVisualizationSignalFromIR(envelope)
+	signal.StreamGeneration = int64(event.Generation)
+	signal.FilterRevision = event.FilterRevision
+	signal.ServingStateID = event.ServingStateID
+	signal.ConsumerIdentity = event.Target
+	return signal
 }
 
 // RefreshEventEnvelope keeps refresh ordering and mailbox behavior outside the
@@ -176,7 +178,7 @@ func RefreshEventEnvelope(event dashboardstream.RefreshEvent) pagestream.Envelop
 }
 
 func dashboardMergeRoots() []string {
-	return []string{"filterOptions", "visuals"}
+	return []string{"visuals"}
 }
 
 func visualStatusKey(target string) string {

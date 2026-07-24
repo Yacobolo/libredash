@@ -7,6 +7,7 @@ import (
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	"github.com/Yacobolo/leapview/internal/dashboard/consumer"
 	dashboarddefinition "github.com/Yacobolo/leapview/internal/dashboard/definition"
+	dashboardfilter "github.com/Yacobolo/leapview/internal/dashboard/filter"
 	"github.com/Yacobolo/leapview/internal/dashboard/report"
 	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
 	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
@@ -15,10 +16,9 @@ import (
 type TargetKind = consumer.Kind
 
 const (
-	TargetFilterOptions TargetKind = consumer.KindFilterOptions
-	TargetVisual        TargetKind = consumer.KindVisual
-	TargetWindow        TargetKind = consumer.KindWindow
-	TargetSpatial       TargetKind = consumer.KindSpatial
+	TargetVisual  TargetKind = consumer.KindVisual
+	TargetWindow  TargetKind = consumer.KindWindow
+	TargetSpatial TargetKind = consumer.KindSpatial
 )
 
 type Target = consumer.Target
@@ -31,6 +31,54 @@ type RefreshPlan struct {
 type PreparedRefresh struct {
 	Filters dashboard.Filters
 	Plan    RefreshPlan
+}
+
+// PrepareFilterState attaches canonical compiled filter state and refreshes
+// only active-page consumers targeted by the changed bindings.
+func (s Service) PrepareFilterState(request Request, authoritative dashboard.Filters, state dashboardfilter.State, changedBindingKeys []string) (PreparedRefresh, error) {
+	definition, _, ok := s.Metrics.Report(request.DashboardID)
+	if !ok {
+		return PreparedRefresh{}, fmt.Errorf("dashboard %q is not published", request.DashboardID)
+	}
+	page, ok := definition.PageOrDefault(request.PageID)
+	if !ok || page.ID != request.PageID {
+		return PreparedRefresh{}, fmt.Errorf("unknown dashboard page %q", request.PageID)
+	}
+	filters := report.NormalizeFilters(s.Metrics, request.DashboardID, request.PageID, authoritative)
+	canonical := dashboardfilter.CloneState(state)
+	filters.CompiledState = &canonical
+	bindings := definition.CompiledFilterBindings()
+	changed := make(map[string]struct{}, len(changedBindingKeys))
+	for _, key := range changedBindingKeys {
+		changed[key] = struct{}{}
+	}
+	componentIDs := map[string]struct{}{}
+	for key, binding := range bindings {
+		if len(changed) > 0 {
+			if _, ok := changed[key]; !ok {
+				continue
+			}
+		}
+		prefix := page.ID + "/"
+		for _, target := range binding.Targets {
+			if len(target) > len(prefix) && target[:len(prefix)] == prefix {
+				componentIDs[target[len(prefix):]] = struct{}{}
+			}
+		}
+	}
+	visualIDs := []string{}
+	for _, component := range page.Visuals {
+		if _, ok := componentIDs[component.ID]; ok && component.Visual != "" {
+			visualIDs = append(visualIDs, component.Visual)
+		}
+	}
+	targets, err := s.targetsForIDs(request, visualIDs)
+	if err != nil {
+		return PreparedRefresh{}, err
+	}
+	return PreparedRefresh{
+		Filters: filters, Plan: RefreshPlan{Command: "filter_change", Targets: targets},
+	}, nil
 }
 
 // PrepareSelect applies the command to coordinator-owned filters and plans
@@ -107,16 +155,6 @@ func (s Service) PrepareClearSelection(request Request, authoritative dashboard.
 	filters.Selections = []dashboard.InteractionSelection{}
 	filters.SpatialSelections = []dashboard.SpatialInteractionSelection{}
 	return PreparedRefresh{Filters: filters, Plan: RefreshPlan{Command: "clear_selection", Targets: targets}}, nil
-}
-
-func (s Service) PrepareReload(request Request, authoritative dashboard.Filters) (PreparedRefresh, error) {
-	filters := report.NormalizeFilters(s.Metrics, request.DashboardID, request.PageID, authoritative)
-	return PreparedRefresh{Filters: filters, Plan: s.fullPlan(request, "reload")}, nil
-}
-
-func (s Service) PrepareResetFilters(request Request) (PreparedRefresh, error) {
-	filters := report.DefaultFilters(s.Metrics, request.DashboardID, request.PageID)
-	return PreparedRefresh{Filters: filters, Plan: s.fullPlan(request, "reset_filters")}, nil
 }
 
 func (s Service) PrepareInitial(request Request, initial dashboard.Filters) (PreparedRefresh, error) {
@@ -256,8 +294,6 @@ func (s Service) fullPlan(request Request, commandName string) RefreshPlan {
 	for _, item := range page.Visuals {
 		var target Target
 		switch {
-		case item.Kind == "filter" && item.Filter != "":
-			target = Target{Kind: TargetFilterOptions, ID: item.Filter}
 		case item.Visual != "":
 			if compiled, ok := definition.Visualizations[item.Visual]; ok {
 				if spatial, windowed := spatialTarget(compiled, request.VisualSpatialWindowCommand, commandName != "initial"); windowed {
@@ -281,16 +317,6 @@ func (s Service) fullPlan(request Request, commandName string) RefreshPlan {
 		}
 		seen[key] = struct{}{}
 		targets = append(targets, target)
-	}
-	// PageFilterIDs is the canonical page filter scope. Keep any filter not
-	// represented by a filter-card placement deterministic as well.
-	for _, filterID := range definition.PageFilterIDs(page.ID) {
-		key := string(TargetFilterOptions) + ":" + filterID
-		if _, ok := seen[key]; ok {
-			continue
-		}
-		seen[key] = struct{}{}
-		targets = append(targets, Target{Kind: TargetFilterOptions, ID: filterID})
 	}
 	return RefreshPlan{Command: commandName, Targets: targets}
 }

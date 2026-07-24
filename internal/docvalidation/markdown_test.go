@@ -46,7 +46,11 @@ func TestValidateMarkdownAcceptsPartialAndValidResourceExamples(t *testing.T) {
 ~~~yaml
 filters:
   state:
-    type: multi_select
+    label: State
+    field: customer_state
+    predicates:
+      - kind: set
+        operators: [in]
 ~~~
 
 ` + "```yaml\n" + `apiVersion: leapview.dev/v1

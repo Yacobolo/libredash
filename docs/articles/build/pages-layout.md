@@ -44,7 +44,7 @@ components:
     placement: {col: 1, row: 10, col_span: 12, row_span: 8}
 ```
 
-Use `kind: visual` for charts, KPIs, tables, matrices, and pivots; rendering is inferred from the referenced visual's `type`. Use `kind: filter` for filter controls and `kind: header` for headings.
+Use `kind: visual` for charts, KPIs, tables, matrices, and pivots; rendering is inferred from the referenced visual's `type`. Use `kind: slicer` for an on-canvas presentation of a report or page filter binding, and `kind: header` for headings. The Filters pane presents those same bindings independently of canvas placement.
 
 Coordinates are one-based. Keep `col + col_span - 1` within the configured column count. Avoid accidental overlaps unless a future component contract explicitly supports layering.
 
@@ -69,7 +69,7 @@ Choose spans based on the information a component must display:
 - Legends and long category labels require more chart width.
 - Time-series charts need enough horizontal space for the selected period.
 - Tables need enough height for a useful initial window.
-- Filter cards need space for selected values and operators.
+- Slicers need space for selected values, summaries, search, and operators.
 
 Do not solve overcrowding by shrinking every component. Split a page when users are expected to answer distinct questions or when details push the primary analysis below several screenfuls.
 

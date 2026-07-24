@@ -235,7 +235,7 @@ func PayloadSchemaForAssetType(typ AssetType) string {
 	case AssetTypePageItem:
 		return "page_item.v1"
 	case AssetTypeFilter:
-		return "filter.v1"
+		return "filter.v2"
 	case AssetTypeVisual:
 		return "visual.v1"
 	case AssetTypeWorkspaceGroup:

@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	nethttp "net/http"
 	"strings"
@@ -11,6 +12,8 @@ import (
 	"github.com/Yacobolo/leapview/internal/dashboard"
 	"github.com/Yacobolo/leapview/internal/dashboard/command"
 	lddatastar "github.com/Yacobolo/leapview/internal/dashboard/datastar"
+	dashboardfilter "github.com/Yacobolo/leapview/internal/dashboard/filter"
+	dashboardsession "github.com/Yacobolo/leapview/internal/dashboard/session"
 	dashboardstream "github.com/Yacobolo/leapview/internal/dashboard/stream"
 	reportui "github.com/Yacobolo/leapview/internal/dashboard/ui"
 	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
@@ -58,6 +61,29 @@ func (h Handler) Updates(w nethttp.ResponseWriter, r *nethttp.Request) {
 	if streamInstanceID == "" {
 		streamInstanceID = fallbackStreamInstanceID()
 	}
+	filterState, err := reportDefinition.FilterStateFromURL(activePage.ID, r.URL.Query())
+	if err != nil {
+		nethttp.Error(w, err.Error(), nethttp.StatusBadRequest)
+		return
+	}
+	sessionKey := h.dashboardSessionKey(r, reportDefinition, clientID, streamInstanceID)
+	if h.SessionStore != nil {
+		key := sessionKey
+		state := dashboardsession.NewState(activePage.ID, dashboardfilter.MachineSnapshot{
+			Version: dashboardfilter.MachineSnapshotVersion, State: filterState,
+		})
+		record, createErr := h.SessionStore.Create(r.Context(), key, state)
+		if errors.Is(createErr, dashboardsession.ErrConflict) {
+			record, createErr = h.SessionStore.Load(r.Context(), key)
+		}
+		if createErr != nil {
+			nethttp.Error(w, "dashboard session is unavailable", nethttp.StatusServiceUnavailable)
+			return
+		}
+		filterState = record.State.Filters.State
+	}
+	initialFilters.CompiledState = &filterState
+	initialFilters.ServingStateID = sessionKey.ServingStateID
 	streamID := lddatastar.StreamID(clientID, dashboardID, activePage.ID, streamInstanceID)
 	request := command.Request{
 		DashboardID: dashboardID,
@@ -122,7 +148,7 @@ func (h Handler) Updates(w nethttp.ResponseWriter, r *nethttp.Request) {
 			})
 		})
 	})
-	_, err := coordinator.BeginPrepared(func(dashboard.Filters) (dashboardstream.RefreshPreparation, error) {
+	_, err = coordinator.BeginPrepared(func(dashboard.Filters) (dashboardstream.RefreshPreparation, error) {
 		prepared, err := service.PrepareInitial(request, initialFilters)
 		return streamPreparation(prepared), err
 	}, func(preparation dashboardstream.RefreshPreparation) dashboardstream.RefreshWork {
@@ -183,7 +209,14 @@ func (h Handler) refreshObserver(dashboardID, pageID string) dashboardstream.Sum
 			"dashboard", dashboardID,
 			"page", pageID,
 			"command", summary.Command,
+			"servingStateId", summary.ServingStateID,
+			"filterRevision", summary.FilterRevision,
+			"affectedTargets", summary.AffectedTargets,
 			"plannedTargets", summary.PlannedTargets,
+			"visualCount", summary.VisualCount,
+			"optionCount", summary.OptionCount,
+			"currentCount", summary.CurrentCount,
+			"staleCount", summary.StaleCount,
 			"targetSuccesses", summary.TargetSuccesses,
 			"targetErrors", summary.TargetErrors,
 			"queryCount", summary.QueryCount,

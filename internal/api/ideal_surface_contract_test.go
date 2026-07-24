@@ -157,10 +157,15 @@ func TestDashboardVisualResponsesUseVersionedVisualizationEnvelope(t *testing.T)
 	}
 }
 
-func TestDashboardFiltersExposeSpatialSelections(t *testing.T) {
+func TestDashboardQueryExposesIndependentFilterAndSpatialState(t *testing.T) {
 	spec := managedDataOpenAPISpec(t)
 	schemas := openAPIMap(t, openAPIMap(t, spec, "components"), "schemas")
-	spatialSelections := schemaProperty(t, openAPISchema(t, schemas, "DashboardFilters"), "spatialSelections")
+	request := openAPISchema(t, schemas, "DashboardPageQueryRequest")
+	filterState := schemaProperty(t, request, "filterState")
+	if filterState["$ref"] != "#/components/schemas/DashboardAppliedFilterInput" {
+		t.Fatalf("dashboard filter state is not independently typed: %#v", filterState)
+	}
+	spatialSelections := schemaProperty(t, request, "spatialSelections")
 	if spatialSelections["type"] != "array" {
 		t.Fatalf("dashboard spatial selections are not an array: %#v", spatialSelections)
 	}

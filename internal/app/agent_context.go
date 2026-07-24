@@ -12,6 +12,7 @@ import (
 	"github.com/Yacobolo/leapview/internal/access"
 	"github.com/Yacobolo/leapview/internal/agent"
 	"github.com/Yacobolo/leapview/internal/dashboard"
+	dashboardfilter "github.com/Yacobolo/leapview/internal/dashboard/filter"
 	productsearch "github.com/Yacobolo/leapview/internal/search"
 	visualizationdefinition "github.com/Yacobolo/leapview/internal/visualization/definition"
 	visualizationir "github.com/Yacobolo/leapview/internal/visualization/ir"
@@ -166,25 +167,36 @@ func dashboardFiltersFromTurnContext(raw map[string]any) (dashboard.Filters, err
 	if raw == nil {
 		return dashboard.Filters{}.WithDefaults(), nil
 	}
+	if _, ok := raw["revision"]; !ok {
+		return dashboard.Filters{}, errors.New("invalid dashboard filter state: revision is required")
+	}
 	encoded, err := json.Marshal(raw)
 	if err != nil {
-		return dashboard.Filters{}, fmt.Errorf("encode dashboard filters: %w", err)
+		return dashboard.Filters{}, fmt.Errorf("encode dashboard filter state: %w", err)
 	}
-	var filters dashboard.Filters
-	if err := json.Unmarshal(encoded, &filters); err != nil {
-		return dashboard.Filters{}, fmt.Errorf("invalid dashboard filters: %w", err)
+	var state dashboardfilter.State
+	if err := json.Unmarshal(encoded, &state); err != nil {
+		return dashboard.Filters{}, fmt.Errorf("invalid dashboard filter state: %w", err)
 	}
-	return filters.WithDefaults(), nil
+	return dashboard.Filters{CompiledState: &state}.WithDefaults(), nil
 }
 
 func turnContextFilters(filters dashboard.Filters) (map[string]any, error) {
-	encoded, err := json.Marshal(filters)
+	state := dashboardfilter.State{
+		AppliedControls: map[string]dashboardfilter.AppliedState{},
+		DraftControls:   map[string]dashboardfilter.Expression{},
+		DirtyBindings:   []string{},
+	}
+	if filters.CompiledState != nil {
+		state = dashboardfilter.CloneState(*filters.CompiledState)
+	}
+	encoded, err := json.Marshal(state)
 	if err != nil {
-		return nil, fmt.Errorf("encode normalized dashboard filters: %w", err)
+		return nil, fmt.Errorf("encode normalized dashboard filter state: %w", err)
 	}
 	var out map[string]any
 	if err := json.Unmarshal(encoded, &out); err != nil {
-		return nil, fmt.Errorf("decode normalized dashboard filters: %w", err)
+		return nil, fmt.Errorf("decode normalized dashboard filter state: %w", err)
 	}
 	return out, nil
 }

@@ -201,7 +201,7 @@ func publicVisualizationDiscriminators(t *testing.T, schemaPath string) ([]strin
 	t.Helper()
 	type schemaNode struct {
 		Ref        string                `json:"$ref"`
-		Const      string                `json:"const"`
+		Const      any                   `json:"const"`
 		Enum       []string              `json:"enum"`
 		AnyOf      []schemaNode          `json:"anyOf"`
 		Properties map[string]schemaNode `json:"properties"`
@@ -218,11 +218,13 @@ func publicVisualizationDiscriminators(t *testing.T, schemaPath string) ([]strin
 	}
 	values := func(node schemaNode) []string {
 		out := append([]string{}, node.Enum...)
-		if node.Const != "" {
-			out = append(out, node.Const)
+		if value, ok := node.Const.(string); ok && value != "" {
+			out = append(out, value)
 		}
 		for _, candidate := range node.AnyOf {
-			out = append(out, candidate.Const)
+			if value, ok := candidate.Const.(string); ok && value != "" {
+				out = append(out, value)
+			}
 		}
 		return out
 	}
