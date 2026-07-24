@@ -66,7 +66,7 @@ func testStoreOptions(store *platform.Store, options assemblyConfig) assemblyCon
 	return options
 }
 
-func queryAuditRepositoryForTest(t *testing.T, server *applicationAssembly) queryaudit.Repository {
+func queryAuditRepositoryForTest(t *testing.T, server *appTestHarness) queryaudit.Repository {
 	t.Helper()
 	if server.runtime.queryAuditProvider == nil {
 		t.Fatal("query audit provider is not configured")

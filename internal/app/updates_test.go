@@ -15,7 +15,7 @@ func TestUpdatesLoginNoopStreamDoesNotRequireAuth(t *testing.T) {
 	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/updates?route=login", nil)
 	rec := httptest.NewRecorder()
 
-	newApplicationAssembly(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+	newAppTestHarness(fakeMetrics{}).Routes().ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
@@ -32,7 +32,7 @@ func TestUpdatesRejectsUnknownRoute(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/updates?route=missing", nil)
 	rec := httptest.NewRecorder()
 
-	newApplicationAssembly(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+	newAppTestHarness(fakeMetrics{}).Routes().ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d body=%s", rec.Code, http.StatusBadRequest, rec.Body.String())
@@ -43,7 +43,7 @@ func TestUpdatesRequiresRouteQuery(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/updates?dashboard=executive-sales&datastar=%7B%22runtime%22%3A%7B%22kind%22%3A%22dashboard%22%7D%7D", nil)
 	rec := httptest.NewRecorder()
 
-	newApplicationAssembly(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+	newAppTestHarness(fakeMetrics{}).Routes().ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d body=%s", rec.Code, http.StatusBadRequest, rec.Body.String())
@@ -54,7 +54,7 @@ func TestUpdatesRequiresRouteQuery(t *testing.T) {
 }
 
 func TestLegacyUpdateRoutesAreNotRegistered(t *testing.T) {
-	server := newApplicationAssembly(fakeMetrics{})
+	server := newAppTestHarness(fakeMetrics{})
 	for _, path := range []string{
 		"/data/updates",
 		"/chat/updates",

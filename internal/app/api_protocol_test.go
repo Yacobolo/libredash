@@ -175,7 +175,7 @@ func TestAPIGenTransportErrorsIdentifyInvalidParameterWithoutLeakingValue(t *tes
 }
 
 func TestPublicProtocolIdempotencyReplaysAndRejectsDigestReuse(t *testing.T) {
-	server := newApplicationAssembly(fakeMetrics{})
+	server := newAppTestHarness(fakeMetrics{})
 	calls := 0
 	handler := server.publicProtocolMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
@@ -219,7 +219,7 @@ func TestPublicProtocolIdempotencyReplaysAfterServerRestart(t *testing.T) {
 		w.WriteHeader(http.StatusCreated)
 		_, _ = w.Write([]byte(`{"id":"p-restart"}`))
 	})
-	request := func(server *applicationAssembly) *httptest.ResponseRecorder {
+	request := func(server *appTestHarness) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/principals", bytes.NewBufferString(`{"email":"restart@example.com"}`))
 		req.Header.Set("Authorization", "Bearer token-a")
 		req.Header.Set("Content-Type", "application/json")
@@ -290,7 +290,7 @@ func TestDurableIdempotencyDoesNotReplayTransientServerFailures(t *testing.T) {
 }
 
 func TestPublicProtocolMapsStreamedBodyLimitTo413(t *testing.T) {
-	server := newApplicationAssembly(fakeMetrics{})
+	server := newAppTestHarness(fakeMetrics{})
 	handler := requestBodyLimit(RequestBodyLimitConfig{Enabled: true, MaxBytes: 4})(server.publicProtocolMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusCreated)
 	})))
@@ -307,7 +307,7 @@ func TestPublicProtocolMapsStreamedBodyLimitTo413(t *testing.T) {
 }
 
 func TestPublicProtocolRequiresIdempotencyKeyForMutationsOnly(t *testing.T) {
-	server := newApplicationAssembly(fakeMetrics{})
+	server := newAppTestHarness(fakeMetrics{})
 	handler := server.publicProtocolMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
 	for _, tc := range []struct {
 		path string
@@ -328,7 +328,7 @@ func TestPublicProtocolRequiresIdempotencyKeyForMutationsOnly(t *testing.T) {
 }
 
 func TestPublicProtocolAlwaysRequiresBearerCredentials(t *testing.T) {
-	server := newApplicationAssembly(fakeMetrics{})
+	server := newAppTestHarness(fakeMetrics{})
 	handler := server.publicProtocolMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -391,7 +391,7 @@ func TestPublicListCursorsAreSignedBoundAndUnwrapped(t *testing.T) {
 		t.Fatalf("signed cursor response=%s err=%v", recorder.Body.String(), err)
 	}
 
-	server := newApplicationAssembly(fakeMetrics{})
+	server := newAppTestHarness(fakeMetrics{})
 	seen := ""
 	handler := server.publicProtocolMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		seen = r.URL.Query().Get("pageToken")

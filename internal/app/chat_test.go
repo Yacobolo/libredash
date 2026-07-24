@@ -1193,7 +1193,7 @@ func waitForRecorderBodyContains(t *testing.T, rec *synchronizedRecorder, want s
 	return ""
 }
 
-func readUpdatesUntil(t *testing.T, server *applicationAssembly, path, token string, wants ...string) string {
+func readUpdatesUntil(t *testing.T, server *appTestHarness, path, token string, wants ...string) string {
 	t.Helper()
 	reqCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1240,7 +1240,7 @@ func chatPrincipalAndToken(t *testing.T, ctx context.Context, store *platform.St
 	return testPrincipalRef{ID: principal.ID}, token
 }
 
-func waitForBrokerSubscription(t *testing.T, server *applicationAssembly, key string) {
+func waitForBrokerSubscription(t *testing.T, server *appTestHarness, key string) {
 	t.Helper()
 	deadline := time.Now().Add(time.Second)
 	for time.Now().Before(deadline) {

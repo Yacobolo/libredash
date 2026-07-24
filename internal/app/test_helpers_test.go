@@ -72,48 +72,48 @@ type assemblyConfig struct {
 	QueryAudit            *analyticsmodule.QueryAuditSurface
 }
 
-// applicationAssembly is a test fixture facade for legacy app-package tests.
+// appTestHarness is a test fixture facade for legacy app-package tests.
 // Production composition exposes only the final handler and lifecycle.
-type applicationAssembly struct {
+type appTestHarness struct {
 	routes   capabilityRoutes
 	runtime  runtimeServices
 	platform platformServices
 	policy   httpPolicy
 }
 
-func (s *applicationAssembly) Routes() http.Handler {
+func (s *appTestHarness) Routes() http.Handler {
 	return Routes(&s.routes, &s.runtime, &s.platform, &s.policy)
 }
 
-func (s *applicationAssembly) StartBackgroundJobs(ctx context.Context) error {
+func (s *appTestHarness) StartBackgroundJobs(ctx context.Context) error {
 	return StartBackgroundJobs(&s.routes, &s.runtime, &s.platform, &s.policy, ctx)
 }
 
-func (s *applicationAssembly) StopBackgroundJobs(ctx context.Context) error {
+func (s *appTestHarness) StopBackgroundJobs(ctx context.Context) error {
 	return StopBackgroundJobs(&s.routes, &s.runtime, &s.platform, &s.policy, ctx)
 }
 
-func (s *applicationAssembly) workloadController() workloadControl {
+func (s *appTestHarness) workloadController() workloadControl {
 	return workloadController(&s.routes, &s.runtime, &s.platform, &s.policy)
 }
 
-func (s *applicationAssembly) workspaceID(value string) string {
+func (s *appTestHarness) workspaceID(value string) string {
 	return workspaceID(&s.routes, &s.runtime, &s.platform, &s.policy, value)
 }
 
-func (s *applicationAssembly) requestServingEnvironment(r *http.Request) servingstatemodule.Environment {
+func (s *appTestHarness) requestServingEnvironment(r *http.Request) servingstatemodule.Environment {
 	return requestServingEnvironment(&s.routes, &s.runtime, &s.platform, &s.policy, r)
 }
 
-func (s *applicationAssembly) publicProtocolMiddleware(next http.Handler) http.Handler {
+func (s *appTestHarness) publicProtocolMiddleware(next http.Handler) http.Handler {
 	return publicProtocolMiddleware(&s.routes, &s.runtime, &s.platform, &s.policy, next)
 }
 
-func (s *applicationAssembly) metricsForWorkspace(workspaceID string) (QueryMetrics, bool) {
+func (s *appTestHarness) metricsForWorkspace(workspaceID string) (QueryMetrics, bool) {
 	return metricsForWorkspace(&s.routes, &s.runtime, &s.platform, &s.policy, workspaceID)
 }
 
-func assembleRuntime(metrics QueryMetrics, options assemblyConfig) *applicationAssembly {
+func assembleRuntime(metrics QueryMetrics, options assemblyConfig) *appTestHarness {
 	server, err := assembleRuntimeChecked(context.Background(), metrics, options)
 	if err != nil {
 		panic(err)
@@ -121,11 +121,11 @@ func assembleRuntime(metrics QueryMetrics, options assemblyConfig) *applicationA
 	return server
 }
 
-func newApplicationAssembly(metrics QueryMetrics) *applicationAssembly {
+func newAppTestHarness(metrics QueryMetrics) *appTestHarness {
 	return assembleRuntime(metrics, assemblyConfig{})
 }
 
-func apiGenDispatcherForTest(server *applicationAssembly) apiGenDispatcher {
+func apiGenDispatcherForTest(server *appTestHarness) apiGenDispatcher {
 	return apiGenDispatcher{
 		accessModule: server.routes.accessModule, agentModule: server.routes.agentModule,
 		dashboardModule: server.routes.dashboardModule, deploymentModule: server.routes.deploymentModule,
@@ -136,7 +136,7 @@ func apiGenDispatcherForTest(server *applicationAssembly) apiGenDispatcher {
 	}
 }
 
-func assembleRuntimeChecked(ctx context.Context, metrics QueryMetrics, options assemblyConfig) (*applicationAssembly, error) {
+func assembleRuntimeChecked(ctx context.Context, metrics QueryMetrics, options assemblyConfig) (*appTestHarness, error) {
 	if options.AccessModule == nil {
 		var err error
 		options.AccessModule, err = accessmodule.Build(ctx, accessmodule.Config{
@@ -185,7 +185,7 @@ func assembleRuntimeChecked(ctx context.Context, metrics QueryMetrics, options a
 	if err != nil {
 		return nil, err
 	}
-	return &applicationAssembly{
+	return &appTestHarness{
 		routes: *routes, runtime: *runtime, platform: *platform, policy: *policy,
 	}, nil
 }

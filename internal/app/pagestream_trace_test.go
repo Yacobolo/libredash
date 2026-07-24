@@ -46,7 +46,7 @@ func TestDevelopmentPageStreamTraceEndpointReturnsSanitizedEvents(t *testing.T) 
 
 func TestProductionOmitsPageStreamTraceEndpoint(t *testing.T) {
 	t.Setenv("LEAPVIEW_PRODUCTION", "1")
-	server := newApplicationAssembly(fakeMetrics{})
+	server := newAppTestHarness(fakeMetrics{})
 	req := httptest.NewRequest(http.MethodGet, "/__dev/pagestream/traces", nil)
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
@@ -57,7 +57,7 @@ func TestProductionOmitsPageStreamTraceEndpoint(t *testing.T) {
 
 func TestDevelopmentPageStreamSignalsEndpointReturnsStateAndSelectedHistory(t *testing.T) {
 	t.Setenv("LEAPVIEW_PRODUCTION", "")
-	server := newApplicationAssembly(fakeMetrics{})
+	server := newAppTestHarness(fakeMetrics{})
 	server.runtime.pageStreamTrace.Record(pagestream.TraceRecord{
 		StreamID: "trace:test", Stage: pagestream.TraceStageDelivered,
 		Signals:    pagestream.SignalPatch{"status": map[string]any{"progressPercent": 0}},
@@ -99,7 +99,7 @@ func TestDevelopmentPageStreamSignalsEndpointReturnsStateAndSelectedHistory(t *t
 
 func TestProductionOmitsPageStreamSignalsEndpoint(t *testing.T) {
 	t.Setenv("LEAPVIEW_PRODUCTION", "1")
-	server := newApplicationAssembly(fakeMetrics{})
+	server := newAppTestHarness(fakeMetrics{})
 	req := httptest.NewRequest(http.MethodGet, "/__dev/pagestream/signals", nil)
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)

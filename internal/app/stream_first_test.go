@@ -13,12 +13,12 @@ import (
 
 var dataInitUpdatesPattern = regexp.MustCompile(`data-init="@get\('([^']+)'`)
 
-func renderedWithBootstrap(t *testing.T, server *applicationAssembly, pageBody, authorization string) string {
+func renderedWithBootstrap(t *testing.T, server *appTestHarness, pageBody, authorization string) string {
 	t.Helper()
 	return html.UnescapeString(pageBody) + streamBootstrapBody(t, server, pageBody, authorization)
 }
 
-func streamBootstrapBody(t *testing.T, server *applicationAssembly, pageBody, authorization string) string {
+func streamBootstrapBody(t *testing.T, server *appTestHarness, pageBody, authorization string) string {
 	t.Helper()
 	decoded := html.UnescapeString(pageBody)
 	matches := dataInitUpdatesPattern.FindStringSubmatch(decoded)

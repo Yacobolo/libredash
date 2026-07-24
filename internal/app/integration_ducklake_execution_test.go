@@ -55,7 +55,7 @@ type duckLakeHarness struct {
 	dataPath    string
 	deployments *servingstatesqlite.Repository
 	registry    *runtimehost.Registry
-	appServer   *applicationAssembly
+	appServer   *appTestHarness
 	database    *analyticsducklake.Environment
 }
 
@@ -865,7 +865,7 @@ func (h *duckLakeHarness) stopBackgroundJobs(t *testing.T) {
 	h.appServer = nil
 }
 
-func stopServerBackgroundForTest(t *testing.T, server *applicationAssembly) {
+func stopServerBackgroundForTest(t *testing.T, server *appTestHarness) {
 	t.Helper()
 	if server == nil {
 		return

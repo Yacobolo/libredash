@@ -475,7 +475,7 @@ func TestPageRouteRendersRequestedYamlPage(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/workspaces/test-workspace/dashboards/executive-sales/pages/operations", nil)
 	rec := httptest.NewRecorder()
 
-	server := newApplicationAssembly(fakeMetrics{})
+	server := newAppTestHarness(fakeMetrics{})
 	server.Routes().ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
@@ -522,7 +522,7 @@ func TestPageRouteSeedsPageScopedFiltersFromURL(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/workspaces/test-workspace/dashboards/executive-sales/pages/overview?state=SP&state=RJ&category=ignored", nil)
 	rec := httptest.NewRecorder()
 
-	server := newApplicationAssembly(fakeMetrics{})
+	server := newAppTestHarness(fakeMetrics{})
 	server.Routes().ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
@@ -547,7 +547,7 @@ func TestPageRouteSeedsOperationsPageFiltersFromURL(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/workspaces/test-workspace/dashboards/executive-sales/pages/operations?state=SP&category=ops", nil)
 	rec := httptest.NewRecorder()
 
-	server := newApplicationAssembly(fakeMetrics{})
+	server := newAppTestHarness(fakeMetrics{})
 	server.Routes().ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
@@ -573,7 +573,7 @@ func TestHTMLRoutesIncludeSelfHostedDatastarRuntimeAndDevInspector(t *testing.T)
 			req := httptest.NewRequest(http.MethodGet, path, nil)
 			rec := httptest.NewRecorder()
 
-			newApplicationAssembly(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+			newAppTestHarness(fakeMetrics{}).Routes().ServeHTTP(rec, req)
 
 			if rec.Code != http.StatusOK {
 				t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
@@ -594,7 +594,7 @@ func TestHTMLRoutesOmitDatastarInspectorInProduction(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, path, nil)
 			rec := httptest.NewRecorder()
 
-			newApplicationAssembly(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+			newAppTestHarness(fakeMetrics{}).Routes().ServeHTTP(rec, req)
 
 			if rec.Code != http.StatusOK {
 				t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
@@ -623,7 +623,7 @@ func TestHTMLRoutesHonorConfiguredStaticAssetVersion(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 
-	newApplicationAssembly(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+	newAppTestHarness(fakeMetrics{}).Routes().ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
@@ -641,7 +641,7 @@ func TestStaticAssetsCacheOnlyCurrentVersionedURLs(t *testing.T) {
 	t.Chdir(projectRoot(t))
 	t.Setenv("LEAPVIEW_PRODUCTION", "")
 	t.Setenv("LEAPVIEW_ASSET_VERSION", "prod-build-123")
-	handler := newApplicationAssembly(fakeMetrics{}).Routes()
+	handler := newAppTestHarness(fakeMetrics{}).Routes()
 
 	for _, tc := range []struct {
 		name string
@@ -759,7 +759,7 @@ func TestHomeRouteRendersDashboardCatalog(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 
-	server := newApplicationAssembly(fakeMetrics{})
+	server := newAppTestHarness(fakeMetrics{})
 	server.Routes().ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
@@ -846,7 +846,7 @@ func TestLoginRouteRendersAzureADLogin(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/login", nil)
 	rec := httptest.NewRecorder()
 
-	server := newApplicationAssembly(fakeMetrics{})
+	server := newAppTestHarness(fakeMetrics{})
 	server.Routes().ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
@@ -886,7 +886,7 @@ func TestDashboardRouteRedirectsToFirstPage(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/workspaces/test-workspace/dashboards/executive-sales", nil)
 	rec := httptest.NewRecorder()
 
-	newApplicationAssembly(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+	newAppTestHarness(fakeMetrics{}).Routes().ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusFound {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusFound)
@@ -933,7 +933,7 @@ func TestUnknownPageRouteReturnsNotFound(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/workspaces/test-workspace/dashboards/executive-sales/pages/missing", nil)
 	rec := httptest.NewRecorder()
 
-	newApplicationAssembly(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+	newAppTestHarness(fakeMetrics{}).Routes().ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)
@@ -954,7 +954,7 @@ func TestLegacyRoutesReturnNotFound(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		rec := httptest.NewRecorder()
 
-		newApplicationAssembly(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+		newAppTestHarness(fakeMetrics{}).Routes().ServeHTTP(rec, req)
 
 		if rec.Code != http.StatusNotFound {
 			t.Fatalf("%s status = %d, want %d", path, rec.Code, http.StatusNotFound)
@@ -1014,7 +1014,7 @@ func TestUpdatesStreamsDatastarPatchSignals(t *testing.T) {
 	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/updates?route=dashboard&workspace=test-workspace&dashboard=executive-sales&page=overview&state=SP&category=ignored", nil)
 	rec := httptest.NewRecorder()
 
-	newApplicationAssembly(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+	newAppTestHarness(fakeMetrics{}).Routes().ServeHTTP(rec, req)
 
 	if got := rec.Header().Get("Content-Type"); !strings.HasPrefix(got, "text/event-stream") {
 		t.Fatalf("content type = %q, want text/event-stream", got)
@@ -1071,7 +1071,7 @@ func TestUpdatesStreamsPageScopedChartSignals(t *testing.T) {
 	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/updates?route=dashboard&workspace=test-workspace&dashboard=executive-sales&page=operations&datastar=%7B%22runtime%22%3A%7B%22clientId%22%3A%22test-client%22%2C%22dashboardId%22%3A%22executive-sales%22%2C%22pageId%22%3A%22operations%22%7D%7D", nil)
 	rec := httptest.NewRecorder()
 
-	newApplicationAssembly(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+	newAppTestHarness(fakeMetrics{}).Routes().ServeHTTP(rec, req)
 
 	body := rec.Body.String()
 	if !strings.Contains(body, `"visuals":{"ops_pipeline"`) {
@@ -1094,7 +1094,7 @@ func TestDashboardRefreshCommandRouteIsRemoved(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
-	newApplicationAssembly(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+	newAppTestHarness(fakeMetrics{}).Routes().ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d, body:\n%s", rec.Code, http.StatusNotFound, rec.Body.String())
@@ -1107,7 +1107,7 @@ func TestSelectCommandAcceptsDatastarSignals(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
-	newApplicationAssembly(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+	newAppTestHarness(fakeMetrics{}).Routes().ServeHTTP(rec, req)
 
 	assertDatastarCommandAccepted(t, rec)
 }
@@ -1164,7 +1164,7 @@ func TestPageCommandsQueryActivePage(t *testing.T) {
 			req.Header.Set("Content-Type", "application/json")
 			rec := httptest.NewRecorder()
 
-			newApplicationAssembly(metrics).Routes().ServeHTTP(rec, req)
+			newAppTestHarness(metrics).Routes().ServeHTTP(rec, req)
 
 			assertDatastarCommandAccepted(t, rec)
 			for i := 0; i < tt.queries; i++ {
@@ -1278,7 +1278,7 @@ func TestClearSelectionCommandAcceptsDatastarSignals(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
-	newApplicationAssembly(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+	newAppTestHarness(fakeMetrics{}).Routes().ServeHTTP(rec, req)
 
 	assertDatastarCommandAccepted(t, rec)
 }
@@ -1289,7 +1289,7 @@ func TestResetFiltersCommandAcceptsDatastarSignals(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
-	newApplicationAssembly(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+	newAppTestHarness(fakeMetrics{}).Routes().ServeHTTP(rec, req)
 
 	assertDatastarCommandAccepted(t, rec)
 }
@@ -1300,13 +1300,13 @@ func TestTableWindowCommandAcceptsDatastarSignals(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
-	newApplicationAssembly(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+	newAppTestHarness(fakeMetrics{}).Routes().ServeHTTP(rec, req)
 
 	assertDatastarCommandAccepted(t, rec)
 }
 
 func TestTableWindowCommandDoesNotPublishCanceledQueries(t *testing.T) {
-	server := newApplicationAssembly(canceledTableMetrics{})
+	server := newAppTestHarness(canceledTableMetrics{})
 	updates, unsubscribe := server.runtime.broker.Subscribe("test-client:executive-sales:overview")
 	defer unsubscribe()
 

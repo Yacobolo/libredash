@@ -24,9 +24,9 @@ type assemblyConfig struct {
 	RateLimits         apihttpmiddleware.RateLimitConfig
 }
 
-type applicationAssembly struct{ handler http.Handler }
+type scimTestHarness struct{ handler http.Handler }
 
-func (a *applicationAssembly) Routes() http.Handler { return a.handler }
+func (a *scimTestHarness) Routes() http.Handler { return a.handler }
 
 type RateLimitConfig = apihttpmiddleware.RateLimitConfig
 
@@ -49,7 +49,7 @@ func testAccessRepository(store *platform.Store) access.Repository {
 	return accesssqlite.NewRepository(store.SQLDB())
 }
 
-func assembleRuntime(_ fakeMetrics, config assemblyConfig) *applicationAssembly {
+func assembleSCIMTestHarness(_ fakeMetrics, config assemblyConfig) *scimTestHarness {
 	if config.DefaultWorkspaceID != "" {
 		if err := workspacesqlite.NewRepository(config.store.SQLDB()).Ensure(context.Background(), workspace.EnsureInput{
 			ID: workspace.WorkspaceID(config.DefaultWorkspaceID), Title: config.DefaultWorkspaceID,
@@ -71,5 +71,5 @@ func assembleRuntime(_ fakeMetrics, config assemblyConfig) *applicationAssembly 
 	if config.RateLimits.Enabled {
 		handler = config.RateLimits.API()(handler)
 	}
-	return &applicationAssembly{handler: handler}
+	return &scimTestHarness{handler: handler}
 }

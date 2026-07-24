@@ -96,7 +96,7 @@ func TestAuditedQueryMetricsRecordsExecutionError(t *testing.T) {
 	}
 }
 
-func queryEventsForTest(t *testing.T, server *applicationAssembly, filter queryaudit.Filter) []queryaudit.Event {
+func queryEventsForTest(t *testing.T, server *appTestHarness, filter queryaudit.Filter) []queryaudit.Event {
 	t.Helper()
 	repo := queryAuditRepositoryForTest(t, server)
 	events, err := repo.ListQueryEvents(context.Background(), filter)

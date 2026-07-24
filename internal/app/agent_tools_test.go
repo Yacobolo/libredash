@@ -22,19 +22,19 @@ import (
 	agentcore "github.com/Yacobolo/leapview/pkg/agent"
 )
 
-func agentAPIGenToolsForTest(server *applicationAssembly, scope agentcap.Scope) []agentcore.ToolDefinition {
+func agentAPIGenToolsForTest(server *appTestHarness, scope agentcap.Scope) []agentcore.ToolDefinition {
 	return server.routes.agentModule.APIGenToolProvider().Definitions(agentmodule.ToolsScope(scope))
 }
 
-func agentVisualToolsForTest(server *applicationAssembly, scope agentcap.Scope) []agentcore.ToolDefinition {
+func agentVisualToolsForTest(server *appTestHarness, scope agentcap.Scope) []agentcore.ToolDefinition {
 	return agentVisualToolProviderForTest(server).Definitions(agentmodule.ToolsScope(scope))
 }
 
-func runAgentVisualToolForTest(server *applicationAssembly, ctx context.Context, scope agentcap.Scope, call agentcore.ToolCall) agentcore.ToolResult {
+func runAgentVisualToolForTest(server *appTestHarness, ctx context.Context, scope agentcap.Scope, call agentcore.ToolCall) agentcore.ToolResult {
 	return agentVisualToolProviderForTest(server).Run(ctx, agentmodule.ToolsScope(scope), call)
 }
 
-func agentVisualToolProviderForTest(server *applicationAssembly) agenttools.VisualProvider {
+func agentVisualToolProviderForTest(server *appTestHarness) agenttools.VisualProvider {
 	return server.routes.agentModule.VisualToolProvider()
 }
 

@@ -405,7 +405,7 @@ func TestMCPOAuthDiscoveryAndBrowserConsent(t *testing.T) {
 	}
 }
 
-func issueMCPUserToken(t *testing.T, server *applicationAssembly, principalID string) string {
+func issueMCPUserToken(t *testing.T, server *appTestHarness, principalID string) string {
 	t.Helper()
 	registrationBody := `{"client_name":"Test MCP Client","redirect_uris":["https://client.example/callback"],"grant_types":["authorization_code","refresh_token"],"response_types":["code"],"token_endpoint_auth_method":"none"}`
 	registrationRequest := httptest.NewRequest(http.MethodPost, "/oauth/register", strings.NewReader(registrationBody))
